@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { BrandLogo } from '../../components/BrandLogo';
 import { Button, Card, Field, Notice, TextInput } from '../../components/ui';
 import { api, describeError } from '../../lib/api';
 
@@ -16,7 +17,7 @@ export function LandingPage() {
             <span className="public-hero__eyebrow">Independent practice platform</span>
             <h1>Computer-based exam practice, classroom management and full mock tests.</h1>
             <p>
-              Meridian Test Studio gives teachers one workflow for original Reading, Listening and Writing practice:
+              Ai eo gives teachers one workflow for original Reading, Listening and Writing practice:
               server-marked results, assigned deadlines, class analytics and integrity monitoring that is honest about
               what a browser can and cannot observe.
             </p>
@@ -166,8 +167,12 @@ export function LandingPage() {
       <footer className="public-footer">
         <div className="public-footer__inner">
           <div>
-            <h3>Meridian Test Studio</h3>
-            <p>Independent exam-style practice for schools and teachers, running on Cloudflare Workers and D1.</p>
+            <div className="footer-brand" aria-label="Ai eo">
+              <span className="brand-logo">
+                <BrandLogo height={30} />
+              </span>
+            </div>
+            <p>Independent English practice for schools and teachers, running on Cloudflare Workers and D1.</p>
           </div>
           <div>
             <h3>Product</h3>
@@ -187,8 +192,8 @@ export function LandingPage() {
           </div>
         </div>
         <p className="public-footer__notice">
-          Not affiliated with, endorsed by or connected to IELTS, the British Council, IDP or Cambridge. Meridian Test
-          Studio does not reproduce their materials, logos or branding, and no practice band here is an official result.
+          Not affiliated with, endorsed by or connected to IELTS, the British Council, IDP or Cambridge. Ai eo
+          does not reproduce their materials, logos or branding, and no practice band here is an official result.
           Content remains the responsibility of the institution that imports or writes it.
         </p>
       </footer>

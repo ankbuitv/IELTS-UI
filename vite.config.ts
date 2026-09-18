@@ -23,6 +23,8 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    // Dev only: accept proxied preview hosts (sandbox / container previews).
+    allowedHosts: true,
     // Development convenience only: `npm run dev:client` serves HMR assets and
     // proxies API calls to the local Worker (wrangler dev on 8787).
     proxy: {

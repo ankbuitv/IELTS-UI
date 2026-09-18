@@ -1,4 +1,4 @@
-# IELTS Platform
+# Ai eo
 
 A self-hosted practice platform for English exam preparation: reusable exam
 shell, question engine, server-side marking, classrooms, assignments, analytics
@@ -207,24 +207,27 @@ log entries.
 
 ## Deployment
 
+Full guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+The client **must be built before** `wrangler deploy` runs (the Worker serves
+the SPA from `dist/client`). In the Cloudflare dashboard set:
+
+| Setting         | Value                   |
+| --------------- | ----------------------- |
+| Build command   | `npm run build`         |
+| Deploy command  | `npx wrangler deploy`   |
+
+Or use the single command `npm run deploy` (build + deploy). Running
+`npx wrangler deploy` without a build fails with
+`assets.directory ... dist/client does not exist` — that error always means
+the build step was skipped.
+
 ```bash
-# 1. Bindings
-npx wrangler d1 create ielts-platform-db          # copy the id into wrangler.jsonc
-npx wrangler queues create ielts-import-jobs      # optional: the import queue
-npx wrangler queues create ielts-import-jobs-dlq
-
-# 2. Replace REPLACE_WITH_D1_DATABASE_ID in wrangler.jsonc, then
+# One-off setup, then npm run deploy (see docs/DEPLOYMENT.md for details)
+npx wrangler d1 create ielts-platform-db
 npx wrangler d1 migrations apply DB --remote
-npx wrangler d1 execute DB --remote --file=./seed/seed.sql   # optional
-
-# 3. Secrets (server-side only; never committed)
 npx wrangler secret put SESSION_SECRET      # required
 npx wrangler secret put OPENAI_API_KEY      # optional: enables AI structuring
-
-# 4. Custom domain (must be a zone in your own Cloudflare account)
-#    wrangler.jsonc already declares custom_domain = ielts.ankb.qzz.io.
-#    If the zone is not on the account running the deploy, remove that block
-#    and add the domain in the dashboard instead.
 npm run deploy
 ```
 

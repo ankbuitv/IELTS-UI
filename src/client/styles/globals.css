@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Meridian Test Studio — design system
+   Ai eo — design system
    A calm, predominantly white examination workspace. The visual language is
    original to this project: no third-party branding, logos or copies.
 
@@ -149,6 +149,13 @@ a:hover { color: var(--brand-600); text-decoration: underline; }
   background: linear-gradient(150deg, var(--brand-500) 0%, var(--brand-600) 60%, var(--brand-700) 100%);
   color: #fff; font-weight: 700; font-size: 0.8rem; box-shadow: 0 4px 12px rgba(8, 145, 178, 0.25);
 }
+
+/* Ai eo brand lockups (inline SVG, see components/BrandLogo.tsx). */
+.brand-logo { display: inline-flex; align-items: center; line-height: 0; }
+.brand-logo svg { display: block; }
+.topbar__brand { display: inline-flex; align-items: center; line-height: 0; border-radius: 8px; }
+.topbar__brand:hover { text-decoration: none; }
+.footer-brand { display: flex; align-items: center; margin-bottom: 10px; }
 
 .sidebar__section {
   font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.09em;
