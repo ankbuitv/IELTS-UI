@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { BrandLogo } from '../../components/BrandLogo';
-import { Button, Card, Field, Notice, TextInput } from '../../components/ui';
+import { Button, Field, Notice, PasswordInput, TextInput } from '../../components/ui';
 import { api, describeError } from '../../lib/api';
 
 export function LandingPage() {
@@ -240,6 +240,66 @@ function Feature({ title, icon, children }: { title: string; icon?: string; chil
   );
 }
 
+/**
+ * Shared split-screen frame for the public auth pages: a deep brand rail that
+ * says what the account is for, next to a quiet form panel. One source of truth
+ * so sign in, sign up and joining a classroom all look the same.
+ */
+function AuthScreen({
+  eyebrow,
+  title,
+  lede,
+  points,
+  formTitle,
+  formIntro,
+  footer,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  lede: string;
+  points: Array<{ title: string; detail: string }>;
+  formTitle: string;
+  formIntro?: string;
+  footer?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="auth">
+      <aside className="auth__panel">
+        <span className="auth__eyebrow">{eyebrow}</span>
+        <div>
+          <h2 className="auth__title">{title}</h2>
+          <p className="auth__lede">{lede}</p>
+        </div>
+        <ul className="auth__points">
+          {points.map((point) => (
+            <li key={point.title}>
+              <span className="auth__tick" aria-hidden="true">
+                ✓
+              </span>
+              <span>
+                <strong>{point.title}</strong>
+                <span>{point.detail}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="auth__fineprint">
+          Ai eo is an independent practice platform. It is not affiliated with, endorsed by or connected to IELTS,
+          the British Council, IDP or Cambridge, and no band shown here is an official result.
+        </p>
+      </aside>
+      <section className="auth__form">
+        <h1>{formTitle}</h1>
+        {formIntro ? <p className="auth__form-intro">{formIntro}</p> : null}
+        {children}
+        {footer}
+      </section>
+    </div>
+  );
+}
+
 export function LoginPage() {
   const { login, user } = useAuth();
   const navigate = useNavigate();
@@ -269,43 +329,94 @@ export function LoginPage() {
   };
 
   return (
-    <div style={{ maxWidth: 420, margin: '40px auto' }}>
-      <Card title="Sign in" hint="Use the account your institution gave you.">
-        <form onSubmit={submit}>
-          {error ? <Notice tone="danger">{error}</Notice> : null}
-          <div style={{ height: 12 }} />
-          <Field label="Email" required>
-            {(id) => (
-              <TextInput
-                id={id}
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            )}
-          </Field>
-          <Field label="Password" required>
-            {(id) => (
-              <TextInput
-                id={id}
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            )}
-          </Field>
-          <Button type="submit" variant="primary" block loading={busy}>
-            Sign in
-          </Button>
-        </form>
-        <p className="small muted" style={{ marginTop: 14 }}>
+    <AuthScreen
+      eyebrow="Welcome back"
+      title="Pick up the practice where you left it."
+      lede="Your attempts, estimated bands and class assignments are all behind this sign in."
+      points={[
+        { title: 'Server-marked results', detail: 'Objective sections are marked in the Worker against protected answer keys.' },
+        { title: 'Timing you cannot trick', detail: 'Deadlines are recomputed on the server, so refreshing never buys extra minutes.' },
+        { title: 'Progress you can read', detail: 'Band estimates per skill, task-type accuracy and a full attempt history.' },
+      ]}
+      formTitle="Sign in"
+      formIntro="Use the account your institution gave you, or the one you created."
+      footer={
+        <p className="auth__alt">
           No account yet? <Link to="/register">Create a student account</Link>.
         </p>
-      </Card>
+      }
+    >
+      <form onSubmit={submit}>
+        {error ? <Notice tone="danger">{error}</Notice> : null}
+        <div style={{ height: 12 }} />
+        <Field label="Email" required>
+          {(id) => (
+            <TextInput
+              id={id}
+              type="email"
+              autoComplete="email"
+              required
+              placeholder="you@school.edu"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          )}
+        </Field>
+        <Field label="Password" required>
+          {(id) => (
+            <PasswordInput id={id} value={password} onChange={setPassword} autoComplete="current-password" required />
+          )}
+        </Field>
+        <Button type="submit" variant="primary" size="lg" block loading={busy}>
+          Sign in
+        </Button>
+      </form>
+    </AuthScreen>
+  );
+}
+
+/**
+ * Live password-policy feedback. The rules mirror `checkPasswordPolicy` in
+ * `src/worker/services/auth-service.ts` exactly, so what the candidate sees
+ * before submitting is what the server will accept.
+ */
+const POLICY_RULES: Array<{ id: string; label: string; test: (password: string, email: string) => boolean }> = [
+  { id: 'length', label: 'At least 10 characters', test: (password) => password.length >= 10 },
+  {
+    id: 'case',
+    label: 'Upper-case, lower-case and a number',
+    test: (password) => /[a-z]/.test(password) && /[A-Z]/.test(password) && /[0-9]/.test(password),
+  },
+  {
+    id: 'email',
+    label: 'Does not contain your email address',
+    test: (password, email) => {
+      const local = email.split('@')[0]?.toLowerCase() ?? '';
+      if (local.length < 4) return true;
+      return !password.toLowerCase().includes(local);
+    },
+  },
+];
+
+function PasswordPolicy({ password, email }: { password: string; email: string }) {
+  const results = POLICY_RULES.map((rule) => ({ ...rule, ok: rule.test(password, email) }));
+  const satisfied = results.filter((result) => result.ok).length;
+  const percent = password.length === 0 ? 0 : Math.round((satisfied / results.length) * 100);
+  const strengthColor = satisfied === results.length ? 'var(--success)' : satisfied >= 2 ? 'var(--warning)' : 'var(--danger)';
+
+  return (
+    <div className="policy" aria-live="polite">
+      <div className="policy__meter" role="presentation">
+        <div className="policy__meter-fill" style={{ width: `${percent}%`, background: strengthColor }} />
+      </div>
+      {results.map((result) => (
+        <div key={result.id} className={`policy__row${result.ok && password ? ' policy__row--ok' : ''}`}>
+          <span className="policy__dot" aria-hidden="true">
+            {result.ok && password ? '✓' : ''}
+          </span>
+          <span>{result.label}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -334,19 +445,26 @@ export function RegisterPage() {
 
   if (!registrationOpen && !needsBootstrap) {
     return (
-      <div style={{ maxWidth: 460, margin: '40px auto' }}>
-        <Card title="Registration is closed">
-          <Notice tone="info">
-            An administrator has switched off self-service registration on this platform. Ask your teacher or
-            administrator to create your account for you, then sign in with the credentials they give you.
-          </Notice>
-          <div style={{ marginTop: 12 }}>
-            <Link className="btn btn--block" to="/login">
-              Go to sign in
-            </Link>
-          </div>
-        </Card>
-      </div>
+      <AuthScreen
+        eyebrow="Sign-up closed"
+        title="An administrator manages accounts on this platform."
+        lede="Self-service registration has been switched off, so accounts are created for you."
+        points={[
+          { title: 'Ask your teacher', detail: 'They can add you to a classroom and issue your sign-in details.' },
+          { title: 'Nothing is lost', detail: 'Once the account exists, every practice attempt and result is kept.' },
+        ]}
+        formTitle="Registration is closed"
+        formIntro="Ask your teacher or administrator to create your account, then sign in with the details they give you."
+      >
+        <Notice tone="info">
+          Self-service registration is disabled on this platform. An administrator has to create your account.
+        </Notice>
+        <div style={{ marginTop: 16 }}>
+          <Link className="btn btn--primary btn--lg btn--block" to="/login">
+            Go to sign in
+          </Link>
+        </div>
+      </AuthScreen>
     );
   }
 
@@ -365,54 +483,65 @@ export function RegisterPage() {
   };
 
   return (
-    <div style={{ maxWidth: 460, margin: '40px auto' }}>
-      <Card
-        title="Create your account"
-        hint="Public sign-up creates a student account. Teachers and administrators are added by an administrator."
-      >
-        <form onSubmit={submit}>
-          {error ? <Notice tone="danger">{error}</Notice> : null}
-          <div style={{ height: 12 }} />
-          <Field label="Full name" required>
-            {(id) => (
-              <TextInput
-                id={id}
-                required
-                value={form.displayName}
-                onChange={(event) => setForm({ ...form, displayName: event.target.value })}
-              />
-            )}
-          </Field>
-          <Field label="Email" required>
-            {(id) => (
-              <TextInput
-                id={id}
-                type="email"
-                autoComplete="email"
-                required
-                value={form.email}
-                onChange={(event) => setForm({ ...form, email: event.target.value })}
-              />
-            )}
-          </Field>
-          <Field
-            label="Password"
-            required
-            hint="At least 10 characters with upper case, lower case and a number. Passwords are stored only as salted PBKDF2 hashes."
-          >
-            {(id) => (
-              <TextInput
-                id={id}
-                type="password"
-                autoComplete="new-password"
-                required
-                value={form.password}
-                onChange={(event) => setForm({ ...form, password: event.target.value })}
-              />
-            )}
-          </Field>
+    <AuthScreen
+      eyebrow="Free student account"
+      title="Practise Reading, Listening and Writing under real exam conditions."
+      lede="No credit card and no trial timer. Create an account and start a full mock whenever you are ready."
+      points={[
+        { title: 'Four skills, one exam shell', detail: 'Passage on the left, questions on the right, a timer the server controls.' },
+        { title: 'Honest integrity monitoring', detail: 'Observable browser events only — never a conclusion about you.' },
+        { title: 'Estimated bands, clearly labelled', detail: 'A practice signal from your institution’s own conversion profile.' },
+      ]}
+      formTitle="Create your account"
+      formIntro="Public sign-up creates a student account. Teachers and administrators are added by an administrator."
+      footer={
+        <p className="auth__alt">
+          Already registered? <Link to="/login">Sign in instead</Link>.
+        </p>
+      }
+    >
+      <form onSubmit={submit}>
+        {error ? <Notice tone="danger">{error}</Notice> : null}
+        <div style={{ height: 12 }} />
+        <Field label="Full name" required>
+          {(id) => (
+            <TextInput
+              id={id}
+              required
+              placeholder="Nguyen Van A"
+              value={form.displayName}
+              onChange={(event) => setForm({ ...form, displayName: event.target.value })}
+            />
+          )}
+        </Field>
+        <Field label="Email" required>
+          {(id) => (
+            <TextInput
+              id={id}
+              type="email"
+              autoComplete="email"
+              required
+              placeholder="you@school.edu"
+              value={form.email}
+              onChange={(event) => setForm({ ...form, email: event.target.value })}
+            />
+          )}
+        </Field>
+        <Field label="Password" required hint="Stored only as a salted PBKDF2 hash — never as text.">
+          {(id) => (
+            <PasswordInput
+              id={id}
+              value={form.password}
+              onChange={(value) => setForm({ ...form, password: value })}
+              autoComplete="new-password"
+              required
+            />
+          )}
+        </Field>
+        <PasswordPolicy password={form.password} email={form.email} />
 
-          {needsBootstrap ? (
+        {needsBootstrap ? (
+          <div className="auth__bootstrap">
             <Notice tone="info" title="First administrator">
               <label className="checkbox">
                 <input
@@ -426,15 +555,15 @@ export function RegisterPage() {
                 </span>
               </label>
             </Notice>
-          ) : null}
+          </div>
+        ) : null}
 
-          <div style={{ height: 14 }} />
-          <Button type="submit" variant="primary" block loading={busy}>
-            Create account
-          </Button>
-        </form>
-      </Card>
-    </div>
+        <div style={{ height: 16 }} />
+        <Button type="submit" variant="primary" size="lg" block loading={busy}>
+          Create account
+        </Button>
+      </form>
+    </AuthScreen>
   );
 }
 
@@ -463,48 +592,62 @@ export function JoinPage() {
   };
 
   return (
-    <div style={{ maxWidth: 480, margin: '40px auto' }}>
-      <Card title="Join a classroom" hint="Use the invitation link from your teacher, or enter the class code.">
-        {!user ? (
-          <Notice tone="info" title="Sign in first">
-            <Link to={`/login?next=${encodeURIComponent(`/join${token ? `?token=${token}` : ''}`)}`}>Sign in</Link> or{' '}
-            <Link to={`/register?next=${encodeURIComponent(`/join${token ? `?token=${token}` : ''}`)}`}>create an account</Link>{' '}
-            to accept this invitation.
-          </Notice>
-        ) : (
-          <>
-            {message ? <Notice tone="success">{message}</Notice> : null}
-            {error ? <Notice tone="danger">{error}</Notice> : null}
-            {token ? (
-              <>
-                <p className="small">
-                  An invitation link was detected. Accepting it enrols you in the classroom that issued it.
-                </p>
-                <Button variant="primary" loading={busy} onClick={() => void join({ token })}>
-                  Accept invitation
-                </Button>
-              </>
-            ) : (
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void join({ code });
-                }}
-              >
-                <Field label="Class code" required>
-                  {(id) => (
-                    <TextInput id={id} required value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} />
-                  )}
-                </Field>
-                <Button type="submit" variant="primary" loading={busy}>
-                  Join classroom
-                </Button>
-              </form>
-            )}
-          </>
-        )}
-      </Card>
-    </div>
+    <AuthScreen
+      eyebrow="Classroom"
+      title="Join your class and get the assigned tests."
+      lede="Use the invitation link from your teacher, or type the class code they shared with you."
+      points={[
+        { title: 'Assigned work in one place', detail: 'Deadlines, attempt limits and released results per assignment.' },
+        { title: 'Classes stay isolated', detail: 'A teacher can only ever see their own classrooms and students.' },
+      ]}
+      formTitle="Join a classroom"
+      formIntro="Enter the class code from your teacher, or accept the invitation link you were sent."
+    >
+      {!user ? (
+        <Notice tone="info" title="Sign in first">
+          <Link to={`/login?next=${encodeURIComponent(`/join${token ? `?token=${token}` : ''}`)}`}>Sign in</Link> or{' '}
+          <Link to={`/register?next=${encodeURIComponent(`/join${token ? `?token=${token}` : ''}`)}`}>create an account</Link>{' '}
+          to accept this invitation.
+        </Notice>
+      ) : (
+        <>
+          {message ? <Notice tone="success">{message}</Notice> : null}
+          {error ? <Notice tone="danger">{error}</Notice> : null}
+          {token ? (
+            <>
+              <p className="small">
+                An invitation link was detected. Accepting it enrols you in the classroom that issued it.
+              </p>
+              <Button variant="primary" size="lg" block loading={busy} onClick={() => void join({ token })}>
+                Accept invitation
+              </Button>
+            </>
+          ) : (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void join({ code });
+              }}
+            >
+              <Field label="Class code" required>
+                {(id) => (
+                  <TextInput
+                    id={id}
+                    required
+                    placeholder="ABC123"
+                    value={code}
+                    onChange={(event) => setCode(event.target.value.toUpperCase())}
+                  />
+                )}
+              </Field>
+              <Button type="submit" variant="primary" size="lg" block loading={busy}>
+                Join classroom
+              </Button>
+            </form>
+          )}
+        </>
+      )}
+    </AuthScreen>
   );
 }
 

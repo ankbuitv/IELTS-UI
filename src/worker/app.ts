@@ -4,6 +4,7 @@ import { ApiError } from './lib/errors';
 import { securityHeaders } from './lib/http';
 import { attachAuth } from './middleware/auth';
 import { newId } from './lib/ids';
+import { ensureSchema, isMissingSchemaError, missingTables, MISSING_SCHEMA_HINT } from './lib/ensure-schema';
 
 import authRoutes from './routes/auth';
 import catalogRoutes from './routes/catalog';
@@ -30,9 +31,25 @@ export function createApp() {
 
   app.use('*', attachAuth);
 
-  app.get('/api/health', (c) =>
-    c.json({ ok: true, service: 'ielts-platform', time: new Date().toISOString(), environment: c.env.APP_ENV }),
-  );
+  // Creates any missing table before the first query touches it, so a database
+  // whose migrations were never applied still comes up instead of returning a
+  // 500 for every request. One cheap read per isolate, nothing afterwards.
+  app.use('/api/*', async (c, next) => {
+    await ensureSchema(c.env);
+    await next();
+  });
+
+  app.get('/api/health', async (c) => {
+    // Never let the health probe fail: it reports what it could not read.
+    const database = await probeDatabase(c.env);
+    return c.json({
+      ok: database.reachable,
+      service: 'ielts-platform',
+      time: new Date().toISOString(),
+      environment: c.env.APP_ENV,
+      database,
+    });
+  });
 
   app.route('/api/auth', authRoutes);
   app.route('/api', catalogRoutes);
@@ -58,14 +75,35 @@ export function createApp() {
         error.status as never,
       );
     }
+
     const requestId = c.get('requestId');
-    console.error('unhandled_error', requestId, error?.stack ?? String(error));
+    const reason = (error as Error)?.message ?? String(error);
+    console.error('unhandled_error', requestId, (error as Error)?.stack ?? reason);
+
+    // An un-initialised database is an operator problem, not a candidate one.
+    // Say so, with the command that fixes it, instead of a bare 500.
+    if (isMissingSchemaError(error)) {
+      return c.json(
+        {
+          error: {
+            code: 'STORAGE_UNAVAILABLE',
+            message: 'The platform database is not initialised yet, so accounts cannot be created or read.',
+            details: { requestId, reason, fix: 'npx wrangler d1 migrations apply DB --remote' },
+          },
+        },
+        503 as never,
+      );
+    }
+
+    // Outside production the underlying reason is included: it is what turns an
+    // undiagnosable "something went wrong" into a one-line fix.
+    const verbose = c.env.APP_ENV !== 'production';
     return c.json(
       {
         error: {
           code: 'INTERNAL',
-          message: 'Something went wrong. Please try again.',
-          details: { requestId },
+          message: verbose ? `Something went wrong: ${reason}` : 'Something went wrong. Please try again.',
+          details: verbose ? { requestId, reason, hint: MISSING_SCHEMA_HINT } : { requestId },
         },
       },
       500,
@@ -73,4 +111,24 @@ export function createApp() {
   });
 
   return app;
+}
+
+interface DatabaseProbe {
+  reachable: boolean;
+  schemaReady: boolean;
+  missingTables?: string[];
+}
+
+/**
+ * Reports whether the bound D1 database answers and whether the application
+ * tables exist. Never throws: the health probe must stay readable even when the
+ * database is the thing that is broken.
+ */
+async function probeDatabase(env: AppBindings['Bindings']): Promise<DatabaseProbe> {
+  try {
+    const missing = await missingTables(env);
+    return { reachable: true, schemaReady: missing.length === 0, missingTables: missing };
+  } catch (error) {
+    return { reachable: false, schemaReady: false, missingTables: [(error as Error)?.message ?? 'unknown'] };
+  }
 }
