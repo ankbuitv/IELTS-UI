@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, setCsrfToken, type ApiUser } from '../lib/api';
+import { api, setCsrfToken, setSessionToken, type ApiUser } from '../lib/api';
 
 interface AuthState {
   user: ApiUser | null;
@@ -19,9 +19,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const result = await api.get<{ user: ApiUser | null; csrfToken: string | null }>('/api/auth/me');
+      const result = await api.get<{ user: ApiUser | null; csrfToken: string | null; sessionToken?: string | null }>('/api/auth/me');
       setUser(result.user);
       setCsrfToken(result.csrfToken);
+      setSessionToken(result.sessionToken ?? null);
     } catch {
       setUser(null);
       setCsrfToken(null);
@@ -35,17 +36,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const result = await api.post<{ user: ApiUser; csrfToken: string }>('/api/auth/login', { email, password });
+    const result = await api.post<{ user: ApiUser; csrfToken: string; sessionToken?: string | null }>('/api/auth/login', { email, password });
     setUser(result.user);
     setCsrfToken(result.csrfToken);
+    setSessionToken(result.sessionToken ?? null);
     return result.user;
   }, []);
 
   const register = useCallback(
     async (input: { email: string; password: string; displayName: string; bootstrapAdmin?: boolean }) => {
-      const result = await api.post<{ user: ApiUser; csrfToken: string }>('/api/auth/register', input);
+      const result = await api.post<{ user: ApiUser; csrfToken: string; sessionToken?: string | null }>('/api/auth/register', input);
       setUser(result.user);
       setCsrfToken(result.csrfToken);
+      setSessionToken(result.sessionToken ?? null);
       return result.user;
     },
     [],
@@ -57,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setUser(null);
       setCsrfToken(null);
+      setSessionToken(null);
     }
   }, []);
 

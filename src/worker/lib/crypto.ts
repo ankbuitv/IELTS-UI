@@ -7,7 +7,10 @@
  * returned in any API response.
  */
 
-const PBKDF2_ITERATIONS = 210_000;
+// Cloudflare Workers' WebCrypto caps PBKDF2 at 100,000 iterations
+// ("iteration counts above 100000 are not supported"), so 100,000 is the
+// highest count this platform can use without breaking registration.
+const PBKDF2_ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const KEY_BITS = 256;
 

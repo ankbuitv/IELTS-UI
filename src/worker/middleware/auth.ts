@@ -1,13 +1,13 @@
 import { createMiddleware } from 'hono/factory';
 import type { AppBindings } from '../env';
-import { getSessionCookie } from '../lib/http';
+import { getSessionToken } from '../lib/http';
 import { resolveSession, touchSession } from '../services/auth-service';
 import { ApiError } from '../lib/errors';
 import type { Role } from '../../shared/types';
 
-/** Resolves the session cookie (if any) into `c.get('user')`. Never throws. */
+/** Resolves the session (Bearer token or cookie) into `c.get('user')`. Never throws. */
 export const attachAuth = createMiddleware<AppBindings>(async (c, next) => {
-  const token = getSessionCookie(c);
+  const token = getSessionToken(c);
   if (token) {
     try {
       const resolved = await resolveSession(c.env, token);

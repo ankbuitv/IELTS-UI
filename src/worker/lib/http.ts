@@ -80,6 +80,32 @@ export function getSessionCookie(c: Context<AppBindings>): string | null {
   return getCookie(c, cookieName(c)) ?? null;
 }
 
+/** Parse an `Authorization: Bearer <token>` header, if present. */
+export function getBearerToken(c: Context<AppBindings>): string | null {
+  const header = c.req.header('authorization');
+  if (!header) return null;
+  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
+  return match?.[1]?.trim() || null;
+}
+
+/**
+ * Session token from, in order: the `X-Session-Token` header, the
+ * `Authorization: Bearer` header, then the session cookie. The token itself
+ * is the same 256-bit random value whose hash is stored server-side, so the
+ * trust level is identical to the cookie. The header channels exist because
+ * the sandbox preview proxy strips both the `Authorization` header and
+ * `Set-Cookie`, so the SPA there authenticates via `X-Session-Token` (a
+ * custom header the proxy passes through). Production simply keeps using the
+ * cookie and never receives a raw token.
+ */
+export function getSessionToken(c: Context<AppBindings>): string | null {
+  const custom = c.req.header('x-session-token');
+  if (custom && custom.trim()) return custom.trim();
+  const bearer = getBearerToken(c);
+  if (bearer) return bearer;
+  return getSessionCookie(c);
+}
+
 export function securityHeaders(): Record<string, string> {
   return {
     'x-content-type-options': 'nosniff',

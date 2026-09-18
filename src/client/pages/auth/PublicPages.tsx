@@ -527,7 +527,7 @@ export function RegisterPage() {
             />
           )}
         </Field>
-        <Field label="Password" required hint="Stored only as a salted PBKDF2 hash — never as text.">
+        <Field label="Password" required>
           {(id) => (
             <PasswordInput
               id={id}

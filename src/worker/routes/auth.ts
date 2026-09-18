@@ -21,7 +21,17 @@ import { currentUser } from '../middleware/auth';
 import { parseBody } from '../lib/validate';
 import { loadPlatformSettings } from '../lib/settings';
 import { resolveSession } from '../services/auth-service';
-import { getSessionCookie } from '../lib/http';
+import { getSessionToken } from '../lib/http';
+
+/**
+ * The raw session token is only echoed back outside production. Embedded
+ * sandbox previews drop the session cookie in the browser, so the SPA there
+ * authenticates with `Authorization: Bearer <sessionToken>` instead.
+ * Production keeps cookie-only delivery.
+ */
+function devSessionToken(c: { env: { APP_ENV?: string } }, token: string): string | undefined {
+  return c.env.APP_ENV === 'production' ? undefined : token;
+}
 
 const router = new Hono<AppBindings>();
 
@@ -97,7 +107,7 @@ router.post('/register', async (c) => {
   }
 
   setSessionCookie(c, session.token, session.session.expiresAt);
-  return c.json({ user: session.user, csrfToken: session.session.csrfToken }, 201);
+  return c.json({ user: session.user, csrfToken: session.session.csrfToken, sessionToken: devSessionToken(c, session.token) }, 201);
 });
 
 router.post('/login', async (c) => {
@@ -120,7 +130,7 @@ router.post('/login', async (c) => {
 
   const result = await login(c.env, body, { ip: clientIp(c), userAgent: userAgent(c) });
   setSessionCookie(c, result.token, result.session.expiresAt);
-  return c.json({ user: result.user, csrfToken: result.session.csrfToken });
+  return c.json({ user: result.user, csrfToken: result.session.csrfToken, sessionToken: devSessionToken(c, result.token) });
 });
 
 router.post('/logout', async (c) => {
@@ -135,11 +145,11 @@ router.post('/logout', async (c) => {
 });
 
 router.get('/me', async (c) => {
-  const token = getSessionCookie(c);
+  const token = getSessionToken(c);
   if (!token) return c.json({ user: null, csrfToken: null });
   const resolved = await resolveSession(c.env, token);
   if (!resolved) return c.json({ user: null, csrfToken: null });
-  return c.json({ user: resolved.user, csrfToken: resolved.session.csrfToken });
+  return c.json({ user: resolved.user, csrfToken: resolved.session.csrfToken, sessionToken: devSessionToken(c, token) });
 });
 
 router.patch('/profile', async (c) => {
@@ -199,12 +209,24 @@ router.post('/password', async (c) => {
 });
 
 function setSessionCookie(c: Parameters<typeof setCookie>[0], token: string, expiresAt: string) {
-  const secure = (c.env.APP_BASE_URL || '').startsWith('https://');
+  // Derive `Secure` from the protocol the browser actually used, honouring the
+  // proxy's X-Forwarded-Proto so the attribute is correct behind the sandbox
+  // preview proxy and on plain-HTTP local development alike.
+  const requestUrl = new URL(c.req.url);
+  const forwardedProto = (c.req.header('x-forwarded-proto') ?? '').split(',')[0]?.trim().toLowerCase();
+  const secure = requestUrl.protocol === 'https:' || forwardedProto === 'https';
+
+  // In development the app can be embedded cross-site (sandbox preview iframe).
+  // A SameSite=Lax cookie is never sent from that context, which breaks the
+  // session after login. SameSite=None is only used on secure development
+  // connections; production keeps the stricter Lax.
+  const sameSite = secure && c.env.APP_ENV === 'development' ? 'None' : 'Lax';
+
   setCookie(c, c.env.SESSION_COOKIE_NAME || 'ielts_session', token, {
     path: '/',
     httpOnly: true,
     secure,
-    sameSite: 'Lax',
+    sameSite,
     expires: new Date(expiresAt),
   });
   for (const [key, value] of Object.entries(securityHeaders())) {
