@@ -87,6 +87,54 @@ export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} />;
 }
 
+/**
+ * Password input with an inline reveal toggle. The toggle is a real button so it
+ * is keyboard reachable, and the input keeps `autoComplete` semantics for
+ * password managers.
+ */
+export function PasswordInput({
+  id,
+  value,
+  onChange,
+  autoComplete = 'current-password',
+  placeholder,
+  required,
+  name,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete?: string;
+  placeholder?: string;
+  required?: boolean;
+  name?: string;
+}) {
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <div className="field--password">
+      <input
+        id={id}
+        name={name}
+        type={revealed ? 'text' : 'password'}
+        value={value}
+        required={required}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <button
+        type="button"
+        className="password-toggle"
+        aria-pressed={revealed}
+        aria-label={revealed ? 'Hide password' : 'Show password'}
+        onClick={() => setRevealed((current) => !current)}
+      >
+        {revealed ? 'Hide' : 'Show'}
+      </button>
+    </div>
+  );
+}
+
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea {...props} />;
 }

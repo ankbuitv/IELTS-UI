@@ -59,7 +59,8 @@ export function AppShell() {
   const brand = (
     <NavLink to={user ? '/dashboard' : '/'} className="sidebar__brand" aria-label="Ai eo home">
       <span className="brand-logo">
-        <BrandLogo height={38} />
+        {/* Dark wordmark variant: the sidebar rail is a deep surface. */}
+        <BrandLogo theme="dark" height={38} />
       </span>
     </NavLink>
   );

@@ -2,6 +2,10 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ielts",
   "main": "src/worker/index.ts",
+  // Inline the generated runtime schema as a string: Workers have no
+  // filesystem, and the schema bootstrap needs it at runtime. See
+  // src/worker/lib/ensure-schema.ts and scripts/generate-runtime-schema.mjs.
+  "rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": false }],
   "compatibility_date": "2025-09-01",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,

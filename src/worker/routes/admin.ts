@@ -20,6 +20,7 @@ import {
 } from '../services/content-service';
 import { replaceVersionContent, type EditableContent } from '../services/content-write-service';
 import { clearTestAccessCode, setTestAccessCode } from '../services/access-code-service';
+import { schemaReport } from '../lib/ensure-schema';
 import { buildResultView } from '../services/attempt-service';
 import type { AttemptRow } from '../services/attempt-service';
 import { getAdminAnalytics } from '../services/analytics-service';
@@ -1148,6 +1149,38 @@ router.patch('/settings', async (c) => {
   });
 
   return c.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// System: database schema diagnostics
+// ---------------------------------------------------------------------------
+/**
+ * Reports which application tables exist and repairs the schema in place by
+ * creating anything missing. Nothing existing is altered or dropped, so this is
+ * safe to run at any time — including on a healthy database.
+ */
+router.get('/system/schema', async (c) => {
+  const report = await schemaReport(c.env);
+  return c.json({
+    ...report,
+    environment: c.env.APP_ENV,
+    baseUrl: c.env.APP_BASE_URL,
+    migrationCommand: 'npx wrangler d1 migrations apply DB --remote',
+  });
+});
+
+router.post('/system/schema/repair', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const report = await schemaReport(c.env);
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'SCHEMA_REPAIR',
+    entityType: 'system',
+    metadata: { created: report.created ?? [], missing: report.missing },
+    ip: clientIp(c),
+  });
+  return c.json({ ...report, migrationCommand: 'npx wrangler d1 migrations apply DB --remote' });
 });
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,9 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './components/ui';
+// Self-hosted variable fonts (bundled with the app, no external font CDN).
+import '@fontsource-variable/plus-jakarta-sans';
+import '@fontsource-variable/inter';
 import './styles/globals.css';
 
 const container = document.getElementById('root');
