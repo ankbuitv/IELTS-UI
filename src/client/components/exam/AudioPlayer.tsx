@@ -7,6 +7,10 @@ import { formatClock } from '../../lib/format';
  * Listening playback with the policy supplied by the server:
  * play limits, preparation time, pause and seek rules. The policy is part of
  * the attempt configuration, so it cannot be relaxed from the browser.
+ *
+ * The visual design is deliberately a calm exam panel rather than a music
+ * player: one clear play control, an honest progress track and the playback
+ * rules stated in words.
  */
 export function AudioPlayer({
   audio,
@@ -54,37 +58,45 @@ export function AudioPlayer({
     element.pause();
   };
 
+  const percent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const policyNotes = [
+    `Play allowance ${plays}/${audio.playback.maxPlays}`,
+    audio.playback.allowPause ? 'pausing allowed' : 'pausing disabled',
+    audio.playback.allowSeekAfterPlay ? 'seeking allowed' : 'seeking disabled',
+  ];
+
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card__header">
+    <section className="audio-panel" style={{ marginBottom: 16 }} aria-label="Listening audio">
+      <div className="audio-panel__head">
         <div>
-          <h3 className="card__title">{sectionTitle || 'Listening audio'}</h3>
-          <div className="card__hint">
-            Play allowance: {plays}/{audio.playback.maxPlays}
-            {audio.playback.allowPause ? '' : ' · pausing is disabled for this test'}
-            {audio.playback.allowSeekAfterPlay ? '' : ' · seeking is disabled'}
-          </div>
+          <div className="audio-panel__title">{sectionTitle || 'Listening audio'}</div>
+          <div className="audio-panel__meta">{policyNotes.join(' · ')}</div>
         </div>
-        <span className="tiny muted">{duration ? `Recording ${formatClock(duration)}` : ''}</span>
+        <span className="badge badge--neutral" title="Recording length">
+          {duration ? formatClock(duration) : 'Loading…'}
+        </span>
       </div>
 
       {!prepDone ? (
-        <Notice tone="info" title="Preparation time">
-          The recording starts in {formatClock(prepRemaining)}. You cannot replay the audio afterwards.
-        </Notice>
+        <div style={{ marginTop: 14 }}>
+          <Notice tone="info" title="Preparation time">
+            The recording starts in {formatClock(prepRemaining)}. Playback controls unlock when preparation ends.
+          </Notice>
+        </div>
       ) : null}
 
       {error ? (
-        <Notice tone="warning">
-          {error}
-        </Notice>
+        <div style={{ marginTop: 14 }}>
+          <Notice tone="warning">{error}</Notice>
+        </div>
       ) : null}
 
+      {/* The element itself stays hidden: the panel below is the visible control. */}
       <audio
         ref={ref}
         src={audio.url}
         preload="metadata"
-        style={{ width: '100%', marginTop: 10 }}
+        style={{ display: 'none' }}
         onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || duration)}
         onTimeUpdate={(event) => {
           const element = event.currentTarget;
@@ -111,24 +123,73 @@ export function AudioPlayer({
         }}
       />
 
-      <div className="row" style={{ marginTop: 10 }}>
-        <Button variant="primary" size="sm" onClick={handlePlay} disabled={maxedOut || !prepDone || playing}>
-          {playing ? 'Playing…' : maxedOut ? 'Play limit reached' : 'Play recording'}
-        </Button>
-        <Button size="sm" onClick={handlePause} disabled={!playing || !audio.playback.allowPause}>
-          Pause
-        </Button>
-        <span className="tiny muted nowrap">
-          {formatClock(currentTime)} {duration ? `/ ${formatClock(duration)}` : ''}
+      <div className="audio-panel__controls">
+        <button
+          type="button"
+          className="audio-panel__play"
+          onClick={playing ? handlePause : handlePlay}
+          disabled={maxedOut || !prepDone || (playing && !audio.playback.allowPause)}
+          aria-label={playing ? 'Pause recording' : 'Play recording'}
+        >
+          {playing ? '❚❚' : '▶'}
+        </button>
+
+        <div
+          className="audio-panel__track"
+          role="progressbar"
+          aria-valuenow={Math.round(percent)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Recording progress"
+        >
+          <div className="audio-panel__fill" style={{ width: `${percent}%` }} />
+        </div>
+
+        <span className="audio-panel__time">
+          {formatClock(currentTime)} / {duration ? formatClock(duration) : '--:--'}
         </span>
       </div>
 
+      {audio.playback.allowSeekAfterPlay && prepDone ? (
+        <input
+          className="audio-panel__scrub"
+          type="range"
+          min={0}
+          max={Math.max(1, Math.floor(duration))}
+          value={Math.floor(currentTime)}
+          onChange={(event) => {
+            const element = ref.current;
+            if (!element) return;
+            element.currentTime = Number(event.target.value);
+            setCurrentTime(element.currentTime);
+          }}
+          aria-label="Seek within the recording"
+        />
+      ) : null}
+
+      <div className="row" style={{ marginTop: 12 }}>
+        {!playing ? (
+          <Button variant="primary" size="sm" onClick={handlePlay} disabled={maxedOut || !prepDone}>
+            {maxedOut ? 'Play limit reached' : 'Play recording'}
+          </Button>
+        ) : null}
+        {playing && audio.playback.allowPause ? (
+          <Button size="sm" onClick={handlePause}>
+            Pause
+          </Button>
+        ) : null}
+      </div>
+
       {maxedOut ? (
-        <p className="tiny muted" style={{ marginTop: 8 }}>
+        <p className="audio-panel__policy">
           The recording has been played the permitted number of times. This mirrors a computer-based listening test where
           the audio is played once.
         </p>
-      ) : null}
-    </div>
+      ) : (
+        <p className="audio-panel__policy">
+          Playback rules come from the test configuration and cannot be changed from the browser.
+        </p>
+      )}
+    </section>
   );
 }

@@ -167,9 +167,25 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
         </div>
 
         {state.components.length > 1 ? (
-          <span className="badge badge--neutral">
-            Section {state.activeComponentIndex + 1} of {state.components.length}
-          </span>
+          <div className="mock-progress" aria-label={`Section ${state.activeComponentIndex + 1} of ${state.components.length}`}>
+            {state.components.map((component, index) => (
+              <span key={component.sessionId} style={{ display: 'contents' }}>
+                {index > 0 ? <span className="mock-progress__sep" aria-hidden="true" /> : null}
+                <span
+                  className={`mock-progress__step ${
+                    index < state.activeComponentIndex
+                      ? 'mock-progress__step--done'
+                      : index === state.activeComponentIndex
+                        ? 'mock-progress__step--current'
+                        : ''
+                  }`}
+                >
+                  <span aria-hidden="true">{index < state.activeComponentIndex ? '✓' : index === state.activeComponentIndex ? '●' : '○'}</span>
+                  {SKILL_LABELS[component.skill] ?? component.label}
+                </span>
+              </span>
+            ))}
+          </div>
         ) : null}
 
         <div className="exam-topbar__spacer" />
@@ -201,9 +217,17 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
         ) : null}
 
         {!isWriting ? (
-          <span className="tiny muted nowrap">
-            Answered {answeredNumbers.size}/{objectiveQuestions.length}
-          </span>
+          <div className="exam-topbar__progress nowrap" title="Answered questions in this section">
+            <span className="tiny muted">
+              Answered {answeredNumbers.size}/{objectiveQuestions.length}
+            </span>
+            <div className="bar" style={{ width: 92, marginTop: 4 }}>
+              <div
+                className="bar__fill"
+                style={{ width: `${objectiveQuestions.length > 0 ? (answeredNumbers.size / objectiveQuestions.length) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
         ) : null}
 
         {session.sessionRemainingSeconds !== null ? (
@@ -214,8 +238,8 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
           <span className="tiny muted">Untimed</span>
         )}
 
-        <Button variant="primary" size="sm" onClick={() => setSubmitOpen(true)} disabled={submitting}>
-          Submit
+        <Button variant="primary" onClick={() => setSubmitOpen(true)} disabled={submitting}>
+          Submit test
         </Button>
       </header>
 

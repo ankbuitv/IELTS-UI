@@ -4,6 +4,7 @@ import { ApiError } from '../lib/errors';
 import { requireAuth } from '../middleware/auth';
 import { currentUser } from '../middleware/auth';
 import type { AuthUser } from '../lib/auth-types';
+import { resolveAssetUrl } from '../services/media-service';
 
 const router = new Hono<AppBindings>();
 
@@ -12,7 +13,9 @@ router.use('*', requireAuth);
 interface AssetRow {
   id: string;
   kind: string;
-  r2_key: string;
+  storage_kind: string;
+  external_url: string | null;
+  r2_key: string | null;
   filename: string;
   mime: string;
   size_bytes: number;
@@ -22,16 +25,19 @@ interface AssetRow {
 }
 
 /**
- * Streams an asset from R2 after an ownership/authorization check.
+ * Resolves an asset to a deliverable URL after an ownership/authorization check.
  *
- * Assets are never public. Listening audio and chart images are reachable only
- * by users entitled to the test version; private import sources stay admin-only.
- * Range requests are forwarded to R2 so audio seeking works in the exam player.
+ * V1 stores media as external HTTPS URLs (or bundled demo files), so this route
+ * verifies access and then redirects. Assets are never public: listening audio
+ * and chart images are reachable only by users entitled to the test version, and
+ * private import sources stay admin-only.
  */
 router.get('/:assetId', async (c) => {
   const user = currentUser(c);
   const asset = await c.env.DB.prepare(
-    'SELECT id, kind, r2_key, filename, mime, size_bytes, visibility, test_version_id, uploaded_by FROM assets WHERE id = ?',
+    `SELECT id, kind, storage_kind, external_url, r2_key, filename, mime, size_bytes, visibility,
+            test_version_id, uploaded_by
+       FROM assets WHERE id = ?`,
   )
     .bind(c.req.param('assetId'))
     .first<AssetRow>();
@@ -41,30 +47,16 @@ router.get('/:assetId', async (c) => {
   const allowed = await canAccessAsset(c, user, asset);
   if (!allowed) throw ApiError.forbidden('You are not authorized to access this file.');
 
-  const object = await c.env.CONTENT_BUCKET.get(asset.r2_key, { range: c.req.raw.headers });
-  if (!object) throw ApiError.notFound('The stored file is missing.');
-
-  const headers = new Headers();
-  headers.set('content-type', asset.mime || 'application/octet-stream');
-  headers.set('etag', object.httpEtag);
-  headers.set('accept-ranges', 'bytes');
-  headers.set('cache-control', 'private, max-age=300');
-  headers.set(
-    'content-disposition',
-    `${asset.kind === 'AUDIO' || asset.kind === 'IMAGE' ? 'inline' : 'attachment'}; filename="${asset.filename.replace(/"/g, '')}"`,
-  );
-
-  const range = object.range as { offset?: number; length?: number; suffix?: number } | undefined;
-  if (range && typeof range.offset === 'number') {
-    const start = range.offset;
-    const length = range.length ?? asset.size_bytes - start;
-    headers.set('content-range', `bytes ${start}-${start + length - 1}/${asset.size_bytes}`);
-    headers.set('content-length', String(length));
-    return new Response(object.body as unknown as ReadableStream, { status: 206, headers });
+  const url = resolveAssetUrl(asset);
+  if (!url) {
+    throw new ApiError(
+      'NOT_FOUND',
+      'This asset has no media URL yet. An administrator can add an external HTTPS link for it.',
+    );
   }
 
-  headers.set('content-length', String(object.size));
-  return new Response(object.body as unknown as ReadableStream, { status: 200, headers });
+  if (url.startsWith('/')) return c.redirect(url, 302);
+  return c.redirect(url, 302);
 });
 
 async function canAccessAsset(

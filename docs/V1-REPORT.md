@@ -20,7 +20,7 @@ deployable platform on Cloudflare:
 | --- | --- |
 | Runtime | One Worker (Hono) serving the REST API and the built React SPA |
 | Data | D1 schema, 30 tables, two migrations, versioned content |
-| Storage | R2 for import sources, audio and images; queue for import jobs |
+| Storage | No object storage in V1: import text lives in D1, media are external HTTPS URLs; optional queue for import jobs |
 | Client | React 19 + react-router-dom 7 SPA, 24 routed pages, responsive original UI |
 | Roles | STUDENT, TEACHER, ADMIN with server-side authorisation everywhere |
 | Exam shell | Server-authoritative timer, autosave, resume, full-mock sequencing |
@@ -46,7 +46,7 @@ beyond the repository itself, so no destructive change was needed.
 
 **Constraints that shaped the design.**
 
-- Cloudflare-only runtime (Workers + D1 + R2 + Queues).
+- Cloudflare-only runtime (Workers + D1 + Queues).
 - Original branding and content only; no IELTS/British Council/IDP/Cambridge
   logos, wordmarks or official material; no claim of official affiliation.
 - Answer keys must never reach a candidate client and no score may be trusted
@@ -63,9 +63,10 @@ and serves the SPA assets, which removes CORS entirely and keeps the security
 boundary in one place. Shared TypeScript contracts live in `src/shared` and are
 imported by both sides; the modules that contain answer material or grading
 logic are worker-only by construction (`answer-key.ts`, `scoring.ts` are never
-imported from `src/client`). D1 holds relational state; R2 holds binaries and is
-referenced by `assets` rows; a queue carries the expensive import stages so a
-request never blocks on extraction or AI.
+imported from `src/client`). D1 holds relational state, including the extracted
+text of imports and the HTTPS URLs of media, so no object storage is required;
+the optional queue carries import stages that can be deferred without dropping
+the request-time fallback.
 
 **Phases.** (1) schema + shared contracts, (2) worker services and routes,
 (3) client foundation and exam shell, (4) student/teacher/admin areas,
@@ -78,8 +79,9 @@ the sections below describe the delivered state rather than the plan.
 
 ```
 Browser ─┬─ SPA (React 19, Vite 8)  ──┐
-         │                            ├─► Worker (Hono) ─► D1 / R2 / Queue
+         │                            ├─► Worker (Hono) ─► D1 / Queue (optional)
          └─ /api/* (same origin)   ────┘
+                                          └─► external HTTPS media (linked, not uploaded)
 ```
 
 - `wrangler.jsonc` sets `run_worker_first: ["/api/*"]`; every API request passes
@@ -169,7 +171,7 @@ All endpoints are JSON, same-origin, and re-authorise on the server.
 `POST /api/auth/password`.
 
 **Catalogue & files** — `GET /api/tests`, `GET /api/tests/:testId/preview`,
-`GET /api/files/:assetId` (visibility-checked R2 delivery).
+`GET /api/files/:assetId` (visibility check, then a 302 to the registered HTTPS URL).
 
 **Attempts** — `POST /api/attempts`, `GET /api/attempts/:id`,
 `PATCH /api/attempts/:id/answers`, `POST /api/attempts/:id/writing`,
@@ -309,8 +311,9 @@ verified in the acceptance run.
 - Candidate payloads contain no `answerKey`, `evidence` or `explanation` — the
   acceptance run asserts this on the candidate attempt state, on the admin
   preview payload, and via a canary string planted in server-only evidence.
-- Files are delivered through `/api/files/:id` after a visibility check; R2 keys
-  are not exposed.
+- Media is delivered through `/api/files/:id` after a visibility check, which
+  redirects to the registered external URL; the destination is only revealed to
+  a caller who is allowed to see the asset.
 - Uploads validate MIME type and size (26,214,400 bytes) and store a SHA-256
   checksum.
 - The Worker sets `x-content-type-options`, `referrer-policy`,
@@ -440,7 +443,6 @@ client:
 | Binding | Type | Name | Status |
 | --- | --- | --- | --- |
 | `DB` | D1 | `ielts-platform-db` | local database migrated and seeded; **remote id is a placeholder** (`REPLACE_WITH_D1_DATABASE_ID`) |
-| `CONTENT_BUCKET` | R2 | `ielts-platform-content` | configured; bucket must be created in the target account |
 | `IMPORT_QUEUE` | Queue producer | `ielts-import-jobs` | configured; degrade-to-inline when absent locally |
 | `ielts-import-jobs` | Queue consumer | — | configured (batch, retries, DLQ) |
 | `ielts-import-jobs-dlq` | Dead-letter queue | — | configured |
@@ -518,9 +520,10 @@ were therefore **not** executed here):
    plus an asset-loader review is needed first.
 8. **Email is not sent.** Invitations can be copied as links or applied by
    e-mail address; there is no outbound mail provider.
-9. **Remote infrastructure was not provisioned** (D1 id, R2 bucket, queues,
-   custom domain, secrets). Steps are documented in §12; they need account
-   permissions.
+9. **Remote infrastructure was not provisioned** (D1 id, queues, custom domain,
+   secrets). Steps are documented in §12; they need account permissions. No
+   object storage is needed: a later pass removed the R2 dependency entirely
+   (see `docs/MODERNISATION-REPORT.md`).
 10. **Local databases accumulate runs.** Without `npm run db:reset:local`, a
     second acceptance run stops at "an administrator already exists" — by
     design, since the script refuses to hijack an existing platform.

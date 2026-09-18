@@ -25,10 +25,25 @@ export interface ValidationIssue {
   questionNumber?: number | null;
 }
 
+export interface ValidationParagraph {
+  label: string;
+  text: string;
+}
+
+export interface ValidationPassage {
+  paragraphs: ValidationParagraph[];
+  /** Word count declared by the source (an import file, for example). Never trusted. */
+  declaredWordCount?: number | null;
+}
+
 export interface ValidationQuestion {
   id: string;
   number: number;
   prompt: string;
+  /** Candidate-visible extra body text (summary / table / flow-chart blocks). */
+  bodyText?: string | null;
+  /** Server-only marking evidence. A quote must exist verbatim in the passage. */
+  evidence?: string | null;
   options: Array<{ id: string; text: string }>;
   config: {
     wordLimit?: { min?: number; max?: number };
@@ -47,6 +62,8 @@ export interface ValidationGroup {
   rangeFrom?: number | null;
   rangeTo?: number | null;
   questions: ValidationQuestion[];
+  /** Candidate-visible body blocks (summary text, table rows). */
+  bodyTexts?: string[];
 }
 
 export interface ValidationSection {
@@ -57,6 +74,8 @@ export interface ValidationSection {
   instructions: string;
   hasPassage: boolean;
   passageParagraphCount: number;
+  /** Present when the section has a passage; enables paragraph-level checks. */
+  passage?: ValidationPassage | null;
   hasAudio: boolean;
   groups: ValidationGroup[];
 }
@@ -152,6 +171,11 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
       });
     }
 
+    // ---- passage hygiene (imports frequently get this wrong) ----------------
+    if (section.passage && section.passage.paragraphs.length > 0) {
+      issues.push(...validatePassage(section));
+    }
+
     if (section.groups.length === 0) {
       issues.push({
         level: 'ERROR',
@@ -162,6 +186,7 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
     }
 
     let previousGroupRange: { from: number; to: number } | null = null;
+    let previousRangeEnd: number | null = null;
     for (const group of section.groups) {
       if (!isQuestionType(group.type)) {
         issues.push({
@@ -237,6 +262,32 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
         });
       }
 
+      // ---- declared range sanity -----------------------------------------
+      const declaredFrom = group.rangeFrom ?? null;
+      const declaredTo = group.rangeTo ?? null;
+      if (declaredFrom !== null && declaredTo !== null) {
+        if (declaredFrom < 1 || declaredTo < 1 || declaredTo < declaredFrom) {
+          issues.push({
+            level: 'ERROR',
+            code: 'MALFORMED_RANGE',
+            message: `Group range ${declaredFrom}–${declaredTo} is not a valid question range.`,
+            sectionId: section.id,
+            groupId: group.id,
+          });
+        } else if (previousRangeEnd !== null && declaredFrom <= previousRangeEnd) {
+          issues.push({
+            level: 'WARNING',
+            code: 'OVERLAPPING_RANGE',
+            message: `Group range ${declaredFrom}–${declaredTo} overlaps the previous group (which ends at ${previousRangeEnd}).`,
+            sectionId: section.id,
+            groupId: group.id,
+          });
+        }
+      }
+
+      // ---- student-visible text must never contain answer material --------
+      issues.push(...findLeakedAnswerFields(section.id, group));
+
       const numbers = group.questions.map((q) => q.number);
       const expectedFrom = numbers[0] ?? 0;
       const expectedTo = numbers[numbers.length - 1] ?? 0;
@@ -261,10 +312,12 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
         }
       }
       previousGroupRange = { from: expectedFrom, to: expectedTo };
+      const declaredEnd = group.rangeTo ?? null;
+      previousRangeEnd = declaredEnd !== null ? Math.max(declaredEnd, expectedTo) : expectedTo;
 
       for (const question of group.questions) {
         issues.push(
-          ...validateQuestion(section.id, group, question, group.type as QuestionType),
+          ...validateQuestion(section, group, question, group.type as QuestionType),
         );
       }
     }
@@ -305,15 +358,246 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
   return issues;
 }
 
+/**
+ * Paragraph-level checks for imported passages.
+ *
+ * Duplicated or missing labels make matching questions unanswerable, and a
+ * declared word count that disagrees with the text means the source (often an
+ * AI provider) invented a number. The count is always recomputed server-side;
+ * a mismatch is reported so an admin can sanity-check the import.
+ */
+function validatePassage(section: ValidationSection): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const paragraphs = section.passage?.paragraphs ?? [];
+  const labels: string[] = [];
+  const seenText = new Map<string, string>();
+
+  for (const paragraph of paragraphs) {
+    const label = (paragraph.label ?? '').trim();
+    const text = (paragraph.text ?? '').trim();
+    if (!text) {
+      issues.push({
+        level: 'WARNING',
+        code: 'EMPTY_PARAGRAPH',
+        message: `Paragraph ${label || '(unlabelled)'} is empty.`,
+        sectionId: section.id,
+      });
+      continue;
+    }
+    if (!label) {
+      issues.push({
+        level: 'WARNING',
+        code: 'PARAGRAPH_WITHOUT_LABEL',
+        message: 'A passage paragraph has no label, so it cannot be referenced by a matching question.',
+        sectionId: section.id,
+      });
+    } else {
+      labels.push(label);
+    }
+    const key = text.toLowerCase();
+    const previousLabel = seenText.get(key);
+    if (previousLabel !== undefined) {
+      issues.push({
+        level: 'ERROR',
+        code: 'DUPLICATE_PARAGRAPH_TEXT',
+        message: `Paragraphs ${previousLabel} and ${label || '(unlabelled)'} contain exactly the same text.`,
+        sectionId: section.id,
+      });
+    } else {
+      seenText.set(key, label || '(unlabelled)');
+    }
+  }
+
+  const duplicateLabel = findDuplicate(labels);
+  if (duplicateLabel) {
+    issues.push({
+      level: 'ERROR',
+      code: 'DUPLICATE_PARAGRAPH_LABEL',
+      message: `Paragraph label "${duplicateLabel}" is used more than once; matching questions become ambiguous.`,
+      sectionId: section.id,
+    });
+  }
+
+  const computed = countWords(paragraphs.map((paragraph) => paragraph.text ?? '').join(' '));
+  const declared = section.passage?.declaredWordCount ?? null;
+  if (declared !== null && declared !== undefined && declared > 0) {
+    const difference = Math.abs(declared - computed);
+    if (difference > Math.max(5, Math.round(computed * 0.02))) {
+      issues.push({
+        level: 'WARNING',
+        code: 'PASSAGE_WORD_COUNT_MISMATCH',
+        message: `The source declares ${declared} words but the passage contains ${computed}. The stored count uses the text, not the declaration.`,
+        sectionId: section.id,
+      });
+    }
+  }
+  if (section.skill === 'READING' && computed > 0 && computed < 120) {
+    issues.push({
+      level: 'WARNING',
+      code: 'PASSAGE_VERY_SHORT',
+      message: `The passage is ${computed} words long, which is short for Reading practice.`,
+      sectionId: section.id,
+    });
+  }
+
+  return issues;
+}
+
+/** Word counting used for passages; deliberately simple and deterministic. */
+export function countWords(text: string): number {
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter((token) => /[A-Za-z0-9]/.test(token)).length;
+}
+
+const ANSWER_LEAK_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+  // JSON-ish or YAML-ish keys, with or without quotes: {"answer": "B"}, answer: B
+  { pattern: /(?:^|[\s"'[{,])["']?answer(?:key|s)?["']?\s*:/i, label: 'answer' },
+  { pattern: /(?:^|[\s"'[{,])["']?correct(?:answer|option|choice)?["']?\s*:/i, label: 'correct answer' },
+  { pattern: /(?:^|[\s"'[{,])["']?solutions?["']?\s*:/i, label: 'solution' },
+  { pattern: /\[(?:ANSWER|KEY|SOLUTION)\b/i, label: 'answer marker' },
+];
+
+/**
+ * Detects answer material that leaked into student-visible text.
+ *
+ * A candidate payload must never carry keys or explanations. Imports (and
+ * hand-authored JSON) sometimes nest an `answer` field inside a passage or a
+ * question body by mistake, so this scans the text a candidate would see.
+ */
+function findLeakedAnswerFields(sectionId: string, group: ValidationGroup): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  const candidates: Array<{ text: string; where: string; questionNumber?: number }> = [
+    { text: group.instructions, where: `the instructions of a ${group.type.replace(/_/g, ' ').toLowerCase()} group` },
+    ...group.sharedOptions.map((option) => ({ text: option.text, where: `option ${option.id} of an option bank` })),
+    ...(group.bodyTexts ?? []).map((text) => ({ text, where: 'a shared question body' })),
+    ...group.questions.map((question) => ({
+      text: `${question.prompt}\n${question.bodyText ?? ''}`,
+      where: `the text of question ${question.number}`,
+      questionNumber: question.number,
+    })),
+  ];
+
+  for (const candidate of candidates) {
+    for (const { pattern, label } of ANSWER_LEAK_PATTERNS) {
+      if (pattern.test(candidate.text)) {
+        issues.push({
+          level: 'ERROR',
+          code: 'LEAKED_ANSWER_FIELD',
+          message: `Possible ${label} leaked into student-visible content in ${candidate.where}. Answer material belongs in the answer key, not in the question text.`,
+          sectionId,
+          groupId: group.id,
+          questionNumber: candidate.questionNumber ?? null,
+        });
+        break;
+      }
+    }
+  }
+
+  return issues;
+}
+
+/**
+ * Marking evidence that claims to quote the passage must actually quote it.
+ *
+ * Only explicit quotations are checked (`"…"`, `“…”`, `‘…’`, `'…'`) or text
+ * introduced with a `quote:` label, because evidence is also used for free-form
+ * marking notes that are not supposed to be literal extracts. Anything that is
+ * presented as a quotation must exist in the passage it refers to.
+ */
+function validateEvidence(
+  section: ValidationSection,
+  group: ValidationGroup,
+  question: ValidationQuestion,
+  base: Record<string, unknown>,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const evidence = (question.evidence ?? '').trim();
+  if (!evidence) return issues;
+
+  if (/^\s*[[{]/.test(evidence)) {
+    issues.push({
+      level: 'ERROR',
+      code: 'MALFORMED_EVIDENCE',
+      message: `Evidence for question ${question.number} looks like raw JSON. Provide the quoted sentence or a short text reference.`,
+      ...base,
+    });
+    return issues;
+  }
+
+  const paragraphs = section.passage?.paragraphs ?? [];
+  if (paragraphs.length === 0) return issues;
+
+  const quotes = extractQuotations(evidence);
+  if (quotes.length === 0) return issues;
+
+  const normalise = (value: string) => value.replace(/\s+/g, ' ').trim().toLowerCase();
+  const haystack = normalise(paragraphs.map((paragraph) => paragraph.text ?? '').join(' '));
+
+  for (const quote of quotes) {
+    const needle = normalise(quote);
+    if (needle.length >= 12 && !haystack.includes(needle)) {
+      issues.push({
+        level: 'ERROR',
+        code: 'EVIDENCE_QUOTE_NOT_FOUND',
+        message: `The evidence quoted for question ${question.number} does not appear verbatim in the passage (“${quote.slice(0, 60)}${quote.length > 60 ? '…' : ''}”).`,
+        ...base,
+      });
+      break;
+    }
+  }
+
+  void group;
+  return issues;
+}
+
+/** Pulls the quotations out of an evidence string (`"…"`, `“…”`, `‘…’`, `'…'`). */
+function extractQuotations(evidence: string): string[] {
+  const quotes: string[] = [];
+  for (const match of evidence.matchAll(/["“]([^"”]{12,})["”]/g)) {
+    if (match[1]) quotes.push(match[1]);
+  }
+  for (const match of evidence.matchAll(/['‘]([^'’]{12,})['’]/g)) {
+    if (match[1]) quotes.push(match[1]);
+  }
+  return quotes;
+}
+
 function validateQuestion(
-  sectionId: string,
+  section: ValidationSection,
   group: ValidationGroup,
   question: ValidationQuestion,
   type: QuestionType,
 ): ValidationIssue[] {
+  const sectionId = section.id;
   const issues: ValidationIssue[] = [];
   const base = { sectionId, groupId: group.id, questionNumber: question.number };
   const meta = QUESTION_TYPE_META[type];
+
+  // ---- word limits -------------------------------------------------------
+  const limit = question.config?.wordLimit;
+  if (limit) {
+    const min = limit.min ?? null;
+    const max = limit.max ?? null;
+    if ((min !== null && min < 0) || (max !== null && max < 1) || (min !== null && max !== null && min > max)) {
+      issues.push({
+        level: 'ERROR',
+        code: 'INVALID_WORD_LIMIT',
+        message: `Question ${question.number} has an impossible word limit (${min ?? 0}–${max ?? '?'}).`,
+        ...base,
+      });
+    } else if (max !== null && max > 2000) {
+      issues.push({
+        level: 'ERROR',
+        code: 'INVALID_WORD_LIMIT',
+        message: `Question ${question.number} allows ${max} words, which exceeds the supported maximum of 2000.`,
+        ...base,
+      });
+    }
+  }
+
 
   if (!question.prompt.trim() && meta.control !== 'ESSAY' && type !== 'MATCHING_HEADINGS') {
     issues.push({ level: 'ERROR', code: 'QUESTION_WITHOUT_PROMPT', message: `Question ${question.number} has no text.`, ...base });
@@ -439,6 +723,22 @@ function validateQuestion(
     });
   }
 
+  if (type === 'MCQ_SINGLE' || type === 'MCQ_MULTI') {
+    const optionIds = (question.options.length > 0 ? question.options : group.sharedOptions).map((option) => option.id);
+    if (question.answerKey?.kind === 'CHOICE' && optionIds.length > 0) {
+      for (const value of question.answerKey.values) {
+        if (!optionIds.includes(value)) {
+          issues.push({
+            level: 'ERROR',
+            code: 'INVALID_ANSWER_VALUE',
+            message: `Answer "${value}" for question ${question.number} is not one of its options (${optionIds.join(', ')}).`,
+            ...base,
+          });
+        }
+      }
+    }
+  }
+
   if (type === 'TRUE_FALSE_NOT_GIVEN' || type === 'YES_NO_NOT_GIVEN' || type === 'MATCHING_FEATURES') {
     const validIds = group.sharedOptions.length > 0
       ? group.sharedOptions.map((o) => o.id)
@@ -472,6 +772,9 @@ function validateQuestion(
       });
     }
   }
+
+  // Marking evidence that claims to quote the passage must actually quote it.
+  issues.push(...validateEvidence(section, group, question, base));
 
   return issues;
 }

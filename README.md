@@ -4,8 +4,10 @@ A self-hosted practice platform for English exam preparation: reusable exam
 shell, question engine, server-side marking, classrooms, assignments, analytics
 and an AI-assisted content import pipeline.
 
-It runs entirely on Cloudflare (Workers, D1, R2, Queues) with a React 19 + Vite
-single-page client served from the same Worker.
+It runs entirely on Cloudflare (Workers, D1, Queues) with a React 19 + Vite
+single-page client served from the same Worker. **V1 needs no object storage:**
+imports are processed in the request and kept in D1 as text, and listening audio
+or diagram images are registered as external HTTPS URLs rather than uploaded.
 
 > **Not affiliated with IELTS, the British Council, IDP or Cambridge.** All band
 > figures produced by this platform are labelled **Estimated band** and come from
@@ -75,21 +77,34 @@ single-page client served from the same Worker.
 **Administration**
 
 - Dashboard, tests & versions, question bank editor, imports, scoring profiles,
-  users, attempts, assets, audit log and platform settings.
+  users, attempts, media URLs, audit log and platform settings.
+- Media is registered, not uploaded: paste an HTTPS URL for listening audio or a
+  chart image, and the candidate player follows an authorised redirect through
+  `/api/files/:assetId`. A future version can add object storage behind the same
+  resolver (`src/worker/services/media-service.ts`) without touching V1 code.
 - Versioned content with a DRAFT → REVIEW → PUBLISHED → ARCHIVED lifecycle.
   Published versions are immutable and frozen; editing requires a new version.
 - Deterministic validation before publish (blocking errors vs. warnings).
-- AI-assisted imports: upload → extract → AI structure → validate → admin
-  review → publish. AI never publishes by itself, and if no API key is present
-  the pipeline degrades gracefully (extraction + manual editing still work).
+- Imports without object storage: **paste reading JSON or text**, or upload a
+  document whose text is extracted during the request and stored in D1. Then
+  validate → review → apply to a draft → publish. AI structuring is optional: if
+  no API key is present, extraction and manual editing still work, and AI never
+  publishes by itself.
+- Structured reading JSON is validated before it can be published: answer fields
+  leaked into student-visible content, duplicate/missing question numbers,
+  malformed ranges, answer keys pointing at options that do not exist, invalid
+  word limits, malformed evidence, duplicate paragraph labels or duplicated
+  paragraph text, and an invented `passageWordCount`. Passage word counts are
+  always recomputed from the text on the server, and a quoted piece of marking
+  evidence must exist verbatim in the passage it refers to.
 
 ---
 
 ## Architecture
 
 ```
-Browser  ──►  Cloudflare Worker (Hono)  ──►  D1   (users, content, attempts, results)
-                    │                   ──►  R2   (import sources, audio, images)
+Browser  ──►  Cloudflare Worker (Hono)  ──►  D1   (users, content, attempts, results,
+                    │                             extracted import text, media URLs)
                     │                   ──►  Queue(import pipeline jobs)
                     └──►  Static assets (React SPA bundle)
 ```
@@ -109,7 +124,7 @@ migrations/   D1 schema (0001_init, 0002_imports_and_settings)
 seed/         original sample content + wipe script
 scripts/      database reset + end-to-end acceptance run
 tests/unit/   vitest unit suite
-docs/         final report and the recorded acceptance run
+docs/         delivery report, modernisation report and the recorded acceptance run
 ```
 
 ---
@@ -195,8 +210,7 @@ log entries.
 ```bash
 # 1. Bindings
 npx wrangler d1 create ielts-platform-db          # copy the id into wrangler.jsonc
-npx wrangler r2 bucket create ielts-platform-content
-npx wrangler queues create ielts-import-jobs
+npx wrangler queues create ielts-import-jobs      # optional: the import queue
 npx wrangler queues create ielts-import-jobs-dlq
 
 # 2. Replace REPLACE_WITH_D1_DATABASE_ID in wrangler.jsonc, then
@@ -263,6 +277,9 @@ full-mock flows. The recorded output of a green run is in
 
 ## Documentation
 
+- [`docs/MODERNISATION-REPORT.md`](docs/MODERNISATION-REPORT.md) — the visual
+  modernisation and object-storage removal pass: tokens, components, pages,
+  accessibility, remaining optional storage references and current bindings.
 - [`docs/V1-REPORT.md`](docs/V1-REPORT.md) — architecture, data model, API map,
   bindings, deployment steps, executed tests, verified behaviour, limitations
   and the list of suggested future features that are intentionally *not*

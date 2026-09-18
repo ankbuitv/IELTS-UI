@@ -6,9 +6,8 @@
  *   2. apply migrations   (migrations/*.sql)
  *   3. load sample content (seed/seed.sql)
  *
- * It never touches the remote database. Assets that live in the local R2
- * simulation are left on disk; their D1 rows disappear with the wipe, so a
- * re-upload is needed if you were testing file features.
+ * It never touches the remote database. Media is stored as external URLs and
+ * bundled demo files, so nothing outside D1 needs cleaning up.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';

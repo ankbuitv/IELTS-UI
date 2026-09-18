@@ -4,7 +4,7 @@ import { ApiError } from '../lib/errors';
 import { newId, nowIso } from '../lib/ids';
 import { sha256Hex } from '../lib/crypto';
 import type { AuthUser } from '../lib/auth-types';
-import { extractText, kindForMime, ALLOWED_IMPORT_MIME_TYPES } from '../extract';
+import { extractText, ALLOWED_IMPORT_MIME_TYPES } from '../extract';
 import { aiStatus, structureTestFromSource } from '../ai/openai';
 import { isQuestionType, QUESTION_TYPE_META, type QuestionType } from '../../shared/question-types';
 import { validateTestVersion, summariseIssues, type ValidationIssue } from '../../shared/validation';
@@ -28,11 +28,25 @@ export interface CreateImportInput {
   licenseNotes?: string;
 }
 
-export async function createImport(env: Env, user: AuthUser, input: CreateImportInput): Promise<{
+export interface CreateImportResult {
   importId: string;
-  assetId: string;
   status: string;
-}> {
+  extractedChars: number;
+  structured: boolean;
+}
+
+/**
+ * Accepts an uploaded source file.
+ *
+ * V1 has no object storage, so the file is handled entirely inside the request:
+ * text is extracted, the extracted text is stored in D1 (`imports.source_text`),
+ * and the original binary is discarded. A JSON upload is treated as an already
+ * structured payload and goes straight to review.
+ *
+ * Files that cannot be turned into text without object storage (for example a
+ * scanned PDF) are reported as a limitation instead of being stored as a blob.
+ */
+export async function createImport(env: Env, user: AuthUser, input: CreateImportInput): Promise<CreateImportResult> {
   const maxBytes = Number(env.MAX_UPLOAD_BYTES || 26_214_400);
   if (input.file.size <= 0) throw ApiError.validation('The uploaded file is empty.');
   if (input.file.size > maxBytes) {
@@ -45,38 +59,67 @@ export async function createImport(env: Env, user: AuthUser, input: CreateImport
     throw ApiError.validation(`Unsupported file type "${mime}".`, { allowed: ALLOWED_IMPORT_MIME_TYPES });
   }
 
-  const importId = newId('imp');
-  const assetId = newId('ast');
-  const kind = kindForMime(mime, filename);
-  const extension = filename.includes('.') ? filename.split('.').pop()!.slice(0, 8) : 'bin';
-  const r2Key = `imports/${importId}/source.${extension}`;
   const buffer = await input.file.arrayBuffer();
-  const checksum = await sha256Hex(buffer);
+  const isJson = mime === 'application/json' || /\.json$/i.test(filename);
 
-  await env.CONTENT_BUCKET.put(r2Key, buffer, {
-    httpMetadata: { contentType: mime, contentDisposition: `attachment; filename="${filename}"` },
-    customMetadata: { importId, uploadedBy: user.id },
-  });
+  if (isJson) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(new TextDecoder().decode(buffer));
+    } catch {
+      throw ApiError.validation('That file is not valid JSON. Check the file and try again, or paste the content instead.');
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      throw ApiError.validation('The JSON file must contain a test object.');
+    }
+    return createStructuredImport(env, user, {
+      ...input,
+      filename,
+      mime,
+      sizeBytes: input.file.size,
+      payload: parsed,
+      checksum: await sha256Hex(buffer),
+    });
+  }
 
+  const extraction = extractText(new Uint8Array(buffer), mime, filename);
+  const text = extraction.text ?? '';
+
+  const importId = newId('imp');
   const timestamp = nowIso();
   const title = (input.title ?? filename.replace(/\.[^.]+$/, '')).slice(0, 200);
 
+  const log = [
+    {
+      at: timestamp,
+      message: `Read ${filename} (${input.file.size} bytes, ${mime}). The original file is processed in-request and is not retained.`,
+    },
+    {
+      at: timestamp,
+      message: `Extracted ${text.length} characters from a ${extraction.kind} file${extraction.pageCount ? ` (${extraction.pageCount} pages)` : ''}.`,
+    },
+  ];
+  if (extraction.warning) log.push({ at: timestamp, message: extraction.warning });
+  if (text.trim().length === 0) {
+    log.push({
+      at: timestamp,
+      message:
+        'No extractable text was found. Scanned documents need OCR, which V1 does not include: paste the text instead so it can be structured.',
+    });
+  }
+
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO assets (id, kind, r2_key, filename, mime, size_bytes, checksum_sha256, visibility, uploaded_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'PRIVATE', ?, ?)`,
-    ).bind(assetId, kind, r2Key, filename, mime, input.file.size, checksum, user.id, timestamp),
-    env.DB.prepare(
-      `INSERT INTO imports (id, title, filename, mime, size_bytes, r2_key, status, ai_used, created_by, created_at, updated_at,
-                            content_origin, source_title, source_url, attribution, license_notes)
-       VALUES (?, ?, ?, ?, ?, ?, 'UPLOADED', 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO imports (id, title, filename, mime, size_bytes, status, ai_used, created_by, created_at, updated_at,
+                            content_origin, source_title, source_url, attribution, license_notes, source_text, extracted_chars)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
       importId,
       title,
       filename,
       mime,
       input.file.size,
-      r2Key,
+      text.trim().length > 0 ? 'PROCESSING' : 'REVIEW',
       user.id,
       timestamp,
       timestamp,
@@ -85,14 +128,17 @@ export async function createImport(env: Env, user: AuthUser, input: CreateImport
       input.sourceUrl ?? null,
       input.attribution ?? null,
       input.licenseNotes ?? null,
+      text.length > 0 ? text : null,
+      text.length,
     ),
     env.DB.prepare(
       `INSERT INTO import_jobs (id, import_id, stage, status, attempts, log_json, started_at, finished_at, created_at, updated_at)
-       VALUES (?, ?, 'UPLOAD', 'SUCCEEDED', 1, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, 'EXTRACT', ?, 1, ?, ?, ?, ?, ?)`,
     ).bind(
       newId('job'),
       importId,
-      JSON.stringify([{ at: timestamp, message: `Stored ${filename} (${input.file.size} bytes, ${mime}).` }]),
+      text.trim().length > 0 ? 'SUCCEEDED' : 'SKIPPED',
+      JSON.stringify(log),
       timestamp,
       timestamp,
       timestamp,
@@ -105,16 +151,187 @@ export async function createImport(env: Env, user: AuthUser, input: CreateImport
     action: 'IMPORT_UPLOAD',
     entityType: 'import',
     entityId: importId,
-    metadata: { filename, size: input.file.size, mime },
+    metadata: { filename, size: input.file.size, mime, extractedChars: text.length },
   });
 
-  // Queue the extraction stage when a queue binding exists; otherwise the caller
-  // can run the pipeline inline (both paths execute the identical code).
-  if (env.IMPORT_QUEUE) {
-    await env.IMPORT_QUEUE.send({ importId, stage: 'EXTRACT', requestedBy: user.id });
+  // The extraction already happened; continue with AI structuring when a queue
+  // is bound, otherwise the caller runs the same pipeline inline.
+  if (env.IMPORT_QUEUE && text.trim().length > 0) {
+    await env.IMPORT_QUEUE.send({ importId, stage: 'AI_STRUCTURE', requestedBy: user.id });
   }
 
-  return { importId, assetId, status: 'UPLOADED' };
+  return {
+    importId,
+    status: text.trim().length > 0 ? 'PROCESSING' : 'REVIEW',
+    extractedChars: text.length,
+    structured: false,
+  };
+}
+
+export interface CreateTextImportInput {
+  title?: string;
+  text: string;
+  contentOrigin?: ContentOrigin;
+  sourceTitle?: string;
+  sourceUrl?: string;
+  attribution?: string;
+  licenseNotes?: string;
+}
+
+/** Pasted source text: no file, no storage - the text goes straight into D1. */
+export async function createTextImport(env: Env, user: AuthUser, input: CreateTextImportInput): Promise<CreateImportResult> {
+  const text = (input.text ?? '').trim();
+  if (text.length < 40) throw ApiError.validation('Paste at least a paragraph of source text before importing.');
+  if (text.length > 400_000) throw ApiError.validation('Pasted text is limited to 400,000 characters.');
+
+  // A pasted JSON document is treated as a structured payload.
+  const looksJson = text.startsWith('{') || text.startsWith('[');
+  if (looksJson) {
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (parsed && typeof parsed === 'object') {
+        return createStructuredImport(env, user, {
+          ...input,
+          filename: 'pasted.json',
+          mime: 'application/json',
+          sizeBytes: text.length,
+          payload: parsed,
+          checksum: await sha256Hex(text),
+        });
+      }
+    } catch {
+      // Not JSON after all: continue as plain text below.
+    }
+  }
+
+  const importId = newId('imp');
+  const timestamp = nowIso();
+  const title = (input.title ?? 'Pasted source text').slice(0, 200);
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO imports (id, title, filename, mime, size_bytes, status, ai_used, created_by, created_at, updated_at,
+                            content_origin, source_title, source_url, attribution, license_notes, source_text, extracted_chars)
+       VALUES (?, ?, 'pasted.txt', 'text/plain', ?, 'PROCESSING', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      importId,
+      title,
+      text.length,
+      user.id,
+      timestamp,
+      timestamp,
+      input.contentOrigin ?? 'IMPORTED',
+      input.sourceTitle ?? null,
+      input.sourceUrl ?? null,
+      input.attribution ?? null,
+      input.licenseNotes ?? null,
+      text,
+      text.length,
+    ),
+    env.DB.prepare(
+      `INSERT INTO import_jobs (id, import_id, stage, status, attempts, log_json, started_at, finished_at, created_at, updated_at)
+       VALUES (?, ?, 'EXTRACT', 'SUCCEEDED', 1, ?, ?, ?, ?, ?)`,
+    ).bind(
+      newId('job'),
+      importId,
+      JSON.stringify([{ at: timestamp, message: `Stored ${text.length} characters of pasted text.` }]),
+      timestamp,
+      timestamp,
+      timestamp,
+      timestamp,
+    ),
+  ]);
+
+  await recordAudit(env, {
+    actorUserId: user.id,
+    action: 'IMPORT_PASTE',
+    entityType: 'import',
+    entityId: importId,
+    metadata: { characters: text.length },
+  });
+
+  if (env.IMPORT_QUEUE) {
+    await env.IMPORT_QUEUE.send({ importId, stage: 'AI_STRUCTURE', requestedBy: user.id });
+  }
+
+  return { importId, status: 'PROCESSING', extractedChars: text.length, structured: false };
+}
+
+/** A JSON document that already follows the platform's structured test format. */
+async function createStructuredImport(
+  env: Env,
+  user: AuthUser,
+  input: {
+    title?: string;
+    filename: string;
+    mime: string;
+    sizeBytes: number;
+    payload: unknown;
+    checksum: string;
+    contentOrigin?: ContentOrigin;
+    sourceTitle?: string;
+    sourceUrl?: string;
+    attribution?: string;
+    licenseNotes?: string;
+  },
+): Promise<CreateImportResult> {
+  const importId = newId('imp');
+  const timestamp = nowIso();
+  const title = (input.title ?? 'Structured JSON import').slice(0, 200);
+  const serialised = JSON.stringify(input.payload);
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO imports (id, title, filename, mime, size_bytes, status, ai_used, created_by, created_at, updated_at,
+                            content_origin, source_title, source_url, attribution, license_notes,
+                            source_text, extracted_chars, structured_payload_json)
+       VALUES (?, ?, ?, ?, ?, 'REVIEW', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      importId,
+      title,
+      input.filename,
+      input.mime,
+      input.sizeBytes,
+      user.id,
+      timestamp,
+      timestamp,
+      input.contentOrigin ?? 'IMPORTED',
+      input.sourceTitle ?? null,
+      input.sourceUrl ?? null,
+      input.attribution ?? null,
+      input.licenseNotes ?? null,
+      serialised.length <= 400_000 ? serialised : null,
+      serialised.length,
+      serialised,
+    ),
+    env.DB.prepare(
+      `INSERT INTO import_jobs (id, import_id, stage, status, attempts, log_json, started_at, finished_at, created_at, updated_at)
+       VALUES (?, ?, 'AI_STRUCTURE', 'SKIPPED', 1, ?, ?, ?, ?, ?)`,
+    ).bind(
+      newId('job'),
+      importId,
+      JSON.stringify([
+        {
+          at: timestamp,
+          message: `Loaded a structured JSON payload (${serialised.length} characters). AI structuring was not needed.`,
+        },
+      ]),
+      timestamp,
+      timestamp,
+      timestamp,
+      timestamp,
+    ),
+  ]);
+
+  await recordAudit(env, {
+    actorUserId: user.id,
+    action: 'IMPORT_JSON',
+    entityType: 'import',
+    entityId: importId,
+    metadata: { filename: input.filename, characters: serialised.length, checksum: input.checksum },
+  });
+
+  return { importId, status: 'REVIEW', extractedChars: serialised.length, structured: true };
 }
 
 function sanitiseFilename(name: string): string {
@@ -128,11 +345,18 @@ export async function runImportStage(env: Env, message: ImportQueueMessage): Pro
   const { importId, stage, requestedBy } = message;
 
   const row = await env.DB.prepare(
-    'SELECT id, title, filename, mime, r2_key, text_r2_key FROM (SELECT id, title, filename, mime, r2_key, extracted_r2_key AS text_r2_key FROM imports WHERE id = ?)',
+    'SELECT id, title, filename, mime, source_text, structured_payload_json FROM imports WHERE id = ?',
   )
     .bind(importId)
-    .first<{ id: string; title: string; filename: string; mime: string; r2_key: string | null; text_r2_key: string | null }>();
-  if (!row || !row.r2_key) throw new Error(`Import ${importId} not found`);
+    .first<{
+      id: string;
+      title: string;
+      filename: string;
+      mime: string;
+      source_text: string | null;
+      structured_payload_json: string | null;
+    }>();
+  if (!row) throw new Error(`Import ${importId} not found`);
 
   const jobId = newId('job');
   const startedAt = nowIso();
@@ -151,25 +375,17 @@ export async function runImportStage(env: Env, message: ImportQueueMessage): Pro
         .bind(nowIso(), importId)
         .run();
 
-      const object = await env.CONTENT_BUCKET.get(row.r2_key);
-      if (!object) throw new Error('The stored source file could not be read.');
-      const bytes = new Uint8Array(await object.arrayBuffer());
-      const extraction = extractText(bytes, row.mime, row.filename);
+      const text = row.source_text ?? '';
       log.push({
         at: nowIso(),
-        message: `Extracted ${extraction.text.length} characters from a ${extraction.kind} file${extraction.pageCount ? ` (${extraction.pageCount} pages)` : ''}.`,
+        message:
+          text.length > 0
+            ? `Using the ${text.length} characters extracted when the import was received (stored in the database, no file storage involved).`
+            : 'No extracted text is available for this import. Paste the source text to structure it.',
       });
-      if (extraction.warning) log.push({ at: nowIso(), message: extraction.warning });
-
-      if (extraction.text.trim().length > 0) {
-        const key = `imports/${importId}/extracted.txt`;
-        await env.CONTENT_BUCKET.put(key, extraction.text, { httpMetadata: { contentType: 'text/plain' } });
-        await env.DB.prepare(
-          `UPDATE imports SET extracted_r2_key = ?, extracted_chars = ?, status = ?, updated_at = ? WHERE id = ?`,
-        )
-          .bind(key, extraction.text.length, 'PROCESSING', nowIso(), importId)
-          .run();
-      }
+      await env.DB.prepare(`UPDATE imports SET status = ?, updated_at = ? WHERE id = ?`)
+        .bind(text.trim().length > 0 ? 'PROCESSING' : 'REVIEW', nowIso(), importId)
+        .run();
 
       await env.DB.prepare(
         `UPDATE import_jobs SET status = 'SUCCEEDED', log_json = ?, finished_at = ?, updated_at = ? WHERE id = ?`,
@@ -215,11 +431,7 @@ export async function runImportStage(env: Env, message: ImportQueueMessage): Pro
         return;
       }
 
-      let text = '';
-      if (row.text_r2_key) {
-        const textObject = await env.CONTENT_BUCKET.get(row.text_r2_key);
-        if (textObject) text = await textObject.text();
-      }
+      const text = row.source_text ?? '';
       if (!text.trim()) {
         log.push({
           at: nowIso(),
@@ -330,7 +542,17 @@ const aiPayloadSchema = z.object({
   testType: z.enum(['READING', 'LISTENING', 'WRITING', 'FULL_MOCK']),
   answerKeyConfidence: z.enum(['PROVIDED', 'PARTIAL', 'ABSENT']),
   warnings: z.array(z.string()).default([]),
-  passages: z.array(z.object({ title: z.string().nullable().optional(), paragraphs: z.array(z.object({ label: z.string(), text: z.string() })) })).default([]),
+  passages: z
+    .array(
+      z.object({
+        title: z.string().nullable().optional(),
+        // Informational only. The platform recomputes the count from the text
+        // and reports a mismatch instead of trusting this number.
+        passageWordCount: z.number().int().nullable().optional(),
+        paragraphs: z.array(z.object({ label: z.string(), text: z.string() })),
+      }),
+    )
+    .default([]),
   sections: z.array(
     z.object({
       skill: z.enum(['READING', 'LISTENING', 'WRITING']),
@@ -459,7 +681,12 @@ export function convertAiPayload(payload: unknown): ConvertedAiPayload {
       title: section.title ?? '',
       instructions: section.instructions ?? '',
       passage: passage
-        ? { title: passage.title ?? '', paragraphs: passage.paragraphs.map((p) => ({ label: p.label, text: p.text })) }
+        ? {
+            title: passage.title ?? '',
+            paragraphs: passage.paragraphs.map((p) => ({ label: p.label, text: p.text })),
+            // Kept only so the review screen can flag an inflated declared count.
+            passageWordCount: passage.passageWordCount ?? null,
+          }
         : null,
       audioAssetId: null,
       groups,
@@ -554,7 +781,7 @@ export async function applyImportDraft(
   options: { testId?: string | null; title?: string; origin?: ContentOrigin } = {},
 ): Promise<ApplyImportResult> {
   const importRow = await env.DB.prepare(
-    'SELECT id, title, filename, status, content_origin, source_title, source_url, attribution, license_notes, r2_key FROM imports WHERE id = ?',
+    'SELECT id, title, filename, status, content_origin, source_title, source_url, attribution, license_notes FROM imports WHERE id = ?',
   )
     .bind(importId)
     .first<{
@@ -567,7 +794,6 @@ export async function applyImportDraft(
       source_url: string | null;
       attribution: string | null;
       license_notes: string | null;
-      r2_key: string | null;
     }>();
   if (!importRow) throw ApiError.notFound('Import not found.');
   if (importRow.status === 'PUBLISHED' || importRow.status === 'DISCARDED') {
@@ -642,7 +868,13 @@ export async function applyImportDraft(
   const written = await replaceVersionContent(env, versionId, content, user.id);
 
   const adminContent = await loadAdminVersion(env, versionId);
-  const issues = validateTestVersion(toValidationInput(adminContent));
+  // Stored content is validated from the database (which recomputes word counts
+  // from the text). Declared counts from the source file are compared here, so
+  // an inflated AI or hand-authored number is reported instead of believed.
+  const issues: ValidationIssue[] = [
+    ...validateTestVersion(toValidationInput(adminContent)),
+    ...declaredWordCountIssues(adminContent, content),
+  ];
   const summary = summariseIssues(issues);
 
   await env.DB.batch([
@@ -666,8 +898,6 @@ export async function applyImportDraft(
     metadata: { testId, versionId, totalQuestions: written.totalQuestions, errors: summary.errors },
   });
 
-  void importRow.r2_key;
-
   return {
     testId,
     versionId,
@@ -675,6 +905,33 @@ export async function applyImportDraft(
     issues,
     publishable: summary.publishable,
   };
+}
+
+/** Compares a source's declared passage word count with the stored text. */
+function declaredWordCountIssues(
+  stored: Awaited<ReturnType<typeof loadAdminVersion>>,
+  incoming: EditableContent,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  for (const section of incoming.sections) {
+    const declared = section.passage?.passageWordCount ?? null;
+    if (declared === null || declared === undefined) continue;
+    const match = stored.sections.find(
+      (candidate) => candidate.skill === section.skill && candidate.title === section.title,
+    );
+    const computed = match?.passage?.wordCount ?? 0;
+    if (computed === 0) continue;
+    const difference = Math.abs(declared - computed);
+    if (difference > Math.max(5, Math.round(computed * 0.02))) {
+      issues.push({
+        level: 'WARNING',
+        code: 'PASSAGE_WORD_COUNT_MISMATCH',
+        message: `The import declares ${declared} words for “${section.title}” but the stored passage contains ${computed}. The text is authoritative.`,
+        sectionId: match?.id ?? null,
+      });
+    }
+  }
+  return issues;
 }
 
 function inferTestType(content: EditableContent): 'READING' | 'LISTENING' | 'WRITING' | 'FULL_MOCK' {
@@ -712,14 +969,11 @@ export async function loadImportDetail(env: Env, importId: string) {
     .first<Record<string, unknown>>();
   if (!row) throw ApiError.notFound('Import not found.');
 
-  const [jobs, drafts, asset] = await Promise.all([
+  const [jobs, drafts] = await Promise.all([
     env.DB.prepare('SELECT * FROM import_jobs WHERE import_id = ? ORDER BY created_at').bind(importId).all(),
     env.DB.prepare('SELECT id, validation_json, status, test_version_id, created_at FROM import_drafts WHERE import_id = ? ORDER BY created_at DESC')
       .bind(importId)
       .all(),
-    row['r2_key']
-      ? env.DB.prepare('SELECT id, filename, mime, size_bytes FROM assets WHERE r2_key = ?').bind(row['r2_key']).first()
-      : Promise.resolve(null),
   ]);
 
   return {
@@ -745,12 +999,12 @@ export async function loadImportDetail(env: Env, importId: string) {
       sourceUrl: row['source_url'],
       attribution: row['attribution'],
       licenseNotes: row['license_notes'],
-      hasExtractedText: Boolean(row['extracted_r2_key']),
+      hasExtractedText: Boolean(row['source_text']),
+      sourceTextChars: (row['source_text'] as string | null)?.length ?? 0,
       structuredPayload: row['structured_payload_json']
         ? safeParseJson(row['structured_payload_json'] as string)
         : null,
     },
-    asset,
     jobs: (jobs.results as Array<Record<string, unknown>>).map((job) => ({
       id: job['id'],
       stage: job['stage'],

@@ -21,11 +21,12 @@ interface AdminTestRow {
   component_count: number;
 }
 
-const STATUS_TONES: Record<string, 'neutral' | 'accent' | 'success' | 'warning'> = {
+/** Status colours: draft neutral, review amber, published emerald, archived dimmed. */
+const STATUS_TONES: Record<string, 'neutral' | 'accent' | 'success' | 'warning' | 'dim'> = {
   DRAFT: 'neutral',
-  REVIEW: 'accent',
+  REVIEW: 'warning',
   PUBLISHED: 'success',
-  ARCHIVED: 'warning',
+  ARCHIVED: 'dim',
 };
 
 export function AdminTestsPage() {

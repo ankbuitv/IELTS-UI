@@ -38,6 +38,12 @@ export interface EditableSection {
     title: string;
     subtitle?: string | null;
     paragraphs: PassageParagraph[];
+    /**
+     * Word count declared by the source file. Never trusted or stored: the
+     * canonical count is recomputed from the paragraph text on write, and a
+     * difference is reported to the admin as a validation warning.
+     */
+    passageWordCount?: number | null;
   } | null;
   audioAssetId?: string | null;
   playback?: Partial<AudioPlaybackPolicy>;

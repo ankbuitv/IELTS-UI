@@ -88,12 +88,14 @@ function WritingTask({
     <>
       <div className="writing-editor__meta">
         <span>
-          {words} word{words === 1 ? '' : 's'}
+          <strong>{words}</strong> word{words === 1 ? '' : 's'}
           {minimumWords ? ` · minimum ${minimumWords}` : ''}
         </span>
-        <span className={meetsMinimum ? 'muted' : ''} style={meetsMinimum ? undefined : { color: '#9a6400' }}>
-          {meetsMinimum ? 'Length requirement met' : 'Below the minimum length'}
-        </span>
+        {meetsMinimum ? (
+          <span className="badge badge--success">Length requirement met</span>
+        ) : (
+          <span className="badge badge--warning">Below the minimum length</span>
+        )}
       </div>
       <textarea
         aria-label="Your written response"

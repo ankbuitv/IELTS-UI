@@ -115,7 +115,7 @@ CREATE INDEX idx_classroom_invites_classroom ON classroom_invites (classroom_id)
 CREATE INDEX idx_classroom_invites_email ON classroom_invites (email);
 
 -- -----------------------------------------------------------------------------
--- Assets (R2 objects; metadata in D1)
+-- Assets (metadata in D1; V1 links external HTTPS URLs — see migration 0003)
 -- -----------------------------------------------------------------------------
 CREATE TABLE assets (
   id               TEXT PRIMARY KEY,

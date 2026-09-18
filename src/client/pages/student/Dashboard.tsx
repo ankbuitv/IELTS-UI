@@ -110,21 +110,33 @@ export function StudentDashboardPage() {
       </Card>
 
       <div className="grid grid--4">
-        <Stat label="Attempts" value={data.totals.attempts} hint={`${data.totals.submitted} submitted`} />
+        <Stat
+          label="Attempts"
+          value={data.totals.attempts}
+          hint={`${data.totals.submitted} submitted`}
+          icon="🗂"
+          accent="blue"
+        />
         <Stat
           label="Reading"
           value={formatScore(reading?.rawScore ?? null, reading?.totalQuestions ?? null)}
           hint={reading?.latestBand ? `Latest estimated band ${formatBand(reading.latestBand)}` : 'No marked reading yet'}
+          icon="📖"
+          accent="brand"
         />
         <Stat
           label="Listening"
           value={formatScore(listening?.rawScore ?? null, listening?.totalQuestions ?? null)}
           hint={listening?.latestBand ? `Latest estimated band ${formatBand(listening.latestBand)}` : 'No marked listening yet'}
+          icon="🎧"
+          accent="violet"
         />
         <Stat
           label="Writing"
           value={writing?.writingScores ? `${writing.writingScores} marked` : 'Not yet marked'}
           hint={writing?.averageWritingBand ? `Average ${formatBand(writing.averageWritingBand)}` : 'Teacher-marked only'}
+          icon="✍️"
+          accent="amber"
         />
       </div>
 

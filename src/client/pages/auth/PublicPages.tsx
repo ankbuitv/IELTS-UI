@@ -9,66 +9,224 @@ export function LandingPage() {
   if (user) return <Navigate to="/dashboard" replace />;
 
   return (
-    <div className="stack" style={{ gap: 0 }}>
-      <section className="public-hero" style={{ margin: '-24px -20px 0', padding: '64px 24px 72px' }}>
-        <div className="public-hero__inner stack">
-          <span className="badge badge--accent" style={{ width: 'fit-content' }}>
-            Independent practice platform
-          </span>
-          <h1>Computer-based exam practice, classroom management and full mock tests.</h1>
-          <p>
-            Meridian Test Studio gives teachers a complete workflow: original Reading, Listening and Writing practice;
-            server-marked results; assigned deadlines; and integrity monitoring that is honest about what a browser can
-            and cannot observe.
-          </p>
-          <div className="row">
-            <Link className="btn btn--primary btn--lg" to="/register">
-              Create a free student account
-            </Link>
-            <Link className="btn btn--lg" to="/login" style={{ background: 'transparent', color: '#eaf1f6', borderColor: 'rgba(255,255,255,0.35)' }}>
-              Sign in
-            </Link>
+    <div className="public-page">
+      <section className="public-hero">
+        <div className="public-hero__inner">
+          <div>
+            <span className="public-hero__eyebrow">Independent practice platform</span>
+            <h1>Computer-based exam practice, classroom management and full mock tests.</h1>
+            <p>
+              Meridian Test Studio gives teachers one workflow for original Reading, Listening and Writing practice:
+              server-marked results, assigned deadlines, class analytics and integrity monitoring that is honest about
+              what a browser can and cannot observe.
+            </p>
+            <div className="public-hero__actions">
+              <Link className="btn btn--primary btn--lg" to="/register">
+                Create a free student account
+              </Link>
+              <Link className="btn btn--lg" to="/login">
+                Sign in
+              </Link>
+            </div>
+            <p className="public-hero__note">
+              No credit card, no trial timer. Teachers are created by an administrator or by signing up with an
+              institution code.
+            </p>
           </div>
-          <p className="tiny" style={{ color: '#a9c0ce', maxWidth: 720 }}>
-            Not affiliated with, endorsed by or connected to IELTS, the British Council, IDP or Cambridge. All practice
-            material on this platform is original or imported by your institution under its own rights.
-          </p>
+
+          <div className="public-hero__card">
+            <h2>What a session looks like</h2>
+            <p className="tiny muted" style={{ marginBottom: 0 }}>
+              The same shell from practice to a full mock: passage on the left, questions on the right, a timer the
+              server controls.
+            </p>
+            <div className="hero-preview">
+              <div className="hero-preview__row">
+                <span className="skill-chip skill-reading">Reading</span>
+                <span>Passage + 13 questions</span>
+                <span className="hero-preview__badge">40 min</span>
+              </div>
+              <div className="hero-preview__row">
+                <span className="skill-chip skill-listening">Listening</span>
+                <span>Audio panel + note completion</span>
+                <span className="hero-preview__badge">30 min</span>
+              </div>
+              <div className="hero-preview__row">
+                <span className="skill-chip skill-writing">Writing</span>
+                <span>Task 1 and Task 2 with word counts</span>
+                <span className="hero-preview__badge">60 min</span>
+              </div>
+              <div className="hero-preview__row">
+                <span className="skill-chip skill-mock">Full mock</span>
+                <span>Listening → Reading → Writing</span>
+                <span className="hero-preview__badge">Sequence</span>
+              </div>
+            </div>
+            <p className="tiny muted" style={{ marginTop: 14, marginBottom: 0 }}>
+              Estimated bands are a practice signal, never an official IELTS result.
+            </p>
+          </div>
         </div>
       </section>
 
-      <section className="public-section grid grid--3">
-        <Feature title="Exam shell that behaves like the real thing">
-          Server-authoritative countdown, autosave, flag-for-review, unanswered warnings and full refresh/reconnect
-          recovery. Refreshing the page or changing your system clock never adds time.
-        </Feature>
-        <Feature title="Reading, Listening and Writing">
-          TRUE/FALSE/NOT GIVEN, YES/NO/NOT GIVEN, multiple choice, matching information, matching headings,
-          sentence/summary/note completion and short answer, plus realistic Writing tasks with autosave and word counts.
-        </Feature>
-        <Feature title="Classrooms and assignments">
-          Create a classroom, invite students securely, assign a published test with a deadline, attempt limit, timing
-          policy and result-release policy, then review class analytics.
-        </Feature>
-        <Feature title="Server-side marking">
-          Objective sections are marked in the Worker against protected answer keys. Correct answers never reach the
-          browser before a result is released.
-        </Feature>
-        <Feature title="Versioned tests">
-          Publishing freezes an immutable version. Later edits create a new version, so an attempt never changes after
-          the fact.
-        </Feature>
-        <Feature title="AI-assisted import, human approved">
-          Upload a PDF, DOCX or text source; the server extracts structure and proposes a draft. Nothing is published
-          automatically and the model is never allowed to invent an answer key.
-        </Feature>
+      <section className="public-section" id="skills">
+        <div className="public-section__head">
+          <h2>Four skills, one consistent exam shell</h2>
+          <p>
+            Each skill keeps its own colour across the dashboards and analytics, so a class report can be read at a
+            glance without relying on a single hue.
+          </p>
+        </div>
+        <div className="grid grid--4">
+          <SkillCard
+            skill="reading"
+            name="Reading"
+            detail="TRUE/FALSE/NOT GIVEN, matching headings and information, completion and short answer tasks, with a readability-first passage pane."
+            meta="40 questions · 60 min"
+          />
+          <SkillCard
+            skill="listening"
+            name="Listening"
+            detail="A calm audio panel with policy-driven play limits, section information and note, table and sentence completion."
+            meta="40 questions · 30 min"
+          />
+          <SkillCard
+            skill="writing"
+            name="Writing"
+            detail="Task 1 and Task 2 with autosave, live word counts, prompt cards and human marking by a teacher."
+            meta="2 tasks · 60 min"
+          />
+          <SkillCard
+            skill="mock"
+            name="Full mock"
+            detail="Listening, Reading and Writing in sequence with a clear progression indicator and server-controlled section timing."
+            meta="Complete test"
+          />
+        </div>
       </section>
+
+      <section className="public-section public-section--muted" id="teachers">
+        <div className="public-section__inner">
+          <div className="public-section__head">
+            <h2>Built for teachers, not for a leaderboard</h2>
+            <p>
+              Classrooms, assignments and reports designed to be scanned: alignment, whitespace, status badges and
+              filters rather than a wall of numbers.
+            </p>
+          </div>
+          <div className="grid grid--3">
+            <Feature icon="🏫" title="Classrooms and secure invitations">
+              Create a classroom, share a single-use invitation code, enrol by email and keep every class isolated.
+              Teachers can only ever read their own classes and students.
+            </Feature>
+            <Feature icon="🗓" title="Assignments with real rules">
+              Assign a published version with a deadline, attempt limit, timing policy and result-release policy
+              (immediate, score only, after the deadline or no review).
+            </Feature>
+            <Feature icon="📈" title="Reports that stay honest">
+              Class analytics, band distributions, task-type accuracy and integrity summaries. Observable events are
+              recorded, never declared as proof of cheating.
+            </Feature>
+          </div>
+        </div>
+      </section>
+
+      <section className="public-section" id="features">
+        <div className="public-section__head">
+          <h2>What the platform does</h2>
+          <p>Everything is served from one Worker: the API, the candidate app and the teacher and admin consoles.</p>
+        </div>
+        <div className="grid grid--3">
+          <Feature icon="⏱" title="Server-authoritative timing">
+            Deadlines are recomputed on the server on every request. Refreshing the page, changing the system clock or
+            reconnecting never grants extra time.
+          </Feature>
+          <Feature icon="🔒" title="Answer keys stay server-side">
+            Objective sections are marked in the Worker against protected keys. Correct answers reach the browser only
+            when a result is released.
+          </Feature>
+          <Feature icon="🧾" title="Versioned, immutable content">
+            Publishing freezes a version. Later edits create a new version, so an attempt never changes after the fact.
+          </Feature>
+          <Feature icon="📥" title="Import with human review">
+            Paste structured reading JSON or upload a document; the platform extracts structure, validates it and stops
+            at review. Nothing is published automatically and no answer key is invented.
+          </Feature>
+          <Feature icon="🧮" title="Estimated bands, clearly labelled">
+            Reading and Listening estimates use your own versioned conversion profile, and the interface always labels
+            them as estimates. Writing is marked by a person.
+          </Feature>
+          <Feature icon="♿" title="Accessible by default">
+            Keyboard navigation, visible focus, semantic labels, colour never carrying meaning alone, and reduced-motion
+            support throughout.
+          </Feature>
+        </div>
+      </section>
+
+      <footer className="public-footer">
+        <div className="public-footer__inner">
+          <div>
+            <h3>Meridian Test Studio</h3>
+            <p>Independent exam-style practice for schools and teachers, running on Cloudflare Workers and D1.</p>
+          </div>
+          <div>
+            <h3>Product</h3>
+            <p>
+              <Link to="/register">Create an account</Link>
+            </p>
+            <p>
+              <Link to="/login">Sign in</Link>
+            </p>
+          </div>
+          <div>
+            <h3>Integrity</h3>
+            <p>
+              Integrity monitoring records observable browser events only. It cannot see other applications, and it never
+              reports a conclusion about a candidate.
+            </p>
+          </div>
+        </div>
+        <p className="public-footer__notice">
+          Not affiliated with, endorsed by or connected to IELTS, the British Council, IDP or Cambridge. Meridian Test
+          Studio does not reproduce their materials, logos or branding, and no practice band here is an official result.
+          Content remains the responsibility of the institution that imports or writes it.
+        </p>
+      </footer>
     </div>
   );
 }
 
-function Feature({ title, children }: { title: string; children: React.ReactNode }) {
+function SkillCard({
+  skill,
+  name,
+  detail,
+  meta,
+}: {
+  skill: 'reading' | 'listening' | 'writing' | 'mock';
+  name: string;
+  detail: string;
+  meta: string;
+}) {
+  return (
+    <article className={`feature skill-card skill-${skill}`}>
+      <span className="skill-chip">Skill</span>
+      <h3 style={{ marginTop: 10 }}>{name}</h3>
+      <p className="skill-card__meta">{meta}</p>
+      <p className="muted small" style={{ marginBottom: 0 }}>
+        {detail}
+      </p>
+    </article>
+  );
+}
+
+function Feature({ title, icon, children }: { title: string; icon?: string; children: React.ReactNode }) {
   return (
     <article className="feature">
+      {icon ? (
+        <div className="feature__icon" aria-hidden="true">
+          {icon}
+        </div>
+      ) : null}
       <h3>{title}</h3>
       <p className="muted small" style={{ marginBottom: 0 }}>
         {children}

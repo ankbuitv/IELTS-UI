@@ -11,6 +11,7 @@ import {
   applyImportDraft,
   convertAiPayload,
   createImport,
+  createTextImport,
   loadImportDetail,
   runImportPipelineInline,
 } from '../services/import-service';
@@ -76,6 +77,9 @@ const editableContentSchema = z.object({
           .object({
             title: z.string().max(300).default(''),
             subtitle: z.string().max(300).nullish(),
+            // Declared by the source, ignored on write: the count is recomputed
+            // from the text and a difference is surfaced as a warning.
+            passageWordCount: z.number().int().min(0).max(50_000).nullish(),
             paragraphs: z.array(z.object({ label: z.string().max(20), text: z.string().max(60_000) })).max(200),
           })
           .nullish(),
@@ -175,6 +179,38 @@ router.post('/', async (c) => {
   return c.json(result, 201);
 });
 
+/**
+ * Pasted text or JSON import.
+ *
+ * Nothing is stored as a file: the text is kept in D1 and processed in the
+ * request, which is why V1 needs no object storage for imports.
+ */
+router.post('/paste', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  await enforceRateLimit(
+    c.env,
+    { bucket: `import-upload:${user.id}`, windowSeconds: 3600, limit: 60 },
+    'Too many imports in the last hour.',
+  );
+
+  const body = await parseBody(
+    c,
+    z.object({
+      text: z.string().min(1).max(400_000),
+      title: z.string().max(200).optional(),
+      contentOrigin: z.enum(CONTENT_ORIGINS).optional(),
+      sourceTitle: z.string().max(500).optional(),
+      sourceUrl: z.string().max(1000).optional(),
+      attribution: z.string().max(1000).optional(),
+      licenseNotes: z.string().max(4000).optional(),
+    }),
+  );
+
+  const result = await createTextImport(c.env, user, body);
+  return c.json(result, 201);
+});
+
 function stringField(form: FormData, key: string): string | undefined {
   const value = form.get(key);
   if (typeof value !== 'string') return undefined;
@@ -187,17 +223,13 @@ router.get('/:id', async (c) => {
 });
 
 router.get('/:id/extracted', async (c) => {
-  const row = await c.env.DB.prepare('SELECT extracted_r2_key, filename FROM imports WHERE id = ?')
+  const row = await c.env.DB.prepare('SELECT source_text, filename FROM imports WHERE id = ?')
     .bind(c.req.param('id'))
-    .first<{ extracted_r2_key: string | null; filename: string }>();
+    .first<{ source_text: string | null; filename: string }>();
   if (!row) throw ApiError.notFound('Import not found.');
-  if (!row.extracted_r2_key) throw ApiError.notFound('No extracted text is stored for this import.');
+  if (!row.source_text) throw ApiError.notFound('No extracted text is stored for this import.');
 
-  const object = await c.env.CONTENT_BUCKET.get(row.extracted_r2_key);
-  if (!object) throw ApiError.notFound('Extracted text is missing from storage.');
-  const text = await object.text();
-
-  return c.json({ filename: row.filename, extractedChars: text.length, text });
+  return c.json({ filename: row.filename, extractedChars: row.source_text.length, text: row.source_text });
 });
 
 /**

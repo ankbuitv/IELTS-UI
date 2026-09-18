@@ -17,11 +17,11 @@ import {
 // ---------------------------------------------------------------------------
 // Buttons
 // ---------------------------------------------------------------------------
-type ButtonVariant = 'default' | 'primary' | 'danger' | 'ghost';
+type ButtonVariant = 'default' | 'primary' | 'secondary' | 'success' | 'danger' | 'ghost';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'icon';
   block?: boolean;
   loading?: boolean;
 }
@@ -114,6 +114,97 @@ export function Checkbox({
   );
 }
 
+export function Radio({
+  name,
+  value,
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  name: string;
+  value: string;
+  checked: boolean;
+  onChange: (value: string) => void;
+  label: ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="radio">
+      <input
+        type="radio"
+        name={name}
+        value={value}
+        checked={checked}
+        disabled={disabled}
+        onChange={() => onChange(value)}
+      />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+export function IconButton({
+  label,
+  children,
+  size = 'md',
+  variant = 'default',
+  ...rest
+}: ButtonProps & { label: string }) {
+  return (
+    <Button variant={variant} size={size === 'lg' ? 'md' : size} aria-label={label} title={label} {...rest}>
+      <span aria-hidden="true">{children}</span>
+    </Button>
+  );
+}
+
+/** Accessible hover/focus hint; never the only carrier of important text. */
+export function Tooltip({ text, children }: { text: string; children: ReactNode }) {
+  return (
+    <span className="tooltip">
+      {children}
+      <span className="tooltip__bubble" role="tooltip">
+        {text}
+      </span>
+    </span>
+  );
+}
+
+export function Skeleton({ height = 16, width = '100%', radius }: { height?: number | string; width?: number | string; radius?: number }) {
+  return (
+    <div
+      className="skeleton"
+      style={{ height, width, borderRadius: radius !== undefined ? radius : undefined }}
+      aria-hidden="true"
+    />
+  );
+}
+
+export function Pagination({
+  page,
+  pageCount,
+  onPage,
+  totalLabel,
+}: {
+  page: number;
+  pageCount: number;
+  onPage: (page: number) => void;
+  totalLabel?: string;
+}) {
+  if (pageCount <= 1) return null;
+  return (
+    <nav className="pagination" aria-label="Pagination">
+      <span className="pagination__status">{totalLabel ?? `Page ${page} of ${pageCount}`}</span>
+      <Button size="sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+        Previous
+      </Button>
+      <Button size="sm" disabled={page >= pageCount} onClick={() => onPage(page + 1)}>
+        Next
+      </Button>
+    </nav>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Layout helpers
 // ---------------------------------------------------------------------------
@@ -123,6 +214,7 @@ export function Card({
   actions,
   children,
   flush,
+  interactive,
   className = '',
 }: {
   title?: ReactNode;
@@ -130,10 +222,12 @@ export function Card({
   actions?: ReactNode;
   children: ReactNode;
   flush?: boolean;
+  /** Adds the hover lift used for cards that link somewhere. */
+  interactive?: boolean;
   className?: string;
 }) {
   return (
-    <section className={`card ${flush ? 'card--flush' : ''} ${className}`}>
+    <section className={`card ${flush ? 'card--flush' : ''} ${interactive ? 'card--link' : ''} ${className}`}>
       {(title || actions) && (
         <header className="card__header" style={flush ? { padding: '16px 18px 0' } : undefined}>
           <div>
@@ -148,12 +242,38 @@ export function Card({
   );
 }
 
-export function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: ReactNode }) {
+/**
+ * Stat card.
+ *
+ * `accent` exists so a dashboard row can use several accessible colours at
+ * once (Reading cyan, Listening violet, Writing amber, Full mock emerald)
+ * without turning the whole page one hue. `tone` on ProgressBar/Bar matches.
+ */
+export function Stat({
+  label,
+  value,
+  hint,
+  icon,
+  accent = 'brand',
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: ReactNode;
+  icon?: ReactNode;
+  accent?: 'brand' | 'emerald' | 'violet' | 'amber' | 'blue' | 'rose' | 'slate';
+}) {
   return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value">{value}</div>
-      {hint ? <div className="stat__hint">{hint}</div> : null}
+    <div className={`stat accent--${accent}`}>
+      {icon ? (
+        <div className="stat__icon" aria-hidden="true">
+          {icon}
+        </div>
+      ) : null}
+      <div className="stat__body">
+        <div className="stat__label">{label}</div>
+        <div className="stat__value">{value}</div>
+        {hint ? <div className="stat__hint">{hint}</div> : null}
+      </div>
     </div>
   );
 }
@@ -162,13 +282,16 @@ export function Badge({
   children,
   tone = 'neutral',
   title,
+  plain,
 }: {
   children: ReactNode;
-  tone?: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info';
+  tone?: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | 'violet' | 'dim';
   title?: string;
+  /** Hide the leading status dot (for purely decorative labels). */
+  plain?: boolean;
 }) {
   return (
-    <span className={`badge badge--${tone}`} title={title}>
+    <span className={`badge badge--${tone}${plain ? ' badge--plain' : ''}`} title={title}>
       {children}
     </span>
   );
@@ -216,7 +339,7 @@ export function Loading({ label = 'Loading…' }: { label?: string }) {
   );
 }
 
-export function ProgressBar({ value, max, tone }: { value: number; max: number; tone?: 'success' | 'warning' | 'danger' }) {
+export function ProgressBar({ value, max, tone }: { value: number; max: number; tone?: 'success' | 'warning' | 'danger' | 'violet' }) {
   const percent = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
     <div className={`bar ${tone ? `bar--${tone}` : ''}`} role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>

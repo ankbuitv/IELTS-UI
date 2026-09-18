@@ -15,6 +15,7 @@ import {
   Notice,
   Select,
   Stat,
+  Tabs,
   TextArea,
   TextInput,
   useToast,
@@ -65,9 +66,9 @@ interface ImportDetail {
     attribution: string | null;
     licenseNotes: string | null;
     hasExtractedText: boolean;
+    sourceTextChars: number;
     structuredPayload: unknown;
   };
-  asset: unknown;
   jobs: Array<{
     id: string;
     stage: string;
@@ -81,13 +82,15 @@ interface ImportDetail {
   drafts: Array<{ id: string; status: string; testVersionId: string | null; validation: unknown; createdAt: string }>;
 }
 
-const STATUS_TONES: Record<string, 'neutral' | 'accent' | 'success' | 'warning' | 'danger'> = {
+/** Import pipeline status: queued neutral, working cyan, review amber, done emerald. */
+const STATUS_TONES: Record<string, 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'dim'> = {
   UPLOADED: 'neutral',
-  REVIEW: 'accent',
+  PROCESSING: 'accent',
+  REVIEW: 'warning',
   PUBLISHED: 'success',
-  DISCARDED: 'neutral',
+  DISCARDED: 'dim',
   FAILED: 'danger',
-  SKIPPED: 'warning',
+  SKIPPED: 'neutral',
 };
 
 export function AdminImportsPage() {
@@ -112,7 +115,7 @@ export function AdminImportsPage() {
           </p>
         </div>
         <Button variant="primary" onClick={() => setUploadOpen(true)}>
-          Upload source
+          New import
         </Button>
       </div>
 
@@ -137,8 +140,9 @@ export function AdminImportsPage() {
             </select>
           </label>
           <span className="tiny muted" style={{ alignSelf: 'flex-end', paddingBottom: 8 }}>
-            Accepted: PDF, DOCX, TXT, MD, CSV — up to 25 MB. OCR is not available, so scanned PDFs without a text layer
-            cannot be extracted.
+            Paste reading JSON or text directly, or upload PDF, DOCX, TXT, MD or CSV (25 MB). Text is extracted during
+            the request and kept in the database; the original file is not retained. OCR is not available, so scanned
+            PDFs without a text layer cannot be extracted.
           </span>
         </div>
       </Card>
@@ -197,16 +201,24 @@ export function AdminImportsPage() {
             </tbody>
           </table>
         </div>
-        {data && data.imports.length === 0 ? <EmptyState title="No imports yet">Upload a source document to begin.</EmptyState> : null}
+        {data && data.imports.length === 0 ? (
+          <EmptyState title="No imports yet">Paste reading JSON or text, or upload a source document, to begin.</EmptyState>
+        ) : null}
       </Card>
 
-      <Modal open={uploadOpen} title="Upload a source document" onClose={() => setUploadOpen(false)} actions={<Button onClick={() => setUploadOpen(false)}>Close</Button>}>
-        <UploadForm
-          onUploaded={async (importId) => {
+      <Modal
+        open={uploadOpen}
+        wide
+        title="New import"
+        onClose={() => setUploadOpen(false)}
+        actions={<Button onClick={() => setUploadOpen(false)}>Close</Button>}
+      >
+        <ImportStartForm
+          onCreated={async (importId) => {
             await reload();
             setUploadOpen(false);
             setSelected(importId);
-            toast.push('Upload stored. Run extraction next.', 'success');
+            toast.push('Import created. Review the extracted text and run AI structuring if needed.', 'success');
           }}
           onError={(message) => toast.push(message, 'error')}
         />
@@ -234,13 +246,16 @@ export function AdminImportsPage() {
   );
 }
 
-function UploadForm({
-  onUploaded,
+function ImportStartForm({
+  onCreated,
   onError,
 }: {
-  onUploaded: (importId: string) => Promise<void>;
+  onCreated: (importId: string) => Promise<void>;
   onError: (message: string) => void;
 }) {
+  const [mode, setMode] = useState<'paste' | 'file'>('paste');
+  const [busy, setBusy] = useState(false);
+  const [pasteText, setPasteText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [form, setForm] = useState({
     title: '',
@@ -250,23 +265,11 @@ function UploadForm({
     attribution: '',
     licenseNotes: '',
   });
-  const [busy, setBusy] = useState(false);
 
-  return (
-    <div>
-      <Field label="Source file" required hint="PDF, DOCX, TXT, Markdown or CSV up to 25 MB.">
-        {(id) => (
-          <input
-            id={id}
-            type="file"
-            accept=".pdf,.docx,.txt,.md,.csv,application/pdf,text/plain,text/markdown,text/csv,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-          />
-        )}
-      </Field>
-      <Field label="Title" hint="Defaults to the file name if left empty.">
-        {(id) => <TextInput id={id} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />}
-      </Field>
+  const looksLikeJson = /^\s*[[{]/.test(pasteText);
+
+  const provenance = (
+    <>
       <Field label="Where does this material come from?" required>
         {(id) => (
           <Select id={id} value={form.contentOrigin} onChange={(event) => setForm({ ...form, contentOrigin: event.target.value })}>
@@ -284,30 +287,120 @@ function UploadForm({
       </div>
       <Field label="Attribution">{(id) => <TextInput id={id} value={form.attribution} onChange={(event) => setForm({ ...form, attribution: event.target.value })} />}</Field>
       <Field label="Licence notes">{(id) => <TextArea id={id} rows={2} value={form.licenseNotes} onChange={(event) => setForm({ ...form, licenseNotes: event.target.value })} />}</Field>
-      <Button
-        variant="primary"
-        loading={busy}
-        disabled={!file}
-        onClick={async () => {
-          if (!file) return;
-          setBusy(true);
-          try {
-            const body = new FormData();
-            body.set('file', file);
-            for (const [key, value] of Object.entries(form)) {
-              if (value) body.set(key, value);
-            }
-            const result = await api.upload<{ importId: string }>('/api/admin/imports', body);
-            await onUploaded(result.importId);
-          } catch (uploadError) {
-            onError(describeError(uploadError));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        Upload for review
-      </Button>
+    </>
+  );
+
+  return (
+    <div>
+      <Tabs
+        value={mode}
+        onChange={setMode}
+        tabs={[
+          { id: 'paste', label: 'Paste text or JSON' },
+          { id: 'file', label: 'Upload a document' },
+        ]}
+      />
+
+      {mode === 'paste' ? (
+        <>
+          <Field
+            label="Paste reading JSON, plain text or an AI response"
+            required
+            hint="A JSON object with a testType is validated and turned into a draft immediately. Plain text is stored for AI structuring or manual editing."
+          >
+            {(id) => (
+              <TextArea
+                id={id}
+                rows={12}
+                value={pasteText}
+                onChange={(event) => setPasteText(event.target.value)}
+                placeholder={'{\n  "testType": "READING",\n  "passages": [ … ],\n  "sections": [ … ]\n}'}
+                spellCheck={false}
+                className="mono"
+              />
+            )}
+          </Field>
+          <Field label="Title" hint="Optional. Shown in the import list.">
+            {(id) => <TextInput id={id} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />}
+          </Field>
+          <p className="tiny muted">
+            Detected content: {looksLikeJson ? 'JSON — validated against the structured content schema.' : 'plain text — kept as extracted text.'}{' '}
+            {pasteText.length > 0 ? `${pasteText.length.toLocaleString()} characters.` : ''}
+          </p>
+          {provenance}
+          <Button
+            variant="primary"
+            loading={busy}
+            disabled={pasteText.trim().length < 40}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const result = await api.post<{ importId: string }>('/api/admin/imports/paste', {
+                  text: pasteText,
+                  title: form.title || undefined,
+                  contentOrigin: form.contentOrigin,
+                  sourceTitle: form.sourceTitle || undefined,
+                  sourceUrl: form.sourceUrl || undefined,
+                  attribution: form.attribution || undefined,
+                  licenseNotes: form.licenseNotes || undefined,
+                });
+                await onCreated(result.importId);
+              } catch (pasteError) {
+                onError(describeError(pasteError));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Create import from pasted content
+          </Button>
+        </>
+      ) : (
+        <>
+          <Field label="Source file" required hint="PDF, DOCX, TXT, Markdown or CSV up to 25 MB.">
+            {(id) => (
+              <input
+                id={id}
+                type="file"
+                accept=".pdf,.docx,.txt,.md,.csv,.json,application/pdf,text/plain,text/markdown,text/csv,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              />
+            )}
+          </Field>
+          <Field label="Title" hint="Defaults to the file name if left empty.">
+            {(id) => <TextInput id={id} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />}
+          </Field>
+          <p className="tiny muted">
+            Text is extracted during the request and stored in the database as extracted text. The uploaded file itself
+            is not retained in V1, so keep your own copy of the original.
+          </p>
+          {provenance}
+          <Button
+            variant="primary"
+            loading={busy}
+            disabled={!file}
+            onClick={async () => {
+              if (!file) return;
+              setBusy(true);
+              try {
+                const body = new FormData();
+                body.set('file', file);
+                for (const [key, value] of Object.entries(form)) {
+                  if (value) body.set(key, value);
+                }
+                const result = await api.upload<{ importId: string }>('/api/admin/imports', body);
+                await onCreated(result.importId);
+              } catch (uploadError) {
+                onError(describeError(uploadError));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Upload for review
+          </Button>
+        </>
+      )}
     </div>
   );
 }
@@ -414,7 +507,7 @@ function ImportDetailView({
       </Card>
 
       {extracted !== null ? (
-        <Card title="Extracted text" hint="Stored in object storage, not in D1.">
+        <Card title="Extracted text" hint="Kept in D1 so imports work without object storage.">
           <TextArea readOnly rows={12} value={extracted} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }} />
         </Card>
       ) : null}
@@ -516,10 +609,20 @@ function ImportDetailView({
             onClick={async () => {
               setBusy(true);
               try {
-                const result = await api.post<{ testId: string; versionId: string; totalQuestions: number; publishable: boolean }>(
-                  `/api/admin/imports/${importId}/apply`,
-                  applyTarget ? { testId: applyTarget } : {},
-                );
+                const result = await api.post<{
+                  testId: string;
+                  versionId: string;
+                  totalQuestions: number;
+                  publishable: boolean;
+                  issues: Array<{ level: string; code: string; message: string }>;
+                }>(`/api/admin/imports/${importId}/apply`, applyTarget ? { testId: applyTarget } : {});
+                const warnings = result.issues.filter((issue) => issue.level !== 'ERROR');
+                const errors = result.issues.filter((issue) => issue.level === 'ERROR');
+                if (errors.length > 0) {
+                  toast.push(`Draft created with ${errors.length} blocking issue(s) — open the draft and fix them before publishing.`, 'error');
+                } else if (warnings.length > 0) {
+                  toast.push(`Draft created with ${warnings.length} warning(s) to review.`, 'warning');
+                }
                 await onApplied(result.testId);
               } catch (applyError) {
                 toast.push(describeError(applyError), 'error');

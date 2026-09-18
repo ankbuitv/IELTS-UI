@@ -119,7 +119,7 @@ export function AdminTestEditorPage() {
           </p>
         </div>
         <div className="row">
-          <Badge tone={test.status === 'PUBLISHED' ? 'success' : test.status === 'ARCHIVED' ? 'warning' : 'neutral'}>
+          <Badge tone={test.status === 'PUBLISHED' ? 'success' : test.status === 'REVIEW' ? 'warning' : test.status === 'ARCHIVED' ? 'dim' : 'neutral'}>
             {test.status.toLowerCase()}
           </Badge>
           <Button onClick={() => setEditingMeta(true)}>Edit metadata</Button>
@@ -1193,33 +1193,46 @@ function AudioUpload({
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [url, setUrl] = useState('');
+  const valid = /^https:\/\/\S+$/i.test(url.trim());
 
   return (
     <div className="field">
-      <span className="field__label">Upload audio (mp3, m4a, wav, ogg — max 25 MB)</span>
-      <input
-        type="file"
-        accept="audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/ogg,.mp3,.m4a,.wav,.ogg"
-        disabled={disabled || busy}
-        onChange={async (event) => {
-          const file = event.target.files?.[0];
-          if (!file) return;
-          setBusy(true);
-          try {
-            const form = new FormData();
-            form.set('file', file);
-            form.set('testVersionId', versionId);
-            await api.upload('/api/admin/assets', form);
-            toast.push('Audio uploaded and attached to the draft.', 'success');
-            await onUploaded();
-          } catch (uploadError) {
-            toast.push(describeError(uploadError), 'error');
-          } finally {
-            setBusy(false);
-            event.target.value = '';
-          }
-        }}
-      />
+      <span className="field__label">Audio URL (https://… — mp3, m4a, wav, ogg)</span>
+      <div className="row">
+        <TextInput
+          type="url"
+          inputMode="url"
+          value={url}
+          disabled={disabled || busy}
+          placeholder="https://cdn.example.com/listening/section-1.mp3"
+          onChange={(event) => setUrl(event.target.value)}
+          style={{ flex: '1 1 260px' }}
+        />
+        <Button
+          size="sm"
+          loading={busy}
+          disabled={disabled || !valid}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await api.post('/api/admin/assets', { url: url.trim(), kind: 'AUDIO', testVersionId: versionId });
+              setUrl('');
+              toast.push('Audio linked to the draft.', 'success');
+              await onUploaded();
+            } catch (linkError) {
+              toast.push(describeError(linkError), 'error');
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Link audio
+        </Button>
+      </div>
+      <span className="field__hint">
+        Media is linked, not uploaded: the file stays on the host you name and must be reachable over HTTPS.
+      </span>
     </div>
   );
 }

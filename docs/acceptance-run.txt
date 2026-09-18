@@ -1,4 +1,4 @@
-IELTS platform acceptance run mu6rpnxa
+IELTS platform acceptance run mu6seocp
 Target: http://127.0.0.1:8787
     ✓ worker health check (development)
     ✓ cross-origin state-changing request is rejected (403)
@@ -18,6 +18,23 @@ Flow 1 — ADMIN: content pipeline (create → validate → publish → preview)
     ✓ preview payload contains the candidate-visible passage
     ✓ preview payload exposes no marking evidence field
     ✓ writing version published for use as a mock component
+
+Flow 5 — IMPORT: paste structured JSON → review → draft (no object storage)
+    ✓ pasted JSON created an import with no file upload
+    ✓ JSON payload was recognised as structured content
+    ✓ structured import waits in review
+    ✓ structured payload is stored in D1
+    ✓ extracted text is kept in the database
+    ✓ no object-storage asset is attached to the import
+    ✓ extracted text is served from D1
+    ✓ import applied to a new draft version
+    ✓ apply reports the invented declared word count instead of trusting it
+    ✓ the word-count mismatch is a warning, not a fabricated error
+    ✓ imported content lands as a draft, never published
+    ✓ validation catches an answer field leaked into a prompt
+    ✓ validation checks that evidence quotes the passage
+    ✓ imported preview payload contains no answer keys
+    ✓ imported preview payload leaks no marking evidence
 
 Flow 2 — TEACHER: classroom, enrolment, assignment, reports, authorisation
     ✓ teacher created a classroom
@@ -82,4 +99,4 @@ Flow 5 — TEACHER/ADMIN: marking writing and reading the attempt
     ✓ teacher report reflects the student attempts
     ✓ classroom analytics aggregates marked sessions
 
-71 checks passed, 0 failed.
+86 checks passed, 0 failed.

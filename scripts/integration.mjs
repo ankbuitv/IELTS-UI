@@ -3,12 +3,14 @@
  * End-to-end acceptance script for the V1 platform.
  *
  * It drives a running Worker over real HTTP (cookies, CSRF headers, JSON) and
- * exercises four flows:
+ * exercises six flows:
  *
  *   1. ADMIN      — create a 40-question Reading test, validate, publish, preview
  *   2. TEACHER    — classroom, enrolment, assignment, reports, cross-classroom IDOR check
  *   3. STUDENT    — assignment attempt, autosave, integrity events, submit, marked result
  *   4. FULL MOCK  — multi-component sequence, section advance, submit
+ *   5. IMPORT     — paste a structured Reading JSON, validate the draft, preview it
+ *   6. MARKING    — teacher scores the Writing submission and publishes the band
  *
  * Usage:
  *   npm run dev                     # in one terminal (Worker on :8787)
@@ -435,6 +437,124 @@ async function adminFlow(admin) {
   };
 }
 
+/**
+ * Flow 5 — structured import with no object storage.
+ *
+ * V1 keeps no uploaded binaries: a pasted JSON payload is validated and stored
+ * in D1, then applied to a draft. The fixture deliberately contains the two
+ * mistakes the import review must catch — an answer field leaked into a
+ * student-visible prompt and an invented passage word count — and marks its
+ * evidence with the canary so the preview leak check stays meaningful.
+ */
+async function importFlow(admin) {
+  section('Flow 5 — IMPORT: paste structured JSON → review → draft (no object storage)');
+
+  const passageText = [
+    'A. ' + 'Coastal cities have always been shaped by the water beside them, and the engineering that keeps the sea out also reshapes the streets behind the wall. '.repeat(1),
+    'B. ' + 'When the first sea wall was raised, planners assumed the threat was fixed, so they built closer to the shoreline than any earlier generation had dared. '.repeat(1),
+    'C. ' + 'Two decades later the wall had to be raised again, and the cost of moving the people who had settled behind it fell on the same council that had encouraged them to build. '.repeat(1),
+  ];
+
+  const payload = {
+    testTitle: `Integration import ${RUN}`,
+    testType: 'READING',
+    answerKeyConfidence: 'PROVIDED',
+    warnings: [],
+    passages: [
+      {
+        title: 'Passage 1',
+        // Deliberately wrong: the platform must recompute from the text.
+        passageWordCount: 4000,
+        paragraphs: [
+          { label: 'A', text: passageText[0] },
+          { label: 'B', text: passageText[1] },
+          { label: 'C', text: passageText[2] },
+        ],
+      },
+    ],
+    sections: [
+      {
+        skill: 'READING',
+        title: 'Passage 1',
+        instructions: 'Answer questions 1–3 about the passage.',
+        passageIndex: 0,
+        audioProvided: false,
+        groups: [
+          {
+            questionType: 'TRUE_FALSE_NOT_GIVEN',
+            instructions: 'Write TRUE, FALSE or NOT GIVEN.',
+            sharedOptions: [],
+            questions: [
+              {
+                number: 1,
+                prompt: 'Sea walls changed the layout of the districts behind them.',
+                answer: 'TRUE',
+                evidence: '“the engineering that keeps the sea out also reshapes the streets behind the wall”',
+              },
+              {
+                number: 2,
+                prompt: 'Planners assumed the threat was fixed. {"answer": "TRUE"}',
+                answer: 'FALSE',
+                evidence: `“a quotation that is nowhere in the passage ${CANARY}”`,
+              },
+              {
+                number: 3,
+                prompt: 'The cost of moving residents fell on a different authority.',
+                answer: 'FALSE',
+                evidence: '“the cost of moving the people who had settled behind it fell on the same council”',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  const pasted = await admin.post('/api/admin/imports/paste', {
+    text: JSON.stringify(payload),
+    title: `Integration import ${RUN}`,
+    contentOrigin: 'ORIGINAL',
+    attribution: 'Arena integration script',
+  });
+  assert(pasted.status === 201 && pasted.body.importId, 'pasted JSON created an import with no file upload');
+  assert(pasted.body.structured === true, 'JSON payload was recognised as structured content');
+  assert(pasted.body.status === 'REVIEW', 'structured import waits in review');
+
+  const detail = await admin.get(`/api/admin/imports/${pasted.body.importId}`);
+  assert(Boolean(detail.body.import.structuredPayload), 'structured payload is stored in D1');
+  assert(detail.body.import.sourceTextChars > 0, 'extracted text is kept in the database');
+  assert(!('asset' in detail.body.import) && !('asset' in detail.body), 'no object-storage asset is attached to the import');
+
+  const extracted = await admin.get(`/api/admin/imports/${pasted.body.importId}/extracted`);
+  assert(extracted.body.text.includes('sea wall'), 'extracted text is served from D1');
+
+  const applied = await admin.post(`/api/admin/imports/${pasted.body.importId}/apply`, {});
+  assert(applied.status === 201 && applied.body.versionId, 'import applied to a new draft version');
+  const applyCodes = applied.body.issues.map((issue) => issue.code);
+  assert(
+    applyCodes.includes('PASSAGE_WORD_COUNT_MISMATCH'),
+    'apply reports the invented declared word count instead of trusting it',
+  );
+  assert(
+    applied.body.issues.some((issue) => issue.code === 'PASSAGE_WORD_COUNT_MISMATCH' && issue.level === 'WARNING'),
+    'the word-count mismatch is a warning, not a fabricated error',
+  );
+
+  const version = await admin.get(`/api/admin/versions/${applied.body.versionId}`);
+  assert(version.body.version.status === 'DRAFT', 'imported content lands as a draft, never published');
+  const validation = await admin.post(`/api/admin/versions/${applied.body.versionId}/validate`, {});
+  const codes = validation.body.issues.map((issue) => issue.code);
+  assert(codes.includes('LEAKED_ANSWER_FIELD'), 'validation catches an answer field leaked into a prompt');
+  assert(codes.includes('EVIDENCE_QUOTE_NOT_FOUND'), 'validation checks that evidence quotes the passage');
+
+  const preview = await admin.get(`/api/admin/versions/${applied.body.versionId}/preview`);
+  const previewText = JSON.stringify(preview.body);
+  assert(!previewText.includes('answerKey'), 'imported preview payload contains no answer keys');
+  assert(!candidateShapeContainsCanary(preview.body), 'imported preview payload leaks no marking evidence');
+
+  return applied.body.versionId;
+}
+
 async function teacherFlow(admin, teacher, studentEmail) {
   section('Flow 2 — TEACHER: classroom, enrolment, assignment, reports, authorisation');
 
@@ -720,6 +840,7 @@ async function main() {
   assert(true, 'admin, teacher and student sessions established');
 
   const adminResult = await adminFlow(admin);
+  await importFlow(admin);
   const teacherResult = await teacherFlow(admin, teacher, studentEmail);
   const assignmentId = await assignmentFlow(teacher, {
     classroomId: teacherResult.classroomId,

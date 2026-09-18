@@ -23,6 +23,8 @@ import { formatDateTime } from '../../lib/format';
 interface AssetRow {
   id: string;
   kind: string;
+  storage_kind: string;
+  external_url: string | null;
   filename: string;
   mime: string;
   size_bytes: number;
@@ -31,6 +33,7 @@ interface AssetRow {
   visibility: string;
   test_version_id: string | null;
   created_at: string;
+  updated_at: string | null;
   uploaded_by_email: string | null;
   test_title: string | null;
 }
@@ -44,7 +47,7 @@ export function AdminSettingsPage() {
         <div>
           <h1>Settings &amp; operations</h1>
           <p className="page-head__meta">
-            Platform switches are enforced on the server; files live in object storage and every admin action is audited.
+            Platform switches are enforced on the server; media is linked by URL and every admin action is audited.
           </p>
         </div>
       </div>
@@ -188,10 +191,12 @@ function SettingsPanel() {
 function AssetsPanel() {
   const toast = useToast();
   const [kind, setKind] = useState('');
+  const [url, setUrl] = useState('');
+  const [label, setLabel] = useState('');
+  const [assetKind, setAssetKind] = useState('');
   const [versionId, setVersionId] = useState('');
   const [altText, setAltText] = useState('');
   const [duration, setDuration] = useState('');
-  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
 
   const query = queryString({ kind: kind || undefined });
@@ -200,21 +205,67 @@ function AssetsPanel() {
     [query],
   );
 
+  const register = async () => {
+    setBusy(true);
+    try {
+      await api.post('/api/admin/assets', {
+        url: url.trim(),
+        filename: label.trim() || undefined,
+        kind: assetKind || undefined,
+        testVersionId: versionId.trim() || undefined,
+        altText: altText.trim() || undefined,
+        durationSeconds: duration ? Number(duration) : undefined,
+      });
+      setUrl('');
+      setLabel('');
+      setAltText('');
+      setDuration('');
+      await reload();
+      toast.push('Media URL registered.', 'success');
+    } catch (registerError) {
+      toast.push(describeError(registerError), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const urlLooksValid = /^https:\/\/\S+$/i.test(url.trim());
+
   return (
     <div className="stack">
-      <Card title="Upload an asset" hint="Audio for Listening sections, images for diagrams, PDFs for reference.">
+      <Card
+        title="Register a media URL"
+        hint="V1 links to media instead of storing it: paste an HTTPS URL that you have the right to use."
+      >
         <div className="grid grid--2">
-          <Field label="File" required>
+          <Field label="HTTPS media URL" required hint="Audio for Listening, images and charts for Reading/Writing.">
             {(id) => (
-              <input
+              <TextInput
                 id={id}
-                type="file"
-                accept="audio/*,image/*,.pdf,.docx,.txt,.md,.csv"
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                type="url"
+                inputMode="url"
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                placeholder="https://cdn.example.com/listening/section-1.mp3"
               />
             )}
           </Field>
-          <Field label="Attach to a test version ID" hint="Optional. Assets can be attached later in the content editor.">
+          <Field label="Display name" hint="Optional. Defaults to the file name in the URL.">
+            {(id) => <TextInput id={id} value={label} onChange={(event) => setLabel(event.target.value)} />}
+          </Field>
+          <Field label="Media kind" hint="Optional. Detected from the URL when left empty.">
+            {(id) => (
+              <select id={id} value={assetKind} onChange={(event) => setAssetKind(event.target.value)}>
+                <option value="">Detect automatically</option>
+                <option value="AUDIO">Audio</option>
+                <option value="IMAGE">Image</option>
+                <option value="PDF">PDF</option>
+                <option value="DOC">Document</option>
+                <option value="OTHER">Other</option>
+              </select>
+            )}
+          </Field>
+          <Field label="Attach to a test version ID" hint="Optional. Assets can also be attached from the content editor.">
             {(id) => <TextInput id={id} value={versionId} onChange={(event) => setVersionId(event.target.value)} placeholder="ver_…" />}
           </Field>
           <Field label="Alt text / description" hint="Required for images to keep the exam usable with a screen reader.">
@@ -225,37 +276,15 @@ function AssetsPanel() {
           </Field>
         </div>
         <p className="tiny muted">
-          Allowed: PDF, DOCX, TXT, Markdown, CSV and images, up to the configured upload limit (25 MB by default). MIME
-          type and size are validated on the server.
+          Only plain <span className="mono">https://</span> URLs are accepted. The server stores the link, records who
+          registered it, and streams nothing itself — the candidate browser fetches the media from the host you name.
         </p>
-        <Button
-          variant="primary"
-          loading={busy}
-          disabled={!file}
-          onClick={async () => {
-            if (!file) return;
-            setBusy(true);
-            try {
-              const body = new FormData();
-              body.set('file', file);
-              if (versionId) body.set('testVersionId', versionId);
-              if (altText) body.set('altText', altText);
-              if (duration) body.set('durationSeconds', duration);
-              await api.upload('/api/admin/assets', body);
-              setFile(null);
-              setAltText('');
-              setDuration('');
-              await reload();
-              toast.push('Asset uploaded.', 'success');
-            } catch (uploadError) {
-              toast.push(describeError(uploadError), 'error');
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          Upload asset
-        </Button>
+        <div className="row">
+          <Button variant="primary" loading={busy} disabled={!urlLooksValid} onClick={register}>
+            Register URL
+          </Button>
+          {url && !urlLooksValid ? <span className="tiny muted">Enter a full https:// URL.</span> : null}
+        </div>
       </Card>
 
       <Card>
@@ -282,11 +311,11 @@ function AssetsPanel() {
           <table className="data">
             <thead>
               <tr>
-                <th>File</th>
+                <th>Media</th>
                 <th>Kind</th>
-                <th className="num">Size</th>
+                <th>Source</th>
                 <th>Attached to</th>
-                <th>Uploaded</th>
+                <th>Registered</th>
                 <th />
               </tr>
             </thead>
@@ -300,26 +329,41 @@ function AssetsPanel() {
                   <td>
                     <Badge tone={asset.kind === 'AUDIO' ? 'accent' : 'neutral'}>{asset.kind.toLowerCase()}</Badge>
                   </td>
-                  <td className="num">{(asset.size_bytes / 1024).toFixed(0)} KB</td>
+                  <td className="tiny">
+                    {asset.external_url ? (
+                      <span className="mono" title={asset.external_url}>
+                        {hostOf(asset.external_url)}
+                      </span>
+                    ) : (
+                      asset.storage_kind.toLowerCase().replace('_', ' ')
+                    )}
+                  </td>
                   <td className="tiny">{asset.test_title ?? asset.test_version_id ?? 'Not attached'}</td>
                   <td className="nowrap">{formatDateTime(asset.created_at)}</td>
                   <td className="right">
                     <div className="row" style={{ justifyContent: 'flex-end' }}>
-                      <a className="btn btn--sm" href={`/api/files/${asset.id}`} target="_blank" rel="noreferrer">
-                        Open
-                      </a>
+                      {asset.external_url ? (
+                        <a className="btn btn--sm" href={asset.external_url} target="_blank" rel="noreferrer">
+                          Open source
+                        </a>
+                      ) : null}
                       <ConfirmButton
                         size="sm"
                         variant="ghost"
-                        title="Delete this asset?"
-                        confirmLabel="Delete"
+                        title="Remove this media record?"
+                        confirmLabel="Remove"
                         onConfirm={async () => {
                           await api.delete(`/api/admin/assets/${asset.id}`);
                           await reload();
                         }}
-                        body={<p>The file is removed from object storage. Assets still attached to a section cannot be deleted.</p>}
+                        body={
+                          <p>
+                            The record is deleted from the database. A linked file on another host is not touched. Media
+                            still attached to a section cannot be deleted.
+                          </p>
+                        }
                       >
-                        Delete
+                        Remove
                       </ConfirmButton>
                     </div>
                   </td>
@@ -328,10 +372,19 @@ function AssetsPanel() {
             </tbody>
           </table>
         </div>
-        {data && data.assets.length === 0 ? <EmptyState title="No assets uploaded" /> : null}
+        {data && data.assets.length === 0 ? <EmptyState title="No media registered yet" /> : null}
       </Card>
     </div>
   );
+}
+
+/** Host shown in the asset table so admins can see where media comes from. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
 }
 
 function AuditPanel() {

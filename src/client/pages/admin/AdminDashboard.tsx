@@ -43,13 +43,33 @@ export function AdminDashboardPage() {
       {!ai.available ? <Notice tone="info" title="AI import is not configured">{ai.reason}</Notice> : null}
 
       <div className="grid grid--4">
-        <Stat label="Users" value={analytics.users.total} hint={`${analytics.users.students} students · ${analytics.users.teachers} teachers`} />
-        <Stat label="Published tests" value={analytics.tests.published} hint={`${analytics.tests.draft} draft · ${analytics.tests.review} in review`} />
-        <Stat label="Attempts (30d)" value={analytics.attempts.last30Days} hint={`${analytics.attempts.submitted} submitted in total`} />
+        <Stat
+          label="Users"
+          value={analytics.users.total}
+          hint={`${analytics.users.students} students · ${analytics.users.teachers} teachers`}
+          icon="👥"
+          accent="blue"
+        />
+        <Stat
+          label="Published tests"
+          value={analytics.tests.published}
+          hint={`${analytics.tests.draft} draft · ${analytics.tests.review} in review`}
+          icon="📄"
+          accent="brand"
+        />
+        <Stat
+          label="Attempts (30d)"
+          value={analytics.attempts.last30Days}
+          hint={`${analytics.attempts.submitted} submitted in total`}
+          icon="🧭"
+          accent="violet"
+        />
         <Stat
           label="Assignment completion"
           value={analytics.completion.completionRate !== null ? `${analytics.completion.completionRate}%` : '—'}
           hint={`${analytics.completion.submittedAssignmentAttempts}/${analytics.completion.assignmentAttempts} assignment attempts submitted`}
+          icon="✅"
+          accent="emerald"
         />
       </div>
 

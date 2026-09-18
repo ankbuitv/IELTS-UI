@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
 import { ApiError } from '../lib/errors';
+import { normaliseExternalUrl } from '../services/media-service';
 import { assertCsrf, assertSameOrigin, clientIp } from '../lib/http';
 import { parseBody, parseQuery } from '../lib/validate';
 import { requireAuth, requireRole } from '../middleware/auth';
@@ -25,8 +26,7 @@ import { aiStatus } from '../ai/openai';
 import { validateConversionRanges } from '../../shared/scoring';
 import { QUESTION_TYPES } from '../../shared/question-types';
 import { TEST_TYPES, SKILLS, ROLES, CONTENT_ORIGINS } from '../../shared/types';
-import { ALLOWED_IMPORT_MIME_TYPES, kindForMime } from '../extract';
-import { sha256Hex } from '../lib/crypto';
+import { kindForMime } from '../extract';
 
 const router = new Hono<AppBindings>();
 
@@ -200,6 +200,9 @@ const editableContentSchema = z.object({
           .object({
             title: z.string().max(300).default(''),
             subtitle: z.string().max(300).nullish(),
+            // Declared by the source, ignored on write: the count is recomputed
+            // from the text and a difference is surfaced as a warning.
+            passageWordCount: z.number().int().min(0).max(50_000).nullish(),
             paragraphs: z.array(z.object({ label: z.string().max(20), text: z.string().max(60_000) })).max(200),
           })
           .nullish(),
@@ -1106,8 +1109,9 @@ router.patch('/settings', async (c) => {
 router.get('/assets', async (c) => {
   const query = parseQuery(c, z.object({ kind: z.enum(['PDF', 'DOC', 'IMAGE', 'AUDIO', 'OTHER']).optional() }));
   const rows = await c.env.DB.prepare(
-    `SELECT a.id, a.kind, a.filename, a.mime, a.size_bytes, a.duration_seconds, a.alt_text, a.visibility,
-            a.test_version_id, a.created_at, u.email AS uploaded_by_email, t.title AS test_title
+    `SELECT a.id, a.kind, a.storage_kind, a.external_url, a.filename, a.mime, a.size_bytes, a.duration_seconds,
+            a.alt_text, a.visibility, a.test_version_id, a.created_at, a.updated_at,
+            u.email AS uploaded_by_email, t.title AS test_title
        FROM assets a
        LEFT JOIN users u ON u.id = a.uploaded_by
        LEFT JOIN test_versions v ON v.id = a.test_version_id
@@ -1124,71 +1128,101 @@ router.get('/assets', async (c) => {
 router.post('/assets', async (c) => {
   const actor = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
-  const form = await c.req.formData().catch(() => null);
-  if (!form) throw ApiError.validation('A multipart/form-data upload is required.');
+  const body = await parseBody(
+    c,
+    z.object({
+      url: z.string().trim().min(1).max(2000),
+      kind: z.enum(['PDF', 'DOC', 'IMAGE', 'AUDIO', 'OTHER']).optional(),
+      filename: z.string().max(160).optional(),
+      altText: z.string().max(500).nullish(),
+      durationSeconds: z.number().min(0).max(36_000).nullish(),
+      testVersionId: z.string().max(64).nullish(),
+      visibility: z.enum(['PRIVATE', 'ATTEMPT']).optional(),
+    }),
+  );
 
-  const file = form.get('file');
-  if (!(file instanceof File)) throw ApiError.validation('Attach a file in the "file" field.');
-
-  const maxBytes = Number(c.env.MAX_UPLOAD_BYTES || 26_214_400);
-  if (file.size <= 0 || file.size > maxBytes) {
-    throw ApiError.validation(`Files must be between 1 byte and ${Math.round(maxBytes / 1024 / 1024)} MB.`);
+  const externalUrl = normaliseExternalUrl(body.url);
+  if (!externalUrl) {
+    throw ApiError.validation(
+      'Enter a plain HTTPS media URL (https://…). Media is linked, not uploaded: V1 does not store files.',
+    );
   }
 
-  const mime = file.type || 'application/octet-stream';
-  if (!ALLOWED_IMPORT_MIME_TYPES.includes(mime) && !mime.startsWith('image/')) {
-    throw ApiError.validation(`Unsupported file type "${mime}".`);
-  }
-
-  const filename = (file.name || 'asset').replace(/[^\w.\- ()]/g, '_').slice(0, 160);
-  const kind = kindForMime(mime, filename);
   const id = newId('ast');
-  const extension = filename.includes('.') ? filename.split('.').pop()!.slice(0, 8) : 'bin';
-  const r2Key = `content/${kind.toLowerCase()}/${id}.${extension}`;
-  const buffer = await file.arrayBuffer();
-
-  await c.env.CONTENT_BUCKET.put(r2Key, buffer, {
-    httpMetadata: { contentType: mime },
-    customMetadata: { uploadedBy: actor.id },
-  });
-
-  const testVersionId = typeof form.get('testVersionId') === 'string' ? (form.get('testVersionId') as string) : null;
-  const altText = typeof form.get('altText') === 'string' ? (form.get('altText') as string).slice(0, 500) : null;
-  const durationRaw = form.get('durationSeconds');
+  const filename = (body.filename?.trim() || filenameFromUrl(externalUrl)).slice(0, 160);
+  const kind = body.kind ?? kindForMime(mimeFromUrl(externalUrl), filename);
+  const timestamp = nowIso();
 
   await c.env.DB.prepare(
-    `INSERT INTO assets (id, kind, r2_key, filename, mime, size_bytes, checksum_sha256, alt_text, duration_seconds,
-                         visibility, test_version_id, uploaded_by, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO assets (id, kind, storage_kind, external_url, filename, mime, size_bytes, alt_text,
+                         duration_seconds, visibility, test_version_id, uploaded_by, created_at, updated_at)
+     VALUES (?, ?, 'EXTERNAL_URL', ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
       kind,
-      r2Key,
+      externalUrl,
       filename,
-      mime,
-      file.size,
-      await sha256Hex(buffer),
-      altText,
-      typeof durationRaw === 'string' && durationRaw ? Number(durationRaw) : null,
-      kind === 'AUDIO' || kind === 'IMAGE' ? 'ATTEMPT' : 'PRIVATE',
-      testVersionId,
+      mimeFromUrl(externalUrl),
+      body.altText ?? null,
+      body.durationSeconds ?? null,
+      body.visibility ?? (kind === 'AUDIO' || kind === 'IMAGE' ? 'ATTEMPT' : 'PRIVATE'),
+      body.testVersionId ?? null,
       actor.id,
-      nowIso(),
+      timestamp,
+      timestamp,
     )
     .run();
 
   await recordAudit(c.env, {
     actorUserId: actor.id,
-    action: 'ASSET_UPLOAD',
+    action: 'ASSET_LINK',
     entityType: 'asset',
     entityId: id,
-    metadata: { filename, kind, size: file.size },
+    metadata: { kind, host: new URL(externalUrl).host },
     ip: clientIp(c),
   });
 
-  return c.json({ assetId: id, kind, filename, url: `/api/files/${id}` }, 201);
+  return c.json({ assetId: id, kind, filename, url: externalUrl, deliveryUrl: `/api/files/${id}` }, 201);
 });
+
+/** Best-effort file name and MIME type from the URL path. */
+function filenameFromUrl(raw: string): string {
+  try {
+    const path = new URL(raw).pathname;
+    const last = path.split('/').filter(Boolean).pop();
+    return last ? decodeURIComponent(last) : 'external-media';
+  } catch {
+    return 'external-media';
+  }
+}
+
+function mimeFromUrl(raw: string): string {
+  const extension = raw.split('?')[0]?.split('.').pop()?.toLowerCase() ?? '';
+  switch (extension) {
+    case 'mp3':
+      return 'audio/mpeg';
+    case 'm4a':
+      return 'audio/mp4';
+    case 'wav':
+      return 'audio/wav';
+    case 'ogg':
+      return 'audio/ogg';
+    case 'png':
+      return 'image/png';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'webp':
+      return 'image/webp';
+    case 'svg':
+      return 'image/svg+xml';
+    case 'gif':
+      return 'image/gif';
+    default:
+      return 'application/octet-stream';
+  }
+}
 
 router.patch('/assets/:id', async (c) => {
   const actor = currentUser(c);
@@ -1196,6 +1230,7 @@ router.patch('/assets/:id', async (c) => {
   const body = await parseBody(
     c,
     z.object({
+      url: z.string().trim().max(2000).optional(),
       altText: z.string().max(500).nullish(),
       durationSeconds: z.number().min(0).max(36_000).nullish(),
       testVersionId: z.string().max(64).nullish(),
@@ -1204,16 +1239,27 @@ router.patch('/assets/:id', async (c) => {
   );
   const id = c.req.param('id');
 
+  let externalUrl: string | null = null;
+  if (body.url !== undefined) {
+    const candidate = normaliseExternalUrl(body.url);
+    if (!candidate) throw ApiError.validation('Enter a plain HTTPS media URL (https://…).');
+    externalUrl = candidate;
+  }
+
   await c.env.DB.prepare(
-    `UPDATE assets SET alt_text = COALESCE(?, alt_text), duration_seconds = COALESCE(?, duration_seconds),
-                       test_version_id = COALESCE(?, test_version_id), visibility = COALESCE(?, visibility)
+    `UPDATE assets SET external_url = COALESCE(?, external_url), alt_text = COALESCE(?, alt_text),
+                       duration_seconds = COALESCE(?, duration_seconds),
+                       test_version_id = COALESCE(?, test_version_id), visibility = COALESCE(?, visibility),
+                       updated_at = ?
       WHERE id = ?`,
   )
     .bind(
+      externalUrl,
       body.altText ?? null,
       body.durationSeconds ?? null,
       body.testVersionId ?? null,
       body.visibility ?? null,
+      nowIso(),
       id,
     )
     .run();
@@ -1235,9 +1281,9 @@ router.delete('/assets/:id', async (c) => {
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const id = c.req.param('id');
 
-  const asset = await c.env.DB.prepare('SELECT id, r2_key, test_version_id, kind FROM assets WHERE id = ?')
+  const asset = await c.env.DB.prepare('SELECT id, test_version_id, kind FROM assets WHERE id = ?')
     .bind(id)
-    .first<{ id: string; r2_key: string; test_version_id: string | null; kind: string }>();
+    .first<{ id: string; test_version_id: string | null; kind: string }>();
   if (!asset) throw ApiError.notFound('Asset not found.');
 
   if (asset.test_version_id) {
@@ -1251,7 +1297,8 @@ router.delete('/assets/:id', async (c) => {
     }
   }
 
-  await c.env.CONTENT_BUCKET.delete(asset.r2_key);
+  // V1 links media instead of storing it, so deleting the record is the whole
+  // operation; the external file itself is untouched and stays the owner's.
   await c.env.DB.prepare('DELETE FROM assets WHERE id = ?').bind(id).run();
 
   await recordAudit(c.env, {

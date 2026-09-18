@@ -10,6 +10,8 @@ export interface SeriesPoint {
   sublabel?: string;
 }
 
+export type ChartTone = 'brand' | 'violet' | 'emerald' | 'amber' | 'blue';
+
 export function LineChart({
   points,
   height = 220,
@@ -18,6 +20,7 @@ export function LineChart({
   yLabel,
   emptyLabel = 'Not enough data yet',
   formatValue = (value: number) => String(value),
+  tone,
 }: {
   points: SeriesPoint[];
   height?: number;
@@ -26,6 +29,7 @@ export function LineChart({
   yLabel?: string;
   emptyLabel?: string;
   formatValue?: (value: number) => string;
+  tone?: ChartTone;
 }) {
   const usable = points.filter((point) => point.value !== null) as Array<SeriesPoint & { value: number }>;
   if (usable.length < 2) {
@@ -53,7 +57,7 @@ export function LineChart({
   const labelEvery = Math.max(1, Math.ceil(points.length / 8));
 
   return (
-    <svg className="chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={yLabel ?? 'Trend chart'}>
+    <svg className={`chart${tone ? ` chart--${tone}` : ''}`} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={yLabel ?? 'Trend chart'}>
       {tickValues.map((value) => (
         <g key={value}>
           <line className="chart__grid" x1={padding.left} x2={width - padding.right} y1={y(value)} y2={y(value)} />
@@ -88,12 +92,14 @@ export function BarChart({
   formatValue = (value: number) => String(value),
   yLabel,
   emptyLabel = 'No data yet',
+  tone,
 }: {
   bars: SeriesPoint[];
   height?: number;
   formatValue?: (value: number) => string;
   yLabel?: string;
   emptyLabel?: string;
+  tone?: ChartTone;
 }) {
   if (bars.length === 0 || bars.every((bar) => !bar.value)) {
     return <div className="empty">{emptyLabel}</div>;
@@ -108,7 +114,7 @@ export function BarChart({
   const barWidth = Math.min(38, slot * 0.6);
 
   return (
-    <svg className="chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={yLabel ?? 'Bar chart'}>
+    <svg className={`chart${tone ? ` chart--${tone}` : ''}`} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={yLabel ?? 'Bar chart'}>
       {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
         const value = max * fraction;
         const yPos = padding.top + innerHeight - fraction * innerHeight;
@@ -150,7 +156,7 @@ export function BarChart({
 export function AccuracyList({
   items,
 }: {
-  items: Array<{ label: string; correct: number; total: number; accuracy: number | null }>;
+  items: Array<{ label: string; correct: number; total: number; accuracy: number | null; tone?: ChartTone }>;
 }) {
   if (items.length === 0) return <div className="empty">No marked answers yet</div>;
   return (
@@ -163,12 +169,12 @@ export function AccuracyList({
               {item.accuracy === null ? '—' : `${item.accuracy}%`} · {item.correct}/{item.total}
             </span>
           </div>
-          <div className="bar">
+          <div className={`bar${item.tone ? ` bar--tone-${item.tone}` : ''}`}>
             <div
               className="bar__fill"
               style={{
                 width: `${item.accuracy ?? 0}%`,
-                background: (item.accuracy ?? 0) >= 70 ? 'var(--success)' : (item.accuracy ?? 0) >= 45 ? '#c58a17' : 'var(--danger)',
+                background: (item.accuracy ?? 0) >= 70 ? 'var(--success)' : (item.accuracy ?? 0) >= 45 ? 'var(--warning)' : 'var(--danger)',
               }}
             />
           </div>

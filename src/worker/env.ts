@@ -4,7 +4,15 @@
 export interface Env {
   // --- Bindings -----------------------------------------------------------
   DB: D1Database;
-  CONTENT_BUCKET: R2Bucket;
+  /**
+   * Static application bundle (built SPA + bundled demo media).
+   *
+   * V1 deliberately has no object-storage binding: lesson media is referenced
+   * by external HTTPS URL and imports are processed in-request. See
+   * `src/worker/services/media-service.ts` for the single place that knows how
+   * an asset is turned into a URL, so an optional object-storage adapter can be
+   * added later without touching the exam engine.
+   */
   ASSETS: Fetcher;
   /** Optional: when absent the import pipeline runs inline (local dev). */
   IMPORT_QUEUE?: Queue<ImportQueueMessage>;

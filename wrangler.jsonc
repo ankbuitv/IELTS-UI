@@ -10,6 +10,12 @@
   // ---------------------------------------------------------------------------
   // Static assets: the built React SPA. API + private file routes are always
   // handled by the Worker first (run_worker_first) so they can enforce auth.
+  //
+  // V1 has NO object storage. Listening audio and chart images are registered
+  // as external HTTPS URLs in D1 (Admin -> Settings -> Assets), and imports are
+  // processed in-request, so no bucket or R2 billing is required. An optional
+  // object-storage adapter can be added later in
+  // src/worker/services/media-service.ts without touching the exam engine.
   // ---------------------------------------------------------------------------
   "assets": {
     "directory": "dist/client",
@@ -27,16 +33,6 @@
       "database_name": "ielts-platform-db",
       "database_id": "REPLACE_WITH_D1_DATABASE_ID",
       "migrations_dir": "migrations"
-    }
-  ],
-
-  // ---------------------------------------------------------------------------
-  // R2 object storage (import sources, audio, images, charts)
-  // ---------------------------------------------------------------------------
-  "r2_buckets": [
-    {
-      "binding": "CONTENT_BUCKET",
-      "bucket_name": "ielts-platform-content"
     }
   ],
 

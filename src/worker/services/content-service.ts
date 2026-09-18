@@ -1,5 +1,6 @@
 import type { Env } from '../env';
 import { ApiError } from '../lib/errors';
+import { resolveAssetUrl } from './media-service';
 import { newId, nowIso, parseJson } from '../lib/ids';
 import type {
   AnswerKey,
@@ -113,6 +114,9 @@ interface AnswerKeyRow {
 interface AssetRow {
   id: string;
   kind: string;
+  storage_kind: string;
+  external_url: string | null;
+  r2_key: string | null;
   filename: string;
   mime: string;
   size_bytes: number;
@@ -171,7 +175,9 @@ export async function loadCandidateTest(
       .bind(versionId)
       .all<QuestionRow>(),
     env.DB.prepare(
-      'SELECT id, kind, filename, mime, size_bytes, duration_seconds, alt_text, visibility, test_version_id FROM assets WHERE test_version_id = ?',
+      `SELECT id, kind, storage_kind, external_url, r2_key, filename, mime, size_bytes, duration_seconds, alt_text,
+              visibility, test_version_id
+         FROM assets WHERE test_version_id = ?`,
     )
       .bind(versionId)
       .all<AssetRow>(),
@@ -227,7 +233,10 @@ export async function loadCandidateTest(
 
     const audioRow = section.audio_asset_id ? assetById.get(section.audio_asset_id) : undefined;
     const sectionConfig = parseJson<{ playback?: Partial<AudioPlaybackPolicy> }>(section.config_json, {});
-    const audio: CandidateAudio | null = audioRow
+    // The asset is delivered through the authorized file route, which resolves
+    // the external URL. An asset without a usable URL is treated as "no audio"
+    // so the exam never renders a dead player.
+    const audio: CandidateAudio | null = audioRow && resolveAssetUrl(audioRow)
       ? {
           assetId: audioRow.id,
           url: `${basePath}/${audioRow.id}`,
@@ -383,7 +392,9 @@ export async function loadAdminVersion(env: Env, versionId: string): Promise<Adm
       .bind(versionId)
       .all<AnswerKeyRow>(),
     env.DB.prepare(
-      'SELECT id, kind, filename, mime, size_bytes, duration_seconds, alt_text, visibility, test_version_id FROM assets WHERE test_version_id = ?',
+      `SELECT id, kind, storage_kind, external_url, r2_key, filename, mime, size_bytes, duration_seconds, alt_text,
+              visibility, test_version_id
+         FROM assets WHERE test_version_id = ?`,
     )
       .bind(versionId)
       .all<AssetRow>(),
@@ -517,6 +528,20 @@ export async function loadAdminVersion(env: Env, versionId: string): Promise<Adm
 // -----------------------------------------------------------------------------
 // Validation
 // -----------------------------------------------------------------------------
+/** Flattens a question body into the text a candidate would actually read. */
+function questionBodyText(body: AdminQuestion['body']): string | null {
+  if (!body) return null;
+  const parts: string[] = [];
+  if (typeof body.text === 'string') parts.push(body.text);
+  if (Array.isArray(body.rows)) {
+    for (const row of body.rows) {
+      if (Array.isArray(row)) parts.push(row.join(' '));
+    }
+  }
+  const text = parts.join('\n').trim();
+  return text.length > 0 ? text : null;
+}
+
 export function toValidationInput(content: AdminVersionContent): ValidationInput {
   const mockComponentIssues: ValidationIssue[] =
     content.test.type === 'FULL_MOCK'
@@ -542,6 +567,17 @@ export function toValidationInput(content: AdminVersionContent): ValidationInput
       instructions: section.instructions,
       hasPassage: Boolean(section.passage && section.passage.paragraphs.length >= 0 && section.passage.id),
       passageParagraphCount: section.passage?.paragraphs.length ?? 0,
+      // Paragraph-level checks (duplicate labels, duplicated text, declared vs
+      // computed word count) need the passage body, not just a count.
+      passage: section.passage
+        ? {
+            paragraphs: section.passage.paragraphs.map((paragraph) => ({
+              label: paragraph.label ?? '',
+              text: paragraph.text ?? '',
+            })),
+            declaredWordCount: section.passage.wordCount ?? null,
+          }
+        : null,
       hasAudio: Boolean(section.audioAssetId),
       groups: section.groups.map((group) => ({
         id: group.id,
@@ -550,10 +586,15 @@ export function toValidationInput(content: AdminVersionContent): ValidationInput
         sharedOptions: group.sharedOptions,
         rangeFrom: group.rangeFrom,
         rangeTo: group.rangeTo,
+        bodyTexts: group.questions
+          .map((question) => questionBodyText(question.body))
+          .filter((value): value is string => Boolean(value)),
         questions: group.questions.map((question) => ({
           id: question.id,
           number: question.number,
           prompt: question.prompt,
+          bodyText: questionBodyText(question.body),
+          evidence: question.evidence ?? null,
           options: question.options,
           config: question.config,
           answerKey: question.answerKey,

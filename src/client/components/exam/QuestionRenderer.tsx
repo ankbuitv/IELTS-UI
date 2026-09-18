@@ -395,6 +395,30 @@ export function QuestionNavStrip({
 }) {
   return (
     <div className="exam-footer">
+      <span className="nav-strip__legend" aria-hidden="true">
+        <span>
+          <span className="nav-strip__item" style={{ display: 'inline-grid', width: 20, height: 20, marginRight: 4 }}>1</span>
+          unanswered
+        </span>
+        <span>
+          <span
+            className="nav-strip__item nav-strip__item--answered"
+            style={{ display: 'inline-grid', width: 20, height: 20, marginRight: 4 }}
+          >
+            2
+          </span>
+          answered
+        </span>
+        <span>
+          <span
+            className="nav-strip__item nav-strip__item--flagged"
+            style={{ display: 'inline-grid', width: 20, height: 20, marginRight: 4 }}
+          >
+            3
+          </span>
+          flagged
+        </span>
+      </span>
       <div className="nav-strip" role="list" aria-label="Question navigation">
         {numbers.map((number) => (
           <button

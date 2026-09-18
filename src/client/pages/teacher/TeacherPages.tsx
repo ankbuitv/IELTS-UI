@@ -21,7 +21,7 @@ import {
   TextInput,
   useToast,
 } from '../../components/ui';
-import { AccuracyList, BarChart } from '../../components/charts';
+import { AccuracyList, BarChart, type ChartTone } from '../../components/charts';
 import { ResultSummary, type AttemptResultPayload } from '../../components/ResultView';
 import {
   BAND_DISCLAIMER,
@@ -47,6 +47,14 @@ interface ClassroomView {
   assignmentCount: number;
   isOwner: boolean;
 }
+
+/** Skill colours shared with the student dashboards and charts. */
+const SKILL_CHART_TONES: Record<string, ChartTone> = {
+  READING: 'brand',
+  LISTENING: 'violet',
+  WRITING: 'amber',
+  FULL_MOCK: 'emerald',
+};
 
 export function TeacherHomePage() {
   const toast = useToast();
@@ -82,10 +90,10 @@ export function TeacherHomePage() {
       ) : (
         <div className="grid grid--3">
           {data?.classrooms.map((classroom) => (
-            <div className="card" key={classroom.id}>
+            <div className="card card--link" key={classroom.id}>
               <div className="row row--between">
                 <h3 style={{ margin: 0 }}>{classroom.name}</h3>
-                {classroom.status === 'ARCHIVED' ? <Badge tone="warning">Archived</Badge> : null}
+                {classroom.status === 'ARCHIVED' ? <Badge tone="dim">Archived</Badge> : <Badge tone="success">Active</Badge>}
               </div>
               <p className="small muted">{classroom.description || 'No description.'}</p>
               <KeyValue
@@ -96,7 +104,7 @@ export function TeacherHomePage() {
                   ['Your role', classroom.isOwner ? 'Owner' : 'Co-teacher'],
                 ]}
               />
-              <Button block style={{ marginTop: 12 }} onClick={() => navigate(`/teacher/classrooms/${classroom.id}`)}>
+              <Button block variant="secondary" style={{ marginTop: 12 }} onClick={() => navigate(`/teacher/classrooms/${classroom.id}`)}>
                 Open classroom
               </Button>
             </div>
@@ -295,6 +303,7 @@ export function ClassroomPage() {
                   correct: skill.rawScore,
                   total: skill.totalQuestions,
                   accuracy: skill.accuracy,
+                  tone: SKILL_CHART_TONES[skill.skill] ?? 'brand',
                 }))}
               />
             </Card>
