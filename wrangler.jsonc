@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ielts-platform",
+  "name": "ielts",
   "main": "src/worker/index.ts",
   "compatibility_date": "2025-09-01",
   "compatibility_flags": ["nodejs_compat"],
