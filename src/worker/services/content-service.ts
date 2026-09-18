@@ -177,9 +177,11 @@ export async function loadCandidateTest(
     env.DB.prepare(
       `SELECT id, kind, storage_kind, external_url, r2_key, filename, mime, size_bytes, duration_seconds, alt_text,
               visibility, test_version_id
-         FROM assets WHERE test_version_id = ?`,
+         FROM assets
+        WHERE test_version_id = ?
+           OR id IN (SELECT audio_asset_id FROM sections WHERE test_version_id = ? AND audio_asset_id IS NOT NULL)`,
     )
-      .bind(versionId)
+      .bind(versionId, versionId)
       .all<AssetRow>(),
   ]);
 
@@ -233,13 +235,13 @@ export async function loadCandidateTest(
 
     const audioRow = section.audio_asset_id ? assetById.get(section.audio_asset_id) : undefined;
     const sectionConfig = parseJson<{ playback?: Partial<AudioPlaybackPolicy> }>(section.config_json, {});
-    // The asset is delivered through the authorized file route, which resolves
-    // the external URL. An asset without a usable URL is treated as "no audio"
-    // so the exam never renders a dead player.
-    const audio: CandidateAudio | null = audioRow && resolveAssetUrl(audioRow)
+    // Play the HTTPS origin directly so the exam player does not depend on a
+    // 302 from /api/files (audio elements drop auth headers on redirect).
+    const resolvedUrl = audioRow ? resolveAssetUrl(audioRow) : null;
+    const audio: CandidateAudio | null = audioRow && resolvedUrl
       ? {
           assetId: audioRow.id,
-          url: `${basePath}/${audioRow.id}`,
+          url: resolvedUrl.startsWith('/') ? `${basePath}/${audioRow.id}` : resolvedUrl,
           durationSeconds: audioRow.duration_seconds,
           playback: { ...DEFAULT_AUDIO_POLICY, ...(sectionConfig.playback ?? {}) },
         }
@@ -394,9 +396,14 @@ export async function loadAdminVersion(env: Env, versionId: string): Promise<Adm
     env.DB.prepare(
       `SELECT id, kind, storage_kind, external_url, r2_key, filename, mime, size_bytes, duration_seconds, alt_text,
               visibility, test_version_id
-         FROM assets WHERE test_version_id = ?`,
+         FROM assets
+        WHERE kind = 'AUDIO'
+           OR test_version_id = ?
+           OR id IN (SELECT audio_asset_id FROM sections WHERE test_version_id = ? AND audio_asset_id IS NOT NULL)
+        ORDER BY created_at DESC
+        LIMIT 120`,
     )
-      .bind(versionId)
+      .bind(versionId, versionId)
       .all<AssetRow>(),
     env.DB.prepare('SELECT * FROM mock_components WHERE mock_version_id = ? ORDER BY order_index').bind(versionId).all<{
       id: string;

@@ -22,7 +22,7 @@ import {
   useToast,
 } from '../../components/ui';
 import { AccuracyList, BarChart, type ChartTone } from '../../components/charts';
-import { ResultSummary, type AttemptResultPayload } from '../../components/ResultView';
+import { ResultSummary, WritingMarkForm, type AttemptResultPayload } from '../../components/ResultView';
 import {
   BAND_DISCLAIMER,
   formatBand,
@@ -76,9 +76,12 @@ export function TeacherHomePage() {
           <h1>Teaching</h1>
           <p className="page-head__meta">Classrooms, assignments, class analytics and integrity summaries.</p>
         </div>
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          New classroom
-        </Button>
+        <div className="row">
+          <Button onClick={() => navigate('/teacher/marking')}>Mark writing</Button>
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            New classroom
+          </Button>
+        </div>
       </div>
 
       {data?.classrooms.length === 0 ? (
@@ -911,9 +914,16 @@ export function AssignmentPage() {
                   <td className="num">{row.integrityEventCount}</td>
                   <td className="num">{row.writingSubmitted}</td>
                   <td className="right">
-                    <Link className="btn btn--sm" to={`/teacher/students/${row.userId}`}>
-                      Progress
-                    </Link>
+                    <div className="row" style={{ justifyContent: 'flex-end' }}>
+                      {row.writingSubmitted > 0 ? (
+                        <Link className="btn btn--sm" to="/teacher/marking">
+                          Mark writing
+                        </Link>
+                      ) : null}
+                      <Link className="btn btn--sm" to={`/teacher/students/${row.userId}`}>
+                        Progress
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1007,16 +1017,20 @@ interface StudentDetail {
     taskLabel: string;
     wordCount: number;
     submittedAt: string | null;
+    responseText: string;
+    prompt: string;
     scoreBand: number | null;
     feedback: string;
     scoringSource: string | null;
+    criteria?: Record<string, number>;
   }>;
 }
 
 export function StudentDetailPage() {
   const { userId = '' } = useParams();
   const [selectedAttempt, setSelectedAttempt] = useState<string | null>(null);
-  const { data, loading, error } = useAsync<StudentDetail>(() => api.get(`/api/teacher/students/${userId}`), [userId]);
+  const [marking, setMarking] = useState<StudentDetail['writing'][number] | null>(null);
+  const { data, loading, error, reload } = useAsync<StudentDetail>(() => api.get(`/api/teacher/students/${userId}`), [userId]);
   const attempt = useAsync<AttemptResultPayload>(
     () => api.get(`/api/teacher/attempts/${selectedAttempt}`),
     [selectedAttempt],
@@ -1120,6 +1134,7 @@ export function StudentDetailPage() {
                 <th className="num">Band</th>
                 <th>Source</th>
                 <th>Submitted</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -1131,6 +1146,11 @@ export function StudentDetailPage() {
                   <td className="num">{formatBand(row.scoreBand)}</td>
                   <td>{row.scoringSource ? row.scoringSource.toLowerCase() : 'Awaiting marking'}</td>
                   <td className="nowrap">{formatDateTime(row.submittedAt)}</td>
+                  <td className="right">
+                    <Button size="sm" variant="primary" onClick={() => setMarking(row)}>
+                      {row.scoreBand != null ? 'Edit mark' : 'Mark'}
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1148,7 +1168,43 @@ export function StudentDetailPage() {
       >
         {attempt.loading ? <Loading label="Loading attempt…" /> : null}
         {attempt.error ? <Notice tone="danger">{attempt.error}</Notice> : null}
-        {attempt.data ? <ResultSummary result={attempt.data} /> : null}
+        {attempt.data ? (
+          <ResultSummary result={attempt.data} marking={{ apiBase: '/api/teacher', onSaved: attempt.reload }} />
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(marking)}
+        wide
+        title={marking ? `Mark ${marking.taskLabel}` : 'Mark writing'}
+        onClose={() => setMarking(null)}
+        actions={<Button onClick={() => setMarking(null)}>Close</Button>}
+      >
+        {marking ? (
+          <WritingMarkForm
+            apiBase="/api/teacher"
+            submissionId={marking.submissionId}
+            taskLabel={marking.taskLabel}
+            wordCount={marking.wordCount}
+            prompt={marking.prompt}
+            responseText={marking.responseText}
+            existing={
+              marking.scoringSource
+                ? {
+                    band: marking.scoreBand,
+                    feedback: marking.feedback,
+                    source: marking.scoringSource,
+                    scoredAt: marking.submittedAt ?? '',
+                    criteria: marking.criteria ?? {},
+                  }
+                : null
+            }
+            onSaved={async () => {
+              await reload();
+              setMarking(null);
+            }}
+          />
+        ) : null}
       </Modal>
     </div>
   );

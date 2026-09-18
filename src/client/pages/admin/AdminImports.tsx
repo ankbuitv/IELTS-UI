@@ -21,6 +21,7 @@ import {
   useToast,
 } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
+import { parseLeadingJson } from '@shared/json';
 
 interface ImportRow {
   id: string;
@@ -214,11 +215,11 @@ export function AdminImportsPage() {
         actions={<Button onClick={() => setUploadOpen(false)}>Close</Button>}
       >
         <ImportStartForm
-          onCreated={async (importId) => {
-            await reload();
+          onCreated={(importId) => {
             setUploadOpen(false);
             setSelected(importId);
-            toast.push('Import created. Review the extracted text and run AI structuring if needed.', 'success');
+            toast.push('Import created. Review the draft — it is not published.', 'success');
+            void reload();
           }}
           onError={(message) => toast.push(message, 'error')}
         />
@@ -250,7 +251,7 @@ function ImportStartForm({
   onCreated,
   onError,
 }: {
-  onCreated: (importId: string) => Promise<void>;
+  onCreated: (importId: string) => void | Promise<void>;
   onError: (message: string) => void;
 }) {
   const [mode, setMode] = useState<'paste' | 'file'>('paste');
@@ -306,7 +307,7 @@ function ImportStartForm({
           <Field
             label="Paste reading JSON, plain text or an AI response"
             required
-            hint="A JSON object with a testType is validated and turned into a draft immediately. Plain text is stored for AI structuring or manual editing."
+            hint="A JSON object with a testType (or a schemaVersion source document) is validated and turned into a draft immediately. Extra JSON after the first object is ignored. Plain text is stored for AI structuring or manual editing."
           >
             {(id) => (
               <TextArea
@@ -423,6 +424,7 @@ function ImportDetailView({
   const [extracted, setExtracted] = useState<string | null>(null);
   const [applyTarget, setApplyTarget] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showPayload, setShowPayload] = useState(false);
 
   if (loading) return <Loading label="Loading import…" />;
   if (error) return <Notice tone="danger">{error}</Notice>;
@@ -430,7 +432,8 @@ function ImportDetailView({
 
   const record = data.import;
   const payload = record.structuredPayload;
-  const payloadValue = payloadText ?? (payload ? JSON.stringify(payload, null, 2) : '');
+  const payloadValue =
+    payloadText ?? (showPayload && payload ? JSON.stringify(payload, null, 2) : '');
 
   return (
     <div className="stack">
@@ -564,37 +567,72 @@ function ImportDetailView({
         </Card>
       ) : null}
 
-      <Card title="Structured payload" hint="Edit before applying. This is what becomes the test version content.">
-        <TextArea
-          rows={16}
-          spellCheck={false}
-          value={payloadValue}
-          onChange={(event) => setPayloadText(event.target.value)}
-          style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}
-        />
+      <Card title="Structured payload" hint="Kept as a draft. Opening the editor pretty-prints the JSON — skip it unless you need to edit.">
+        {showPayload || payloadText !== null ? (
+          <TextArea
+            rows={16}
+            spellCheck={false}
+            value={payloadValue}
+            onChange={(event) => setPayloadText(event.target.value)}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}
+          />
+        ) : (
+          <p className="tiny muted">
+            {payload
+              ? 'Structured JSON is ready. Apply the draft without opening the editor unless you need to change questions.'
+              : 'No structured payload yet. Run extraction or paste JSON that includes testType / schemaVersion.'}
+          </p>
+        )}
         <div className="row" style={{ marginTop: 10 }}>
-          <Button
-            onClick={async () => {
-              try {
-                const parsed = JSON.parse(payloadValue) as unknown;
-                await api.patch(`/api/admin/imports/${importId}`, { payload: parsed });
-                await reload();
-                toast.push('Draft payload saved.', 'success');
-              } catch (saveError) {
-                toast.push(describeError(saveError), 'error');
-              }
-            }}
-          >
-            Save draft payload
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setPayloadText(payload ? JSON.stringify(payload, null, 2) : '');
-            }}
-          >
-            Revert edits
-          </Button>
+          {!showPayload && payloadText === null ? (
+            <Button
+              onClick={() => {
+                setShowPayload(true);
+                if (payload && payloadText === null) {
+                  setPayloadText(JSON.stringify(payload, null, 2));
+                }
+              }}
+            >
+              Open JSON editor
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={async () => {
+                  try {
+                    const parsed = parseLeadingJson(payloadValue);
+                    if (!parsed) {
+                      toast.push(
+                        'The payload is not valid JSON. Paste a single test object — extra documents after the first object are ignored.',
+                        'error',
+                      );
+                      return;
+                    }
+                    await api.patch(`/api/admin/imports/${importId}`, { payload: parsed.value });
+                    await reload();
+                    toast.push(
+                      parsed.trailing
+                        ? 'Draft payload saved. Extra text after the first JSON object was ignored.'
+                        : 'Draft payload saved.',
+                      parsed.trailing ? 'warning' : 'success',
+                    );
+                  } catch (saveError) {
+                    toast.push(describeError(saveError), 'error');
+                  }
+                }}
+              >
+                Save draft payload
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setPayloadText(payload ? JSON.stringify(payload, null, 2) : '');
+                }}
+              >
+                Revert edits
+              </Button>
+            </>
+          )}
         </div>
       </Card>
 

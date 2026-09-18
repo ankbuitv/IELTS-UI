@@ -6,6 +6,8 @@ import type { CandidateQuestion, QuestionGroupConfig, SharedOption } from '../..
 import { isQuestionType, questionTypeMeta } from '../../shared/question-types';
 import type { AudioPlaybackPolicy, PassageParagraph } from '../../shared/question-types';
 import type { Skill } from '../../shared/types';
+import { normaliseExternalUrl } from './media-service';
+import { resolveActiveProfileId } from './scoring-profile-service';
 
 export interface EditableQuestion {
   number: number;
@@ -46,6 +48,8 @@ export interface EditableSection {
     passageWordCount?: number | null;
   } | null;
   audioAssetId?: string | null;
+  /** Convenience: a pasted HTTPS audio URL is turned into an asset on save. */
+  audioUrl?: string | null;
   playback?: Partial<AudioPlaybackPolicy>;
   groups: EditableGroup[];
 }
@@ -93,7 +97,10 @@ export async function replaceVersionContent(
     );
   }
 
+  await resolveAudioReferences(env, versionId, content, actorId);
   await assertAssetsExist(env, content);
+  await assertScoringProfile(env, content);
+  content.mockComponents = (content.mockComponents ?? []).filter((component) => Boolean(blankToNull(component.testVersionId)));
   await assertMockComponents(env, versionId, content);
 
   const timestamp = nowIso();
@@ -101,7 +108,17 @@ export async function replaceVersionContent(
   const sectionIds: string[] = [];
   let totalQuestions = 0;
 
-  // Remove the previous tree (cascades to groups, questions and answer keys).
+  // Explicit child deletes: D1 foreign keys on attempt_answers and mock
+  // components do not always cascade through a single `DELETE FROM sections`,
+  // which is what produced `FOREIGN KEY constraint failed` on Save content.
+  statements.push(
+    env.DB.prepare(
+      `DELETE FROM attempt_answers WHERE question_id IN (SELECT id FROM questions WHERE test_version_id = ?)`,
+    ).bind(versionId),
+  );
+  statements.push(env.DB.prepare('DELETE FROM answer_keys WHERE test_version_id = ?').bind(versionId));
+  statements.push(env.DB.prepare('DELETE FROM questions WHERE test_version_id = ?').bind(versionId));
+  statements.push(env.DB.prepare('DELETE FROM question_groups WHERE test_version_id = ?').bind(versionId));
   statements.push(env.DB.prepare('DELETE FROM sections WHERE test_version_id = ?').bind(versionId));
   statements.push(env.DB.prepare('DELETE FROM passages WHERE test_version_id = ?').bind(versionId));
   statements.push(env.DB.prepare('DELETE FROM mock_components WHERE mock_version_id = ?').bind(versionId));
@@ -110,6 +127,7 @@ export async function replaceVersionContent(
     const sectionId = newId('sec');
     sectionIds.push(sectionId);
     let passageId: string | null = null;
+    const skill = inferSectionSkill(section);
 
     if (section.passage) {
       passageId = newId('psg');
@@ -143,13 +161,13 @@ export async function replaceVersionContent(
       ).bind(
         sectionId,
         versionId,
-        section.skill,
+        skill,
         sectionIndex,
         section.title ?? '',
         section.subtitle ?? null,
         section.instructions ?? '',
         passageId,
-        section.audioAssetId ?? null,
+        blankToNull(section.audioAssetId),
         section.durationSeconds ?? null,
         JSON.stringify(section.playback ? { playback: section.playback } : {}),
         timestamp,
@@ -162,9 +180,10 @@ export async function replaceVersionContent(
         throw ApiError.validation(`Unknown question type "${group.type}".`);
       }
       const meta = questionTypeMeta(group.type);
-      if (!meta.skills.includes(section.skill)) {
+      const writingType = group.type === 'WRITING_TASK_1' || group.type === 'WRITING_TASK_2';
+      if (!writingType && !meta.skills.includes(skill)) {
         throw ApiError.validation(
-          `${meta.label} cannot be used in a ${section.skill} section (section "${section.title || sectionIndex + 1}").`,
+          `${meta.label} cannot be used in a ${skill} section (section "${section.title || sectionIndex + 1}").`,
         );
       }
 
@@ -263,7 +282,7 @@ export async function replaceVersionContent(
       `UPDATE test_versions
           SET total_questions = ?, duration_seconds = COALESCE(?, duration_seconds),
               is_complete_test = COALESCE(?, is_complete_test),
-              scoring_profile_id = COALESCE(?, scoring_profile_id),
+              scoring_profile_id = ?,
               config_json = COALESCE(?, config_json),
               updated_at = ?
         WHERE id = ?`,
@@ -278,12 +297,104 @@ export async function replaceVersionContent(
     ),
   );
 
-  for (let i = 0; i < statements.length; i += 40) {
-    await env.DB.batch(statements.slice(i, i + 40));
+  try {
+    for (let i = 0; i < statements.length; i += 40) {
+      await env.DB.batch(statements.slice(i, i + 40));
+    }
+  } catch (error) {
+    const message = (error as Error)?.message ?? '';
+    if (/FOREIGN KEY/i.test(message)) {
+      throw ApiError.validation(
+        'Could not save this content because a related record is missing (audio URL, scoring profile, or leftover attempt data). Paste a real HTTPS audio link, clear an invalid scoring profile id, or delete the test and recreate it.',
+        { reason: message },
+      );
+    }
+    throw error;
   }
 
   void actorId;
   return { totalQuestions, sectionIds };
+}
+
+function blankToNull(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function isWritingType(type: string): boolean {
+  return type === 'WRITING_TASK_1' || type === 'WRITING_TASK_2';
+}
+
+function inferSectionSkill(section: EditableSection): Skill {
+  const types = section.groups.map((group) => group.type);
+  if (types.length > 0 && types.every(isWritingType)) return 'WRITING';
+  return section.skill;
+}
+
+/** Accept a pasted HTTPS URL in `audioUrl` or `audioAssetId` and store an asset. */
+async function resolveAudioReferences(
+  env: Env,
+  versionId: string,
+  content: EditableContent,
+  actorId: string | null,
+): Promise<void> {
+  for (const section of content.sections) {
+    const pasted = blankToNull(section.audioUrl) ?? blankToNull(section.audioAssetId);
+    if (!pasted) {
+      section.audioAssetId = null;
+      continue;
+    }
+    if (pasted.startsWith('http://') || pasted.startsWith('https://')) {
+      section.audioAssetId = await ensureAudioAsset(env, pasted, versionId, actorId);
+      continue;
+    }
+    section.audioAssetId = pasted;
+  }
+}
+
+async function ensureAudioAsset(env: Env, rawUrl: string, versionId: string, actorId: string | null): Promise<string> {
+  const url = normaliseExternalUrl(rawUrl);
+  if (!url) {
+    throw ApiError.validation('Listening audio must be an HTTPS URL (https://…).');
+  }
+  const existing = await env.DB.prepare('SELECT id FROM assets WHERE external_url = ? AND kind = ? LIMIT 1')
+    .bind(url, 'AUDIO')
+    .first<{ id: string }>();
+  if (existing) {
+    await env.DB.prepare('UPDATE assets SET test_version_id = COALESCE(test_version_id, ?), visibility = ? WHERE id = ?')
+      .bind(versionId, 'ATTEMPT', existing.id)
+      .run();
+    return existing.id;
+  }
+  const id = newId('ast');
+  const timestamp = nowIso();
+  const filename = url.split('?')[0]?.split('/').filter(Boolean).pop() ?? 'listening-audio';
+  await env.DB.prepare(
+    `INSERT INTO assets (id, kind, storage_kind, external_url, filename, mime, size_bytes, visibility, test_version_id,
+                         uploaded_by, created_at, updated_at)
+     VALUES (?, 'AUDIO', 'EXTERNAL_URL', ?, ?, 'audio/mpeg', 0, 'ATTEMPT', ?, ?, ?, ?)`,
+  )
+    .bind(id, url, filename.slice(0, 160), versionId, actorId, timestamp, timestamp)
+    .run();
+  return id;
+}
+
+async function assertScoringProfile(env: Env, content: EditableContent): Promise<void> {
+  let profileId = blankToNull(content.scoringProfileId);
+  if (!profileId) {
+    const skills = new Set(content.sections.map((section) => inferSectionSkill(section)));
+    const only = skills.size === 1 ? [...skills][0] : null;
+    if (only === 'READING' || only === 'LISTENING') {
+      profileId = await resolveActiveProfileId(env, only);
+    }
+  }
+  content.scoringProfileId = profileId;
+  if (!profileId) return;
+  const row = await env.DB.prepare('SELECT id FROM scoring_profiles WHERE id = ?').bind(profileId).first<{ id: string }>();
+  if (!row) {
+    throw ApiError.validation('That scoring profile id does not exist. Clear the field or pick a real profile.');
+  }
 }
 
 async function assertAssetsExist(env: Env, content: EditableContent): Promise<void> {

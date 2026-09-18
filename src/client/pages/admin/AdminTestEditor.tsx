@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { QUESTION_TYPES, QUESTION_TYPE_META } from '@shared/question-types';
 import type { QuestionType } from '@shared/question-types';
 import { api, describeError } from '../../lib/api';
@@ -90,6 +90,7 @@ interface TestDetailResponse {
 
 export function AdminTestEditorPage() {
   const { testId = '' } = useParams();
+  const navigate = useNavigate();
   const toast = useToast();
   const [editingVersionId, setEditingVersionId] = useState<string | null>(null);
   const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
@@ -125,6 +126,28 @@ export function AdminTestEditorPage() {
             {test.status.toLowerCase()}
           </Badge>
           <Button onClick={() => setEditingMeta(true)}>Edit metadata</Button>
+          <ConfirmButton
+            variant="danger"
+            title={`Delete “${test.title}”?`}
+            confirmLabel="Delete test"
+            onConfirm={async () => {
+              try {
+                await api.delete(`/api/admin/tests/${testId}`);
+                toast.push('Test deleted.', 'success');
+                navigate('/admin/tests');
+              } catch (deleteError) {
+                toast.push(describeError(deleteError), 'error');
+                throw deleteError;
+              }
+            }}
+            body={
+              <p>
+                This permanently removes the test, every version, and every attempt on it. This cannot be undone.
+              </p>
+            }
+          >
+            Delete test
+          </ConfirmButton>
           <ConfirmButton
             title="Create a new version"
             confirmLabel="Create version"
@@ -321,6 +344,41 @@ export function AdminTestEditorPage() {
                           body={<p>Creates a new editable draft containing a copy of this version's content.</p>}
                         >
                           Clone
+                        </ConfirmButton>
+                        <ConfirmButton
+                          size="sm"
+                          variant="danger"
+                          title={`Delete v${version.version_number}?`}
+                          confirmLabel="Delete version"
+                          onConfirm={async () => {
+                            try {
+                              const result = await api.delete<{ testDeleted?: boolean }>(
+                                `/api/admin/versions/${version.id}`,
+                              );
+                              toast.push(
+                                result.testDeleted
+                                  ? 'Last version removed — the test was deleted.'
+                                  : `v${version.version_number} deleted.`,
+                                'success',
+                              );
+                              if (result.testDeleted) {
+                                navigate('/admin/tests');
+                                return;
+                              }
+                              await reload();
+                            } catch (deleteError) {
+                              toast.push(describeError(deleteError), 'error');
+                              throw deleteError;
+                            }
+                          }}
+                          body={
+                            <p>
+                              This permanently removes this version and any attempts taken on it. If it is the last
+                              version, the whole test is deleted.
+                            </p>
+                          }
+                        >
+                          Delete
                         </ConfirmButton>
                       </div>
                     </td>
@@ -681,6 +739,9 @@ function VersionEditorBody({
   const [jsonText, setJsonText] = useState(() => JSON.stringify(toEditable(data), null, 2));
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [saving, setSaving] = useState(false);
+  const scoringProfiles = useAsync<{
+    profiles: Array<{ id: string; name: string; skill: string; status: string; version: number }>;
+  }>(() => api.get('/api/admin/scoring-profiles'), []);
   const mockVersionList = useAsync<{
     tests: Array<{ id: string; title: string; type: string; current_version_id: string | null }>;
   }>(() => api.get('/api/admin/tests'), [], { immediate: testType === 'FULL_MOCK' });
@@ -829,15 +890,26 @@ function VersionEditorBody({
                   />
                 )}
               </Field>
-              <Field label="Scoring profile">
+              <Field
+                label="Scoring profile"
+                hint="Default Reading and Listening tables are created automatically. Writing is marked by a teacher."
+              >
                 {(id) => (
-                  <TextInput
+                  <Select
                     id={id}
                     value={draft.scoringProfileId ?? ''}
                     disabled={readOnly}
-                    placeholder="No profile (bands unavailable)"
                     onChange={(event) => setDraft({ ...draft, scoringProfileId: event.target.value || null })}
-                  />
+                  >
+                    <option value="">None — raw score only</option>
+                    {(scoringProfiles.data?.profiles ?? [])
+                      .filter((profile) => profile.status === 'ACTIVE')
+                      .map((profile) => (
+                        <option key={profile.id} value={profile.id}>
+                          {profile.name} · {profile.skill.toLowerCase()} v{profile.version}
+                        </option>
+                      ))}
+                  </Select>
                 )}
               </Field>
               <div className="field">
@@ -908,32 +980,61 @@ function VersionEditorBody({
                 )}
               </Field>
 
-              {section.skill === 'LISTENING' ? (
-                <div className="grid grid--2">
-                  <Field label="Audio asset">
+              {section.skill === 'LISTENING' || section.audioAssetId || section.audioUrl ? (
+                <div className="stack">
+                  <Field
+                    label="Audio URL"
+                    hint="Paste an HTTPS link. Saving the content attaches it to this section automatically."
+                  >
                     {(id) => (
-                      <Select
+                      <TextInput
                         id={id}
-                        value={section.audioAssetId ?? ''}
+                        type="url"
+                        value={section.audioUrl ?? ''}
                         disabled={readOnly}
-                        onChange={(event) => updateSection(sectionIndex, { audioAssetId: event.target.value || null })}
-                      >
-                        <option value="">No audio attached</option>
-                        {audioAssets.map((asset) => (
-                          <option key={asset.id} value={asset.id}>
-                            {asset.filename} {asset.duration_seconds ? `(${Math.round(asset.duration_seconds)}s)` : ''}
-                          </option>
-                        ))}
-                      </Select>
+                        placeholder="https://cdn.example.com/listening/section-1.mp3"
+                        onChange={(event) =>
+                          updateSection(sectionIndex, {
+                            audioUrl: event.target.value || null,
+                            audioAssetId: event.target.value ? event.target.value : section.audioAssetId,
+                          })
+                        }
+                      />
                     )}
                   </Field>
-                  <AudioUpload
-                    versionId={versionId}
-                    disabled={readOnly}
-                    onUploaded={async () => {
-                      await reload();
-                    }}
-                  />
+                  <div className="grid grid--2">
+                    <Field label="Audio asset">
+                      {(id) => (
+                        <Select
+                          id={id}
+                          value={section.audioAssetId && !section.audioAssetId.startsWith('http') ? section.audioAssetId : ''}
+                          disabled={readOnly}
+                          onChange={(event) =>
+                            updateSection(sectionIndex, { audioAssetId: event.target.value || null, audioUrl: null })
+                          }
+                        >
+                          <option value="">No audio attached</option>
+                          {section.audioAssetId &&
+                          !section.audioAssetId.startsWith('http') &&
+                          !audioAssets.some((asset) => asset.id === section.audioAssetId) ? (
+                            <option value={section.audioAssetId}>Newly linked audio</option>
+                          ) : null}
+                          {audioAssets.map((asset) => (
+                            <option key={asset.id} value={asset.id}>
+                              {asset.filename} {asset.duration_seconds ? `(${Math.round(asset.duration_seconds)}s)` : ''}
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                    </Field>
+                    <AudioUpload
+                      versionId={versionId}
+                      disabled={readOnly}
+                      onUploaded={(assetId) => {
+                        if (assetId) updateSection(sectionIndex, { audioAssetId: assetId, audioUrl: null });
+                      }}
+                    />
+                  </div>
                 </div>
               ) : null}
 
@@ -1294,7 +1395,7 @@ function AudioUpload({
 }: {
   versionId: string;
   disabled?: boolean;
-  onUploaded: () => Promise<void> | void;
+  onUploaded: (assetId?: string) => Promise<void> | void;
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -1321,10 +1422,14 @@ function AudioUpload({
           onClick={async () => {
             setBusy(true);
             try {
-              await api.post('/api/admin/assets', { url: url.trim(), kind: 'AUDIO', testVersionId: versionId });
+              const linked = await api.post<{ assetId: string }>('/api/admin/assets', {
+                url: url.trim(),
+                kind: 'AUDIO',
+                testVersionId: versionId,
+              });
               setUrl('');
-              toast.push('Audio linked to the draft.', 'success');
-              await onUploaded();
+              toast.push('Audio linked. It is selected for this section — save content to keep it.', 'success');
+              await onUploaded(linked.assetId);
             } catch (linkError) {
               toast.push(describeError(linkError), 'error');
             } finally {

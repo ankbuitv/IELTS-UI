@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
-import { Badge, Button, Card, EmptyState, Field, Loading, Modal, Notice, Select, TextArea, TextInput, useToast } from '../../components/ui';
+import { Badge, Button, Card, ConfirmButton, EmptyState, Field, Loading, Modal, Notice, Select, TextArea, TextInput, useToast } from '../../components/ui';
 import { formatDateTime, TEST_TYPE_LABELS } from '../../lib/format';
 
 interface AdminTestRow {
@@ -130,9 +130,35 @@ export function AdminTestsPage() {
                   <td className="num">{test.attempt_count}</td>
                   <td className="nowrap">{formatDateTime(test.updated_at)}</td>
                   <td className="right">
-                    <Link className="btn btn--sm" to={`/admin/tests/${test.id}`}>
-                      Open
-                    </Link>
+                    <div className="row" style={{ justifyContent: 'flex-end' }}>
+                      <Link className="btn btn--sm" to={`/admin/tests/${test.id}`}>
+                        Open
+                      </Link>
+                      <ConfirmButton
+                        size="sm"
+                        variant="danger"
+                        title={`Delete “${test.title}”?`}
+                        confirmLabel="Delete test"
+                        onConfirm={async () => {
+                          try {
+                            await api.delete(`/api/admin/tests/${test.id}`);
+                            await reload();
+                            toast.push('Test deleted.', 'success');
+                          } catch (deleteError) {
+                            toast.push(describeError(deleteError), 'error');
+                            throw deleteError;
+                          }
+                        }}
+                        body={
+                          <p>
+                            This permanently removes the test, every version, and every attempt on it. This cannot be
+                            undone.
+                          </p>
+                        }
+                      >
+                        Delete
+                      </ConfirmButton>
+                    </div>
                   </td>
                 </tr>
               ))}

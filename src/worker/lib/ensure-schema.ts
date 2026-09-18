@@ -1,6 +1,7 @@
 import type { Env } from '../env';
 // Generated file — see scripts/generate-runtime-schema.mjs (`npm run schema:generate`).
 import RUNTIME_SCHEMA_SQL from './runtime-schema.sql';
+import { ensureDefaultScoringProfiles } from '../services/scoring-profile-service';
 
 /**
  * Self-healing schema bootstrap.
@@ -79,13 +80,14 @@ export function resetSchemaState(): void {
 
 async function checkAndBootstrap(env: Env): Promise<SchemaState> {
   const missing = await missingTables(env);
-  if (missing.length === 0) return { ok: true };
-
-  console.warn('schema_bootstrap', `missing tables: ${missing.join(', ')}`);
-  const statements = splitSqlStatements(RUNTIME_SCHEMA_SQL);
-  // D1 rejects multi-statement queries in a single prepare(), so the script is
-  // executed statement by statement inside one batch (one HTTP round trip).
-  await env.DB.batch(statements.map((sql) => env.DB.prepare(sql)));
+  if (missing.length > 0) {
+    console.warn('schema_bootstrap', `missing tables: ${missing.join(', ')}`);
+    const statements = splitSqlStatements(RUNTIME_SCHEMA_SQL);
+    // D1 rejects multi-statement queries in a single prepare(), so the script is
+    // executed statement by statement inside one batch (one HTTP round trip).
+    await env.DB.batch(statements.map((sql) => env.DB.prepare(sql)));
+  }
+  await ensureDefaultScoringProfiles(env);
   return { ok: true };
 }
 
@@ -110,12 +112,14 @@ export async function schemaReport(env: Env): Promise<SchemaReport> {
     const missing = expected.filter((table) => !existing.has(table));
     if (missing.length === 0) {
       resetSchemaState();
+      await ensureDefaultScoringProfiles(env);
       return { present: expected.filter((table) => existing.has(table)), missing, complete: true };
     }
     const statements = splitSqlStatements(RUNTIME_SCHEMA_SQL);
     await env.DB.batch(statements.map((sql) => env.DB.prepare(sql)));
     const after = await existingTables(env);
     resetSchemaState();
+    await ensureDefaultScoringProfiles(env);
     return {
       present: expected.filter((table) => after.has(table)),
       missing: expected.filter((table) => !after.has(table)),

@@ -1,0 +1,776 @@
+{
+  "testTitle": "Cities, Knowledge and Adaptation",
+  "testType": "READING",
+  "answerKeyConfidence": "PROVIDED",
+  "warnings": [],
+  "passages": [
+    {
+      "title": "Libraries Beyond Books",
+      "passageWordCount": 793,
+      "paragraphs": [
+        {
+          "label": "A",
+          "text": "For generations, public libraries were primarily associated with shelves of printed material and the quiet borrowing of books. That function remains important, but the role of many libraries has expanded considerably. Visitors may now use computers, attend workshops, study in groups, seek help with online forms or borrow equipment that would once have seemed unrelated to a library. This change has not necessarily reduced the importance of reading. Instead, it reflects a broader interpretation of access to information: possessing a book is useful, but so are having an internet connection, knowing how to evaluate a website and finding a suitable place in which to study."
+        },
+        {
+          "label": "B",
+          "text": "One factor behind this transformation is the unequal availability of digital resources at home. Although smartphones are widespread, they do not provide an ideal solution for every task. Completing a complicated application, preparing a curriculum vitae or comparing several sources can be difficult on a small screen. Home internet connections may also be unreliable or unaffordable. Libraries that provide computers and stable connections can therefore serve people who are technically online but still lack practical access to digital services. Staff increasingly help visitors use these services, although they must often distinguish between showing someone how a system works and giving specialist legal or financial advice."
+        },
+        {
+          "label": "C",
+          "text": "The physical design of libraries has changed alongside their services. Traditional reading rooms were built around silence and individual concentration. Contemporary buildings may still contain quiet areas, but they often include meeting rooms, flexible furniture and spaces where conversation is expected. This can create tension. A teenager taking part in a collaborative project and an older visitor reading a newspaper may have equally legitimate reasons for being in the same building while requiring very different environments. Some libraries address this problem through zoning rather than attempting to enforce a single standard of behaviour throughout the building."
+        },
+        {
+          "label": "D",
+          "text": "Another development is the growth of practical lending collections. Some libraries lend tools, sewing machines, musical instruments, toys or scientific equipment. The aim is not to turn the library into a general rental business. Supporters argue that occasional access to an object may be more useful than ownership, particularly for equipment that is expensive but rarely required. Such collections can also introduce people to unfamiliar activities. However, objects create challenges that books do not: they may require safety checks, cleaning, replacement parts and instructions, and staff need procedures for deciding whether damaged equipment can be lent again."
+        },
+        {
+          "label": "E",
+          "text": "Libraries have also become venues for instruction. Courses may cover basic computing, family history, language learning, job applications or the identification of misleading information online. The value of these programmes is difficult to measure solely by attendance. A small class that helps several participants complete an essential task may have greater practical impact than a crowded event that produces little lasting change. For this reason, some library systems collect follow-up information rather than relying only on the number of people who entered a room."
+        },
+        {
+          "label": "F",
+          "text": "Partnerships allow libraries to provide expertise that their permanent staff do not possess. Local charities may offer employment advice, universities may run science activities, and health organisations may provide general information sessions. Yet partnerships need clear boundaries. A library can offer a trusted and accessible location without being responsible for every service delivered there. Managers must consider privacy, professional qualifications and whether an outside organisation's aims are compatible with the library's obligation to serve a broad public."
+        },
+        {
+          "label": "G",
+          "text": "These changes have implications for library employees. Knowledge of books and information systems remains valuable, but staff may also need skills in teaching, event management and digital support. This does not mean that every employee must become an expert in every field. In fact, knowing when to refer a visitor to another organisation can be as important as answering a question directly. Training increasingly focuses on communication and problem solving alongside more traditional library skills."
+        },
+        {
+          "label": "H",
+          "text": "Evaluating the modern library is therefore complicated. Counting borrowed books remains useful, but it captures only part of what happens inside the building. Computer sessions, workshop outcomes, repeat visits and use of study spaces can provide additional evidence. Even these measures require interpretation: a decline in physical loans might reflect changing habits rather than declining public value. The central challenge is to match evaluation methods to the objectives a particular library has chosen, instead of assuming that a single statistic can represent every form of benefit."
+        }
+      ]
+    },
+    {
+      "title": "Reconstructing the History of Weather",
+      "passageWordCount": 824,
+      "paragraphs": [
+        {
+          "label": "A",
+          "text": "Instrumental weather records are fundamental to modern climate research, but in most places they extend back only a fraction of the period scientists would like to examine. Thermometers and rain gauges became common at different times in different regions, and early instruments were not always used consistently. Researchers seeking a longer view therefore turn to proxy evidence: natural or historical records that respond, directly or indirectly, to weather conditions."
+        },
+        {
+          "label": "B",
+          "text": "Tree rings are among the best-known examples. In some environments, a tree forms a wider ring during favourable growing conditions and a narrower one during stressful years. The relationship is not universal. Growth may be limited primarily by temperature in one location and by moisture in another, while disease, competition and physical damage can also affect a ring. Scientists consequently compare many trees and calibrate their growth against periods for which instrumental observations are available."
+        },
+        {
+          "label": "C",
+          "text": "Ice cores provide a different archive. As snow accumulates and is compressed into ice, it can preserve dust, chemical compounds and tiny bubbles of ancient atmosphere. Individual measurements can provide evidence about past environmental conditions, but interpretation depends on understanding how snow was deposited and how the ice changed after burial. Dating deep layers may also become less precise as researchers move further back in time."
+        },
+        {
+          "label": "D",
+          "text": "Historical documents add another category of evidence. Ships' logs, harvest records, diaries and reports of frozen rivers can all contain information related to weather. Their attraction is that they sometimes describe events in places with no early instruments. Their weakness is that the original writer usually had another purpose. A farmer recording a poor harvest, for example, was not necessarily making a controlled observation of rainfall."
+        },
+        {
+          "label": "E",
+          "text": "Researchers must also beware of changes in language. A description such as an exceptionally severe winter may have meant different things to writers in different places or periods. Even numerical records can be difficult to compare if observers used different calendars, measurement units or observation times. Historians and climate scientists therefore work together to determine what a record originally meant before incorporating it into a larger reconstruction."
+        },
+        {
+          "label": "F",
+          "text": "No single source is expected to answer every question. A tree-ring sequence may provide annual detail but say little about the precise timing of rainfall within a season. A diary may describe a dramatic storm while remaining silent about ordinary weather. When independent sources point towards a similar pattern, confidence can increase. When they disagree, the disagreement itself can reveal limitations in one dataset or show that conditions differed across relatively short distances."
+        },
+        {
+          "label": "G",
+          "text": "Spatial coverage is an important challenge. Proxy records are abundant in some environments and rare in others. Long-lived trees suitable for reconstruction do not grow everywhere, and well-preserved written archives are strongly influenced by historical patterns of literacy and administration. A global map assembled from such evidence may therefore look detailed while still representing some populations and landscapes much better than others."
+        },
+        {
+          "label": "H",
+          "text": "Statistical methods help researchers combine records, but sophisticated calculations do not eliminate uncertainty. A reconstruction may include a central estimate surrounded by a range of plausible values. This range should not be interpreted as evidence that scientists know nothing. Instead, it communicates how strongly the available data constrain the conclusion. Problems arise when a single line from a graph is presented publicly without the uncertainty that accompanied the original analysis."
+        },
+        {
+          "label": "I",
+          "text": "New technology continues to alter old evidence. High-resolution imaging can reveal details in documents that are difficult to see with the naked eye, while chemical analysis can extract additional information from natural archives. Digitisation also allows researchers in different countries to compare materials without repeatedly transporting fragile originals. These techniques expand the questions that can be asked, but they cannot repair information that was never recorded in the first place."
+        },
+        {
+          "label": "J",
+          "text": "Historical climate reconstruction is therefore less like discovering a complete hidden record and more like assembling an argument from incomplete witnesses. The strongest studies describe how evidence was selected, how conflicting records were handled and where uncertainty remains. A reconstruction gains credibility not by pretending that every gap has disappeared, but by making the reasoning between observation and conclusion open to examination."
+        }
+      ]
+    },
+    {
+      "title": "When Efficiency Changes Behaviour",
+      "passageWordCount": 876,
+      "paragraphs": [
+        {
+          "label": "A",
+          "text": "Technological efficiency is usually presented as a straightforward route to reducing resource use. If a lamp produces the same amount of light with less electricity, or a vehicle travels the same distance using less fuel, it seems reasonable to expect total consumption to fall. The difficulty is that people and organisations do not necessarily continue behaving in exactly the same way after a technology becomes cheaper to operate. Changes in behaviour can partly offset, and in unusual cases potentially exceed, the savings predicted from engineering performance alone."
+        },
+        {
+          "label": "B",
+          "text": "Economists often describe this response as a rebound effect. Imagine that improved home insulation reduces the energy needed to maintain a room at a given temperature. A household may accept the entire saving, but it may instead choose to heat additional rooms or maintain a warmer indoor temperature. Energy use can still decline overall, yet by less than a calculation based solely on the technical improvement would predict. The existence of rebound therefore does not automatically mean that efficiency has failed."
+        },
+        {
+          "label": "C",
+          "text": "Direct rebound occurs when greater use involves the same service that became more efficient. A driver whose new car requires less fuel per kilometre might travel further because each journey costs less. Indirect effects are more complicated. Money saved on fuel could be spent on another product or activity that itself requires energy and materials. Estimating the second effect requires assumptions about what people purchase, where products are made and how their environmental impacts are calculated."
+        },
+        {
+          "label": "D",
+          "text": "The size of rebound varies greatly between situations. Consumers who previously restricted heating because of cost may respond strongly when warmth becomes cheaper. By contrast, a household that was already comfortable may have little reason to increase its use. Similar differences occur between countries, income groups and technologies. Consequently, a single percentage presented as the rebound effect can conceal considerable variation."
+        },
+        {
+          "label": "E",
+          "text": "Measurement is difficult because researchers need to construct a comparison with what would otherwise have happened. Fuel use after a household buys a more efficient car can be observed, but the distance that the same household would have travelled with its old car in the same circumstances cannot be observed directly. Researchers use statistical comparisons, surveys and economic models to estimate this counterfactual situation, and different methods can produce different results."
+        },
+        {
+          "label": "F",
+          "text": "Longer-term effects are still harder to isolate. Widespread efficiency improvements can influence prices, business models and urban development. Cheaper transportation, for example, might contribute over many years to decisions about where people live and where firms locate. Such changes are not caused by a single efficient vehicle, yet they can influence total transport demand. This makes the boundary between a rebound effect and wider economic change partly dependent on the purpose of the analysis."
+        },
+        {
+          "label": "G",
+          "text": "Some public discussions use rebound as an argument against efficiency standards. This conclusion does not follow simply from evidence that behavioural responses exist. If an appliance uses substantially less electricity per hour, increased use may offset part of the improvement without eliminating it. The relevant question is how large the offset is under particular conditions. Policies can also combine efficiency with prices, information or other measures designed to influence total consumption."
+        },
+        {
+          "label": "H",
+          "text": "There is also an equity dimension. An increase in energy use after insulation may look undesirable in aggregate statistics, but if a low-income household was previously unable to keep its home safely warm, part of the additional consumption represents an improvement in living conditions. Evaluating rebound only as wasted technical savings would ignore this benefit. The social meaning of increased consumption therefore depends partly on the level of service people received before the intervention."
+        },
+        {
+          "label": "I",
+          "text": "Businesses create another layer of complexity. A factory that lowers energy use per unit of output may become more competitive, reduce prices and sell more products. Total energy use can then depend on how strongly demand responds to the lower price. At the same time, competitors may adopt similar equipment, suppliers may alter production and investment may move between industries. Separating these effects empirically is demanding."
+        },
+        {
+          "label": "J",
+          "text": "For policymakers, the practical lesson is neither to ignore rebound nor to assume that it makes efficiency pointless. Predictions should state their behavioural assumptions and, where possible, consider a range of responses. Monitoring after a policy is introduced can then test whether actual behaviour resembles those assumptions. If consumption develops differently, complementary policies can be adjusted rather than treating the original forecast as permanently correct."
+        },
+        {
+          "label": "K",
+          "text": "The broader significance of rebound lies in what it reveals about technological forecasts. Devices operate within social and economic systems, not laboratories isolated from human decisions. Engineering estimates remain essential, but they describe what a technology can save under specified patterns of use. Understanding what it will save in practice requires evidence about behaviour, prices and institutions as well. Efficiency is therefore best understood as an opportunity for savings rather than a guarantee of a particular total outcome."
+        }
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "skill": "READING",
+      "title": "Reading Passage 1",
+      "instructions": "",
+      "passageIndex": 0,
+      "groups": [
+        {
+          "questionType": "MATCHING_HEADINGS",
+          "instructions": "Choose the correct heading for each paragraph from the list of headings below. There are more headings than you need.",
+          "optionNumbering": "roman",
+          "sharedOptions": [
+            {
+              "id": "i",
+              "text": "Measuring success in several ways"
+            },
+            {
+              "id": "ii",
+              "text": "A wider range of objects to borrow"
+            },
+            {
+              "id": "iii",
+              "text": "Conflicting needs within one building"
+            },
+            {
+              "id": "iv",
+              "text": "Replacing professional workers with volunteers"
+            },
+            {
+              "id": "v",
+              "text": "The continuing decline of printed books"
+            },
+            {
+              "id": "vi",
+              "text": "Bringing outside expertise into the library"
+            }
+          ],
+          "questions": [
+            {
+              "number": 1,
+              "prompt": "Paragraph C",
+              "answer": "iii",
+              "evidence": "Paragraph C: “A teenager taking part in a collaborative project and an older visitor reading a newspaper may have equally legitimate reasons for being in the same building while requiring very different environments.”",
+              "explanation": "Paragraph C focuses on competing requirements for quiet and collaborative activity within the same library.",
+              "options": []
+            },
+            {
+              "number": 2,
+              "prompt": "Paragraph D",
+              "answer": "ii",
+              "evidence": "Paragraph D: “Some libraries lend tools, sewing machines, musical instruments, toys or scientific equipment.”",
+              "explanation": "The paragraph is mainly about extending lending beyond books to practical objects.",
+              "options": []
+            },
+            {
+              "number": 3,
+              "prompt": "Paragraph F",
+              "answer": "vi",
+              "evidence": "Paragraph F: “Partnerships allow libraries to provide expertise that their permanent staff do not possess.”",
+              "explanation": "Outside organisations provide specialist knowledge through partnerships.",
+              "options": []
+            },
+            {
+              "number": 4,
+              "prompt": "Paragraph H",
+              "answer": "i",
+              "evidence": "Paragraph H: “The central challenge is to match evaluation methods to the objectives a particular library has chosen, instead of assuming that a single statistic can represent every form of benefit.”",
+              "explanation": "The paragraph argues that library success requires several context-appropriate measures.",
+              "options": []
+            }
+          ],
+          "selectCount": null,
+          "wordLimitMax": null
+        },
+        {
+          "questionType": "TRUE_FALSE_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the information given in Reading Passage 1? Write TRUE, FALSE or NOT GIVEN.",
+          "questions": [
+            {
+              "number": 5,
+              "prompt": "Having a smartphone guarantees convenient access to all digital services.",
+              "answer": "FALSE",
+              "evidence": "Paragraph B: “Although smartphones are widespread, they do not provide an ideal solution for every task.”",
+              "explanation": "The statement claims guaranteed convenient access, whereas the passage explicitly identifies tasks for which smartphones are inadequate.",
+              "options": []
+            },
+            {
+              "number": 6,
+              "prompt": "Some libraries use different areas for activities requiring different noise levels.",
+              "answer": "TRUE",
+              "evidence": "Paragraph C: “Some libraries address this problem through zoning rather than attempting to enforce a single standard of behaviour throughout the building.”",
+              "explanation": "Zoning separates spaces according to differing activity and noise requirements.",
+              "options": []
+            },
+            {
+              "number": 7,
+              "prompt": "Practical lending collections are intended to transform libraries into commercial rental businesses.",
+              "answer": "FALSE",
+              "evidence": "Paragraph D: “The aim is not to turn the library into a general rental business.”",
+              "explanation": "The passage directly rejects the stated purpose.",
+              "options": []
+            },
+            {
+              "number": 8,
+              "prompt": "Most library employees prefer teaching courses to working with books.",
+              "answer": "NOT GIVEN",
+              "evidence": "Paragraph G: “Training increasingly focuses on communication and problem solving alongside more traditional library skills.”",
+              "explanation": "The passage discusses changing skills but gives no information about what most employees personally prefer.",
+              "options": []
+            }
+          ],
+          "sharedOptions": [],
+          "selectCount": null,
+          "wordLimitMax": null
+        },
+        {
+          "questionType": "SENTENCE_COMPLETION",
+          "instructions": "Complete the sentences below. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+          "wordLimitMax": 2,
+          "questions": [
+            {
+              "number": 9,
+              "prompt": "Libraries may provide computers and stable connections to people whose home internet is unreliable or ________.",
+              "answer": "unaffordable",
+              "evidence": "Paragraph B: “Home internet connections may also be unreliable or unaffordable.”",
+              "explanation": "The passage supplies the exact word completing the paired description.",
+              "options": []
+            },
+            {
+              "number": 10,
+              "prompt": "Some practical lending items need cleaning, replacement parts and ________.",
+              "answer": "instructions",
+              "evidence": "Paragraph D: “However, objects create challenges that books do not: they may require safety checks, cleaning, replacement parts and instructions, and staff need procedures for deciding whether damaged equipment can be lent again.”",
+              "explanation": "Instructions are listed alongside cleaning and replacement parts.",
+              "options": []
+            },
+            {
+              "number": 11,
+              "prompt": "Some library systems collect ________ information to evaluate the practical effects of classes.",
+              "answer": "follow-up",
+              "evidence": "Paragraph E: “For this reason, some library systems collect follow-up information rather than relying only on the number of people who entered a room.”",
+              "explanation": "Follow-up information is used instead of relying only on attendance.",
+              "options": []
+            }
+          ],
+          "sharedOptions": [],
+          "selectCount": null
+        },
+        {
+          "questionType": "MCQ_SINGLE",
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "questions": [
+            {
+              "number": 12,
+              "prompt": "What does the writer suggest about modern library staff?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "They should provide professional financial advice."
+                },
+                {
+                  "id": "B",
+                  "text": "They are expected to specialise exclusively in technology."
+                },
+                {
+                  "id": "C",
+                  "text": "They may need skills beyond traditional library work."
+                },
+                {
+                  "id": "D",
+                  "text": "They no longer require knowledge of books."
+                }
+              ],
+              "answer": "C",
+              "evidence": "Paragraph G: “Knowledge of books and information systems remains valuable, but staff may also need skills in teaching, event management and digital support.”",
+              "explanation": "Traditional skills remain useful, but additional abilities are increasingly required."
+            },
+            {
+              "number": 13,
+              "prompt": "What is the writer's main point in paragraph H?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "Book borrowing should no longer be measured."
+                },
+                {
+                  "id": "B",
+                  "text": "Library value cannot be represented adequately by one measure."
+                },
+                {
+                  "id": "C",
+                  "text": "Physical loans are increasing in most libraries."
+                },
+                {
+                  "id": "D",
+                  "text": "Workshop attendance is the most reliable measure of success."
+                }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph H: “Counting borrowed books remains useful, but it captures only part of what happens inside the building.”",
+              "explanation": "The paragraph argues against judging library value through one statistic."
+            }
+          ],
+          "sharedOptions": [],
+          "selectCount": null,
+          "wordLimitMax": null
+        }
+      ],
+      "audioProvided": false
+    },
+    {
+      "skill": "READING",
+      "title": "Reading Passage 2",
+      "instructions": "",
+      "passageIndex": 1,
+      "groups": [
+        {
+          "questionType": "MATCHING_INFORMATION",
+          "instructions": "Which paragraph contains the following information? Write the correct letter, A-J. You may use any letter more than once.",
+          "sharedOptions": [
+            {
+              "id": "A",
+              "text": "Paragraph A"
+            },
+            {
+              "id": "B",
+              "text": "Paragraph B"
+            },
+            {
+              "id": "C",
+              "text": "Paragraph C"
+            },
+            {
+              "id": "D",
+              "text": "Paragraph D"
+            },
+            {
+              "id": "E",
+              "text": "Paragraph E"
+            },
+            {
+              "id": "F",
+              "text": "Paragraph F"
+            },
+            {
+              "id": "G",
+              "text": "Paragraph G"
+            },
+            {
+              "id": "H",
+              "text": "Paragraph H"
+            },
+            {
+              "id": "I",
+              "text": "Paragraph I"
+            },
+            {
+              "id": "J",
+              "text": "Paragraph J"
+            }
+          ],
+          "questions": [
+            {
+              "number": 14,
+              "prompt": "an example of a source whose creator was not intending to record weather scientifically",
+              "answer": "D",
+              "evidence": "Paragraph D: “A farmer recording a poor harvest, for example, was not necessarily making a controlled observation of rainfall.”",
+              "explanation": "The farmer's purpose was recording a harvest rather than conducting systematic weather observation.",
+              "options": []
+            },
+            {
+              "number": 15,
+              "prompt": "an explanation of why geographical representation can be uneven",
+              "answer": "G",
+              "evidence": "Paragraph G: “Long-lived trees suitable for reconstruction do not grow everywhere, and well-preserved written archives are strongly influenced by historical patterns of literacy and administration.”",
+              "explanation": "The availability of evidence varies geographically because suitable natural and documentary records are unevenly distributed.",
+              "options": []
+            },
+            {
+              "number": 16,
+              "prompt": "a warning about presenting the result of an analysis without an important qualification",
+              "answer": "H",
+              "evidence": "Paragraph H: “Problems arise when a single line from a graph is presented publicly without the uncertainty that accompanied the original analysis.”",
+              "explanation": "The warning concerns presenting a central result while omitting its uncertainty.",
+              "options": []
+            },
+            {
+              "number": 17,
+              "prompt": "a situation in which disagreement between sources can itself be informative",
+              "answer": "F",
+              "evidence": "Paragraph F: “When they disagree, the disagreement itself can reveal limitations in one dataset or show that conditions differed across relatively short distances.”",
+              "explanation": "Contradictory sources can reveal either data limitations or genuine local variation.",
+              "options": []
+            },
+            {
+              "number": 18,
+              "prompt": "a limitation that new technology cannot overcome",
+              "answer": "I",
+              "evidence": "Paragraph I: “These techniques expand the questions that can be asked, but they cannot repair information that was never recorded in the first place.”",
+              "explanation": "Technology cannot recover information that was never originally recorded.",
+              "options": []
+            }
+          ],
+          "selectCount": null,
+          "wordLimitMax": null
+        },
+        {
+          "questionType": "TRUE_FALSE_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the information given in Reading Passage 2? Write TRUE, FALSE or NOT GIVEN.",
+          "questions": [
+            {
+              "number": 19,
+              "prompt": "The width of a tree ring is influenced by exactly the same environmental factor in every location.",
+              "answer": "FALSE",
+              "evidence": "Paragraph B: “Growth may be limited primarily by temperature in one location and by moisture in another, while disease, competition and physical damage can also affect a ring.”",
+              "explanation": "Different environmental factors influence tree growth in different locations.",
+              "options": []
+            },
+            {
+              "number": 20,
+              "prompt": "Dating ice becomes potentially less precise in deeper, older layers.",
+              "answer": "TRUE",
+              "evidence": "Paragraph C: “Dating deep layers may also become less precise as researchers move further back in time.”",
+              "explanation": "Greater depth and age are associated with potentially reduced dating precision.",
+              "options": []
+            },
+            {
+              "number": 21,
+              "prompt": "Historical written records are available in equal quantities from all parts of the world.",
+              "answer": "FALSE",
+              "evidence": "Paragraph G: “Proxy records are abundant in some environments and rare in others.”",
+              "explanation": "The passage explicitly states that proxy evidence is unevenly distributed.",
+              "options": []
+            },
+            {
+              "number": 22,
+              "prompt": "The passage specifies the first year in which high-resolution imaging was used for climate research.",
+              "answer": "NOT GIVEN",
+              "evidence": "Paragraph I: “High-resolution imaging can reveal details in documents that are difficult to see with the naked eye, while chemical analysis can extract additional information from natural archives.”",
+              "explanation": "High-resolution imaging is discussed, but no date for its first use is provided.",
+              "options": []
+            }
+          ],
+          "sharedOptions": [],
+          "selectCount": null,
+          "wordLimitMax": null
+        },
+        {
+          "questionType": "SUMMARY_COMPLETION",
+          "instructions": "Complete the summary below. Choose ONE WORD ONLY from the passage for each answer.",
+          "wordLimitMax": 1,
+          "questions": [
+            {
+              "number": 23,
+              "prompt": "Tree growth is compared with periods for which instrumental ________ are available.",
+              "answer": "observations",
+              "evidence": "Paragraph B: “Scientists consequently compare many trees and calibrate their growth against periods for which instrumental observations are available.”",
+              "explanation": "The missing noun is copied directly from the relevant sentence.",
+              "options": []
+            },
+            {
+              "number": 24,
+              "prompt": "Ice can preserve dust, chemicals and bubbles of ancient ________.",
+              "answer": "atmosphere",
+              "evidence": "Paragraph C: “As snow accumulates and is compressed into ice, it can preserve dust, chemical compounds and tiny bubbles of ancient atmosphere.”",
+              "explanation": "The ice preserves bubbles of ancient atmosphere.",
+              "options": []
+            },
+            {
+              "number": 25,
+              "prompt": "Differences in calendars, units and observation times can make even ________ records difficult to compare.",
+              "answer": "numerical",
+              "evidence": "Paragraph E: “Even numerical records can be difficult to compare if observers used different calendars, measurement units or observation times.”",
+              "explanation": "Numerical is the exact modifier used for records affected by these differences.",
+              "options": []
+            },
+            {
+              "number": 26,
+              "prompt": "A range of plausible values communicates the degree of ________ in a reconstruction.",
+              "answer": "uncertainty",
+              "evidence": "Paragraph H: “Problems arise when a single line from a graph is presented publicly without the uncertainty that accompanied the original analysis.”",
+              "explanation": "The range represents uncertainty around the central reconstruction estimate.",
+              "options": []
+            }
+          ],
+          "sharedOptions": [],
+          "selectCount": null
+        }
+      ],
+      "audioProvided": false
+    },
+    {
+      "skill": "READING",
+      "title": "Reading Passage 3",
+      "instructions": "",
+      "passageIndex": 2,
+      "groups": [
+        {
+          "questionType": "MATCHING_HEADINGS",
+          "instructions": "Choose the correct heading for each paragraph from the list below. There are more headings than you need.",
+          "optionNumbering": "roman",
+          "sharedOptions": [
+            {
+              "id": "i",
+              "text": "Why an unobservable alternative creates a research problem"
+            },
+            {
+              "id": "ii",
+              "text": "When additional consumption may have a social benefit"
+            },
+            {
+              "id": "iii",
+              "text": "A distinction between two forms of behavioural response"
+            },
+            {
+              "id": "iv",
+              "text": "Evidence that all efficiency policies should be abandoned"
+            },
+            {
+              "id": "v",
+              "text": "Why the magnitude of the effect is not constant"
+            },
+            {
+              "id": "vi",
+              "text": "Changes that may develop across an economy over time"
+            },
+            {
+              "id": "vii",
+              "text": "The origins of modern energy regulation"
+            },
+            {
+              "id": "viii",
+              "text": "The environmental advantages of manufacturing"
+            }
+          ],
+          "questions": [
+            {
+              "number": 27,
+              "prompt": "Paragraph C",
+              "answer": "iii",
+              "evidence": "Paragraph C: “Direct rebound occurs when greater use involves the same service that became more efficient.” Paragraph C: “Indirect effects are more complicated.”",
+              "explanation": "Paragraph C distinguishes direct rebound from indirect effects.",
+              "options": []
+            },
+            {
+              "number": 28,
+              "prompt": "Paragraph D",
+              "answer": "v",
+              "evidence": "Paragraph D: “The size of rebound varies greatly between situations.”",
+              "explanation": "The paragraph explains why rebound differs among consumers, countries and technologies.",
+              "options": []
+            },
+            {
+              "number": 29,
+              "prompt": "Paragraph E",
+              "answer": "i",
+              "evidence": "Paragraph E: “Fuel use after a household buys a more efficient car can be observed, but the distance that the same household would have travelled with its old car in the same circumstances cannot be observed directly.”",
+              "explanation": "Measurement requires estimating an alternative outcome that cannot be directly observed.",
+              "options": []
+            },
+            {
+              "number": 30,
+              "prompt": "Paragraph F",
+              "answer": "vi",
+              "evidence": "Paragraph F: “Widespread efficiency improvements can influence prices, business models and urban development.”",
+              "explanation": "The paragraph discusses broader changes developing through the economy over longer periods.",
+              "options": []
+            },
+            {
+              "number": 31,
+              "prompt": "Paragraph H",
+              "answer": "ii",
+              "evidence": "Paragraph H: “An increase in energy use after insulation may look undesirable in aggregate statistics, but if a low-income household was previously unable to keep its home safely warm, part of the additional consumption represents an improvement in living conditions.”",
+              "explanation": "Additional consumption can represent improved living conditions rather than simply wasted savings.",
+              "options": []
+            }
+          ],
+          "selectCount": null,
+          "wordLimitMax": null
+        },
+        {
+          "questionType": "YES_NO_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the views of the writer? Write YES, NO or NOT GIVEN.",
+          "questions": [
+            {
+              "number": 32,
+              "prompt": "The existence of a rebound effect proves that improving efficiency is useless.",
+              "answer": "NO",
+              "evidence": "Paragraph G: “Some public discussions use rebound as an argument against efficiency standards. This conclusion does not follow simply from evidence that behavioural responses exist.”",
+              "explanation": "The writer explicitly rejects the conclusion that rebound alone makes efficiency measures pointless.",
+              "options": []
+            },
+            {
+              "number": 33,
+              "prompt": "A single rebound percentage may hide important differences between circumstances.",
+              "answer": "YES",
+              "evidence": "Paragraph D: “Consequently, a single percentage presented as the rebound effect can conceal considerable variation.”",
+              "explanation": "A single figure can hide variation between different contexts.",
+              "options": []
+            },
+            {
+              "number": 34,
+              "prompt": "The writer believes that every household should maintain exactly the same indoor temperature.",
+              "answer": "NOT GIVEN",
+              "evidence": "Paragraph D: “Consumers who previously restricted heating because of cost may respond strongly when warmth becomes cheaper.”",
+              "explanation": "The writer discusses differing heating responses but gives no view that every household should maintain the same temperature.",
+              "options": []
+            },
+            {
+              "number": 35,
+              "prompt": "Forecasts of efficiency savings should make their assumptions about behaviour clear.",
+              "answer": "YES",
+              "evidence": "Paragraph J: “Predictions should state their behavioural assumptions and, where possible, consider a range of responses.”",
+              "explanation": "The writer explicitly says forecasts should state behavioural assumptions.",
+              "options": []
+            }
+          ],
+          "sharedOptions": [],
+          "selectCount": null,
+          "wordLimitMax": null
+        },
+        {
+          "questionType": "MCQ_SINGLE",
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "questions": [
+            {
+              "number": 36,
+              "prompt": "According to paragraph E, why is measuring rebound difficult?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "Researchers cannot observe any household fuel consumption."
+                },
+                {
+                  "id": "B",
+                  "text": "The alternative behaviour without the efficiency improvement cannot be directly observed."
+                },
+                {
+                  "id": "C",
+                  "text": "Households refuse to participate in economic research."
+                },
+                {
+                  "id": "D",
+                  "text": "Efficient technologies cannot be compared statistically."
+                }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph E: “Fuel use after a household buys a more efficient car can be observed, but the distance that the same household would have travelled with its old car in the same circumstances cannot be observed directly.”",
+              "explanation": "The counterfactual behaviour cannot be directly observed, so it has to be estimated."
+            },
+            {
+              "number": 37,
+              "prompt": "What point does the writer make about increased energy use after home insulation?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "It always demonstrates policy failure."
+                },
+                {
+                  "id": "B",
+                  "text": "It occurs only among wealthy households."
+                },
+                {
+                  "id": "C",
+                  "text": "It may partly represent improved living conditions."
+                },
+                {
+                  "id": "D",
+                  "text": "It should never be included in statistics."
+                }
+              ],
+              "answer": "C",
+              "evidence": "Paragraph H: “The social meaning of increased consumption therefore depends partly on the level of service people received before the intervention.”",
+              "explanation": "Higher consumption can reflect a beneficial increase in warmth for households previously receiving inadequate service."
+            },
+            {
+              "number": 38,
+              "prompt": "What is the main argument of the final paragraph?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "Engineering estimates have no practical value."
+                },
+                {
+                  "id": "B",
+                  "text": "Behaviour is impossible to study accurately."
+                },
+                {
+                  "id": "C",
+                  "text": "Technology determines total resource consumption by itself."
+                },
+                {
+                  "id": "D",
+                  "text": "Technical potential and real-world outcomes must be distinguished."
+                }
+              ],
+              "answer": "D",
+              "evidence": "Paragraph K: “Engineering estimates remain essential, but they describe what a technology can save under specified patterns of use.” Paragraph K: “Understanding what it will save in practice requires evidence about behaviour, prices and institutions as well.”",
+              "explanation": "The paragraph distinguishes technical saving potential from savings actually achieved within social and economic systems."
+            }
+          ],
+          "sharedOptions": [],
+          "selectCount": null,
+          "wordLimitMax": null
+        },
+        {
+          "questionType": "SENTENCE_COMPLETION",
+          "instructions": "Complete the sentences below. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+          "wordLimitMax": 2,
+          "questions": [
+            {
+              "number": 39,
+              "prompt": "Researchers use models and other methods to estimate a ________ situation that cannot be observed directly.",
+              "answer": "counterfactual",
+              "evidence": "Paragraph E: “Researchers use statistical comparisons, surveys and economic models to estimate this counterfactual situation, and different methods can produce different results.”",
+              "explanation": "Counterfactual is the passage term for the unobservable alternative situation.",
+              "options": []
+            },
+            {
+              "number": 40,
+              "prompt": "The writer describes efficiency as an ________ for savings rather than a guaranteed final result.",
+              "answer": "opportunity",
+              "evidence": "Paragraph K: “Efficiency is therefore best understood as an opportunity for savings rather than a guarantee of a particular total outcome.”",
+              "explanation": "The requested word is stated directly in the final sentence.",
+              "options": []
+            }
+          ],
+          "sharedOptions": [],
+          "selectCount": null
+        }
+      ],
+      "audioProvided": false
+    }
+  ]
+}

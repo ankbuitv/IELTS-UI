@@ -866,9 +866,8 @@ export async function saveWritingResponse(
             s.deadline_at, s.component_index
        FROM questions q
        JOIN question_groups g ON g.id = q.question_group_id
-       JOIN sections sec ON sec.id = q.section_id
        JOIN attempt_skill_sessions s ON s.test_version_id = q.test_version_id AND s.attempt_id = ?
-      WHERE q.id = ? AND sec.skill = 'WRITING'`,
+      WHERE q.id = ? AND g.question_type IN ('WRITING_TASK_1', 'WRITING_TASK_2')`,
   )
     .bind(attemptId, questionId)
     .first<{
@@ -1202,7 +1201,7 @@ export interface AttemptResultView {
         responseText: string;
         wordCount: number;
         prompt: string;
-        score: { band: number | null; feedback: string; source: string; scoredAt: string } | null;
+        score: { band: number | null; feedback: string; source: string; scoredAt: string; criteria: Record<string, number> } | null;
       }>;
     }
   >;
@@ -1284,7 +1283,7 @@ export async function buildResultView(
     const writingRows = await env.DB.prepare(
       `SELECT w.id, w.question_id, w.task_label, w.response_text, w.word_count,
               q.prompt,
-              s.band, s.feedback, s.scoring_source, s.scored_at
+              s.band, s.feedback, s.scoring_source, s.scored_at, s.criteria_json
          FROM writing_submissions w
          LEFT JOIN questions q ON q.id = w.question_id
          LEFT JOIN writing_scores s ON s.writing_submission_id = w.id
@@ -1303,6 +1302,7 @@ export async function buildResultView(
         feedback: string | null;
         scoring_source: string | null;
         scored_at: string | null;
+        criteria_json: string | null;
       }>();
 
     let review: QuestionReview[] | null = null;
@@ -1346,6 +1346,7 @@ export async function buildResultView(
               feedback: row.feedback ?? '',
               source: row.scoring_source,
               scoredAt: row.scored_at ?? '',
+              criteria: parseJson<Record<string, number>>(row.criteria_json, {}),
             }
           : null,
       })),

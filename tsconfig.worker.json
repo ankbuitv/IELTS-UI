@@ -7,5 +7,5 @@
   "include": ["src/worker/**/*.ts", "src/shared/**/*.ts", "tests/**/*.ts"],
   // The brand test renders client React components and reads repo files, so it
   // runs under vitest (node) only and is intentionally outside the Worker types.
-  "exclude": ["tests/unit/brand.test.ts"]
+  "exclude": ["tests/unit/brand.test.ts", "tests/unit/json-leading.test.ts"]
 }
