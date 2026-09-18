@@ -1,19 +1,17 @@
-/*
-  Baseline hardening for the static React bundle.
-
-  The Worker sets the same headers (plus a request id) on every `/api/*`
-  response. HTML, CSS and JS are served straight from the assets binding for
-  performance, so they are hardened here instead. `_headers` is part of the
-  static-assets contract, which means these rules apply identically in
-  `wrangler dev` and in production.
-
-  Content-Security-Policy is deliberately left out for now: the SPA ships no
-  inline scripts, but enabling CSP safely needs a nonce/hash pipeline and an
-  end-to-end review of every asset loader, so it stays a documented follow-up.
-
-  Note: `_headers` must not be served as a file itself; Cloudflare consumes it
-  at deploy time.
-*/
+# Baseline hardening for the static React bundle.
+#
+# The Worker sets the same headers (plus a request id) on every `/api/*`
+# response. HTML, CSS and JS are served straight from the assets binding for
+# performance, so they are hardened here instead. `_headers` is part of the
+# static-assets contract, which means these rules apply identically in
+# `wrangler dev` and in production.
+#
+# Content-Security-Policy is deliberately left out for now: the SPA ships no
+# inline scripts, but enabling CSP safely needs a nonce/hash pipeline and an
+# end-to-end review of every asset loader, so it stays a documented follow-up.
+#
+# Note: `_headers` must not be served as a file itself; Cloudflare consumes it
+# at deploy time.
 /*
   x-content-type-options: nosniff
   referrer-policy: strict-origin-when-cross-origin
