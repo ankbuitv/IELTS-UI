@@ -19,6 +19,7 @@ interface AdminTestRow {
   total_questions: number | null;
   attempt_count: number;
   component_count: number;
+  requires_access_code: number;
 }
 
 /** Status colours: draft neutral, review amber, published emerald, archived dimmed. */
@@ -114,7 +115,8 @@ export function AdminTestsPage() {
               {data?.tests.map((test) => (
                 <tr key={test.id}>
                   <td>
-                    {test.title}
+                    {test.title}{' '}
+                    {test.requires_access_code === 1 ? <Badge tone="warning">🔒 Code</Badge> : null}
                     <div className="tiny muted">
                       {test.slug} · {test.content_origin.replace('_', ' ').toLowerCase()}
                     </div>

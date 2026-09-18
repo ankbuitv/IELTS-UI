@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { BrandLogo } from './BrandLogo';
 import { Button, Loading } from './ui';
 import { initials } from '../lib/format';
 
@@ -56,11 +57,9 @@ export function AppShell() {
   }
 
   const brand = (
-    <NavLink to={user ? '/dashboard' : '/'} className="sidebar__brand">
-      <span className="brand__mark">MT</span>
-      <span className="sidebar__brand-text">
-        Meridian
-        <span className="brand__sub">Test Studio</span>
+    <NavLink to={user ? '/dashboard' : '/'} className="sidebar__brand" aria-label="Ai eo home">
+      <span className="brand-logo">
+        <BrandLogo height={38} />
       </span>
     </NavLink>
   );
@@ -158,8 +157,10 @@ export function AppShell() {
           <button type="button" className="hamburger" aria-label="Open navigation" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>
             ☰
           </button>
-          <NavLink to={user ? '/dashboard' : '/'} className="topbar__title">
-            Meridian Test Studio
+          <NavLink to={user ? '/dashboard' : '/'} className="topbar__brand" aria-label="Ai eo home">
+            <span className="brand-logo">
+              <BrandLogo height={30} />
+            </span>
           </NavLink>
           {user ? (
             <span className="topbar__meta topbar__meta--role">Signed in as {user.displayName}</span>
@@ -200,8 +201,13 @@ export function AppShell() {
         </main>
 
         <footer className="shell__content" style={{ paddingTop: 0 }}>
+          <div className="footer-brand" aria-hidden="true">
+            <span className="brand-logo">
+              <BrandLogo height={24} />
+            </span>
+          </div>
           <p className="tiny muted" style={{ maxWidth: 900, margin: 0 }}>
-            Meridian Test Studio provides independent IELTS-style practice. It is not affiliated with, endorsed by or
+            Ai eo provides independent English practice. It is not affiliated with, endorsed by or
             connected to IELTS, the British Council, IDP or Cambridge, and it does not reproduce their materials or
             branding. Scores and bands shown here are practice indications only.
           </p>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Ai eo — favicon (simplified icon for 16px readability).
+  Original artwork: white speech bubble + cyan check on a cyan tile.
+  No affiliation with IELTS, British Council, IDP or Cambridge.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Ai eo">
+  <title>Ai eo</title>
+  <defs>
+    <linearGradient id="aieo-fav" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06b6d4"/>
+      <stop offset="1" stop-color="#0e7490"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="16" fill="url(#aieo-fav)"/>
+  <rect x="12" y="13" width="40" height="30" rx="10.5" fill="#ffffff"/>
+  <path d="M23 28.5l6 6 12-13" fill="none" stroke="#0891b2" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="20" cy="47.5" r="4.2" fill="#ffffff"/>
+  <circle cx="12.5" cy="54" r="2.5" fill="#ffffff"/>
+</svg>

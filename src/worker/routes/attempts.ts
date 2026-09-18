@@ -44,6 +44,7 @@ router.post('/', requireRole('STUDENT', 'TEACHER', 'ADMIN'), async (c) => {
       testId: z.string().min(1).optional(),
       testVersionId: z.string().min(1).optional(),
       assignmentId: z.string().min(1).optional(),
+      accessCode: z.string().trim().min(1).max(64).optional(),
       mode: z.enum(EXAM_MODES).optional(),
       clientMeta: z
         .object({
@@ -65,6 +66,7 @@ router.post('/', requireRole('STUDENT', 'TEACHER', 'ADMIN'), async (c) => {
     ...(body.testId ? { testId: body.testId } : {}),
     ...(body.testVersionId ? { testVersionId: body.testVersionId } : {}),
     ...(body.assignmentId ? { assignmentId: body.assignmentId } : {}),
+    ...(body.accessCode ? { accessCode: body.accessCode } : {}),
     ...(requestedMode ? { mode: requestedMode } : {}),
     clientMeta: { ...(body.clientMeta ?? {}), ip: clientIp(c) },
   });

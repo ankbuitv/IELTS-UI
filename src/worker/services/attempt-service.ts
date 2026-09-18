@@ -3,6 +3,7 @@ import { ApiError } from '../lib/errors';
 import { newId, nowIso, parseJson } from '../lib/ids';
 import type { AuthUser } from '../lib/auth-types';
 import { markAttempt, type SessionMarkResult } from './marking-service';
+import { assertPracticeAccess } from './access-code-service';
 import { loadCandidateTest, type CandidateTestPayload } from './content-service';
 import {
   resolvePolicy,
@@ -87,6 +88,8 @@ export interface CreateAttemptInput {
   testId?: string;
   testVersionId?: string;
   assignmentId?: string;
+  /** Supplied when starting a code-protected test for the first time. */
+  accessCode?: string;
   mode?: ExamMode;
   clientMeta?: Record<string, unknown>;
 }
@@ -188,6 +191,14 @@ export async function createAttempt(
         ),
       };
     }
+  }
+
+  // Code-protected tests: students unlock with the code (once ever) before a new
+  // practice attempt is created. Assignment attempts bypass — the teacher's
+  // assignment is itself the authorisation — and resuming an in-progress
+  // attempt above never re-checks, so a rotation cannot strand a live exam.
+  if (!assignment) {
+    await assertPracticeAccess(env, user, testId, input.accessCode);
   }
 
   const mode: ExamMode = assignment?.mode ?? input.mode ?? versionConfig.defaultMode ?? 'PRACTICE';

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Ai eo — compact icon / avatar (dark-background version).
+  Original artwork: rounded speech bubble + check mark + AI sparkle.
+  No affiliation with IELTS, British Council, IDP or Cambridge.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Ai eo">
+  <title>Ai eo</title>
+  <defs>
+    <linearGradient id="aieo-bubble-dark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#67e8f9"/>
+      <stop offset="1" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+  <rect x="7" y="9" width="42" height="34" rx="12.5" fill="url(#aieo-bubble-dark)"/>
+  <path d="M19.5 26.5l6.2 6.2L35.5 22" fill="none" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="16.5" cy="48" r="4.6" fill="#22d3ee"/>
+  <circle cx="8.5" cy="55.5" r="2.7" fill="#67e8f9"/>
+  <path d="M53 5c.9 3.6 2.4 5.1 6 6-3.6.9-5.1 2.4-6 6-.9-3.6-2.4-5.1-6-6 3.6-.9 5.1-2.4 6-6Z" fill="#a78bfa"/>
+  <circle cx="58" cy="24" r="2.8" fill="#a3e635"/>
+</svg>

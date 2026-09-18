@@ -99,4 +99,6 @@ export interface CatalogTest {
   durationSeconds: number | null;
   isCompleteTest: boolean;
   mockComponentCount: number;
+  requiresAccessCode: boolean;
+  unlocked: boolean;
 }

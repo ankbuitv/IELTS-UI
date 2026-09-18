@@ -19,6 +19,7 @@ import {
   validateVersion,
 } from '../services/content-service';
 import { replaceVersionContent, type EditableContent } from '../services/content-write-service';
+import { clearTestAccessCode, setTestAccessCode } from '../services/access-code-service';
 import { buildResultView } from '../services/attempt-service';
 import type { AttemptRow } from '../services/attempt-service';
 import { getAdminAnalytics } from '../services/analytics-service';
@@ -321,7 +322,7 @@ router.get('/tests', async (c) => {
 
   const rows = await c.env.DB.prepare(
     `SELECT t.id, t.slug, t.title, t.type, t.status, t.summary, t.content_origin, t.updated_at,
-            t.current_version_id,
+            t.current_version_id, t.access_code_hash IS NOT NULL AS requires_access_code,
             (SELECT COUNT(*) FROM test_versions v WHERE v.test_id = t.id) AS version_count,
             (SELECT v.total_questions FROM test_versions v WHERE v.id = t.current_version_id) AS total_questions,
             (SELECT COUNT(*) FROM attempts a WHERE a.test_id = t.id) AS attempt_count,
@@ -401,8 +402,14 @@ router.post('/tests', async (c) => {
 });
 
 router.get('/tests/:testId', async (c) => {
-  const test = await c.env.DB.prepare('SELECT * FROM tests WHERE id = ?').bind(c.req.param('testId')).first();
+  const test = await c.env.DB.prepare('SELECT * FROM tests WHERE id = ?').bind(c.req.param('testId')).first<Record<string, unknown>>();
   if (!test) throw ApiError.notFound('Test not found.');
+  // Code hashes never leave the server, even to administrators.
+  const { access_code_hash, access_code_salt, access_code_iterations, ...safeTest } = test;
+  void access_code_hash;
+  void access_code_salt;
+  void access_code_iterations;
+  const testWithFlag = { ...safeTest, requires_access_code: test.access_code_hash != null ? 1 : 0 };
 
   const versions = await c.env.DB.prepare(
     `SELECT v.id, v.version_number, v.status, v.change_note, v.total_questions, v.duration_seconds, v.is_complete_test,
@@ -416,7 +423,47 @@ router.get('/tests/:testId', async (c) => {
     .bind(c.req.param('testId'))
     .all<Record<string, unknown>>();
 
-  return c.json({ test, versions: versions.results });
+  return c.json({ test: testWithFlag, versions: versions.results });
+});
+
+/**
+ * Attach (or rotate) the student access code for a test. Setting a code
+ * revokes all previous unlocks, so every student must enter the new code.
+ * The plaintext code is accepted here but only its hash is stored.
+ */
+router.post('/tests/:testId/access-code', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ code: z.string().trim().min(1).max(64) }));
+
+  await setTestAccessCode(c.env, c.req.param('testId'), body.code, actor.id);
+
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'TEST_ACCESS_CODE_SET',
+    entityType: 'test',
+    entityId: c.req.param('testId'),
+    ip: clientIp(c),
+  });
+
+  return c.json({ ok: true, requiresAccessCode: true });
+});
+
+router.delete('/tests/:testId/access-code', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+
+  await clearTestAccessCode(c.env, c.req.param('testId'));
+
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'TEST_ACCESS_CODE_CLEARED',
+    entityType: 'test',
+    entityId: c.req.param('testId'),
+    ip: clientIp(c),
+  });
+
+  return c.json({ ok: true, requiresAccessCode: false });
 });
 
 router.patch('/tests/:testId', async (c) => {
