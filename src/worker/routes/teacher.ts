@@ -27,6 +27,7 @@ import {
 } from '../services/teacher-service';
 import { getClassroomAnalytics, getSkillPerformance, getTaskTypePerformance, getTrends, listAttempts } from '../services/analytics-service';
 import { buildResultView } from '../services/attempt-service';
+import { listWritingQueue, markQuestionManually, setWritingScore } from '../services/marking-service';
 import { recordAudit } from '../lib/audit';
 import { EXAM_MODES, RESULT_VISIBILITIES, TIMING_POLICIES } from '../../shared/types';
 
@@ -278,7 +279,7 @@ router.get('/students/:userId', async (c) => {
     getTaskTypePerformance(c.env, {}, studentId),
     c.env.DB.prepare(
       `SELECT w.id, w.attempt_id, t.title AS test_title, w.task_label, w.word_count, w.submitted_at,
-              ws.band, ws.feedback, ws.scoring_source
+              w.response_text, w.prompt_snapshot, ws.band, ws.feedback, ws.scoring_source, ws.criteria_json
          FROM writing_submissions w
          JOIN attempts a ON a.id = w.attempt_id
          JOIN tests t ON t.id = a.test_id
@@ -294,9 +295,12 @@ router.get('/students/:userId', async (c) => {
         task_label: string;
         word_count: number;
         submitted_at: string | null;
+        response_text: string;
+        prompt_snapshot: string | null;
         band: number | null;
         feedback: string | null;
         scoring_source: string | null;
+        criteria_json: string | null;
       }>(),
     c.env.DB.prepare(
       `SELECT c.id, c.name FROM classrooms c
@@ -345,9 +349,18 @@ router.get('/students/:userId', async (c) => {
       taskLabel: row.task_label,
       wordCount: row.word_count,
       submittedAt: row.submitted_at,
+      responseText: row.response_text,
+      prompt: row.prompt_snapshot ?? '',
       scoreBand: row.band,
       feedback: row.feedback ?? '',
       scoringSource: row.scoring_source,
+      criteria: (() => {
+        try {
+          return row.criteria_json ? (JSON.parse(row.criteria_json) as Record<string, number>) : {};
+        } catch {
+          return {};
+        }
+      })(),
     })),
   });
 });
@@ -420,6 +433,83 @@ router.get('/classrooms/:id/students', async (c) => {
         bestBand: statsByUser.get(member.userId)?.best_band ?? null,
       })),
   });
+});
+
+
+router.get('/writing-queue', async (c) => {
+  const user = currentUser(c);
+  const unmarkedOnly = c.req.query('unmarked') === '1' || c.req.query('unmarked') === 'true';
+  return c.json(await listWritingQueue(c.env, user, { unmarkedOnly }));
+});
+
+router.post('/attempts/:attemptId/question-marks', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const attemptId = c.req.param('attemptId');
+  const attempt = await c.env.DB.prepare('SELECT id, user_id FROM attempts WHERE id = ?')
+    .bind(attemptId)
+    .first<{ id: string; user_id: string }>();
+  if (!attempt) throw ApiError.notFound('Attempt not found.');
+  await requireStudentAccess(c.env, user, attempt.user_id);
+
+  const body = await parseBody(
+    c,
+    z.object({
+      questionId: z.string().min(1).max(64),
+      isCorrect: z.boolean().nullable(),
+      points: z.number().min(0).max(20).nullable().optional(),
+    }),
+  );
+  const totals = await markQuestionManually(c.env, attemptId, body);
+  await recordAudit(c.env, {
+    actorUserId: user.id,
+    action: 'QUESTION_MARK_SET',
+    entityType: 'attempt',
+    entityId: attemptId,
+    metadata: { questionId: body.questionId, isCorrect: body.isCorrect },
+    ip: clientIp(c),
+  });
+  return c.json({ ok: true, ...totals });
+});
+
+router.post('/writing-scores', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      writingSubmissionId: z.string().min(1).max(64),
+      band: z.number().min(0).max(9).nullable(),
+      feedback: z.string().max(8000).optional(),
+      criteria: z.record(z.string(), z.number().min(0).max(9)).optional(),
+    }),
+  );
+
+  const submission = await c.env.DB.prepare(
+    `SELECT w.id, a.user_id FROM writing_submissions w JOIN attempts a ON a.id = w.attempt_id WHERE w.id = ?`,
+  )
+    .bind(body.writingSubmissionId)
+    .first<{ id: string; user_id: string }>();
+  if (!submission) throw ApiError.notFound('Writing submission not found.');
+  await requireStudentAccess(c.env, user, submission.user_id);
+
+  const result = await setWritingScore(c.env, {
+    writingSubmissionId: body.writingSubmissionId,
+    band: body.band,
+    feedback: body.feedback,
+    criteria: body.criteria,
+    source: 'TEACHER',
+    scoredBy: user.id,
+  });
+  await recordAudit(c.env, {
+    actorUserId: user.id,
+    action: 'WRITING_SCORE_SET',
+    entityType: 'writing_submission',
+    entityId: body.writingSubmissionId,
+    metadata: { band: body.band, attemptId: result.attemptId },
+    ip: clientIp(c),
+  });
+  return c.json({ ok: true });
 });
 
 export default router;

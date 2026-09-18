@@ -19,6 +19,9 @@ import {
   validateVersion,
 } from '../services/content-service';
 import { replaceVersionContent, type EditableContent } from '../services/content-write-service';
+import { purgeTest, purgeVersion } from '../services/content-delete-service';
+import { listWritingQueue, markQuestionManually, setWritingScore } from '../services/marking-service';
+import { ensureDefaultScoringProfiles } from '../services/scoring-profile-service';
 import { clearTestAccessCode, setTestAccessCode } from '../services/access-code-service';
 import { schemaReport } from '../lib/ensure-schema';
 import { buildResultView } from '../services/attempt-service';
@@ -208,7 +211,8 @@ const editableContentSchema = z.object({
             paragraphs: z.array(z.object({ label: z.string().max(20), text: z.string().max(60_000) })).max(200),
           })
           .nullish(),
-        audioAssetId: z.string().max(64).nullish(),
+        audioAssetId: z.string().max(2000).nullish(),
+        audioUrl: z.string().max(2000).nullish(),
         playback: z
           .object({
             maxPlays: z.number().int().min(1).max(10).optional(),
@@ -282,7 +286,7 @@ const editableContentSchema = z.object({
     .array(
       z.object({
         skill: z.enum(SKILLS),
-        testVersionId: z.string().min(1).max(64),
+        testVersionId: z.string().max(64).default(''),
         label: z.string().max(120).default(''),
         durationSeconds: z.number().int().min(60).max(36_000),
         breakAfterSeconds: z.number().int().min(0).max(3600).default(0),
@@ -521,41 +525,41 @@ router.patch('/tests/:testId', async (c) => {
   return c.json({ ok: true });
 });
 
-/** Draft tests with no attempts may be deleted; otherwise archive instead. */
+/** Permanently delete a test, its versions, and attempts on those versions. */
 router.delete('/tests/:testId', async (c) => {
   const actor = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const testId = c.req.param('testId');
 
-  const test = await c.env.DB.prepare('SELECT id, status, title FROM tests WHERE id = ?')
-    .bind(testId)
-    .first<{ id: string; status: string; title: string }>();
-  if (!test) throw ApiError.notFound('Test not found.');
-
-  const attempts = await c.env.DB.prepare('SELECT COUNT(*) AS count FROM attempts WHERE test_id = ?')
-    .bind(testId)
-    .first<{ count: number }>();
-  const published = await c.env.DB.prepare(`SELECT COUNT(*) AS count FROM test_versions WHERE test_id = ? AND status = 'PUBLISHED'`)
-    .bind(testId)
-    .first<{ count: number }>();
-
-  if ((attempts?.count ?? 0) > 0 || (published?.count ?? 0) > 0) {
-    throw ApiError.conflict(
-      'This test has published versions or recorded attempts and cannot be deleted. Archive it instead to preserve attempt history.',
-    );
-  }
-
-  await c.env.DB.prepare('DELETE FROM tests WHERE id = ?').bind(testId).run();
+  const result = await purgeTest(c.env, testId);
   await recordAudit(c.env, {
     actorUserId: actor.id,
     action: 'TEST_DELETE',
     entityType: 'test',
     entityId: testId,
-    metadata: { title: test.title },
+    metadata: result,
     ip: clientIp(c),
   });
 
-  return c.json({ ok: true });
+  return c.json({ ok: true, ...result });
+});
+
+router.delete('/versions/:versionId', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const versionId = c.req.param('versionId');
+
+  const result = await purgeVersion(c.env, versionId);
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'VERSION_DELETE',
+    entityType: 'test_version',
+    entityId: versionId,
+    metadata: result,
+    ip: clientIp(c),
+  });
+
+  return c.json({ ok: true, ...result });
 });
 
 router.post('/tests/:testId/archive', async (c) => {
@@ -840,6 +844,7 @@ router.get('/versions/:versionId/preview', async (c) => {
 // Scoring profiles
 // ---------------------------------------------------------------------------
 router.get('/scoring-profiles', async (c) => {
+  await ensureDefaultScoringProfiles(c.env);
   const rows = await c.env.DB.prepare(
     `SELECT p.*, (SELECT COUNT(*) FROM score_conversion_ranges r WHERE r.profile_id = p.id) AS range_count,
             (SELECT COUNT(*) FROM test_versions v WHERE v.scoring_profile_id = p.id) AS usage_count
@@ -1028,6 +1033,12 @@ router.get('/attempts/:attemptId', async (c) => {
   return c.json({ ...view, student: { id: attempt.user_id, email: student?.email, displayName: student?.display_name } });
 });
 
+router.get('/writing-queue', async (c) => {
+  const user = currentUser(c);
+  const unmarkedOnly = c.req.query('unmarked') === '1' || c.req.query('unmarked') === 'true';
+  return c.json(await listWritingQueue(c.env, user, { unmarkedOnly }));
+});
+
 router.post('/writing-scores', async (c) => {
   const actor = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
@@ -1041,45 +1052,48 @@ router.post('/writing-scores', async (c) => {
     }),
   );
 
-  const submission = await c.env.DB.prepare(
-    'SELECT id, attempt_id FROM writing_submissions WHERE id = ?',
-  )
-    .bind(body.writingSubmissionId)
-    .first<{ id: string; attempt_id: string }>();
-  if (!submission) throw ApiError.notFound('Writing submission not found.');
-
-  const timestamp = nowIso();
-  await c.env.DB.prepare(
-    `INSERT INTO writing_scores (id, writing_submission_id, band, criteria_json, feedback, scoring_source, scored_by, scored_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'ADMIN', ?, ?, ?, ?)
-     ON CONFLICT (writing_submission_id)
-     DO UPDATE SET band = excluded.band, criteria_json = excluded.criteria_json, feedback = excluded.feedback,
-                   scoring_source = excluded.scoring_source, scored_by = excluded.scored_by,
-                   scored_at = excluded.scored_at, updated_at = excluded.updated_at`,
-  )
-    .bind(
-      newId('ws'),
-      body.writingSubmissionId,
-      body.band,
-      JSON.stringify(body.criteria ?? {}),
-      body.feedback ?? '',
-      actor.id,
-      timestamp,
-      timestamp,
-      timestamp,
-    )
-    .run();
+  const result = await setWritingScore(c.env, {
+    writingSubmissionId: body.writingSubmissionId,
+    band: body.band,
+    feedback: body.feedback,
+    criteria: body.criteria,
+    source: 'ADMIN',
+    scoredBy: actor.id,
+  });
 
   await recordAudit(c.env, {
     actorUserId: actor.id,
     action: 'WRITING_SCORE_SET',
     entityType: 'writing_submission',
     entityId: body.writingSubmissionId,
-    metadata: { band: body.band, attemptId: submission.attempt_id },
+    metadata: { band: body.band, attemptId: result.attemptId },
     ip: clientIp(c),
   });
 
   return c.json({ ok: true });
+});
+
+router.post('/attempts/:attemptId/question-marks', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      questionId: z.string().min(1).max(64),
+      isCorrect: z.boolean().nullable(),
+      points: z.number().min(0).max(20).nullable().optional(),
+    }),
+  );
+  const totals = await markQuestionManually(c.env, c.req.param('attemptId'), body);
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'QUESTION_MARK_SET',
+    entityType: 'attempt',
+    entityId: c.req.param('attemptId'),
+    metadata: { questionId: body.questionId, isCorrect: body.isCorrect },
+    ip: clientIp(c),
+  });
+  return c.json({ ok: true, ...totals });
 });
 
 router.get('/audit-logs', async (c) => {

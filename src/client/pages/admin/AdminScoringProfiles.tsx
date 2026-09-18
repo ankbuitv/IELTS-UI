@@ -17,6 +17,11 @@ import {
   useToast,
 } from '../../components/ui';
 import { formatDateTime, SKILL_LABELS, TEST_TYPE_LABELS } from '../../lib/format';
+import { DEFAULT_LISTENING_PROFILE_ID, DEFAULT_READING_PROFILE_ID } from '@shared/default-scoring-profiles';
+
+function isBuiltinProfile(id: string): boolean {
+  return id === DEFAULT_READING_PROFILE_ID || id === DEFAULT_LISTENING_PROFILE_ID;
+}
 
 interface ProfileRow {
   id: string;
@@ -57,9 +62,10 @@ export function AdminScoringProfilesPage() {
         </Button>
       </div>
 
-      <Notice tone="info" title="Only complete, sufficiently long tests receive an estimated band">
-        Reading and Listening are the only skills converted automatically. Writing is always marked by a teacher or
-        administrator, and the platform never invents a band score for it. Shorter practice sets report raw scores only.
+      <Notice tone="info" title="Default Reading and Listening tables are created automatically">
+        A fresh database seeds two built-in practice conversion tables (40 questions). They are estimates only — not
+        official IELTS bands — and existing rows are never overwritten. Writing has no automatic profile: essays go to a
+        teacher or administrator to mark.
       </Notice>
 
       {loading ? <Loading /> : null}
@@ -85,6 +91,12 @@ export function AdminScoringProfilesPage() {
                 <tr key={profile.id}>
                   <td>
                     {profile.name}
+                    {isBuiltinProfile(profile.id) ? (
+                      <>
+                        {' '}
+                        <Badge tone="accent">Built-in</Badge>
+                      </>
+                    ) : null}
                     <div className="tiny muted">
                       min {profile.min_questions} questions · updated {formatDateTime(profile.updated_at)}
                     </div>

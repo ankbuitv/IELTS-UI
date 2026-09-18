@@ -587,6 +587,8 @@ export function ConfirmButton({
                 try {
                   await onConfirm();
                   setOpen(false);
+                } catch {
+                  // Keep the dialog open so the operator can retry after a toast.
                 } finally {
                   setBusy(false);
                 }

@@ -15,6 +15,7 @@ import {
 import { StudentDashboardPage } from './pages/student/Dashboard';
 import { TakeExamPage } from './pages/exam/TakeExam';
 import { TeacherHomePage, ClassroomPage, AssignmentPage, StudentDetailPage } from './pages/teacher/TeacherPages';
+import { AdminWritingQueuePage, TeacherWritingQueuePage } from './pages/staff/WritingQueue';
 import { AdminLayout } from './pages/admin/AdminLayout';
 import { AdminDashboardPage } from './pages/admin/AdminDashboard';
 import { AdminTestsPage } from './pages/admin/AdminTests';
@@ -127,6 +128,14 @@ export function App() {
           }
         />
         <Route
+          path="teacher/marking"
+          element={
+            <RequireAuth roles={['TEACHER', 'ADMIN']}>
+              <TeacherWritingQueuePage />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="teacher/classrooms/:classroomId"
           element={
             <RequireAuth roles={['TEACHER', 'ADMIN']}>
@@ -167,6 +176,7 @@ export function App() {
           <Route path="scoring-profiles" element={<AdminScoringProfilesPage />} />
           <Route path="users" element={<AdminUsersPage />} />
           <Route path="attempts" element={<AdminAttemptsPage />} />
+          <Route path="writing" element={<AdminWritingQueuePage />} />
           <Route path="settings" element={<AdminSettingsPage />} />
         </Route>
 

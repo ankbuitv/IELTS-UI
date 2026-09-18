@@ -178,7 +178,24 @@ export function AudioPlayer({
             Pause
           </Button>
         ) : null}
+        {audio.url ? (
+          <Button
+            size="sm"
+            onClick={() => {
+              window.open(audio.url, '_blank', 'noopener,noreferrer');
+            }}
+          >
+            Open audio URL
+          </Button>
+        ) : null}
       </div>
+      {audio.url && (audio.url.startsWith('http://') || audio.url.startsWith('https://')) ? (
+        <p className="tiny muted" style={{ marginTop: 8, wordBreak: 'break-all' }}>
+          <a href={audio.url} target="_blank" rel="noreferrer">
+            {audio.url}
+          </a>
+        </p>
+      ) : null}
 
       {maxedOut ? (
         <p className="audio-panel__policy">

@@ -1,19 +1,15 @@
 import { useState } from 'react';
-import { api, describeError, queryString } from '../../lib/api';
+import { api, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import {
   Badge,
   Button,
   Card,
   EmptyState,
-  Field,
   Loading,
   Modal,
   Notice,
   Stat,
-  TextArea,
-  TextInput,
-  useToast,
 } from '../../components/ui';
 import { ResultSummary, type AttemptResultPayload } from '../../components/ResultView';
 import { formatBand, formatDateTime, formatScore, MODE_LABELS, TEST_TYPE_LABELS } from '../../lib/format';
@@ -192,126 +188,14 @@ function AttemptDetail({ attemptId }: { attemptId: string }) {
           {data.student.displayName ?? data.student.email} ({data.student.id})
         </Notice>
       ) : null}
-      <ResultSummary result={data} />
-
-      <Card
-        title="Writing marking"
-        hint="Writing is marked by a human. The system never invents a band score."
-      >
-        {writingEntries.length === 0 ? (
-          <EmptyState title="No writing submissions in this attempt" />
-        ) : (
-          writingEntries.map((entry) => (
-            <WritingScoreForm
-              key={entry.submissionId}
-              submissionId={entry.submissionId}
-              taskLabel={`${entry.sessionLabel} · ${entry.taskLabel}`}
-              wordCount={entry.wordCount}
-              responseText={entry.responseText}
-              prompt={entry.prompt}
-              existing={entry.score}
-              onSaved={reload}
-            />
-          ))
-        )}
-      </Card>
-    </div>
-  );
-}
-
-function WritingScoreForm({
-  submissionId,
-  taskLabel,
-  wordCount,
-  responseText,
-  prompt,
-  existing,
-  onSaved,
-}: {
-  submissionId: string;
-  taskLabel: string;
-  wordCount: number;
-  responseText: string;
-  prompt: string;
-  existing: { band: number | null; feedback: string; source: string; scoredAt: string } | null;
-  onSaved: () => Promise<void>;
-}) {
-  const toast = useToast();
-  const [band, setBand] = useState(existing?.band !== null && existing?.band !== undefined ? String(existing.band) : '');
-  const [feedback, setFeedback] = useState(existing?.feedback ?? '');
-  const [busy, setBusy] = useState(false);
-
-  return (
-    <div className="card card--nested" style={{ marginBottom: 14 }}>
-      <div className="row row--between">
-        <div>
-          <strong>{taskLabel}</strong>
-          <div className="tiny muted">{wordCount} words</div>
-        </div>
-        {existing ? (
-          <Badge tone="success">
-            scored {examBandLabel(existing.band)} · {existing.source.toLowerCase()}
-          </Badge>
-        ) : (
-          <Badge tone="warning">Awaiting marking</Badge>
-        )}
-      </div>
-
-      {prompt ? <p className="small muted">{prompt}</p> : null}
-      {responseText ? (
-        <details>
-          <summary className="small">Show candidate response</summary>
-          <pre className="tiny" style={{ whiteSpace: 'pre-wrap' }}>
-            {responseText}
-          </pre>
-        </details>
-      ) : (
-        <p className="tiny muted">The candidate response is not included in this release setting.</p>
+      <ResultSummary result={data} marking={{ apiBase: '/api/admin', onSaved: reload }} />
+      {writingEntries.length === 0 ? null : (
+        <p className="tiny muted">
+          Writing on this attempt is marked in the section above, or from Administration → Writing.
+        </p>
       )}
-
-      <div className="grid grid--2" style={{ marginTop: 10 }}>
-        <Field label="Band" hint="Half bands are allowed. Leave empty and save to clear a score.">
-          {(id) => <TextInput id={id} type="number" min={0} max={9} step={0.5} value={band} onChange={(event) => setBand(event.target.value)} />}
-        </Field>
-        <div className="field">
-          <span className="field__label">Statistics</span>
-          <div className="tiny muted" style={{ paddingTop: 8 }}>
-            Word count {wordCount}. This is a practice platform: bands are human judgments, and the platform never
-            presents them as official IELTS results.
-          </div>
-        </div>
-      </div>
-      <Field label="Feedback to the student">
-        {(id) => <TextArea id={id} rows={3} value={feedback} onChange={(event) => setFeedback(event.target.value)} />}
-      </Field>
-      <Button
-        variant="primary"
-        loading={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            await api.post('/api/admin/writing-scores', {
-              writingSubmissionId: submissionId,
-              band: band === '' ? null : Number(band),
-              feedback,
-            });
-            await onSaved();
-            toast.push('Writing score saved.', 'success');
-          } catch (scoreError) {
-            toast.push(describeError(scoreError), 'error');
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        Save score
-      </Button>
     </div>
   );
-}
-
-function examBandLabel(band: number | null): string {
-  return band === null ? 'no score' : `band ${formatBand(band)}`;
 }
 
 export function AdminAttemptsSummary() {

@@ -114,7 +114,12 @@ export function QuestionRenderer({
           ) : null}
 
           {control === 'ESSAY' ? (
-            <p className="small muted">This task is answered in the Writing editor.</p>
+            <EssayControl
+              value={asValues(response)[0] ?? ''}
+              onChange={(value) => onAnswer(question.id, value.trim() ? { value } : null)}
+              readOnly={readOnly}
+              ariaLabel={`Writing response for question ${question.number}`}
+            />
           ) : null}
 
           {!readOnly ? (
@@ -373,6 +378,31 @@ function TextControl({
       autoComplete="off"
       spellCheck={false}
       onChange={(event) => handle(event.target.value)}
+    />
+  );
+}
+
+function EssayControl({
+  value,
+  onChange,
+  readOnly,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  readOnly?: boolean;
+  ariaLabel: string;
+}) {
+  return (
+    <textarea
+      aria-label={ariaLabel}
+      value={value}
+      readOnly={readOnly}
+      disabled={readOnly}
+      rows={12}
+      placeholder="Type your answer here. Your work is saved automatically."
+      style={{ width: '100%', minHeight: 220, resize: 'vertical' }}
+      onChange={(event) => onChange(event.target.value)}
     />
   );
 }

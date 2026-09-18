@@ -14,6 +14,7 @@ import { loadAdminVersion, toValidationInput } from './content-service';
 import { recordAudit } from '../lib/audit';
 import { loadPlatformSettings } from '../lib/settings';
 import type { ContentOrigin, Skill } from '../../shared/types';
+import { parseLeadingJson } from '../../shared/json';
 
 // -----------------------------------------------------------------------------
 // Upload
@@ -63,21 +64,19 @@ export async function createImport(env: Env, user: AuthUser, input: CreateImport
   const isJson = mime === 'application/json' || /\.json$/i.test(filename);
 
   if (isJson) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(new TextDecoder().decode(buffer));
-    } catch {
-      throw ApiError.validation('That file is not valid JSON. Check the file and try again, or paste the content instead.');
-    }
-    if (!parsed || typeof parsed !== 'object') {
-      throw ApiError.validation('The JSON file must contain a test object.');
+    const decoded = new TextDecoder().decode(buffer);
+    const parsed = parseLeadingJson(decoded);
+    if (!parsed || !parsed.value || typeof parsed.value !== 'object') {
+      throw ApiError.validation(
+        'That file is not valid JSON. Paste a single test object — extra documents after the first object are ignored, but the first value still has to parse.',
+      );
     }
     return createStructuredImport(env, user, {
       ...input,
       filename,
       mime,
       sizeBytes: input.file.size,
-      payload: parsed,
+      payload: parsed.value,
       checksum: await sha256Hex(buffer),
     });
   }
@@ -184,24 +183,26 @@ export async function createTextImport(env: Env, user: AuthUser, input: CreateTe
   if (text.length < 40) throw ApiError.validation('Paste at least a paragraph of source text before importing.');
   if (text.length > 400_000) throw ApiError.validation('Pasted text is limited to 400,000 characters.');
 
-  // A pasted JSON document is treated as a structured payload.
+  // A pasted JSON document is treated as a structured payload. Extra text
+  // after the first object (a second document, a markdown fence, commentary)
+  // is ignored so a concatenated paste still imports.
   const looksJson = text.startsWith('{') || text.startsWith('[');
   if (looksJson) {
-    try {
-      const parsed = JSON.parse(text) as unknown;
-      if (parsed && typeof parsed === 'object') {
-        return createStructuredImport(env, user, {
-          ...input,
-          filename: 'pasted.json',
-          mime: 'application/json',
-          sizeBytes: text.length,
-          payload: parsed,
-          checksum: await sha256Hex(text),
-        });
-      }
-    } catch {
-      // Not JSON after all: continue as plain text below.
+    const parsed = parseLeadingJson(text);
+    if (parsed && parsed.value && typeof parsed.value === 'object') {
+      return createStructuredImport(env, user, {
+        ...input,
+        filename: 'pasted.json',
+        mime: 'application/json',
+        sizeBytes: text.length,
+        payload: parsed.value,
+        checksum: await sha256Hex(parsed.source),
+        title: input.title ?? titleFromPayload(parsed.value) ?? 'Structured JSON import',
+      });
     }
+    throw ApiError.validation(
+      'The pasted text looks like JSON but could not be parsed. Paste a single JSON object — two documents concatenated, or trailing commentary, will fail unless the first object is complete.',
+    );
   }
 
   const importId = newId('imp');
@@ -277,8 +278,10 @@ async function createStructuredImport(
 ): Promise<CreateImportResult> {
   const importId = newId('imp');
   const timestamp = nowIso();
-  const title = (input.title ?? 'Structured JSON import').slice(0, 200);
-  const serialised = JSON.stringify(input.payload);
+  const converted = convertAiPayload(input.payload);
+  const storedPayload = converted.questionCount > 0 ? converted.content : input.payload;
+  const title = (input.title ?? titleFromPayload(input.payload) ?? 'Structured JSON import').slice(0, 200);
+  const serialised = JSON.stringify(storedPayload);
 
   await env.DB.batch([
     env.DB.prepare(
@@ -313,7 +316,10 @@ async function createStructuredImport(
       JSON.stringify([
         {
           at: timestamp,
-          message: `Loaded a structured JSON payload (${serialised.length} characters). AI structuring was not needed.`,
+          message:
+            converted.questionCount > 0
+              ? `Loaded a structured JSON payload (${converted.questionCount} question(s), ${serialised.length} characters). AI structuring was not needed.`
+              : `Loaded a JSON payload (${serialised.length} characters) that still needs to be structured before it can be applied.`,
         },
       ]),
       timestamp,
@@ -592,7 +598,11 @@ export interface ConvertedAiPayload {
 }
 
 export function convertAiPayload(payload: unknown): ConvertedAiPayload {
-  const parsed = aiPayloadSchema.safeParse(payload);
+  if (looksLikeEditableContent(payload)) {
+    return fromEditableContent(payload as EditableContent);
+  }
+  const asAi = looksLikeSourceDocument(payload) ? sourceDocumentToAiPayload(payload) : payload;
+  const parsed = aiPayloadSchema.safeParse(asAi);
   if (!parsed.success) {
     const issues: ValidationIssue[] = parsed.error.issues.map((issue) => ({
       level: 'ERROR' as const,
@@ -716,7 +726,7 @@ export function convertAiPayload(payload: unknown): ConvertedAiPayload {
   }
 
   return {
-    content: { sections },
+    content: withImportDefaults({ sections }, data.testType),
     issues,
     answerKeyConfidence: derivedConfidence,
     questionCount,
@@ -760,6 +770,223 @@ function buildAnswerKey(
   });
 
   return { kind: 'CHOICE', values: resolved, partialCredit: type === 'MCQ_MULTI' };
+}
+
+const SOURCE_QUESTION_TYPES: Record<string, string> = {
+  matching_headings: 'MATCHING_HEADINGS',
+  matching_information: 'MATCHING_INFORMATION',
+  matching_features: 'MATCHING_FEATURES',
+  true_false_not_given: 'TRUE_FALSE_NOT_GIVEN',
+  yes_no_not_given: 'YES_NO_NOT_GIVEN',
+  sentence_completion: 'SENTENCE_COMPLETION',
+  summary_completion: 'SUMMARY_COMPLETION',
+  note_completion: 'NOTE_COMPLETION',
+  table_completion: 'TABLE_COMPLETION',
+  flowchart_completion: 'FLOWCHART_COMPLETION',
+  short_answer: 'SHORT_ANSWER',
+  single_choice: 'MCQ_SINGLE',
+  multiple_choice: 'MCQ_MULTI',
+  mcq_single: 'MCQ_SINGLE',
+  mcq_multi: 'MCQ_MULTI',
+  writing_task_1: 'WRITING_TASK_1',
+  writing_task_2: 'WRITING_TASK_2',
+};
+
+function looksLikeEditableContent(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const sections = (payload as { sections?: unknown }).sections;
+  if (!Array.isArray(sections) || sections.length === 0) return false;
+  const first = sections[0] as { groups?: unknown } | undefined;
+  if (!first || !Array.isArray(first.groups) || first.groups.length === 0) return false;
+  const group = first.groups[0] as { type?: unknown } | undefined;
+  return typeof group?.type === 'string' && isQuestionType(group.type);
+}
+
+function looksLikeSourceDocument(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const record = payload as Record<string, unknown>;
+  if (!Array.isArray(record.sections) || record.sections.length === 0) return false;
+  const first = record.sections[0] as Record<string, unknown> | undefined;
+  return Boolean(first && Array.isArray(first.questionGroups));
+}
+
+function fromEditableContent(content: EditableContent): ConvertedAiPayload {
+  const questionCount = content.sections.reduce(
+    (total, section) => total + section.groups.reduce((inner, group) => inner + group.questions.length, 0),
+    0,
+  );
+  const answered = content.sections.reduce(
+    (total, section) =>
+      total +
+      section.groups.reduce(
+        (inner, group) => inner + group.questions.filter((question) => Boolean(question.answerKey)).length,
+        0,
+      ),
+    0,
+  );
+  const confidence: ConvertedAiPayload['answerKeyConfidence'] =
+    answered === 0 ? 'ABSENT' : answered < questionCount ? 'PARTIAL' : 'PROVIDED';
+  return {
+    content: withImportDefaults(content, inferTestType(content)),
+    issues: [],
+    answerKeyConfidence: confidence,
+    questionCount,
+  };
+}
+
+function sourceDocumentToAiPayload(payload: unknown): unknown {
+  const record = payload as {
+    metadata?: { title?: string; durationMinutes?: number };
+    skill?: string;
+    testTitle?: string;
+    testType?: string;
+    sections: Array<{
+      title?: string;
+      instructions?: string;
+      passageWordCount?: number;
+      passage?: { title?: string; paragraphs?: Array<{ label: string; text: string }> };
+      questionGroups?: Array<{
+        questionType?: string;
+        instructions?: string;
+        options?: Array<{ value?: string; label?: string; id?: string; text?: string }>;
+        questions?: Array<{
+          number: number;
+          prompt?: string;
+          options?: Array<{ value?: string; label?: string; id?: string; text?: string }>;
+          wordLimit?: { maxWords?: number };
+        }>;
+      }>;
+    }>;
+    answerKey?: Array<{
+      questionNumber: number;
+      answer?: string;
+      acceptedAnswers?: string[];
+      evidence?: unknown;
+      explanation?: string;
+    }>;
+  };
+
+  const answers = new Map<number, { answer: string; evidence: string | null; explanation: string | null }>();
+  for (const row of record.answerKey ?? []) {
+    const answer = row.answer ?? row.acceptedAnswers?.[0] ?? '';
+    answers.set(row.questionNumber, {
+      answer,
+      evidence: formatSourceEvidence(row.evidence),
+      explanation: row.explanation ?? null,
+    });
+  }
+
+  const passages = record.sections
+    .map((section) =>
+      section.passage
+        ? {
+            title: section.passage.title ?? section.title ?? '',
+            passageWordCount: section.passageWordCount ?? null,
+            paragraphs: (section.passage.paragraphs ?? []).map((paragraph) => ({
+              label: paragraph.label,
+              text: paragraph.text,
+            })),
+          }
+        : null,
+    )
+    .filter((passage): passage is NonNullable<typeof passage> => passage !== null);
+
+  const skill = (record.skill ?? record.testType ?? 'READING').toString().toUpperCase();
+  const testType = ['READING', 'LISTENING', 'WRITING', 'FULL_MOCK'].includes(skill) ? skill : 'READING';
+
+  return {
+    testTitle: record.metadata?.title ?? record.testTitle ?? null,
+    testType,
+    answerKeyConfidence: answers.size > 0 ? 'PROVIDED' : 'ABSENT',
+    warnings: [],
+    passages,
+    sections: record.sections.map((section, index) => ({
+      skill: testType === 'FULL_MOCK' ? 'READING' : testType,
+      title: section.title ?? '',
+      instructions: section.instructions ?? '',
+      passageIndex: section.passage ? Math.min(index, Math.max(passages.length - 1, 0)) : null,
+      audioProvided: false,
+      groups: (section.questionGroups ?? []).map((group) => {
+        const mappedType = SOURCE_QUESTION_TYPES[(group.questionType ?? '').toLowerCase()] ?? group.questionType ?? '';
+        const sharedOptions = (group.options ?? []).map(mapSourceOption).filter((option) => option.id);
+        const wordLimitMax = group.questions?.find((question) => question.wordLimit?.maxWords)?.wordLimit?.maxWords ?? null;
+        return {
+          questionType: mappedType,
+          instructions: group.instructions ?? '',
+          optionNumbering: mappedType === 'MATCHING_HEADINGS' ? 'roman' : null,
+          sharedOptions,
+          selectCount: null,
+          wordLimitMax,
+          questions: (group.questions ?? []).map((question) => {
+            const key = answers.get(question.number);
+            const options = (question.options ?? []).map(mapSourceOption).filter((option) => option.id);
+            return {
+              number: question.number,
+              prompt: question.prompt ?? '',
+              options,
+              answer: key?.answer ?? null,
+              evidence: key?.evidence ?? null,
+              explanation: key?.explanation ?? null,
+            };
+          }),
+        };
+      }),
+    })),
+  };
+}
+
+function mapSourceOption(option: { value?: string; label?: string; id?: string; text?: string }): { id: string; text: string } {
+  return { id: option.id ?? option.value ?? '', text: option.text ?? option.label ?? '' };
+}
+
+function formatSourceEvidence(evidence: unknown): string | null {
+  if (!evidence) return null;
+  if (typeof evidence === 'string') return evidence;
+  if (!Array.isArray(evidence)) return null;
+  const parts = evidence
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const record = item as { paragraphLabel?: string; quote?: string };
+      if (record.quote && record.paragraphLabel) return `Paragraph ${record.paragraphLabel}: “${record.quote}”`;
+      if (record.quote) return `“${record.quote}”`;
+      return null;
+    })
+    .filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(' ') : null;
+}
+
+function withImportDefaults(
+  content: EditableContent,
+  testType: 'READING' | 'LISTENING' | 'WRITING' | 'FULL_MOCK',
+): EditableContent {
+  const durationSeconds =
+    content.durationSeconds ?? (testType === 'LISTENING' ? 1800 : 3600);
+  return {
+    ...content,
+    durationSeconds,
+    isCompleteTest: content.isCompleteTest ?? true,
+  };
+}
+
+function titleFromPayload(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const record = payload as Record<string, unknown>;
+  if (typeof record.testTitle === 'string' && record.testTitle.trim()) return record.testTitle.trim().slice(0, 200);
+  const metadata = record.metadata as { title?: unknown } | undefined;
+  if (typeof metadata?.title === 'string' && metadata.title.trim()) return metadata.title.trim().slice(0, 200);
+  if (typeof record.title === 'string' && record.title.trim()) return record.title.trim().slice(0, 200);
+  return undefined;
+}
+
+async function attachImportDefaults(env: Env, content: EditableContent): Promise<EditableContent> {
+  const next = withImportDefaults(content, inferTestType(content));
+  if (next.scoringProfileId) return next;
+  const skill = inferTestType(next);
+  if (skill !== 'READING' && skill !== 'LISTENING') return next;
+  const { resolveActiveProfileId } = await import('./scoring-profile-service');
+  const profileId = await resolveActiveProfileId(env, skill);
+  if (!profileId) return next;
+  return { ...next, scoringProfileId: profileId };
 }
 
 // -----------------------------------------------------------------------------
@@ -865,7 +1092,8 @@ export async function applyImportDraft(
     ]);
   }
 
-  const written = await replaceVersionContent(env, versionId, content, user.id);
+  const prepared = await attachImportDefaults(env, content);
+  const written = await replaceVersionContent(env, versionId, prepared, user.id);
 
   const adminContent = await loadAdminVersion(env, versionId);
   // Stored content is validated from the database (which recomputes word counts
@@ -873,7 +1101,7 @@ export async function applyImportDraft(
   // an inflated AI or hand-authored number is reported instead of believed.
   const issues: ValidationIssue[] = [
     ...validateTestVersion(toValidationInput(adminContent)),
-    ...declaredWordCountIssues(adminContent, content),
+    ...declaredWordCountIssues(adminContent, prepared),
   ];
   const summary = summariseIssues(issues);
 

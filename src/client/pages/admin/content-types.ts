@@ -66,6 +66,7 @@ export interface EditableSection {
   durationSeconds?: number | null;
   passage?: { title: string; subtitle?: string | null; paragraphs: PassageParagraph[] } | null;
   audioAssetId?: string | null;
+  audioUrl?: string | null;
   playback?: PlaybackInput;
   groups: EditableGroup[];
 }
@@ -248,7 +249,11 @@ export function emptySection(skill: EditableSection['skill'] = 'READING'): Edita
     passage: skill === 'READING' ? { title: '', subtitle: null, paragraphs: [{ label: 'A', text: '' }] } : null,
     audioAssetId: null,
     playback: {},
-    groups: [emptyGroup('TRUE_FALSE_NOT_GIVEN')],
+    groups: [
+      emptyGroup(
+        skill === 'WRITING' ? 'WRITING_TASK_1' : skill === 'LISTENING' ? 'SHORT_ANSWER' : 'TRUE_FALSE_NOT_GIVEN',
+      ),
+    ],
   };
 }
 

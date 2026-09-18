@@ -61,7 +61,9 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
 
   const unansweredCount = objectiveQuestions.length - answeredNumbers.size;
   const currentQuestion = allQuestions.find((question) => question.id === currentQuestionId) ?? null;
-  const isWriting = state?.components[state.activeComponentIndex]?.skill === 'WRITING';
+  const hasWritingTasks = sections.some((section) => section.writingTasks.length > 0);
+  const isWritingSkill = state?.components[state.activeComponentIndex]?.skill === 'WRITING';
+  const isWriting = isWritingSkill || (hasWritingTasks && !sections.some((section) => section.groups.some((group) => group.type !== 'WRITING_TASK_1' && group.type !== 'WRITING_TASK_2')));
   const activeSection = sections.find((section) => section.writingTasks.length > 0) ?? sections[0] ?? null;
 
   const jumpToQuestion = useCallback((number: number) => {
@@ -337,7 +339,15 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
             ) : (
               sections.map((section) => (
                 <div key={section.id}>
-                  {section.groups.map((group) => (
+                  {section.writingTasks.length > 0 ? (
+                    <WritingEditor
+                      sections={[section]}
+                      answers={state.writing}
+                      onSave={(questionId, text) => session.saveWriting(questionId, text)}
+                    />
+                  ) : null}
+                  {section.groups.map((group) =>
+                    group.type === 'WRITING_TASK_1' || group.type === 'WRITING_TASK_2' ? null : (
                     <div className="question-group" key={group.id} id={`group-${group.id}`}>
                       <QuestionGroupHeader group={group} onJump={() => group.rangeFrom && jumpToQuestion(group.rangeFrom)} />
                       <GroupOptionBank options={group.sharedOptions} numbering={group.config.optionNumbering} />
@@ -363,7 +373,8 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
                         ))}
                       </div>
                     </div>
-                  ))}
+                    ),
+                  )}
                 </div>
               ))
             )}

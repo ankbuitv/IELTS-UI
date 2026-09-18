@@ -51,6 +51,7 @@ export function AppShell() {
   }
   if (user?.role === 'TEACHER' || user?.role === 'ADMIN') {
     workspace.push({ to: '/teacher', label: 'Teaching' });
+    workspace.push({ to: '/teacher/marking', label: 'Mark writing' });
   }
   if (user?.role === 'ADMIN') {
     workspace.push({ to: '/admin', label: 'Administration' });

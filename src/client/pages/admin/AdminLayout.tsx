@@ -14,6 +14,7 @@ export function AdminLayout() {
     { to: '/admin/imports', label: 'Imports' },
     { to: '/admin/scoring-profiles', label: 'Scoring profiles' },
     { to: '/admin/attempts', label: 'Attempts' },
+    { to: '/admin/writing', label: 'Writing' },
     { to: '/admin/users', label: 'Users' },
     { to: '/admin/settings', label: 'Settings' },
   ];
