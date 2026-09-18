@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, describeError, queryString } from '../../lib/api';
+import { ApiRequestError, api, describeError, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import {
   Badge,
@@ -11,6 +11,7 @@ import {
   Field,
   KeyValue,
   Loading,
+  Modal,
   Notice,
   Select,
   Tabs,
@@ -43,18 +44,39 @@ export function PracticePage() {
   const [testType, setTestType] = useState('');
   const [starting, setStarting] = useState<string | null>(null);
   const [strict, setStrict] = useState(false);
+  const [codePrompt, setCodePrompt] = useState<CatalogTest | null>(null);
+  const [accessCode, setAccessCode] = useState('');
+  const [codeError, setCodeError] = useState<string | null>(null);
 
-  const { data, loading, error } = useAsync<{ tests: CatalogTest[] }>(() => api.get('/api/tests'), []);
+  const { data, loading, error, reload } = useAsync<{ tests: CatalogTest[] }>(() => api.get('/api/tests'), []);
 
-  const start = async (test: CatalogTest) => {
+  const start = async (test: CatalogTest, code?: string) => {
+    if (test.requiresAccessCode && !test.unlocked && !code) {
+      setCodePrompt(test);
+      setAccessCode('');
+      setCodeError(null);
+      return;
+    }
     setStarting(test.id);
+    setCodeError(null);
     try {
       const result = await api.post<{ attemptId: string }>('/api/attempts', {
         testId: test.id,
         mode: strict ? 'STANDARD_EXAM' : 'PRACTICE',
+        ...(code ? { accessCode: code } : {}),
       });
       navigate(`/exam/${result.attemptId}`);
     } catch (startError) {
+      if (startError instanceof ApiRequestError && startError.code === 'ACCESS_CODE_REQUIRED') {
+        setCodePrompt(test);
+        setAccessCode('');
+        setCodeError(null);
+        return;
+      }
+      if (codePrompt && startError instanceof ApiRequestError && startError.status === 403) {
+        setCodeError(describeError(startError));
+        return;
+      }
       toast.push(describeError(startError), 'error');
     } finally {
       setStarting(null);
@@ -113,6 +135,15 @@ export function PracticePage() {
                 <Badge tone="accent">{TEST_TYPE_LABELS[test.type] ?? test.type}</Badge>
                 <span className="tiny muted">v{test.versionNumber}</span>
               </div>
+              {test.requiresAccessCode ? (
+                <div style={{ marginTop: 8 }}>
+                  {test.unlocked ? (
+                    <Badge tone="success">🔓 Unlocked</Badge>
+                  ) : (
+                    <Badge tone="warning">🔒 Requires access code</Badge>
+                  )}
+                </div>
+              ) : null}
               <h3 style={{ marginTop: 10 }}>{test.title}</h3>
               <p className="small muted">{test.summary || 'Practice material.'}</p>
               <KeyValue
@@ -135,12 +166,64 @@ export function PracticePage() {
                 loading={starting === test.id}
                 onClick={() => void start(test)}
               >
-                Start attempt
+                {test.requiresAccessCode && !test.unlocked ? 'Unlock & start' : 'Start attempt'}
               </Button>
             </div>
           ))}
         </div>
       )}
+
+      <Modal
+        open={codePrompt !== null}
+        title={codePrompt ? `Unlock “${codePrompt.title}”` : 'Unlock test'}
+        onClose={() => {
+          setCodePrompt(null);
+          setCodeError(null);
+          void reload();
+        }}
+        actions={
+          <>
+            <Button
+              onClick={() => {
+                setCodePrompt(null);
+                setCodeError(null);
+                void reload();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={starting !== null}
+              disabled={!accessCode.trim()}
+              onClick={() => codePrompt && void start(codePrompt, accessCode)}
+            >
+              Unlock & start
+            </Button>
+          </>
+        }
+      >
+        <p className="small muted">
+          This test is protected by an access code. Ask your teacher for the code — you only need to enter it once.
+        </p>
+        {codeError ? <Notice tone="danger">{codeError}</Notice> : null}
+        <Field label="Access code" required>
+          {(id) => (
+            <TextInput
+              id={id}
+              value={accessCode}
+              autoComplete="off"
+              placeholder="e.g. READING-01"
+              onChange={(event) => setAccessCode(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && codePrompt && accessCode.trim() && !starting) {
+                  void start(codePrompt, accessCode);
+                }
+              }}
+            />
+          )}
+        </Field>
+      </Modal>
     </div>
   );
 }

@@ -1,8 +1,12 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import type { AppBindings } from '../env';
 import { ApiError } from '../lib/errors';
-import { requireAuth } from '../middleware/auth';
+import { assertCsrf, assertSameOrigin } from '../lib/http';
+import { parseBody } from '../lib/validate';
+import { currentUser, requireAuth } from '../middleware/auth';
 import { loadCandidateTest } from '../services/content-service';
+import { verifyAndUnlock } from '../services/access-code-service';
 import { loadScoringProfile } from '../services/marking-service';
 import { estimateBand } from '../../shared/scoring';
 import type { TestType } from '../../shared/types';
@@ -14,30 +18,39 @@ const router = new Hono<AppBindings>();
  * question content or answer material.
  */
 router.get('/tests', requireAuth, async (c) => {
+  const user = currentUser(c);
   const rows = await c.env.DB.prepare(
     `SELECT t.id, t.slug, t.title, t.type, t.summary, t.content_origin, t.updated_at,
+            t.access_code_hash IS NOT NULL AS requires_code,
             v.id AS version_id, v.version_number, v.total_questions, v.duration_seconds, v.is_complete_test,
-            (SELECT COUNT(*) FROM mock_components mc WHERE mc.mock_version_id = v.id) AS component_count
+            (SELECT COUNT(*) FROM mock_components mc WHERE mc.mock_version_id = v.id) AS component_count,
+            (SELECT COUNT(*) FROM test_unlocks u WHERE u.test_id = t.id AND u.user_id = ?) AS unlocked
        FROM tests t
        JOIN test_versions v ON v.id = t.current_version_id
       WHERE t.status = 'PUBLISHED'
       ORDER BY t.type, t.title`,
-  ).all<{
-    id: string;
-    slug: string;
-    title: string;
-    type: TestType;
-    summary: string;
-    content_origin: string;
-    updated_at: string;
-    version_id: string;
-    version_number: number;
-    total_questions: number;
-    duration_seconds: number | null;
-    is_complete_test: number;
-    component_count: number;
-  }>();
+  )
+    .bind(user.id)
+    .all<{
+      id: string;
+      slug: string;
+      title: string;
+      type: TestType;
+      summary: string;
+      content_origin: string;
+      updated_at: string;
+      requires_code: number;
+      version_id: string;
+      version_number: number;
+      total_questions: number;
+      duration_seconds: number | null;
+      is_complete_test: number;
+      component_count: number;
+      unlocked: number;
+    }>();
 
+  // Staff bypass access codes, so the client never prompts them.
+  const staffBypass = user.role !== 'STUDENT';
   return c.json({
     tests: rows.results.map((row) => ({
       id: row.id,
@@ -53,8 +66,32 @@ router.get('/tests', requireAuth, async (c) => {
       durationSeconds: row.duration_seconds,
       isCompleteTest: row.is_complete_test === 1,
       mockComponentCount: row.component_count,
+      requiresAccessCode: row.requires_code === 1,
+      unlocked: staffBypass || row.requires_code !== 1 || row.unlocked === 1,
     })),
   });
+});
+
+/**
+ * Unlock a code-protected test without starting an attempt. Students enter
+ * the code once; later practice starts and previews reuse the unlock row.
+ */
+router.post('/tests/:testId/unlock', requireAuth, async (c) => {
+  assertSameOrigin(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const user = currentUser(c);
+  const body = await parseBody(c, z.object({ accessCode: z.string().trim().min(1).max(64) }));
+
+  const test = await c.env.DB.prepare('SELECT id, status FROM tests WHERE id = ?')
+    .bind(c.req.param('testId'))
+    .first<{ id: string; status: string }>();
+  if (!test) throw ApiError.notFound('Test not found.');
+  if (user.role === 'STUDENT' && test.status !== 'PUBLISHED') {
+    throw ApiError.forbidden('This test is not published.');
+  }
+
+  await verifyAndUnlock(c.env, user, test.id, body.accessCode);
+  return c.json({ ok: true, unlocked: true });
 });
 
 /**
@@ -76,6 +113,10 @@ router.get('/tests/:testId/preview', requireAuth, async (c) => {
   const isStaff = user.role === 'ADMIN' || user.role === 'TEACHER';
   if (!isStaff && test.status !== 'PUBLISHED') {
     throw ApiError.forbidden('This test is not published.');
+  }
+  // Code-protected tests hide their structure until the student unlocks them.
+  if (!isStaff) {
+    await verifyAndUnlock(c.env, user, test.id, undefined);
   }
 
   const versionId = requestedVersion ?? test.current_version_id;

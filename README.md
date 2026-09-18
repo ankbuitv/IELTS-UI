@@ -82,6 +82,7 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
   chart image, and the candidate player follows an authorised redirect through
   `/api/files/:assetId`. A future version can add object storage behind the same
   resolver (`src/worker/services/media-service.ts`) without touching V1 code.
+- Per-test access codes: an administrator can lock any test with a code (stored hashed, never plaintext). Students enter it once to unlock the test permanently; attempts and previews stay blocked until then, with guesses rate-limited. Assignment attempts bypass the code.
 - Versioned content with a DRAFT → REVIEW → PUBLISHED → ARCHIVED lifecycle.
   Published versions are immutable and frozen; editing requires a new version.
 - Deterministic validation before publish (blocking errors vs. warnings).

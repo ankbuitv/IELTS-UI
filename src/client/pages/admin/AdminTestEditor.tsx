@@ -68,6 +68,8 @@ interface TestDetailResponse {
     license_notes: string | null;
     current_version_id: string | null;
     updated_at: string;
+    requires_access_code: number;
+    access_code_set_at: string | null;
   };
   versions: Array<{
     id: string;
@@ -172,6 +174,8 @@ export function AdminTestEditorPage() {
           {test.license_notes ? <p className="tiny muted">{test.license_notes}</p> : null}
         </Card>
       </div>
+
+      <AccessCodeCard test={test} onChanged={reload} />
 
       <Card title="Versions" hint="Only DRAFT and REVIEW versions can be edited." flush>
         <div className="table-wrap">
@@ -443,6 +447,107 @@ function TestMetaForm({
         Save metadata
       </Button>
     </div>
+  );
+}
+
+/** Client-side random code, same alphabet as server classroom codes. */
+function generateAccessCode(): string {
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
+}
+
+function AccessCodeCard({
+  test,
+  onChanged,
+}: {
+  test: TestDetailResponse['test'];
+  onChanged: () => Promise<void>;
+}) {
+  const toast = useToast();
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [justSet, setJustSet] = useState<string | null>(null);
+  const locked = test.requires_access_code === 1;
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/api/admin/tests/${test.id}/access-code`, { code });
+      setJustSet(code.trim().toUpperCase());
+      setCode('');
+      await onChanged();
+      toast.push('Access code saved. Share it with your students.', 'success');
+    } catch (saveError) {
+      toast.push(describeError(saveError), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card
+      title="Student access code"
+      hint="Optional. When set, students must enter this code once before they can practise this test."
+    >
+      <div className="row" style={{ marginBottom: 12 }}>
+        {locked ? (
+          <Badge tone="warning">🔒 Code required{test.access_code_set_at ? ` · set ${formatDateTime(test.access_code_set_at)}` : ''}</Badge>
+        ) : (
+          <Badge tone="neutral">Open to all students</Badge>
+        )}
+      </div>
+      {justSet ? (
+        <Notice tone="success" title="Current code — copy it now">
+          <span className="mono" style={{ fontSize: '1.1rem', letterSpacing: '0.08em' }}>
+            {justSet}
+          </span>
+          <div className="tiny" style={{ marginTop: 6 }}>
+            Only the hash is stored, so this code cannot be viewed again later — setting a new code replaces it.
+          </div>
+        </Notice>
+      ) : null}
+      <div style={{ height: 12 }} />
+      <Field label={locked ? 'Replace code' : 'New code'} hint="4–32 characters, case-insensitive. Saving revokes all previous unlocks.">
+        {(id) => (
+          <div className="row">
+            <TextInput
+              id={id}
+              value={code}
+              autoComplete="off"
+              placeholder="e.g. READING-01"
+              onChange={(event) => setCode(event.target.value)}
+              disabled={busy}
+            />
+            <Button disabled={busy} onClick={() => setCode(generateAccessCode())}>
+              Generate
+            </Button>
+            <Button variant="primary" disabled={busy || code.trim().length < 4} onClick={() => void save()}>
+              {busy ? 'Saving…' : locked ? 'Replace code' : 'Set code'}
+            </Button>
+            {locked ? (
+              <ConfirmButton
+                title="Remove access code"
+                confirmLabel="Remove code"
+                body={<p>Students will be able to practise this test without a code. Previous unlocks are discarded.</p>}
+                onConfirm={async () => {
+                  try {
+                    await api.delete(`/api/admin/tests/${test.id}/access-code`);
+                    setJustSet(null);
+                    await onChanged();
+                    toast.push('Access code removed.', 'success');
+                  } catch (clearError) {
+                    toast.push(describeError(clearError), 'error');
+                  }
+                }}
+              >
+                Remove
+              </ConfirmButton>
+            ) : null}
+          </div>
+        )}
+      </Field>
+    </Card>
   );
 }
 
