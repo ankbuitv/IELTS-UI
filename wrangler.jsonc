@@ -67,7 +67,7 @@
   // ---------------------------------------------------------------------------
   "vars": {
     "APP_ENV": "development",
-    "APP_BASE_URL": "http://localhost:8787",
+    "APP_BASE_URL": "https://ielts.ankb.qzz.io",
     "SESSION_TTL_HOURS": "12",
     "SESSION_COOKIE_NAME": "ielts_session",
     "OPENAI_MODEL": "gpt-4.1",
