@@ -198,7 +198,7 @@ export async function login(
   const valid = await verifyPassword(credentials.password, {
     hash: row.password_hash,
     salt: row.password_salt,
-    iterations: row.password_iterations ?? 210_000,
+    iterations: row.password_iterations ?? 100_000,
     algo: row.password_algo ?? 'PBKDF2-SHA256',
   });
 
@@ -336,7 +336,7 @@ export async function changePassword(
   const valid = await verifyPassword(currentPassword, {
     hash: row.password_hash,
     salt: row.password_salt,
-    iterations: row.password_iterations ?? 210_000,
+    iterations: row.password_iterations ?? 100_000,
     algo: 'PBKDF2-SHA256',
   });
   if (!valid) throw ApiError.validation('The current password is incorrect.');

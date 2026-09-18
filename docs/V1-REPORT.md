@@ -220,8 +220,9 @@ attempts `GET /api/admin/attempts`, `GET /api/admin/attempts/:attemptId`,
 
 ## 7. Authentication and authorisation
 
-- **Passwords**: PBKDF2-SHA256, 210,000 iterations, per-user random salt,
-  constant-time comparison; stored as algorithm + iterations + hash, never
+- **Passwords**: PBKDF2-SHA256, 100,000 iterations (the maximum supported by
+  Cloudflare Workers' WebCrypto), per-user random salt, constant-time
+  comparison; stored as algorithm + iterations + hash, never
   plaintext. A dummy PBKDF2 verification runs for unknown e-mails so response
   timing does not reveal account existence.
 - **Sessions**: random 256-bit token stored hashed (with a pepper from

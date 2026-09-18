@@ -14,6 +14,32 @@ export function getCsrfToken(): string | null {
   return csrfToken;
 }
 
+/**
+ * Fallback session delivery for embedded preview environments, where the
+ * browser drops the HttpOnly session cookie. The token comes from the
+ * login/register/me responses (non-production only) and survives reloads in
+ * this tab via sessionStorage. In production it is never populated, so the
+ * client there remains cookie-only.
+ */
+const SESSION_TOKEN_KEY = 'ielts_session_token';
+
+let sessionToken: string | null =
+  typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SESSION_TOKEN_KEY) : null;
+
+export function setSessionToken(token: string | null): void {
+  sessionToken = token;
+  try {
+    if (token) sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+    else sessionStorage.removeItem(SESSION_TOKEN_KEY);
+  } catch {
+    // sessionStorage can be unavailable (privacy modes); Bearer just won't work.
+  }
+}
+
+export function getSessionToken(): string | null {
+  return sessionToken;
+}
+
 export interface ApiErrorShape {
   code: string;
   message: string;
@@ -55,6 +81,12 @@ async function request<T>(path: string, options: RequestInit & { json?: unknown 
   }
   if (method !== 'GET' && method !== 'HEAD' && csrfToken) {
     headers.set('x-csrf-token', csrfToken);
+  }
+  if (sessionToken) {
+    headers.set('authorization', `Bearer ${sessionToken}`);
+    // Duplicate in a custom header as well: some preview proxy layers rewrite
+    // or drop the standard Authorization header.
+    headers.set('x-session-token', sessionToken);
   }
 
   const response = await fetch(path, {
