@@ -1,0 +1,102 @@
+IELTS platform acceptance run mu6seocp
+Target: http://127.0.0.1:8787
+    ✓ worker health check (development)
+    ✓ cross-origin state-changing request is rejected (403)
+    ✓ first registration bootstrapped the administrator account
+    ✓ admin, teacher and student sessions established
+
+Flow 1 — ADMIN: content pipeline (create → validate → publish → preview)
+    ✓ admin created a versioned scoring profile
+    ✓ admin created a draft test
+    ✓ content saved with 40 server-counted questions
+    ✓ deterministic validation found no blocking errors
+    ✓ version published immutably
+    ✓ re-publishing the same version is refused
+    ✓ published content is immutable (editing requires a new version)
+    ✓ published test appears in the candidate catalogue
+    ✓ preview payload contains no answer-key field
+    ✓ preview payload contains the candidate-visible passage
+    ✓ preview payload exposes no marking evidence field
+    ✓ writing version published for use as a mock component
+
+Flow 5 — IMPORT: paste structured JSON → review → draft (no object storage)
+    ✓ pasted JSON created an import with no file upload
+    ✓ JSON payload was recognised as structured content
+    ✓ structured import waits in review
+    ✓ structured payload is stored in D1
+    ✓ extracted text is kept in the database
+    ✓ no object-storage asset is attached to the import
+    ✓ extracted text is served from D1
+    ✓ import applied to a new draft version
+    ✓ apply reports the invented declared word count instead of trusting it
+    ✓ the word-count mismatch is a warning, not a fabricated error
+    ✓ imported content lands as a draft, never published
+    ✓ validation catches an answer field leaked into a prompt
+    ✓ validation checks that evidence quotes the passage
+    ✓ imported preview payload contains no answer keys
+    ✓ imported preview payload leaks no marking evidence
+
+Flow 2 — TEACHER: classroom, enrolment, assignment, reports, authorisation
+    ✓ teacher created a classroom
+    ✓ single-use invitation link generated
+    ✓ student enrolled by email
+    ✓ member list includes the student
+    ✓ another teacher cannot read the classroom (IDOR blocked)
+    ✓ assignment created for the published version
+    ✓ assignment report lists the enrolled students
+
+Flow 3 — STUDENT: attempt, autosave, integrity, submit, marked result
+    ✓ student dashboard loads with assignments
+    ✓ attempt started from an assignment
+    ✓ candidate attempt state returns the section
+    ✓ candidate payload contains no answer keys
+    ✓ candidate payload contains no server-only evidence text
+    ✓ server time is authoritative in the payload
+    ✓ all 40 questions are visible to the candidate
+    ✓ answers autosaved through the batch endpoint
+    ✓ integrity events recorded and counted by policy
+    ✓ attempt submitted
+    ✓ answers cannot be changed after submission
+    ✓ server-marked raw score is 30 (received 30)
+    ✓ estimated band is 7.0 (received 7)
+    ✓ IMMEDIATE visibility released the score
+    ✓ result labels the band as an estimate
+    ✓ integrity summary is attached to the result
+    ✓ a second attempt is allowed by maxAttempts
+    ✓ the third attempt is refused by the attempt limit
+    ✓ attempt history lists the attempts
+    ✓ students cannot self-select an exam integrity mode
+
+Flow 4 — FULL MOCK: multi-component sequence, section advance, submission
+    ✓ full-mock version saved with two components
+    ✓ full mock passes validation
+    ✓ full-mock attempt started
+    ✓ both mock components are scheduled
+    ✓ first component follows the configured sequence
+    ✓ second component follows the configured sequence
+    ✓ self-service mock runs with the practice policy
+    ✓ integrity notice is configuration-driven
+    ✓ candidate advanced to the second component
+    ✓ advancing does not submit the whole attempt
+    ✓ writing component is active now
+    ✓ writing response saved with a server word count
+    ✓ full-mock attempt submitted
+    ✓ result covers both skill sessions
+    ✓ writing submission is attached to the result
+    ✓ writing is left unmarked for a human, never auto-scored
+    ✓ writing submission id is exposed for teacher marking
+
+Flow 5 — TEACHER/ADMIN: marking writing and reading the attempt
+    ✓ admin attempt view exposes the writing submission id
+    ✓ admin saved a human writing score
+    ✓ the saved band appears on the attempt
+    ✓ the score records its source
+    ✓ administrative actions are written to the audit log
+    ✓ publishing is audited
+    ✓ audit log never contains passwords
+    ✓ platform settings are readable
+    ✓ settings update does not break attempt reads
+    ✓ teacher report reflects the student attempts
+    ✓ classroom analytics aggregates marked sessions
+
+86 checks passed, 0 failed.
