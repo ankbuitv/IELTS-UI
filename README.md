@@ -1,1 +1,269 @@
-# IELTS-UI
+# IELTS Platform
+
+A self-hosted practice platform for English exam preparation: reusable exam
+shell, question engine, server-side marking, classrooms, assignments, analytics
+and an AI-assisted content import pipeline.
+
+It runs entirely on Cloudflare (Workers, D1, R2, Queues) with a React 19 + Vite
+single-page client served from the same Worker.
+
+> **Not affiliated with IELTS, the British Council, IDP or Cambridge.** All band
+> figures produced by this platform are labelled **Estimated band** and come from
+> conversion tables an administrator configures. The repository ships only
+> original sample content.
+
+---
+
+## Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Local development](#local-development)
+- [Commands](#commands)
+- [Sample data & demo accounts](#sample-data--demo-accounts)
+- [Deployment](#deployment)
+- [Security model](#security-model)
+- [Testing](#testing)
+- [Documentation](#documentation)
+
+---
+
+## Features
+
+**Exam delivery**
+
+- Reusable exam shell: server-authoritative countdown, section/component
+  sequencing, autosave, resume after disconnect, and attempt recovery.
+- Full mock exams built from configurable component sequences (skill order,
+  per-component duration, breaks) — nothing is hard-coded to one test.
+- Integrity monitor that records *observable* browser events (tab hidden,
+  fullscreen exit, copy/paste, blur) with an explicit on-screen notice that
+  these events are not proof of misconduct and cannot block OS-level actions
+  such as Alt+Tab.
+
+**Question engine**
+
+- 15 registered types — True/False/Not Given, Yes/No/Not Given, MCQ single and
+  multiple answer, matching (information, headings, features), sentence /
+  summary / note / table / flowchart completion, short answer, and the two
+  writing tasks.
+- Reading split-panel layout with passage navigation; listening audio player
+  with a configurable playback policy (max plays, preparation time, pause/seek).
+- Answer keys, evidence and explanations are stored server-side only and never
+  appear in a candidate payload.
+
+**Marking & results**
+
+- Deterministic server-side marking with acceptable answer variants, word
+  limits, partial credit for multiple-answer questions, and normalisation
+  (case, whitespace, articles, numbers).
+- Writing is **never** auto-scored: submissions are stored for a human reviewer
+  to band and comment.
+- Band estimation for reading/listening only, through versioned scoring
+  profiles, refused for incomplete tests and always labelled as an estimate.
+- Result visibility modes: immediate, after deadline, score only, or no review.
+
+**Classes & analytics**
+
+- Teacher classrooms with single-use, expiring, hashed invitations; students
+  join with a code or an invite link.
+- Assignments with deadlines, attempt limits, timing policy, exam mode,
+  integrity overrides, and a per-student submission report.
+- Teacher and student analytics: skill performance, trends, task-type accuracy,
+  band distribution, integrity summaries.
+
+**Administration**
+
+- Dashboard, tests & versions, question bank editor, imports, scoring profiles,
+  users, attempts, assets, audit log and platform settings.
+- Versioned content with a DRAFT → REVIEW → PUBLISHED → ARCHIVED lifecycle.
+  Published versions are immutable and frozen; editing requires a new version.
+- Deterministic validation before publish (blocking errors vs. warnings).
+- AI-assisted imports: upload → extract → AI structure → validate → admin
+  review → publish. AI never publishes by itself, and if no API key is present
+  the pipeline degrades gracefully (extraction + manual editing still work).
+
+---
+
+## Architecture
+
+```
+Browser  ──►  Cloudflare Worker (Hono)  ──►  D1   (users, content, attempts, results)
+                    │                   ──►  R2   (import sources, audio, images)
+                    │                   ──►  Queue(import pipeline jobs)
+                    └──►  Static assets (React SPA bundle)
+```
+
+- One Worker serves both the API (`/api/*`, always handled first) and the SPA
+  static assets, so there is no CORS surface and no second deployment.
+- Shared TypeScript contracts (`src/shared`) are imported by both the Worker and
+  the client; the answer-key and scoring modules are **worker-only**.
+- The client is React 19 + react-router-dom 7 + TanStack Query, built with Vite.
+
+```
+src/
+  shared/     types, question registry, validation, marking, scoring, integrity
+  worker/     app, routes, services, middleware, extractors, AI client, lib
+  client/     React SPA (pages, exam components, hooks, ui kit, styles)
+migrations/   D1 schema (0001_init, 0002_imports_and_settings)
+seed/         original sample content + wipe script
+scripts/      database reset + end-to-end acceptance run
+tests/unit/   vitest unit suite
+docs/         final report and the recorded acceptance run
+```
+
+---
+
+## Local development
+
+Requirements: Node 20+ (developed on 22), npm, and a Cloudflare account only if
+you intend to deploy.
+
+```bash
+npm install
+
+# 1. Local secrets (git-ignored)
+cp .env.example .dev.vars 2>/dev/null || true
+#   SESSION_SECRET=<random string>   # required
+#   OPENAI_API_KEY=<optional>        # enables AI structuring
+
+# 2. Build the SPA, migrate the local database, load sample content
+npm run build:client
+npm run db:migrate:local
+npm run db:seed:local
+
+# 3. Run the Worker (serves API + SPA on http://localhost:8787)
+npm run dev:api
+```
+
+Open <http://localhost:8787/> and register — **the first account becomes the
+administrator** (the register form offers this only while no administrator
+exists).
+
+For UI work with hot reload, run `npm run dev:client` (Vite on `:5173`, proxying
+`/api` to the Worker on `:8787`).
+
+`SESSION_SECRET` is required in production; in development the Worker falls back
+to a clearly-marked local value so a fresh clone starts without configuration.
+
+---
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Build the client, then run the Worker with assets on `:8787` |
+| `npm run dev:api` | Worker only (no rebuild) |
+| `npm run dev:client` | Vite dev server with HMR, proxying `/api` |
+| `npm run build` | Typecheck everything, then build the client |
+| `npm run typecheck` | Worker, client and Node tsconfigs |
+| `npm run lint` | ESLint (see the notes in `eslint.config.js`) |
+| `npm test` | Unit test suite (vitest) |
+| `npm run test:integration` | End-to-end acceptance run against a live Worker |
+| `npm run db:migrate:local` / `:remote` | Apply D1 migrations |
+| `npm run db:seed:local` / `:remote` | Load the original sample content |
+| `npm run db:reset:local` | Wipe, migrate and re-seed the **local** database |
+| `npm run deploy` | Build and deploy the Worker |
+
+---
+
+## Sample data & demo accounts
+
+`seed/seed.sql` inserts two draft tests (a 13-question reading practice set and
+a two-task writing set) plus two 40-question conversion tables. Nothing is
+published, so the publish workflow can be demonstrated end to end.
+
+`npm run test:integration` then creates its own accounts and content. A green
+run leaves demo accounts in the local database (password
+`Integration-Passw0rd!23`, suffix from the run id printed by the script):
+
+| Role | Email pattern |
+| --- | --- |
+| Admin | `admin-<run>@example.test` |
+| Teacher | `teacher-<run>@example.test` |
+| Student | `student-<run>@example.test` |
+
+The full acceptance run leaves a published 40-question reading test, a writing
+test used as a mock component, a published two-component full mock, a classroom
+with an assignment, submitted attempts, a marked writing submission and audit
+log entries.
+
+---
+
+## Deployment
+
+```bash
+# 1. Bindings
+npx wrangler d1 create ielts-platform-db          # copy the id into wrangler.jsonc
+npx wrangler r2 bucket create ielts-platform-content
+npx wrangler queues create ielts-import-jobs
+npx wrangler queues create ielts-import-jobs-dlq
+
+# 2. Replace REPLACE_WITH_D1_DATABASE_ID in wrangler.jsonc, then
+npx wrangler d1 migrations apply DB --remote
+npx wrangler d1 execute DB --remote --file=./seed/seed.sql   # optional
+
+# 3. Secrets (server-side only; never committed)
+npx wrangler secret put SESSION_SECRET      # required
+npx wrangler secret put OPENAI_API_KEY      # optional: enables AI structuring
+
+# 4. Custom domain (must be a zone in your own Cloudflare account)
+#    wrangler.jsonc already declares custom_domain = ielts.ankb.qzz.io.
+#    If the zone is not on the account running the deploy, remove that block
+#    and add the domain in the dashboard instead.
+npm run deploy
+```
+
+`APP_BASE_URL` in `wrangler.jsonc` must match the deployed origin: it is used
+for the same-origin check, absolute links and cookie attributes.
+
+---
+
+## Security model
+
+- **Authentication**: PBKDF2-SHA256 (210k iterations, per-user salt), no
+  plaintext passwords anywhere. Sessions are server-side rows referenced by an
+  HttpOnly, SameSite=Lax cookie; changing a password revokes existing sessions.
+- **CSRF**: SameSite cookies + Origin/Referer validation + a per-session
+  `X-CSRF-Token` header on every state-changing request.
+- **Authorisation**: every route re-checks the role and the object relationship
+  server-side (`requireClassroomAccess`, `requireStudentAccess`, admin guards).
+  Hiding a button in the client is never the control.
+- **Rate limiting**: fixed-window counters in D1 for registration, login (per
+  address and per account), import uploads and the paid AI call.
+- **Answer material**: keys, evidence and explanations live in a dedicated table
+  and are never included in candidate-facing payloads; marking happens on the
+  server with the frozen version snapshot.
+- **Audit log**: administrative and security-relevant actions are recorded with
+  actor, entity and metadata (no secrets, no passwords).
+- **Headers**: the Worker sets baseline hardening headers on `/api/*`; the
+  static bundle carries the same headers through `_headers` in `src/client/public`
+  (verified in `wrangler dev`).
+
+---
+
+## Testing
+
+```bash
+npm run typecheck        # worker + client + node tsconfigs
+npm run lint
+npm test                 # 6 files / 84 unit tests
+npm run build            # typecheck + production client build
+npm run dev:api &        # then:
+npm run test:integration # 71 end-to-end checks across 5 flows
+```
+
+Unit tests cover the marking engine, band conversion, deterministic validation,
+integrity policy, the AI payload converter and the security helpers. The
+acceptance run drives real HTTP sessions for the admin, teacher, student and
+full-mock flows. The recorded output of a green run is in
+[`docs/acceptance-run.txt`](docs/acceptance-run.txt).
+
+---
+
+## Documentation
+
+- [`docs/V1-REPORT.md`](docs/V1-REPORT.md) — architecture, data model, API map,
+  bindings, deployment steps, executed tests, verified behaviour, limitations
+  and the list of suggested future features that are intentionally *not*
+  implemented.

@@ -1,0 +1,111 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ielts-platform",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+
+  // ---------------------------------------------------------------------------
+  // Static assets: the built React SPA. API + private file routes are always
+  // handled by the Worker first (run_worker_first) so they can enforce auth.
+  // ---------------------------------------------------------------------------
+  "assets": {
+    "directory": "dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // ---------------------------------------------------------------------------
+  // D1 relational database (users, content, attempts, results, imports)
+  // ---------------------------------------------------------------------------
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ielts-platform-db",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // ---------------------------------------------------------------------------
+  // R2 object storage (import sources, audio, images, charts)
+  // ---------------------------------------------------------------------------
+  "r2_buckets": [
+    {
+      "binding": "CONTENT_BUCKET",
+      "bucket_name": "ielts-platform-content"
+    }
+  ],
+
+  // ---------------------------------------------------------------------------
+  // Queues: background import pipeline (upload -> extract -> AI structure ->
+  // validate -> admin review). The Worker degrades to inline processing when
+  // this binding is absent, so local development needs no queue.
+  // Create before deploying:
+  //   npx wrangler queues create ielts-import-jobs
+  //   npx wrangler queues create ielts-import-jobs-dlq
+  // ---------------------------------------------------------------------------
+  "queues": {
+    "producers": [
+      {
+        "binding": "IMPORT_QUEUE",
+        "queue": "ielts-import-jobs"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "ielts-import-jobs",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 2,
+        "dead_letter_queue": "ielts-import-jobs-dlq"
+      }
+    ]
+  },
+
+  // ---------------------------------------------------------------------------
+  // Non-secret configuration. Secrets are NOT stored here - see docs/DEPLOYMENT.md
+  // ---------------------------------------------------------------------------
+  "vars": {
+    "APP_ENV": "development",
+    "APP_BASE_URL": "http://localhost:8787",
+    "SESSION_TTL_HOURS": "12",
+    "SESSION_COOKIE_NAME": "ielts_session",
+    "OPENAI_MODEL": "gpt-4.1",
+    "OPENAI_TRANSCRIBE_MODEL": "gpt-4o-transcribe",
+    "MAX_UPLOAD_BYTES": "26214400",
+    "LOGIN_RATE_LIMIT_PER_15MIN": "10",
+    "AI_RATE_LIMIT_PER_HOUR": "30"
+  },
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+
+  // Housekeeping: prune rate-limit counters, expired sessions and old login logs.
+  "triggers": {
+    "crons": ["*/30 * * * *"]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": []
+    }
+  ],
+
+  // ---------------------------------------------------------------------------
+  // Production routing. Requires the zone ankb.qzz.io to be on this Cloudflare
+  // account and `npx wrangler login` with Workers Routes permission.
+  // ---------------------------------------------------------------------------
+  "routes": [
+    {
+      "pattern": "ielts.ankb.qzz.io",
+      "custom_domain": true
+    }
+  ]
+}
