@@ -31,7 +31,7 @@
     {
       "binding": "DB",
       "database_name": "ielts-platform-db",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "724e1e16-d0e1-4252-aedf-435beaedacbb",
       "migrations_dir": "migrations"
     }
   ],
