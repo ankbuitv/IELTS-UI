@@ -7,6 +7,20 @@ nền tảng, viết câu hỏi cho từng dạng, và khai báo đáp án kèm 
 > Đọc kèm: [`docs/samples/cities-knowledge-and-adaptation.json`](samples/cities-knowledge-and-adaptation.json)
 > là một đề Reading hoàn chỉnh (3 passage, 3 section, 4 group). File này chạy
 > được ngay: dán vào **Administration → Imports → Paste JSON**.
+>
+> Đề thi đầy đủ: [`docs/samples/full-test.json`](samples/full-test.json) là một
+> **FULL_MOCK 1-file** — Listening (câu 1–10), 3 passage Reading (11–50) và 2
+> Writing task (51–52) nằm chung trong **một** JSON, mọi section khai báo ngay trong
+> `sections[]`, **không cần** cấu hình mock components. Khi start, nền tảng tự gom
+> các section cùng kỹ năng liên tiếp thành 3 phần Listening → Reading → Writing
+> (thời lượng mặc định 30′/60′/60′). Định dạng này chỉ chạy được khi repo đã có
+> bản vá "Support one-file full mocks" (`inlineMockComponentRows` trong
+> `src/worker/services/attempt-service.ts`); bản cũ hơn sẽ báo
+> `MOCK_WITHOUT_COMPONENTS` khi publish. Trường `audioUrl` của file là một asset
+> id (`ast_…`) chỉ tồn tại trên production: ở đó Apply chạy bình thường; trên DB
+> local chưa có asset này, Apply sẽ bị chặn với *"One of the referenced assets
+> (section audio) no longer exists"* — hãy thay `audioUrl` bằng một URL `https://`
+> (hoặc tạo asset cùng id trong Settings → Assets) rồi Apply lại.
 
 ---
 

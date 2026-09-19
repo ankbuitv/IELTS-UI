@@ -1,0 +1,489 @@
+{
+  "testTitle": "Full IELTS Practice Test — Listening, Reading & Writing",
+  "testType": "FULL_MOCK",
+  "durationSeconds": 7200,
+  "isCompleteTest": true,
+  "sections": [
+    {
+      "sectionNumber": 1,
+      "type": "listening_part",
+      "label": "Listening Part 2",
+      "title": "The Football Stadium",
+      "instructions": "Listen to a guide talking to visitors at a football stadium and answer Questions 1–10.",
+      "order": 0,
+      "audioUrl": "ast_hbzm7pmirt1sh0lfgfur",
+      "transcript": {
+        "segments": [
+          { "id": "ls01", "startSeconds": null, "speaker": "Narrator", "text": "Part 2. You will hear a guide talking to members of the public who are visiting a football stadium in the UK." },
+          { "id": "ls02", "startSeconds": null, "speaker": "Guide", "text": "Good morning and welcome to City Football Club. I'd like to give you some useful information about your visit to the stadium today and then we'll start the tour of the areas of the stadium that are open to visitors." },
+          { "id": "ls03", "startSeconds": null, "speaker": "Guide", "text": "I can see lots of children here today, so just to let mums and dads know a few things before we start. The stadium has lots of stairs and the players' tunnel is very dark. Please don't let your children wander off on their own, even for a minute. We don't want any accidents or anyone getting frightened." },
+          { "id": "ls04", "startSeconds": null, "speaker": "Guide", "text": "Cameras are permitted everywhere and you can take pictures of your child shooting a penalty. Assistants are helping to organise this and hopefully the queue won't be too long." },
+          { "id": "ls05", "startSeconds": null, "speaker": "Guide", "text": "It's very hot and sunny out on the pitch today. You can get food and drink at the cafe and I really recommend the healthy lunchboxes for children." },
+          { "id": "ls06", "startSeconds": null, "speaker": "Guide", "text": "Also in the cafe, children are invited to do a football-themed drawing. We'll pick the best one at the end of the afternoon, so don't forget to put your name and contact details on the back. That way, if you've left the stadium before then, we'll send your prize, but sadly we can't return drawings." },
+          { "id": "ls07", "startSeconds": null, "speaker": "Guide", "text": "I'd like to mention some features of the tour. We'll start with the 360 cinema experience, which has been very popular over the years, and then I'll take you to the players' dressing rooms, before going outside to the seating area and the pitch." },
+          { "id": "ls08", "startSeconds": null, "speaker": "Guide", "text": "I should say, if you'd prefer your visit to be self-guided, please collect headphones from the reception and then you can listen to the pre-recorded information at your own speed. We've only just introduced this feature and would appreciate your feedback." },
+          { "id": "ls09", "startSeconds": null, "speaker": "Guide", "text": "We're thinking of offering tours in other languages in future, so if you have any thoughts on that, we'd welcome those too. If you plan to return another time, you might like to book one of our VIP tours. We've only just started offering these and they can be booked online." },
+          { "id": "ls10", "startSeconds": null, "speaker": "Guide", "text": "Now, the stadium you see today was built in 1989, as part of a three-year redevelopment project. While that project was going on, the team had to play its matches at the ground of another club. Apart from that, the club has been here on this site since 1870." },
+          { "id": "ls11", "startSeconds": null, "speaker": "Guide", "text": "For example, 1870 was also the year that football teams started to include a player whose role it was to guard the goal. It's hard to imagine what the game must have been like without someone in that position, isn't it?" },
+          { "id": "ls12", "startSeconds": null, "speaker": "Guide", "text": "In 1872 and 1873, many other clubs were established, both here and abroad. And the following year, in 1874, referees were allowed to send players off if they committed certain offences. And also in that year, teams started having to swap ends at half-time." },
+          { "id": "ls13", "startSeconds": null, "speaker": "Guide", "text": "One fact I was interested to discover was that in early football games, the aim was for the scorer to get the ball between two flag posts and later between sticks joined at the top with a piece of tape. In 1875, that tape was replaced with the solid crossbar that we're familiar with today." },
+          { "id": "ls14", "startSeconds": null, "speaker": "Guide", "text": "1877 saw the founding of further new clubs, and the history books tell us that in the same year, all the clubs decided to set a limit of 90 minutes for each match." },
+          { "id": "ls15", "startSeconds": null, "speaker": "Guide", "text": "By 1878, the number of teams in the football league increased again. In addition, referees started using whistles and electric lamps were installed on certain pitches. This was a significant change, as games could then be played in the evenings all year round." },
+          { "id": "ls16", "startSeconds": null, "speaker": "Guide", "text": "In 1880, clubs began to charge fans for admission to games, even though players were still amateurs and had other proper jobs." }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "MCQ_SINGLE",
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "fromQuestion": 1,
+          "toQuestion": 4,
+          "questions": [
+            {
+              "number": 1,
+              "prompt": "Why does the guide warn parents about the players' tunnel?",
+              "options": [
+                { "id": "A", "text": "Children are not allowed inside it." },
+                { "id": "B", "text": "Its darkness may frighten children." },
+                { "id": "C", "text": "Photography is forbidden there." },
+                { "id": "D", "text": "The stairs leading to it are closed." }
+              ],
+              "answer": "B",
+              "evidence": "segment:ls03",
+              "explanation": "The guide says the tunnel is very dark and asks parents not to let children wander off because they could become frightened."
+            },
+            {
+              "number": 2,
+              "prompt": "What information should children put on their competition drawing?",
+              "options": [
+                { "id": "A", "text": "Their age and school" },
+                { "id": "B", "text": "Their ticket number" },
+                { "id": "C", "text": "Their name and contact details" },
+                { "id": "D", "text": "Their address and date of birth" }
+              ],
+              "answer": "C",
+              "evidence": "segment:ls06",
+              "explanation": "The guide specifically asks children to put their name and contact details on the back."
+            },
+            {
+              "number": 3,
+              "prompt": "What has recently been introduced for visitors who prefer to explore independently?",
+              "options": [
+                { "id": "A", "text": "A printed stadium map" },
+                { "id": "B", "text": "A mobile application" },
+                { "id": "C", "text": "A pre-recorded headphone tour" },
+                { "id": "D", "text": "A private guide" }
+              ],
+              "answer": "C",
+              "evidence": "segment:ls08",
+              "explanation": "Visitors can now collect headphones and listen to pre-recorded information at their own speed."
+            },
+            {
+              "number": 4,
+              "prompt": "Which service is being considered but is not yet available?",
+              "options": [
+                { "id": "A", "text": "VIP tours" },
+                { "id": "B", "text": "Tours in additional languages" },
+                { "id": "C", "text": "Online ticket booking" },
+                { "id": "D", "text": "Visits to the dressing rooms" }
+              ],
+              "answer": "B",
+              "evidence": "segment:ls09",
+              "explanation": "The guide says tours in other languages are being considered for the future."
+            }
+          ]
+        },
+        {
+          "questionType": "MATCHING_FEATURES",
+          "instructions": "Match each year with the correct development in football. Choose the correct letter, A-H.",
+          "fromQuestion": 5,
+          "toQuestion": 10,
+          "configuration": { "optionNumbering": "alpha" },
+          "sharedOptions": [
+            { "id": "A", "text": "players began receiving payment" },
+            { "id": "B", "text": "the design of the goal changed" },
+            { "id": "C", "text": "electric lighting was introduced" },
+            { "id": "D", "text": "goalkeepers were introduced" },
+            { "id": "E", "text": "the first international match took place" },
+            { "id": "F", "text": "two rules of the game changed" },
+            { "id": "G", "text": "spectators began paying for admission" },
+            { "id": "H", "text": "the duration of a match was standardised" }
+          ],
+          "questions": [
+            { "number": 5, "prompt": "1870", "answer": "D", "evidence": "segment:ls11", "explanation": "Teams began including a player whose role was specifically to guard the goal." },
+            { "number": 6, "prompt": "1874", "answer": "F", "evidence": "segment:ls12", "explanation": "Referees could send players off and teams were required to swap ends at half-time." },
+            { "number": 7, "prompt": "1875", "answer": "B", "evidence": "segment:ls13", "explanation": "The tape joining the goal posts was replaced by a solid crossbar." },
+            { "number": 8, "prompt": "1877", "answer": "H", "evidence": "segment:ls14", "explanation": "Clubs agreed that matches should be limited to 90 minutes." },
+            { "number": 9, "prompt": "1878", "answer": "C", "evidence": "segment:ls15", "explanation": "Electric lamps were installed on some pitches." },
+            { "number": 10, "prompt": "1880", "answer": "G", "evidence": "segment:ls16", "explanation": "Clubs began charging supporters for admission." }
+          ]
+        }
+      ]
+    },
+    {
+      "sectionNumber": 2,
+      "type": "reading_passage",
+      "label": "Reading Passage 1",
+      "title": "When Cities Learn to Store Rain",
+      "instructions": "You should spend about 20 minutes on Questions 11–23.",
+      "order": 1,
+      "passage": {
+        "title": "When Cities Learn to Store Rain",
+        "subtitle": null,
+        "paragraphs": [
+          { "label": "A", "text": "For much of the twentieth century, urban drainage was designed according to a simple principle: rainwater should be removed from streets as rapidly as possible. Networks of gutters, underground pipes and concrete channels carried runoff away from buildings and roads. This approach reduced local flooding in many circumstances, but it also treated rain as a waste product rather than a resource. As cities expanded and acquired more roofs, roads and car parks, a growing proportion of rainfall could no longer soak naturally into soil." },
+          { "label": "B", "text": "The consequences become particularly visible during intense storms. Hard surfaces send water into drains quickly, so a large volume can reach the network within a short period. Increasing the diameter of pipes may provide additional capacity, but replacement is disruptive and expensive. Moreover, a larger pipe does not remove the problem if the water is simply transferred more rapidly to another part of the catchment. Engineers have consequently become interested in controlling when and where runoff enters the drainage system." },
+          { "label": "C", "text": "One response is the rain garden, a shallow planted depression that temporarily receives water from nearby roofs or pavements. Water collects during a storm and gradually infiltrates the soil or leaves through evaporation and plant activity. A rain garden is not simply a conventional flower bed. Its soil composition, depth and overflow route must be designed according to the amount of water expected. Poorly planned systems can remain waterlogged or send excess water towards neighbouring property." },
+          { "label": "D", "text": "Permeable paving follows a related principle. Instead of forcing rainfall to run across an impermeable surface, gaps or porous material allow it to move downward. Beneath the paving, a stone layer may temporarily store water before it enters the soil or drainage network. Such surfaces can be effective in car parks and lightly trafficked streets, although their performance depends on maintenance. Fine sediment can gradually block pores, reducing the rate at which water enters the system." },
+          { "label": "E", "text": "Storage can also occur above ground. Some buildings collect rainwater in tanks for irrigation, toilet flushing or cleaning. The environmental benefit is greatest when stored water is actually used before the next major storm, because empty capacity is then available for incoming rainfall. A tank that remains full may conserve mains water but contribute little to flood management. This illustrates why the same piece of infrastructure can serve different purposes depending on how it is operated." },
+          { "label": "F", "text": "Vegetated roofs delay runoff by retaining part of the rainfall in growing media and plants. Their effectiveness is variable. A roof that has already absorbed several days of rain will have less spare capacity than one that is relatively dry. Plant species, substrate depth, season and weather all influence performance. As a result, planners increasingly avoid assigning a single fixed retention percentage to every green roof." },
+          { "label": "G", "text": "The distribution of these interventions matters as much as their individual design. Hundreds of small installations may collectively alter the timing of runoff across a neighbourhood, but only if they are placed where they influence relevant flow paths. Installing attractive rain gardens in locations chosen solely for visibility can produce excellent publicity without addressing the streets that experience the greatest drainage pressure." },
+          { "label": "H", "text": "Maintenance presents an institutional challenge. A conventional underground pipe usually has a clearly identified owner, whereas distributed drainage features may sit on school grounds, private developments or residential streets. Responsibility for removing sediment, replacing plants or checking overflow structures can become unclear. Some municipalities therefore maintain public registers that record not only where each installation is located but also who is responsible for inspecting it." },
+          { "label": "I", "text": "Advocates sometimes emphasise additional benefits such as cooler streets, more vegetation and improved urban appearance. These advantages can strengthen the case for investment, but they complicate comparisons with conventional drainage. A project that costs more purely as a flood-control measure might still be worthwhile if it also provides valued public space. Economic assessment therefore depends partly on which outcomes decision-makers choose to count." },
+          { "label": "J", "text": "The broader shift is from attempting to eliminate rainwater immediately to managing it as it moves through the city. Pipes remain necessary, particularly during exceptional storms, and distributed systems cannot guarantee that flooding will disappear. Their purpose is to reduce and delay pressure on conventional infrastructure while creating more flexible ways of handling rainfall. The most successful programmes combine engineering calculations with long-term maintenance and an understanding of how water behaves across an entire urban area." }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "MATCHING_HEADINGS",
+          "instructions": "Choose the correct heading for each paragraph from the list below. There are more headings than you need.",
+          "fromQuestion": 11,
+          "toQuestion": 15,
+          "configuration": { "optionNumbering": "roman" },
+          "sharedOptions": [
+            { "id": "i", "text": "A system whose performance changes with its condition" },
+            { "id": "ii", "text": "Uncertainty over responsibility for maintenance" },
+            { "id": "iii", "text": "Why increasing underground capacity may not solve the problem" },
+            { "id": "iv", "text": "The disappearance of conventional drainage" },
+            { "id": "v", "text": "Why the location of small installations matters" },
+            { "id": "vi", "text": "Using stored rainwater for household purposes" },
+            { "id": "vii", "text": "A planted method for temporarily holding runoff" },
+            { "id": "viii", "text": "The historical development of public parks" }
+          ],
+          "questions": [
+            { "number": 11, "prompt": "Paragraph B", "answer": "iii", "evidence": "Paragraph B: “a larger pipe does not remove the problem if the water is simply transferred more rapidly to another part of the catchment.”", "explanation": "Increasing pipe capacity may simply move the problem elsewhere." },
+            { "number": 12, "prompt": "Paragraph C", "answer": "vii", "evidence": "Paragraph C: “One response is the rain garden, a shallow planted depression that temporarily receives water from nearby roofs or pavements.”", "explanation": "Paragraph C explains how a planted rain garden temporarily receives runoff." },
+            { "number": 13, "prompt": "Paragraph F", "answer": "i", "evidence": "Paragraph F: “A roof that has already absorbed several days of rain will have less spare capacity than one that is relatively dry.”", "explanation": "Green-roof performance changes according to its current condition and environmental factors." },
+            { "number": 14, "prompt": "Paragraph G", "answer": "v", "evidence": "Paragraph G: “The distribution of these interventions matters as much as their individual design.”", "explanation": "Placement determines whether distributed installations influence important runoff paths." },
+            { "number": 15, "prompt": "Paragraph H", "answer": "ii", "evidence": "Paragraph H: “Responsibility for removing sediment, replacing plants or checking overflow structures can become unclear.”", "explanation": "The paragraph focuses on uncertainty over maintenance responsibility." }
+          ]
+        },
+        {
+          "questionType": "TRUE_FALSE_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the information given in the passage? Write TRUE, FALSE or NOT GIVEN.",
+          "fromQuestion": 16,
+          "toQuestion": 19,
+          "questions": [
+            { "number": 16, "prompt": "Traditional urban drainage was designed to retain rainfall for later use.", "answer": "FALSE", "evidence": "Paragraph A: “rainwater should be removed from streets as rapidly as possible.”", "explanation": "Traditional drainage aimed to remove rainwater quickly, not retain it." },
+            { "number": 17, "prompt": "Fine material can make permeable paving less effective.", "answer": "TRUE", "evidence": "Paragraph D: “Fine sediment can gradually block pores, reducing the rate at which water enters the system.”", "explanation": "Sediment can obstruct the pores needed for infiltration." },
+            { "number": 18, "prompt": "All municipalities keep public registers of distributed drainage installations.", "answer": "NOT_GIVEN", "evidence": "Paragraph H: “Some municipalities therefore maintain public registers that record not only where each installation is located but also who is responsible for inspecting it.”", "explanation": "The passage says some municipalities do this but does not establish what all municipalities do." },
+            { "number": 19, "prompt": "Distributed drainage systems guarantee that flooding will disappear.", "answer": "FALSE", "evidence": "Paragraph J: “distributed systems cannot guarantee that flooding will disappear.”", "explanation": "The passage explicitly contradicts the statement." }
+          ]
+        },
+        {
+          "questionType": "SENTENCE_COMPLETION",
+          "instructions": "Complete the sentences below. Choose ONE WORD ONLY from the passage for each answer.",
+          "fromQuestion": 20,
+          "toQuestion": 23,
+          "configuration": { "wordLimitMax": 1 },
+          "questions": [
+            { "number": 20, "prompt": "A stone layer beneath permeable paving can temporarily [[20]] water.", "answer": "store", "evidence": "Paragraph D: “Beneath the paving, a stone layer may temporarily store water before it enters the soil or drainage network.”", "explanation": "The required word is 'store'." },
+            { "number": 21, "prompt": "A tank contributes more to flood management when empty [[21]] is available before a storm.", "answer": "capacity", "evidence": "Paragraph E: “empty capacity is then available for incoming rainfall.”", "explanation": "Empty capacity allows the tank to receive new rainfall." },
+            { "number": 22, "prompt": "Green-roof performance is influenced by substrate depth, season and [[22]].", "answer": "weather", "evidence": "Paragraph F: “Plant species, substrate depth, season and weather all influence performance.”", "explanation": "Weather is one of the factors explicitly listed." },
+            { "number": 23, "prompt": "Some authorities maintain public [[23]] containing information about drainage installations.", "answer": "registers", "evidence": "Paragraph H: “Some municipalities therefore maintain public registers that record not only where each installation is located but also who is responsible for inspecting it.”", "explanation": "The passage calls these records public registers." }
+          ]
+        }
+      ]
+    },
+    {
+      "sectionNumber": 3,
+      "type": "reading_passage",
+      "label": "Reading Passage 2",
+      "title": "Why Expertise Is Difficult to Preserve",
+      "instructions": "You should spend about 20 minutes on Questions 24–36.",
+      "order": 2,
+      "passage": {
+        "title": "Why Expertise Is Difficult to Preserve",
+        "subtitle": null,
+        "paragraphs": [
+          { "label": "A", "text": "Organisations often assume that knowledge can be preserved by writing it down. Manuals, databases and checklists are indeed valuable, particularly when procedures must be performed consistently. Yet experienced workers frequently know things that are difficult to express as explicit rules. A technician may recognise an abnormal machine sound before an instrument reports a fault, while a nurse may notice subtle changes in a patient's behaviour that are not captured by a standard form. Such knowledge is often described as tacit because it develops through experience and is partly embedded in judgement." },
+          { "label": "B", "text": "The distinction between explicit and tacit knowledge does not mean that experience is mysterious or impossible to share. Rather, some skills are learned most effectively through participation. Watching an expert respond to an unusual situation can reveal how formal rules are interpreted when conditions are imperfect. Apprenticeship systems have long relied on this process, combining instruction with observation, imitation and gradually increasing responsibility." },
+          { "label": "C", "text": "Modern organisations sometimes undermine this transfer unintentionally. When efficiency programmes reduce overlap between employees, there may be fewer opportunities for junior staff to observe experienced colleagues. Remote work can create a similar difficulty if communication becomes limited to scheduled meetings about immediate tasks. Information may still flow efficiently while the informal conversations through which people learn why decisions were made become less frequent." },
+          { "label": "D", "text": "Retirement presents an obvious risk, but simply interviewing departing employees is not a complete solution. People may forget which aspects of their work are unusual because those practices have become routine to them. They may also provide general principles while overlooking the exceptions that make the principles useful. Interviews tend to work better when they focus on concrete cases, difficult incidents and decisions whose outcomes were uncertain." },
+          { "label": "E", "text": "Digital systems can help by connecting documents, discussion records and examples of previous work. Searchable archives allow staff to find how similar problems were handled before. However, collecting more information can create a new problem: an archive becomes less useful when users cannot judge which material remains current or why an earlier decision was appropriate. Preservation therefore requires curation as well as storage." },
+          { "label": "F", "text": "Some firms establish communities of practice in which people performing related work meet regularly across formal departmental boundaries. These groups can exchange methods and discuss unusual cases without requiring every conversation to produce an official policy. Their success depends on trust. Employees are less likely to describe mistakes or uncertainty if participation is treated as a performance assessment." },
+          { "label": "G", "text": "Simulation is particularly valuable where rare events matter. Pilots, emergency teams and industrial operators can practise situations that would be unsafe or impractical to recreate in normal work. A simulation does not reproduce reality perfectly, but it provides an opportunity to make decisions under pressure and then examine those decisions afterwards. The discussion following an exercise may be more educational than the simulated event itself." },
+          { "label": "H", "text": "There is also a danger in preserving expertise too successfully. Established routines may reflect conditions that no longer exist, and respected experts can unintentionally discourage alternative approaches. Organisations therefore need mechanisms for questioning inherited practice. New employees sometimes notice assumptions that experienced workers no longer see because they have become accustomed to them." },
+          { "label": "I", "text": "The objective is not to capture every thought held by experienced workers. Such a goal would be both impossible and wasteful. A more realistic strategy identifies knowledge whose loss would create significant operational risk, then uses several methods to preserve or reproduce it. Documentation, mentoring, case discussion, simulation and carefully designed digital systems each address different parts of the problem." },
+          { "label": "J", "text": "Knowledge preservation is therefore not a one-time activity carried out when an employee announces retirement. It depends on the everyday structure of work: whether people have time to explain decisions, whether questions are welcomed and whether records remain connected to the context in which they were produced. Organisations preserve expertise most effectively when learning is treated as part of normal operations rather than as an emergency response to departure." }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "MATCHING_INFORMATION",
+          "instructions": "Which paragraph contains the following information? Write the correct letter, A-J. You may use any letter more than once.",
+          "fromQuestion": 24,
+          "toQuestion": 28,
+          "sharedOptions": [
+            { "id": "A", "text": "Paragraph A" },
+            { "id": "B", "text": "Paragraph B" },
+            { "id": "C", "text": "Paragraph C" },
+            { "id": "D", "text": "Paragraph D" },
+            { "id": "E", "text": "Paragraph E" },
+            { "id": "F", "text": "Paragraph F" },
+            { "id": "G", "text": "Paragraph G" },
+            { "id": "H", "text": "Paragraph H" },
+            { "id": "I", "text": "Paragraph I" },
+            { "id": "J", "text": "Paragraph J" }
+          ],
+          "questions": [
+            { "number": 24, "prompt": "a situation in which increasing efficiency may reduce opportunities for learning", "answer": "C", "evidence": "Paragraph C: “When efficiency programmes reduce overlap between employees, there may be fewer opportunities for junior staff to observe experienced colleagues.”", "explanation": "Reducing employee overlap can unintentionally reduce observational learning." },
+            { "number": 25, "prompt": "a reason why preserving established expertise can sometimes be harmful", "answer": "H", "evidence": "Paragraph H: “Established routines may reflect conditions that no longer exist”", "explanation": "Old expertise can preserve assumptions that are no longer appropriate." },
+            { "number": 26, "prompt": "a method that is especially useful for events that rarely occur", "answer": "G", "evidence": "Paragraph G: “Simulation is particularly valuable where rare events matter.”", "explanation": "Simulation allows rare or unsafe situations to be practised." },
+            { "number": 27, "prompt": "why a large collection of stored information may become difficult to use", "answer": "E", "evidence": "Paragraph E: “an archive becomes less useful when users cannot judge which material remains current or why an earlier decision was appropriate.”", "explanation": "Stored information loses value when users cannot assess its current relevance or original context." },
+            { "number": 28, "prompt": "a recommendation to focus on knowledge whose disappearance could create serious consequences", "answer": "I", "evidence": "Paragraph I: “A more realistic strategy identifies knowledge whose loss would create significant operational risk”", "explanation": "The paragraph recommends prioritising knowledge associated with significant operational risk." }
+          ]
+        },
+        {
+          "questionType": "YES_NO_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the views of the writer? Write YES, NO or NOT GIVEN.",
+          "fromQuestion": 29,
+          "toQuestion": 32,
+          "questions": [
+            { "number": 29, "prompt": "All useful professional knowledge can be converted into explicit written rules.", "answer": "NO", "evidence": "Paragraph A: “experienced workers frequently know things that are difficult to express as explicit rules.”", "explanation": "The writer explicitly states that some experienced knowledge is difficult to express as rules." },
+            { "number": 30, "prompt": "Participation and observation can be effective ways of developing certain skills.", "answer": "YES", "evidence": "Paragraph B: “some skills are learned most effectively through participation.”", "explanation": "The writer supports learning through participation and observing experts." },
+            { "number": 31, "prompt": "Employees working remotely are less productive than employees working in offices.", "answer": "NOT_GIVEN", "evidence": "Paragraph C: “Remote work can create a similar difficulty if communication becomes limited to scheduled meetings about immediate tasks.”", "explanation": "The passage discusses knowledge transfer, not comparative productivity." },
+            { "number": 32, "prompt": "Communities of practice may be less effective if workers believe their comments are being used to assess their performance.", "answer": "YES", "evidence": "Paragraph F: “Employees are less likely to describe mistakes or uncertainty if participation is treated as a performance assessment.”", "explanation": "Performance assessment can discourage the openness needed for effective knowledge sharing." }
+          ]
+        },
+        {
+          "questionType": "MCQ_SINGLE",
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "fromQuestion": 33,
+          "toQuestion": 36,
+          "questions": [
+            {
+              "number": 33,
+              "prompt": "What problem with retirement interviews does the writer identify?",
+              "options": [
+                { "id": "A", "text": "Employees deliberately give incorrect information." },
+                { "id": "B", "text": "Routine expertise may no longer seem noteworthy to the employee." },
+                { "id": "C", "text": "Managers rarely have permission to conduct them." },
+                { "id": "D", "text": "They require expensive specialist technology." }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph D: “People may forget which aspects of their work are unusual because those practices have become routine to them.”",
+              "explanation": "Experienced employees may overlook knowledge that has become routine."
+            },
+            {
+              "number": 34,
+              "prompt": "What does the writer suggest about digital archives?",
+              "options": [
+                { "id": "A", "text": "They remove the need for human judgement." },
+                { "id": "B", "text": "They should preserve every possible document." },
+                { "id": "C", "text": "Their contents require curation as well as storage." },
+                { "id": "D", "text": "They are useful only for new employees." }
+              ],
+              "answer": "C",
+              "evidence": "Paragraph E: “Preservation therefore requires curation as well as storage.”",
+              "explanation": "Information needs to be maintained and contextualised, not merely stored."
+            },
+            {
+              "number": 35,
+              "prompt": "What is an important benefit of simulation?",
+              "options": [
+                { "id": "A", "text": "It prevents real emergencies from occurring." },
+                { "id": "B", "text": "It allows decisions made under unusual conditions to be examined." },
+                { "id": "C", "text": "It eliminates the need for practical experience." },
+                { "id": "D", "text": "It automatically produces official procedures." }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph G: “it provides an opportunity to make decisions under pressure and then examine those decisions afterwards.”",
+              "explanation": "Simulation permits both decision-making under pressure and subsequent review."
+            },
+            {
+              "number": 36,
+              "prompt": "Which statement best expresses the writer's overall argument?",
+              "options": [
+                { "id": "A", "text": "Expertise is best preserved through several methods integrated into everyday work." },
+                { "id": "B", "text": "Experienced workers should continue working beyond retirement." },
+                { "id": "C", "text": "Digital storage is the only reliable method of preserving expertise." },
+                { "id": "D", "text": "Tacit knowledge should replace written procedures." }
+              ],
+              "answer": "A",
+              "evidence": "Paragraph J: “Organisations preserve expertise most effectively when learning is treated as part of normal operations rather than as an emergency response to departure.”",
+              "explanation": "The passage recommends combining preservation methods with routine organisational learning."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sectionNumber": 4,
+      "type": "reading_passage",
+      "label": "Reading Passage 3",
+      "title": "The Problem of Predicting Human Movement",
+      "instructions": "You should spend about 20 minutes on Questions 37–50.",
+      "order": 3,
+      "passage": {
+        "title": "The Problem of Predicting Human Movement",
+        "subtitle": null,
+        "paragraphs": [
+          { "label": "A", "text": "Forecasting how people move through cities appears at first to be a problem of measurement. Transport authorities count passengers, record road traffic and increasingly collect anonymised location data. Yet prediction requires more than knowing where people travelled yesterday. A transport network changes the choices available to its users, while users in turn respond to congestion, cost, housing, employment and one another. The system being predicted is therefore partly altered by the decisions made on the basis of previous predictions." },
+          { "label": "B", "text": "Traditional transport models often divide a city into zones and estimate journeys between them. Such models can be useful for major infrastructure decisions, but they simplify individual behaviour. Two residents living on the same street may make entirely different journeys because of their occupations, family obligations or ability to work remotely. Aggregation makes modelling manageable while concealing some of the variation that planners may later discover to be important." },
+          { "label": "C", "text": "Mobile-device data appears to offer a solution because it can reveal movement at an enormous scale. However, scale is not the same as representativeness. People differ in whether they carry devices, enable services or appear in a particular dataset. A technically impressive map can therefore contain systematic gaps. Researchers must ask not only how many observations they possess but also whose movement those observations describe poorly." },
+          { "label": "D", "text": "Prediction becomes especially difficult when a new transport option is introduced. A railway may initially attract passengers from buses and cars, but over time it can also influence where homes and businesses are built. Journeys that did not previously exist may then appear. A model based entirely on existing travel patterns can underestimate these longer-term responses because the intervention changes the geography from which future behaviour emerges." },
+          { "label": "E", "text": "Pricing adds another source of uncertainty. A fare increase may discourage some journeys, shift others to different times or encourage travellers to use another mode. Responses vary according to income, purpose and available alternatives. Consequently, a single average measure of price sensitivity may be convenient for calculation while performing poorly for particular groups." },
+          { "label": "F", "text": "Models are sometimes criticised when forecasts do not match observed outcomes precisely. This criticism can be justified when assumptions were hidden or poor data were ignored, but perfect prediction is an unrealistic standard. Forecasts are conditional statements about what may happen under specified assumptions. Their usefulness depends partly on whether decision-makers understand those conditions rather than treating a central estimate as a promise." },
+          { "label": "G", "text": "Scenario analysis responds to this problem by exploring several plausible futures. Instead of predicting one exact level of demand twenty years ahead, planners might examine combinations of population growth, fuel prices, remote working and land-use policy. The objective is not to declare all outcomes equally likely. It is to discover whether a proposed investment remains useful across futures that cannot yet be distinguished confidently." },
+          { "label": "H", "text": "There are limits to adding complexity. A model containing thousands of variables may reproduce historical data extremely closely while becoming difficult to interpret. It can also fit accidental features of the past that will not recur. Simpler models may omit detail but make causal assumptions easier to inspect. Choosing between them is not simply a contest in which the model with the greatest amount of mathematics wins." },
+          { "label": "I", "text": "Public communication creates a further challenge. A range such as 80,000 to 120,000 future passengers can be harder to communicate than a single figure of 100,000. Political debate and media reporting often favour the apparent clarity of the latter. Yet suppressing uncertainty can make forecasts seem more reliable than they are and later undermine trust when actual demand differs." },
+          { "label": "J", "text": "Some researchers therefore argue that transport forecasting should be judged by how well it supports decisions, not solely by point accuracy. If two possible projects perform similarly under expected conditions but one fails badly under several plausible alternatives, information about uncertainty may be more valuable than a marginal improvement in the central forecast. This shifts attention from finding a perfect prediction towards designing choices that remain acceptable when prediction is imperfect." },
+          { "label": "K", "text": "The broader lesson extends beyond transport. Forecasts are tools linking evidence to decisions under uncertainty. More data and better algorithms can improve them, but neither removes the fact that human beings respond to the systems built around them. Responsible forecasting therefore combines measurement with explicit assumptions, alternative scenarios and continued observation after a policy or infrastructure project has begun to change behaviour." }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "MATCHING_HEADINGS",
+          "instructions": "Choose the correct heading for each paragraph from the list below. There are more headings than you need.",
+          "fromQuestion": 37,
+          "toQuestion": 41,
+          "configuration": { "optionNumbering": "roman" },
+          "sharedOptions": [
+            { "id": "i", "text": "When an intervention changes future demand itself" },
+            { "id": "ii", "text": "The danger of assuming large datasets represent everyone" },
+            { "id": "iii", "text": "Why complexity does not automatically produce a better model" },
+            { "id": "iv", "text": "The advantages of publishing only one forecast" },
+            { "id": "v", "text": "Testing decisions against several possible futures" },
+            { "id": "vi", "text": "Different responses to changes in cost" },
+            { "id": "vii", "text": "The origins of transport modelling" },
+            { "id": "viii", "text": "A complete solution to uncertainty" }
+          ],
+          "questions": [
+            { "number": 37, "prompt": "Paragraph C", "answer": "ii", "evidence": "Paragraph C: “However, scale is not the same as representativeness.”", "explanation": "Large datasets can still systematically underrepresent some groups." },
+            { "number": 38, "prompt": "Paragraph D", "answer": "i", "evidence": "Paragraph D: “the intervention changes the geography from which future behaviour emerges.”", "explanation": "New infrastructure can alter settlement and travel patterns, changing the behaviour being predicted." },
+            { "number": 39, "prompt": "Paragraph E", "answer": "vi", "evidence": "Paragraph E: “Responses vary according to income, purpose and available alternatives.”", "explanation": "Different groups respond differently to changes in transport prices." },
+            { "number": 40, "prompt": "Paragraph G", "answer": "v", "evidence": "Paragraph G: “Scenario analysis responds to this problem by exploring several plausible futures.”", "explanation": "Scenario analysis tests investments against several possible future conditions." },
+            { "number": 41, "prompt": "Paragraph H", "answer": "iii", "evidence": "Paragraph H: “There are limits to adding complexity.”", "explanation": "A more complex model may fit history closely while becoming harder to interpret and overfitting accidental features." }
+          ]
+        },
+        {
+          "questionType": "TRUE_FALSE_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the information given in the passage? Write TRUE, FALSE or NOT GIVEN.",
+          "fromQuestion": 42,
+          "toQuestion": 45,
+          "questions": [
+            { "number": 42, "prompt": "People who live on the same street necessarily make similar journeys.", "answer": "FALSE", "evidence": "Paragraph B: “Two residents living on the same street may make entirely different journeys”", "explanation": "The passage explicitly gives an example of nearby residents making very different journeys." },
+            { "number": 43, "prompt": "Mobile-device datasets may fail to represent some people's movements adequately.", "answer": "TRUE", "evidence": "Paragraph C: “A technically impressive map can therefore contain systematic gaps.”", "explanation": "Differences in device use and dataset inclusion can create systematic gaps." },
+            { "number": 44, "prompt": "The passage states the exact percentage by which a new railway increases nearby property prices.", "answer": "NOT_GIVEN", "evidence": "Paragraph D: “A railway may initially attract passengers from buses and cars, but over time it can also influence where homes and businesses are built.”", "explanation": "The passage discusses land-use effects but provides no percentage for property-price changes." },
+            { "number": 45, "prompt": "A transport forecast should be treated as a guaranteed description of future demand.", "answer": "FALSE", "evidence": "Paragraph F: “Forecasts are conditional statements about what may happen under specified assumptions.”", "explanation": "Forecasts are conditional, not guaranteed predictions." }
+          ]
+        },
+        {
+          "questionType": "MCQ_SINGLE",
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "fromQuestion": 46,
+          "toQuestion": 48,
+          "questions": [
+            {
+              "number": 46,
+              "prompt": "Why does the writer mention a forecast range of 80,000 to 120,000 passengers?",
+              "options": [
+                { "id": "A", "text": "To show that uncertainty ranges can be harder to communicate than a single figure" },
+                { "id": "B", "text": "To show that 100,000 passengers is certain to be correct" },
+                { "id": "C", "text": "To demonstrate that transport models normally fail" },
+                { "id": "D", "text": "To argue that uncertainty should be removed from public reports" }
+              ],
+              "answer": "A",
+              "evidence": "Paragraph I: “A range such as 80,000 to 120,000 future passengers can be harder to communicate than a single figure of 100,000.”",
+              "explanation": "The example illustrates the communication advantage of a single figure despite the information lost by hiding uncertainty."
+            },
+            {
+              "number": 47,
+              "prompt": "According to paragraph J, what may be more valuable than a small improvement in central forecast accuracy?",
+              "options": [
+                { "id": "A", "text": "Removing all alternative projects" },
+                { "id": "B", "text": "Knowing how projects perform under different plausible conditions" },
+                { "id": "C", "text": "Selecting the project with the highest initial cost" },
+                { "id": "D", "text": "Waiting until uncertainty has disappeared" }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph J: “information about uncertainty may be more valuable than a marginal improvement in the central forecast.”",
+              "explanation": "Robust performance across plausible alternatives may matter more than slightly improving the central estimate."
+            },
+            {
+              "number": 48,
+              "prompt": "Which statement best reflects the writer's overall view of transport forecasting?",
+              "options": [
+                { "id": "A", "text": "More data will eventually remove uncertainty completely." },
+                { "id": "B", "text": "Forecasting is useless because people change their behaviour." },
+                { "id": "C", "text": "Forecasts should support robust decisions while making uncertainty explicit." },
+                { "id": "D", "text": "Only simple mathematical models should be used." }
+              ],
+              "answer": "C",
+              "evidence": "Paragraph K: “Responsible forecasting therefore combines measurement with explicit assumptions, alternative scenarios and continued observation”",
+              "explanation": "The writer supports forecasting while arguing that assumptions and uncertainty must remain explicit."
+            }
+          ]
+        },
+        {
+          "questionType": "SENTENCE_COMPLETION",
+          "instructions": "Complete the sentences below. Choose ONE WORD ONLY from the passage for each answer.",
+          "fromQuestion": 49,
+          "toQuestion": 50,
+          "configuration": { "wordLimitMax": 1 },
+          "questions": [
+            { "number": 49, "prompt": "Aggregation makes modelling manageable while concealing some individual [[49]].", "answer": "variation", "evidence": "Paragraph B: “Aggregation makes modelling manageable while concealing some of the variation that planners may later discover to be important.”", "explanation": "The required word is variation." },
+            { "number": 50, "prompt": "Responsible forecasting combines measurement with explicit assumptions and alternative [[50]].", "answer": "scenarios", "evidence": "Paragraph K: “Responsible forecasting therefore combines measurement with explicit assumptions, alternative scenarios and continued observation”", "explanation": "The passage uses the phrase alternative scenarios." }
+          ]
+        }
+      ]
+    },
+    {
+      "sectionNumber": 5,
+      "type": "writing_task",
+      "label": "Task 1",
+      "title": "Writing Task 1",
+      "instructions": "You should spend about 20 minutes on this task. Write at least 150 words.",
+      "order": 4,
+      "questionGroups": [
+        {
+          "questionType": "WRITING_TASK_1",
+          "instructions": "You should spend about 20 minutes on this task. Write at least 150 words.",
+          "fromQuestion": 51,
+          "toQuestion": 51,
+          "configuration": { "minimumWords": 150 },
+          "questions": [
+            {
+              "number": 51,
+              "prompt": "[Placeholder — the source file had no Task 1 prompt. Paste the real Task 1 question here before publishing.]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sectionNumber": 6,
+      "type": "writing_task",
+      "label": "Task 2",
+      "title": "Writing Task 2",
+      "instructions": "You should spend about 40 minutes on this task. Write at least 250 words.",
+      "order": 5,
+      "questionGroups": [
+        {
+          "questionType": "WRITING_TASK_2",
+          "instructions": "You should spend about 40 minutes on this task. Write at least 250 words.",
+          "fromQuestion": 52,
+          "toQuestion": 52,
+          "configuration": { "minimumWords": 250 },
+          "questions": [
+            {
+              "number": 52,
+              "prompt": "[Placeholder — the source file had no Task 2 prompt. Paste the real Task 2 question here before publishing.]"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
