@@ -305,81 +305,89 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
 
         {state.components.length > 1 ? (
           <div className="mock-progress" aria-label={`Section ${state.activeComponentIndex + 1} of ${state.components.length}`}>
-            {state.components.map((component, index) => (
-              <span key={component.sessionId} style={{ display: 'contents' }}>
-                {index > 0 ? <span className="mock-progress__sep" aria-hidden="true" /> : null}
-                <span
-                  className={`mock-progress__step ${
-                    index < state.activeComponentIndex
-                      ? 'mock-progress__step--done'
-                      : index === state.activeComponentIndex
-                        ? 'mock-progress__step--current'
-                        : ''
-                  }`}
-                >
-                  <span aria-hidden="true">{index < state.activeComponentIndex ? '✓' : index === state.activeComponentIndex ? '●' : '○'}</span>
-                  {SKILL_LABELS[component.skill] ?? component.label}
+            {state.components.map((component, index) => {
+              const stepState =
+                index < state.activeComponentIndex ? 'done' : index === state.activeComponentIndex ? 'current' : 'upcoming';
+              return (
+                <span key={component.sessionId} style={{ display: 'contents' }}>
+                  {index > 0 ? <span className="mock-progress__sep" aria-hidden="true" /> : null}
+                  <span
+                    className={`mock-progress__step ${
+                      stepState === 'done' ? 'mock-progress__step--done' : stepState === 'current' ? 'mock-progress__step--current' : ''
+                    }`}
+                    aria-current={stepState === 'current' ? 'step' : undefined}
+                    title={`${SKILL_LABELS[component.skill] ?? component.label} — ${
+                      stepState === 'done' ? 'completed' : stepState === 'current' ? 'in progress' : 'up next'
+                    }`}
+                  >
+                    <span className="mock-progress__icon" aria-hidden="true">
+                      {stepState === 'done' ? <Icon name="check" size={11} strokeWidth={3} /> : null}
+                    </span>
+                    {SKILL_LABELS[component.skill] ?? component.label}
+                  </span>
                 </span>
-              </span>
-            ))}
+              );
+            })}
           </div>
         ) : null}
 
-        <div className="exam-topbar__spacer" />
+        <div className="exam-topbar__actions">
+          <span className="exam-topbar__save nowrap">{saveLabel}</span>
 
-        <span className="tiny muted nowrap">{saveLabel}</span>
-
-        {state.integrity.policy.showIndicator ? (
-          <span
-            className={`integrity-indicator ${
-              state.integrity.warningLevel === 'CRITICAL'
-                ? 'integrity-indicator--critical'
-                : state.integrity.warningLevel === 'WARNING'
-                  ? 'integrity-indicator--warning'
-                  : ''
-            }`}
-            title={state.integrity.notice}
-          >
+          {state.integrity.policy.showIndicator ? (
             <span
-              className={`dot ${
+              className={`integrity-indicator ${
                 state.integrity.warningLevel === 'CRITICAL'
-                  ? 'dot--critical'
+                  ? 'integrity-indicator--critical'
                   : state.integrity.warningLevel === 'WARNING'
-                    ? 'dot--warning'
+                    ? 'integrity-indicator--warning'
                     : ''
               }`}
-            />
-            {state.integrity.counted === 0 ? 'Monitoring active' : `${state.integrity.counted} event(s) recorded`}
-          </span>
-        ) : null}
+              title={state.integrity.notice}
+            >
+              <span
+                className={`dot ${
+                  state.integrity.warningLevel === 'CRITICAL'
+                    ? 'dot--critical'
+                    : state.integrity.warningLevel === 'WARNING'
+                      ? 'dot--warning'
+                      : ''
+                }`}
+              />
+              {state.integrity.counted === 0 ? 'Monitoring active' : `${state.integrity.counted} event(s) recorded`}
+            </span>
+          ) : null}
 
-        {!isWriting ? (
-          <span className="exam-topbar__count nowrap" title="Questions answered in this test">
-            {answeredNumbers.size}/{objectiveQuestions.length} answered
-          </span>
-        ) : null}
+          {!isWriting ? (
+            <span className="exam-topbar__count nowrap" title="Questions answered in this test">
+              <Icon name="check" size={13} strokeWidth={2.6} />
+              <strong>{answeredNumbers.size}</strong>/{objectiveQuestions.length} answered
+            </span>
+          ) : null}
 
-        <button
-          type="button"
-          className="btn btn--sm exam-topbar__vocab nowrap"
-          onClick={() => navigate('/vocabulary')}
-          title="Vocabulary notebook"
-        >
-          <Icon name="book" size={14} />
-          Học từ vựng
-        </button>
+          <button
+            type="button"
+            className="btn btn--sm exam-topbar__vocab nowrap"
+            onClick={() => navigate('/vocabulary')}
+            title="Vocabulary notebook"
+          >
+            <Icon name="book" size={14} />
+            Học từ vựng
+          </button>
 
-        {session.sessionRemainingSeconds !== null ? (
-          <span className={`exam-timer ${timerTone}`} aria-live="off">
-            {formatClock(session.sessionRemainingSeconds)}
-          </span>
-        ) : (
-          <span className="tiny muted">Untimed</span>
-        )}
+          {session.sessionRemainingSeconds !== null ? (
+            <span className={`exam-timer ${timerTone}`} aria-live="off" title="Time remaining">
+              <Icon name="clock" size={16} strokeWidth={2.1} />
+              {formatClock(session.sessionRemainingSeconds)}
+            </span>
+          ) : (
+            <span className="exam-topbar__untimed nowrap">Untimed</span>
+          )}
 
-        <Button variant="primary" onClick={() => setSubmitOpen(true)} disabled={submitting}>
-          Submit test
-        </Button>
+          <Button variant="primary" onClick={() => setSubmitOpen(true)} disabled={submitting}>
+            Submit test
+          </Button>
+        </div>
       </header>
 
       {state.integrity.policy.requireFullscreen && !session.isFullscreen ? (
@@ -445,7 +453,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
                   <span className="exam-sections__tab-name">
                     {progress?.status === 'COMPLETED' ? <Icon name="check" size={14} strokeWidth={2.6} /> : null}
                     {!open ? <Icon name="lock" size={13} /> : null}
-                    {section.label}
+                    <span className="exam-sections__tab-label">{section.label}</span>
                   </span>
                   <span className="exam-sections__tab-count">
                     {section.skill === 'WRITING'
@@ -461,7 +469,9 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
                       className={`exam-sections__tab-timer ${
                         progress.remainingSeconds <= 60 ? 'exam-sections__tab-timer--critical' : ''
                       }`}
+                      title="Time left in this part"
                     >
+                      <Icon name="clock" size={11} strokeWidth={2.4} />
                       {formatClock(progress.remainingSeconds)}
                     </span>
                   ) : (
