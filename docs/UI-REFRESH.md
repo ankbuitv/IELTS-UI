@@ -132,14 +132,80 @@ True/False question repeating three full-width option rows underneath it.
   footer notice — and with no React console error. This proves the tree renders
   and the routes resolve; it does not evaluate layout, so pixel work still needs
   a browser.
+- **Exam chrome check (second pass).** A live attempt against a 3-passage,
+  40-question reading test (built through the Imports pipeline from
+  `docs/samples/cities-knowledge-and-adaptation.json`) renders: three section
+  tabs with their own counts, the sticky footer with palette / score / section
+  tabs / Previous / Next, and a palette drawer holding all 40 numbered cells
+  grouped under Passage 1–3 — with no React console error.
+- **Review check.** The released result of the seeded reading attempt renders 13
+  **Why these answers** panels with their evidence, explanation and answer, next
+  to the `4 / 13` score.
 - The deployed Worker is smoke-tested on every deploy by the same `/api/health`
   probe (`schemaReady: true`) used by `deploy/github-actions-deploy.yml`.
 
-## 6. Deliberately not changed
+## 6. The exam chrome, sections and study tools (second pass)
+
+The question panel was only half of the exam complaint. The chrome around it was
+still a generic app header, and the test did not *look* divided into parts. This
+pass rebuilt the frame and added the study features the reference has.
+
+### 6.1 A test header, not an app header
+
+- An exit control on the left opens **Leave the test?** — it states that answers
+  are already saved, that timed sections keep running, and that leaving the tab
+  is recorded, then routes back to the student workspace.
+- The task is named ("Test in progress" eyebrow + the test title), with the
+  answered counter (`12/40 answered`), the timer, the integrity indicator and
+  Submit. The red **Học từ vựng** button opens the vocabulary notebook.
+- Below it, a **section strip** lists every section as a tab with its own
+  `answered/total` chip, a completed tick, a lock for parts that are not open
+  yet and the per-section timer while that part is running. Locked parts cannot
+  be opened by clicking; the button explains why in its tooltip.
+
+### 6.2 A sticky exam footer
+
+The reference keeps navigation at the bottom of the screen, so the exam does
+too: a palette button (the question grid), **All questions**, the running score
+`n / total`, one tab per section (`1`, `2`, `3`, and the current one expands to
+its label and count), then **Previous** / **Next** — or **Continue to Part 3**
+when the section policy moves the candidate on, which still asks for a second
+confirming click.
+
+**On "Làm đúng x / 40".** The reference counts correct answers while the test is
+running because its client holds the key. Our payloads deliberately never carry
+answer keys into a live attempt (they are released only with the result), so the
+header and footer count *answered* questions and the accuracy figure appears on
+the result screen. Shipping a live correct-answer counter would hand the key to
+the browser.
+
+### 6.3 Transcript as a conversation
+
+Listening review now renders the transcript as alternating chat bubbles with a
+speaker avatar, the line, and the timestamp — the layout the reference uses — and
+the segments keep their `segment-<id>` anchors, so an explanation that cites
+`segment:ls1-03` can scroll to it. Transcripts remain review material: the live
+attempt payload still sends `transcript: null`.
+
+### 6.4 Explanations under the review
+
+The released review gained a **Why these answers** card: one block per question
+with the number, the prompt, the candidate's answer, the accepted answer, and a
+**Explanation** panel carrying the evidence, the reasoning and (for Listening) a
+**Listen from here** button that seeks the section audio to the cited segment.
+
+### 6.5 The vocabulary notebook
+
+**Học từ vựng** now opens a real feature rather than a dead end: a per-candidate
+word list (D1 table `vocabulary_entries`, unique on `(user_id, term)`) with
+add / edit meaning / delete, search, a "words still to review" prompt and a
+self-test flip card that records how often a word was reviewed. Mutations are
+CSRF-protected like every other write. The authoring side is documented in
+[`docs/QUESTION-AUTHORING.md`](QUESTION-AUTHORING.md).
+
+## 7. Deliberately not changed
 
 - No new runtime dependency (the icon set and the tokens are hand-written).
-- No layout rewrites of the exam, admin or teacher screens: they inherit the
-  tokens. Restructuring them without a browser to check the result would trade a
-  known-good layout for an unverified one.
 - No dark mode. The product is a light workspace by decision; a theme toggle
   would double the surface area of every screen for no requirement behind it.
+- Still no live correct-answer counter, for the reason in §6.2.

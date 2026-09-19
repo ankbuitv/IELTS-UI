@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { CandidateQuestion, CandidateSection } from '@shared/question-types';
 import type { AttemptSectionState } from '@shared/candidate';
 import { DEFAULT_SECTION_POLICY, type SectionPolicy } from '@shared/sections';
 import { Button, Modal, Notice } from '../ui';
+import { BrandLogo } from '../BrandLogo';
+import { Icon } from '../Icon';
 import { PassagePane } from './PassagePane';
 import { AudioPlayer } from './AudioPlayer';
-import { QuestionGroupHeader, GroupOptionBank, QuestionNavStrip, QuestionRenderer } from './QuestionRenderer';
+import { QuestionGroupHeader, GroupOptionBank, QuestionRenderer } from './QuestionRenderer';
+import { TranscriptView } from './TranscriptView';
 import { WritingEditor } from './WritingEditor';
 import { formatClock, MODE_LABELS, SKILL_LABELS } from '../../lib/format';
 import { useToast } from '../ui';
@@ -14,13 +18,16 @@ import type { ExamSessionApi } from './useExamSession';
 export function ExamShell({ session, onFinished }: { session: ExamSessionApi; onFinished: () => void }) {
   const { state } = session;
   const toast = useToast();
+  const navigate = useNavigate();
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<'PASSAGE' | 'QUESTIONS'>('QUESTIONS');
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showUnansweredWarning, setShowUnansweredWarning] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [exitOpen, setExitOpen] = useState(false);
   const [advancedToNext, setAdvancedToNext] = useState(false);
+  const [highlightSegmentId] = useState<string | null>(null);
   const questionRefs = useRef<Map<string, HTMLElement>>(new Map());
   const warnedRef = useRef<string | null>(null);
 
@@ -133,6 +140,8 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
     (element?.querySelector('input, select, textarea') as HTMLElement | null)?.focus();
   }, [allQuestions]);
 
+
+
   const switchToSection = useCallback(
     (sectionId: string) => {
       if (!isSectionOpen(sectionId)) {
@@ -145,6 +154,21 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
       if (firstQuestion) setCurrentQuestionId(firstQuestion.id);
     },
     [isSectionOpen, questionsBySection, toast],
+  );
+
+  /** Step to the next / previous question, crossing into the neighbouring part. */
+  const stepQuestion = useCallback(
+    (direction: 1 | -1) => {
+      const ordered = sections.flatMap((section) => questionsBySection.get(section.id) ?? []);
+      if (ordered.length === 0) return;
+      const index = ordered.findIndex((question) => question.id === currentQuestionId);
+      const next = ordered[index === -1 ? 0 : Math.min(ordered.length - 1, Math.max(0, index + direction))];
+      if (!next) return;
+      const owner = sections.find((section) => section.questionNumbers.includes(next.number));
+      if (owner && owner.id !== activeSection?.id) switchToSection(owner.id);
+      jumpToQuestion(next.number);
+    },
+    [sections, questionsBySection, currentQuestionId, activeSection?.id, switchToSection, jumpToQuestion],
   );
 
   // Keep the picked section aligned with server-driven auto-advance (e.g. a
@@ -248,10 +272,25 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
   const activeProgress = activeSection ? sectionProgress.find((row) => row.sectionId === activeSection.id) ?? null : null;
 
   return (
-    <div className="exam-root">
+    <div className={`exam-root ${allQuestions.length > 0 ? 'exam-root--has-bottombar' : ''}`}>
       <header className="exam-topbar">
-        <div>
-          <div className="exam-topbar__title">{state.testTitle}</div>
+        <button
+          type="button"
+          className="exam-topbar__icon exam-topbar__icon--exit"
+          onClick={() => setExitOpen(true)}
+          aria-label="Leave the test"
+          title="Leave the test"
+        >
+          <Icon name="close" size={18} />
+        </button>
+
+        <BrandLogo height={28} />
+
+        <div className="exam-topbar__heading">
+          <div className="exam-topbar__title">
+            <span className="exam-topbar__eyebrow">Test in progress</span>
+            {state.testTitle}
+          </div>
           <div className="exam-topbar__sub">
             {state.components[state.activeComponentIndex]
               ? `${SKILL_LABELS[state.components[state.activeComponentIndex]!.skill]} · ${MODE_LABELS[state.mode]}`
@@ -311,18 +350,20 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
         ) : null}
 
         {!isWriting ? (
-          <div className="exam-topbar__progress nowrap" title="Answered questions in this test">
-            <span className="tiny muted">
-              Answered {answeredNumbers.size}/{objectiveQuestions.length}
-            </span>
-            <div className="bar" style={{ width: 92, marginTop: 4 }}>
-              <div
-                className="bar__fill"
-                style={{ width: `${objectiveQuestions.length > 0 ? (answeredNumbers.size / objectiveQuestions.length) * 100 : 0}%` }}
-              />
-            </div>
-          </div>
+          <span className="exam-topbar__count nowrap" title="Questions answered in this test">
+            {answeredNumbers.size}/{objectiveQuestions.length} answered
+          </span>
         ) : null}
+
+        <button
+          type="button"
+          className="btn btn--sm exam-topbar__vocab nowrap"
+          onClick={() => navigate('/vocabulary')}
+          title="Vocabulary notebook"
+        >
+          <Icon name="book" size={14} />
+          Học từ vựng
+        </button>
 
         {session.sessionRemainingSeconds !== null ? (
           <span className={`exam-timer ${timerTone}`} aria-live="off">
@@ -367,55 +408,65 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
       ) : null}
 
       {sections.length > 1 ? (
-        <nav className="section-nav" aria-label="Test sections">
-          {sections.map((section) => {
-            const progress = sectionProgress.find((row) => row.sectionId === section.id) ?? null;
-            const sectionQuestionIds = questionsBySection.get(section.id) ?? [];
-            const answeredInSection =
-              progress?.answeredCount ??
-              sectionQuestionIds.filter((question) => answeredNumbers.has(question.number)).length;
-            const totalInSection = progress?.totalQuestions ?? sectionQuestionIds.length;
-            const open = isSectionOpen(section.id);
-            return (
-              <button
-                key={section.id}
-                type="button"
-                className={[
-                  'section-nav__chip',
-                  section.id === activeSection?.id ? 'section-nav__chip--current' : '',
-                  progress?.status === 'COMPLETED' ? 'section-nav__chip--done' : '',
-                  !open ? 'section-nav__chip--locked' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                onClick={() => switchToSection(section.id)}
-                aria-current={section.id === activeSection?.id ? 'true' : undefined}
-                title={open ? section.title || section.label : 'This part is not open yet'}
-              >
-                <span className="section-nav__label">
-                  {section.id === activeSection?.id ? '●' : progress?.status === 'COMPLETED' ? '✓' : open ? '○' : '🔒'} {section.label}
-                </span>
-                <span className="section-nav__count">
-                  {section.skill === 'WRITING'
-                    ? state.writing.some((entry) => section.writingTasks.some((task) => task.id === entry.questionId && entry.text.trim().length > 0))
-                      ? 'done'
-                      : '—'
-                    : `${answeredInSection}/${totalInSection}`}
-                </span>
-                {progress?.status === 'IN_PROGRESS' && progress.remainingSeconds !== null ? (
-                  <span className={`section-nav__timer ${progress.remainingSeconds <= 60 ? 'section-nav__timer--critical' : ''}`}>
-                    {formatClock(progress.remainingSeconds)}
+        <nav className="exam-sections" aria-label="Test sections">
+          <span className="exam-sections__hint">Sections</span>
+          <div className="exam-sections__tabs" role="tablist">
+            {sections.map((section, index) => {
+              const progress = sectionProgress.find((row) => row.sectionId === section.id) ?? null;
+              const sectionQuestionIds = questionsBySection.get(section.id) ?? [];
+              const answeredInSection =
+                progress?.answeredCount ??
+                sectionQuestionIds.filter((question) => answeredNumbers.has(question.number)).length;
+              const totalInSection = progress?.totalQuestions ?? sectionQuestionIds.length;
+              const open = isSectionOpen(section.id);
+              const current = section.id === activeSection?.id;
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  role="tab"
+                  className={[
+                    'exam-sections__tab',
+                    current ? 'exam-sections__tab--current' : '',
+                    progress?.status === 'COMPLETED' ? 'exam-sections__tab--done' : '',
+                    !open ? 'exam-sections__tab--locked' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => switchToSection(section.id)}
+                  aria-selected={current}
+                  aria-current={current ? 'true' : undefined}
+                  title={open ? section.title || section.label : 'This part is not open yet'}
+                >
+                  <span className="exam-sections__tab-name">
+                    {progress?.status === 'COMPLETED' ? <Icon name="check" size={14} strokeWidth={2.6} /> : null}
+                    {!open ? <Icon name="lock" size={13} /> : null}
+                    {section.label}
                   </span>
-                ) : null}
-              </button>
-            );
-          })}
-          <div style={{ flex: 1 }} />
-          {allQuestions.length > 0 ? (
-            <Button size="sm" variant="ghost" onClick={() => setDrawerOpen(true)}>
-              All questions
-            </Button>
-          ) : null}
+                  <span className="exam-sections__tab-count">
+                    {section.skill === 'WRITING'
+                      ? state.writing.some((entry) =>
+                          section.writingTasks.some((task) => task.id === entry.questionId && entry.text.trim().length > 0),
+                        )
+                        ? 'done'
+                        : '0/' + section.writingTasks.length
+                      : `${answeredInSection}/${totalInSection}`}
+                  </span>
+                  {progress?.status === 'IN_PROGRESS' && progress.remainingSeconds !== null ? (
+                    <span
+                      className={`exam-sections__tab-timer ${
+                        progress.remainingSeconds <= 60 ? 'exam-sections__tab-timer--critical' : ''
+                      }`}
+                    >
+                      {formatClock(progress.remainingSeconds)}
+                    </span>
+                  ) : (
+                    <span className="exam-sections__tab-index">{index + 1}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </nav>
       ) : null}
 
@@ -467,6 +518,15 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
             ) : null}
             {activeSection ? (
               <PassagePane sections={[activeSection]} activeSectionId={activeSection.id} showInstructions />
+            ) : null}
+            {activeSection?.transcript && activeSection.transcript.segments.length > 0 ? (
+              <section className="exam-pane__section" aria-label="Transcript">
+                <div className="exam-pane__section-head">
+                  <span className="exam-pane__section-title">Transcript</span>
+                  <span className="tiny muted">Released with the review material</span>
+                </div>
+                <TranscriptView transcript={activeSection.transcript} highlightSegmentId={highlightSegmentId} />
+              </section>
             ) : null}
           </section>
         ) : null}
@@ -539,43 +599,107 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
         </section>
       </div>
 
-      {!isWriting && activeSectionQuestions.length > 0 ? (
-        <QuestionNavStrip
-          numbers={activeSectionQuestions.map((question) => question.number)}
-          answeredNumbers={answeredNumbers}
-          flaggedNumbers={flaggedNumbers}
-          currentNumber={currentQuestion?.number ?? null}
-          onSelect={jumpToQuestion}
-          extra={
-            <>
-              {nextClosedSection && activeProgress?.status === 'IN_PROGRESS' ? (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={async () => {
-                    if (!advancedToNext) {
-                      setAdvancedToNext(true);
-                      toast.push(
-                        sectionPolicy.allowReturnToPreviousParts
-                          ? 'You can return to earlier parts while time remains.'
-                          : 'You cannot return to this part after continuing.',
-                        'warning',
-                      );
-                      return;
-                    }
-                    await session.completeSection(activeSection?.id);
-                    setAdvancedToNext(false);
-                  }}
+      {allQuestions.length > 0 ? (
+        <nav className="exam-bottombar" aria-label="Question navigation">
+          <button
+            type="button"
+            className="exam-bottombar__icon"
+            onClick={() => setDrawerOpen(true)}
+            title="Question palette"
+            aria-label="Question palette"
+          >
+            <Icon name="grid" size={18} />
+          </button>
+
+          <button type="button" className="btn btn--sm" onClick={() => setDrawerOpen(true)}>
+            All questions
+          </button>
+
+          <span className="exam-bottombar__score nowrap" title="Answered questions">
+            <Icon name="check" size={14} strokeWidth={2.6} />
+            {answeredNumbers.size} / {objectiveQuestions.length}
+          </span>
+
+          <div className="exam-bottombar__sections">
+            {sections.map((section) => {
+              const progress = sectionProgress.find((row) => row.sectionId === section.id) ?? null;
+              const numbers = questionsBySection.get(section.id) ?? [];
+              const answeredInSection =
+                progress?.answeredCount ?? numbers.filter((question) => answeredNumbers.has(question.number)).length;
+              const current = section.id === activeSection?.id;
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  className={`exam-bottombar__tab ${current ? 'exam-bottombar__tab--current' : ''}`}
+                  onClick={() => switchToSection(section.id)}
+                  aria-current={current ? 'true' : undefined}
                 >
-                  {advancedToNext
-                    ? 'Confirm: continue'
-                    : `Continue to ${nextClosedSection.label}`}
-                </Button>
-              ) : null}
-            </>
-          }
-        />
+                  {current ? (
+                    <span className="exam-bottombar__tab-label">
+                      {section.label}
+                      <span className="exam-bottombar__tab-count">
+                        {answeredInSection}/{numbers.length}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="exam-bottombar__tab-index">{sections.indexOf(section) + 1}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="exam-bottombar__spacer" />
+
+          <Button size="sm" onClick={() => stepQuestion(-1)} disabled={isWriting}>
+            Previous
+          </Button>
+
+          {nextClosedSection && activeProgress?.status === 'IN_PROGRESS' ? (
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={async () => {
+                if (!advancedToNext) {
+                  setAdvancedToNext(true);
+                  toast.push(
+                    sectionPolicy.allowReturnToPreviousParts
+                      ? 'You can return to earlier parts while time remains.'
+                      : 'You cannot return to this part after continuing.',
+                    'warning',
+                  );
+                  return;
+                }
+                await session.completeSection(activeSection?.id);
+                setAdvancedToNext(false);
+              }}
+            >
+              {advancedToNext ? 'Confirm: continue' : `Continue to ${nextClosedSection.label}`}
+            </Button>
+          ) : (
+            <Button size="sm" variant="primary" onClick={() => stepQuestion(1)} disabled={isWriting}>
+              Next
+            </Button>
+          )}
+        </nav>
       ) : null}
+
+      <Modal open={exitOpen} title="Leave the test?" onClose={() => setExitOpen(false)}>
+        <div className="stack">
+          <p>
+            Your answers are saved automatically and stay attached to this attempt. Timed sections keep running while
+            you are away, and leaving the tab is recorded in the integrity log for your teacher.
+          </p>
+          <p className="small muted">You can come back to this attempt from “My tests” at any time before it closes.</p>
+          <div className="row" style={{ justifyContent: 'flex-end' }}>
+            <Button onClick={() => setExitOpen(false)}>Keep working</Button>
+            <Button variant="primary" onClick={() => void navigate('/student')}>
+              Save &amp; exit
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <AllQuestionsDrawer
         open={drawerOpen}

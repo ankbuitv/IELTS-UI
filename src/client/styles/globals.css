@@ -1189,3 +1189,212 @@ table.data--zebra tbody tr:nth-child(even) { background: var(--paper-muted); }
   }
   .auth__title { font-size: 1.45rem; }
 }
+
+/* ------------------------------------------------ exam chrome, second pass */
+/* The exam borrows the reference paper layout: a title bar with the test
+   name, one row of section tabs, the split panes, and a sticky bottom bar
+   that keeps the palette, the score and the section switch in reach. */
+.exam-root--has-bottombar .exam-pane__scroll { padding-bottom: 116px; }
+.exam-root--has-bottombar .passage-pane__scroll { padding-bottom: 116px; }
+
+.exam-topbar__icon {
+  flex: none; width: 34px; height: 34px; border-radius: 10px;
+  border: 1px solid var(--ink-200); background: var(--paper); color: var(--ink-600);
+  display: grid; place-items: center; cursor: pointer;
+  transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+.exam-topbar__icon:hover { background: var(--ink-50); border-color: var(--ink-300); color: var(--ink-900); }
+.exam-topbar__heading { min-width: 0; }
+.exam-topbar__eyebrow {
+  display: block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--brand-700);
+}
+.exam-topbar__count {
+  font-size: 0.8rem; font-weight: 600; color: var(--ink-600);
+  background: var(--paper-muted); border: 1px solid var(--ink-200); border-radius: 999px; padding: 5px 12px;
+}
+.exam-topbar__vocab { background: var(--danger-soft); border-color: var(--danger-border); color: #b91c1c; }
+.exam-topbar__vocab:hover { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+
+/* One row of section tabs, the reference's "Section 1 | 0/10". */
+.exam-sections {
+  display: flex; align-items: center; gap: 12px; padding: 7px 14px;
+  border-bottom: 1px solid var(--ink-200); background: var(--paper);
+  overflow-x: auto; scrollbar-width: thin;
+}
+.exam-sections__hint {
+  flex: none; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-400);
+}
+.exam-sections__tabs { display: flex; align-items: center; gap: 6px; }
+.exam-sections__tab {
+  flex: none; display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid transparent; border-radius: 10px; background: transparent;
+  padding: 6px 11px; font-family: inherit; font-size: 0.83rem; font-weight: 600; color: var(--ink-500);
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--speed) var(--ease), color var(--speed) var(--ease), border-color var(--speed) var(--ease);
+}
+.exam-sections__tab:hover { background: var(--paper-muted); color: var(--ink-800); }
+.exam-sections__tab-name { display: inline-flex; align-items: center; gap: 6px; }
+.exam-sections__tab-count {
+  font-size: 0.74rem; font-weight: 700; color: var(--brand-700);
+  background: var(--brand-50); border-radius: 999px; padding: 1px 8px;
+}
+.exam-sections__tab-index {
+  width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 0.72rem; font-weight: 700; color: var(--ink-500); background: var(--ink-100);
+}
+.exam-sections__tab--current {
+  background: var(--paper); border-color: var(--brand-200); color: var(--brand-800);
+  box-shadow: var(--shadow-xs);
+}
+.exam-sections__tab--current .exam-sections__tab-index { background: var(--brand-600); color: #fff; }
+.exam-sections__tab--done { color: #047857; }
+.exam-sections__tab--done .exam-sections__tab-index { background: var(--success-soft); color: #047857; }
+.exam-sections__tab--locked { opacity: 0.5; cursor: not-allowed; }
+.exam-sections__tab-timer {
+  font-variant-numeric: tabular-nums; font-size: 0.72rem; font-weight: 700;
+  color: #92400e; background: var(--warning-soft); border-radius: 999px; padding: 1px 7px;
+}
+.exam-sections__tab-timer--critical { color: #9f1239; background: var(--danger-soft); }
+
+/* Sticky exam footer: palette, all-questions, score, section tabs, step. */
+.exam-bottombar {
+  position: sticky; bottom: 0; z-index: 25;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 9px 14px; border-top: 1px solid var(--ink-200); background: var(--paper);
+  box-shadow: 0 -2px 10px rgba(15, 23, 42, 0.05);
+}
+.exam-bottombar__icon {
+  flex: none; width: 36px; height: 36px; border-radius: 10px;
+  border: 1px solid var(--ink-200); background: var(--paper); color: var(--ink-700);
+  display: grid; place-items: center; cursor: pointer;
+}
+.exam-bottombar__icon:hover { border-color: var(--brand-300); color: var(--brand-700); background: var(--brand-50); }
+.exam-bottombar__score {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-variant-numeric: tabular-nums; font-weight: 700; font-size: 0.88rem; color: var(--ink-800);
+  background: var(--paper-muted); border: 1px solid var(--ink-200); border-radius: 999px; padding: 6px 13px;
+}
+.exam-bottombar__sections { display: flex; align-items: center; gap: 4px; }
+.exam-bottombar__tab {
+  min-width: 40px; height: 36px; padding: 0 10px; border-radius: 10px; border: 1px solid transparent;
+  background: transparent; font-family: inherit; font-size: 0.82rem; font-weight: 650; color: var(--ink-500);
+  cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+}
+.exam-bottombar__tab:hover { background: var(--paper-muted); color: var(--ink-800); }
+.exam-bottombar__tab-index {
+  width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center;
+  background: var(--ink-100); color: var(--ink-600); font-size: 0.75rem; font-weight: 700;
+}
+.exam-bottombar__tab--current { background: var(--brand-600); color: #fff; }
+.exam-bottombar__tab--current .exam-bottombar__tab-count { background: rgba(255, 255, 255, 0.2); color: #fff; }
+.exam-bottombar__tab-label { display: inline-flex; align-items: center; gap: 8px; }
+.exam-bottombar__tab-count {
+  font-size: 0.75rem; font-weight: 700; background: var(--brand-50); color: var(--brand-700);
+  border-radius: 999px; padding: 1px 8px;
+}
+.exam-bottombar__spacer { flex: 1; min-width: 8px; }
+
+/* ------------------------------------------- listening transcript as a chat */
+.exam-pane__section { border-top: 1px solid var(--ink-200); padding: 18px 20px 26px; background: var(--paper); }
+.exam-pane__section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.exam-pane__section-title { font-weight: 680; font-size: 0.95rem; color: var(--ink-950); }
+
+.convo { display: flex; flex-direction: column; gap: 14px; }
+.convo__row { display: flex; gap: 10px; align-items: flex-start; }
+.convo__row--right { flex-direction: row-reverse; }
+.convo__avatar {
+  flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  font-weight: 750; font-size: 0.85rem; color: #fff; background: var(--gradient-brand);
+}
+.convo__row--right .convo__avatar { background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); }
+.convo__stack { display: flex; flex-direction: column; gap: 4px; max-width: 78%; min-width: 0; }
+.convo__row--right .convo__stack { align-items: flex-end; }
+.convo__speaker { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-400); }
+.convo__bubble {
+  text-align: left; font-family: inherit; font-size: 0.94rem; line-height: 1.62; color: var(--ink-800);
+  background: var(--paper-muted); border: 1px solid var(--ink-200); border-radius: 14px;
+  padding: 10px 14px; cursor: text;
+}
+.convo__row--right .convo__bubble { background: var(--brand-50); border-color: var(--brand-200); }
+.convo__bubble:disabled { cursor: default; }
+.convo__bubble--selected { border-color: var(--brand-500); box-shadow: 0 0 0 3px var(--brand-100); }
+.convo__time { font-variant-numeric: tabular-nums; font-size: 0.7rem; color: var(--ink-400); }
+
+/* ------------------------------------- per-question "why this answer" panel */
+.explain {
+  margin: 10px 0 4px 26px; border: 1px solid var(--ink-200); border-left: 3px solid var(--brand-500);
+  border-radius: var(--radius); background: var(--paper); box-shadow: var(--shadow-xs); overflow: hidden;
+}
+.explain__head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  padding: 9px 14px; background: var(--paper-muted); border-bottom: 1px solid var(--ink-200);
+}
+.explain__title {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 0.78rem; font-weight: 750; letter-spacing: 0.05em; text-transform: uppercase; color: var(--brand-800);
+}
+.explain__body { padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; }
+.explain__text { margin: 0; font-size: 0.92rem; line-height: 1.66; color: var(--ink-700); }
+.explain__label {
+  display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 750; letter-spacing: 0.05em; text-transform: uppercase;
+  background: var(--brand-50); color: var(--brand-700);
+}
+.explain__text--evidence .explain__label { background: var(--warning-soft); color: #92400e; }
+.explain__text--evidence { font-style: italic; color: var(--ink-600); }
+.explain__answer {
+  margin: 0; display: inline-flex; align-items: center; gap: 8px; align-self: flex-start;
+  padding: 6px 13px; border-radius: 999px; font-size: 0.9rem;
+  background: var(--success-soft); border: 1px solid var(--success-border); color: #047857;
+}
+
+@media (max-width: 940px) {
+  .exam-topbar { gap: 10px; padding: 9px 12px; }
+  .exam-topbar__vocab { display: none; }
+  .exam-bottombar { padding: 8px 10px; gap: 8px; }
+  .exam-bottombar__sections { display: none; }
+  .convo__stack { max-width: 84%; }
+  .explain { margin-left: 0; }
+}
+
+/* ------------------------------------------------------ vocabulary notebook */
+.vocab-grid { display: grid; grid-template-columns: minmax(280px, 360px) 1fr; gap: 20px; align-items: start; }
+.vocab-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.vocab-item {
+  border: 1px solid var(--ink-200); border-radius: var(--radius); background: var(--paper);
+  padding: 13px 15px; box-shadow: var(--shadow-xs);
+}
+.vocab-item__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.vocab-item__term { font-weight: 700; font-size: 1.02rem; color: var(--ink-950); }
+.vocab-item__meaning { margin: 7px 0 0; font-size: 0.92rem; line-height: 1.6; color: var(--ink-600); }
+.vocab-item__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.vocab-card {
+  position: fixed; inset: auto 0 0 0; margin: 0 auto 20px; width: min(520px, calc(100vw - 32px));
+  background: var(--paper); border: 1px solid var(--brand-200); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg); padding: 22px 24px; display: flex; flex-direction: column; gap: 10px;
+  text-align: center; z-index: 40;
+}
+.vocab-card__kicker { font-size: 0.7rem; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brand-700); }
+.vocab-card__term { margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--ink-950); }
+.vocab-card__meaning { margin: 0; font-size: 1rem; line-height: 1.6; color: var(--ink-700); }
+
+@media (max-width: 940px) {
+  .vocab-grid { grid-template-columns: 1fr; }
+}
+
+/* ------------------------------------------------- released review material */
+.review-q {
+  border: 1px solid var(--ink-200); border-radius: var(--radius); background: var(--paper-muted);
+  padding: 12px 14px;
+}
+.review-q__head { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.review-q__number {
+  flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+  font-size: 0.8rem; font-weight: 750; color: #fff; background: var(--brand-600);
+}
+.review-q__prompt { flex: 1; min-width: 160px; font-weight: 600; color: var(--ink-900); line-height: 1.5; }
+.review-q__answers { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 2px 36px; font-size: 0.88rem; color: var(--ink-600); }
+.review-q__answer--key { color: #047857; }
+.review-q .explain { margin: 8px 0 2px 36px; background: var(--paper); }

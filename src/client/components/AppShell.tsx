@@ -31,6 +31,7 @@ const PAGE_TITLES: Array<[prefix: string, title: string]> = [
   ['/exam', 'Exam in progress'],
   ['/classrooms', 'Classrooms'],
   ['/analytics', 'My progress'],
+  ['/vocabulary', 'Vocabulary notebook'],
   ['/profile', 'Profile'],
 ];
 
@@ -83,6 +84,7 @@ export function AppShell() {
     primary.push({ to: '/history', label: 'My attempts', icon: 'clock' });
     primary.push({ to: '/classrooms', label: 'Classrooms', icon: 'users' });
     primary.push({ to: '/analytics', label: 'My progress', icon: 'chart' });
+    primary.push({ to: '/vocabulary', label: 'Vocabulary', icon: 'sparkle' });
     primary.push({ to: '/profile', label: 'Profile', icon: 'user' });
   }
   if (user?.role === 'TEACHER' || user?.role === 'ADMIN') {

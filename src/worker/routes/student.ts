@@ -3,7 +3,8 @@ import { z } from 'zod';
 import type { AppBindings } from '../env';
 import { requireAuth } from '../middleware/auth';
 import { currentUser } from '../middleware/auth';
-import { parseQuery } from '../lib/validate';
+import { parseBody, parseQuery } from '../lib/validate';
+import { assertCsrf } from '../lib/http';
 import {
   getStudentDashboard,
   getTaskTypePerformance,
@@ -12,6 +13,18 @@ import {
   listStudentAssignments,
 } from '../services/analytics-service';
 import { SKILLS, TEST_TYPES } from '../../shared/types';
+import {
+  VOCABULARY_MEANING_MAX,
+  VOCABULARY_NOTE_MAX,
+  VOCABULARY_SOURCE_MAX,
+  VOCABULARY_TERM_MAX,
+} from '../../shared/vocabulary';
+import {
+  deleteVocabularyEntry,
+  listVocabulary,
+  saveVocabularyEntry,
+  updateVocabularyEntry,
+} from '../services/vocabulary-service';
 
 const router = new Hono<AppBindings>();
 
@@ -65,6 +78,59 @@ router.get('/analytics', async (c) => {
     getTaskTypePerformance(c.env, { ...filters, skill: filters.skill ?? null, testType: filters.testType ?? null }, user.id),
   ]);
   return c.json({ trends, taskTypes });
+});
+
+// ---------------------------------------------------------------- vocabulary
+// The candidate's own word list, collected from passages, transcripts and
+// explanation panels. Every route is scoped to the signed-in user.
+
+const vocabularyEntrySchema = z.object({
+  term: z.string().trim().min(1).max(VOCABULARY_TERM_MAX),
+  meaning: z.string().max(VOCABULARY_MEANING_MAX).optional(),
+  note: z.string().max(VOCABULARY_NOTE_MAX).nullish(),
+  source: z.string().max(VOCABULARY_SOURCE_MAX).nullish(),
+});
+
+const vocabularyQuerySchema = z.object({
+  search: z.string().max(120).optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+});
+
+router.get('/vocabulary', async (c) => {
+  const user = currentUser(c);
+  const query = parseQuery(c, vocabularyQuerySchema);
+  const list = await listVocabulary(c.env, user.id, { search: query.search ?? null, limit: query.limit ?? 200 });
+  return c.json(list);
+});
+
+router.post('/vocabulary', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, vocabularyEntrySchema);
+  const entry = await saveVocabularyEntry(c.env, user.id, body);
+  return c.json({ entry }, 201);
+});
+
+router.patch('/vocabulary/:id', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      meaning: z.string().max(VOCABULARY_MEANING_MAX).optional(),
+      note: z.string().max(VOCABULARY_NOTE_MAX).nullish(),
+      reviewed: z.boolean().optional(),
+    }),
+  );
+  const entry = await updateVocabularyEntry(c.env, user.id, c.req.param('id'), body);
+  return c.json({ entry });
+});
+
+router.delete('/vocabulary/:id', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  await deleteVocabularyEntry(c.env, user.id, c.req.param('id'));
+  return c.json({ ok: true });
 });
 
 export default router;

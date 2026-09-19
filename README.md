@@ -51,13 +51,24 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
   writing tasks.
 - Reading split-panel layout with passage navigation; listening audio player
   with a configurable playback policy (max plays, preparation time, pause/seek).
+- Visible division into sections: a section tab strip under the header (label,
+  `answered/total`, completed tick, lock for parts that are not open yet and the
+  per-section timer) and a sticky exam footer with the palette, **All questions**
+  (the 1–40 question grid), the running score, one tab per section and
+  Previous / Next — so a full mock never reads as one undivided list.
 - Paper-style question layout: every group opens with an instruction banner
   (range, type and requirement), questions sit in one card with numbered rows,
   True/False/Not Given is a compact segmented control rather than three repeated
   option rows, and completion tasks draw the answer box inside the sentence at
   its `[[n]]` position.
 - Answer keys, evidence and explanations are stored server-side only and never
-  appear in a candidate payload.
+  appear in a candidate payload. Released results render them: listening
+  transcripts become speaker bubbles with timestamps, and every question gains a
+  **Why these answers** panel with the evidence, the reasoning and, for
+  listening, a *Listen from here* jump into the recording.
+- Vocabulary notebook: candidates save words from passages, transcripts or
+  explanation panels and revise them with search, inline edits and a self-test
+  card (`/vocabulary`).
 
 **Marking & results**
 
@@ -325,6 +336,10 @@ full-mock flows. The recorded output of a green run is in
 - [`docs/UI-REFRESH.md`](docs/UI-REFRESH.md) — the light workspace pass: one
   visual language (white shell, icon set, product-first landing page), what it
   replaced, and how it was verified without a browser.
+- [`docs/QUESTION-AUTHORING.md`](docs/QUESTION-AUTHORING.md) — how to create
+  questions: the full structured-JSON import format, every supported question
+  type, how answers/evidence/explanations are graded and shown, plus a
+  pre-publish checklist and the common import errors.
 - [`docs/MODERNISATION-REPORT.md`](docs/MODERNISATION-REPORT.md) — the visual
   modernisation and object-storage removal pass: tokens, components, pages,
   accessibility, remaining optional storage references and current bindings.
