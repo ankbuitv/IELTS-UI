@@ -14,6 +14,13 @@ The first two files describe the same 40-question Academic-style Reading set,
 JSON after the first object is ignored, so concatenating the two files no longer
 fails with `Unexpected non-whitespace character after JSON`.
 
+All three files also work in the **version editor's JSON tab**
+(Admin → Tests → version → Edit content → JSON): *Parse into outline* and
+*Save content* run them through the same shared conversion as the import
+pipeline (`src/shared/import-convert.ts`), so an import-format paste is turned
+into the platform content schema instead of being rejected with per-section
+`Invalid option` errors.
+
 `full-test.json` is a complete 52-question paper in a single JSON: Listening
 Part 2 (Q1–10), three Reading passages (Q11–50) and Writing Task 1 & 2
 (Q51–52). It needs the one-file full-mock support in

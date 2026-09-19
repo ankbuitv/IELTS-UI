@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { QUESTION_TYPES, QUESTION_TYPE_META } from '@shared/question-types';
 import type { QuestionType } from '@shared/question-types';
+import { parseIntoEditableContent } from '@shared/import-convert';
 import {
   SECTION_TYPES,
   SECTION_TYPE_META,
@@ -967,7 +968,21 @@ function VersionEditorBody({
   const save = async () => {
     setSaving(true);
     try {
-      const payload = tab === 'json' ? (JSON.parse(jsonText) as EditableContent) : draft;
+      const pasted = tab === 'json' ? JSON.parse(jsonText) : draft;
+      // The JSON tab accepts the documented import formats as well as the
+      // platform content schema; anything in an import format is converted
+      // first, so the server never receives a tree it would have to reject.
+      const { content: payload, issues, converted } = parseIntoEditableContent(pasted);
+      const fatal = issues.find((issue) => issue.level === 'ERROR');
+      if (payload.sections.length === 0) {
+        toast.push(fatal?.message ?? 'The payload contains no sections to save.', 'error');
+        return;
+      }
+      if (converted) {
+        setDraft(payload);
+        setJsonText(JSON.stringify(payload, null, 2));
+        toast.push('Import format converted to the platform content schema.', 'success');
+      }
       const result = await api.put<{ totalQuestions: number; validation: ValidationResult }>(
         `/api/admin/versions/${versionId}/content`,
         payload,
@@ -1037,8 +1052,9 @@ function VersionEditorBody({
       {tab === 'json' ? (
         <div className="stack">
           <p className="small muted">
-            Paste or edit the structured payload directly. It must match the platform content schema; the server rejects
-            anything else before writing.
+            Paste or edit the structured payload directly. The platform content schema and the documented import formats
+            (the ones Admin → Imports accepts, e.g. <code>docs/samples/full-test.json</code>) both work: import formats
+            are converted when you press <strong>Parse into outline</strong> or <strong>Save content</strong>.
           </p>
           <TextArea
             value={jsonText}
@@ -1049,11 +1065,28 @@ function VersionEditorBody({
           />
           <Button
             onClick={() => {
+              let parsed: unknown;
               try {
-                setDraft(JSON.parse(jsonText) as EditableContent);
-                toast.push('JSON parsed into the editor.', 'success');
+                parsed = JSON.parse(jsonText);
               } catch (jsonError) {
                 toast.push(describeError(jsonError), 'error');
+                return;
+              }
+              const { content, issues, converted } = parseIntoEditableContent(parsed);
+              const errors = issues.filter((issue) => issue.level === 'ERROR');
+              if (content.sections.length === 0) {
+                toast.push(errors[0]?.message ?? 'This payload contains no sections.', 'error');
+                return;
+              }
+              setDraft(content);
+              setJsonText(JSON.stringify(content, null, 2));
+              if (errors.length > 0) {
+                toast.push(
+                  `Parsed into the editor with ${errors.length} validation problem${errors.length === 1 ? '' : 's'} — review before saving.`,
+                  'warning',
+                );
+              } else {
+                toast.push(converted ? 'Import format parsed into the editor.' : 'JSON parsed into the editor.', 'success');
               }
             }}
           >
