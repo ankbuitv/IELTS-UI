@@ -171,6 +171,12 @@ between machines, containers or CI sandboxes — this is why a start-up that doe
 not migrate would otherwise greet you with *"The platform database is not
 initialised yet"*.
 
+Start-up also drops `x-frame-options` from the local `dist/client/_headers`, so
+the app can be embedded in an iframe by a hosted preview (`*.e2b.app`): the rule
+is a static file and cannot vary by host, and `SAMEORIGIN` makes an iframe on
+another origin fail. Nothing here runs on a deploy, so the deployed Worker and
+assets keep the header and stay protected against clickjacking.
+
 Open <http://localhost:8787/> and sign in with a demo account, or register —
 **the first account becomes the administrator** (the register form offers this
 only while no administrator exists).

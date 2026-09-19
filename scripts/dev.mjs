@@ -12,17 +12,21 @@
  *
  *   1. applies the D1 migrations (idempotent), and loads `seed/seed.sql` when
  *      the local database has no tests yet;
- *   2. starts `wrangler dev` on 0.0.0.0:8787 and waits until it answers
+ *   2. drops `x-frame-options` from `dist/client/_headers` when the client was
+ *      built here, so the app can be embedded by the sandbox live preview
+ *      (a different origin) instead of being refused by SAMEORIGIN;
+ *   3. starts `wrangler dev` on 0.0.0.0:8787 and waits until it answers
  *      `/api/health`;
- *   3. provisions the demo accounts and publishes the sample content
+ *   4. provisions the demo accounts and publishes the sample content
  *      (`scripts/demo-accounts.mjs`, idempotent, development only).
  *
  * Nothing here is used in production: `npm run deploy` still builds and deploys
  * the Worker exactly as before.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
+import { stripFramingHeaderFile } from './lib/local-preview-headers.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
@@ -97,6 +101,14 @@ if (testCount === null || testCount === 0) {
   }
 } else {
   console.log(`  · ${testCount} test(s) already in the database — keeping the existing content`);
+}
+
+// The live preview is an iframe on another origin, so the document must not
+// carry SAMEORIGIN. `_headers` is a static file that cannot vary by host, hence
+// the local strip; a deploy never runs this script, so production keeps it.
+const headersFile = `${root}dist/client/_headers`;
+if (stripFramingHeaderFile(headersFile, { readFileSync, writeFileSync, existsSync })) {
+  console.log('  · removed x-frame-options from dist/client/_headers so the app can be previewed in an iframe');
 }
 
 console.log(`\n▸ Starting the Worker on ${base}`);

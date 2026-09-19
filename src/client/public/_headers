@@ -1,21 +1,23 @@
-# Baseline hardening for the static React bundle.
-#
-# The Worker sets the same headers (plus a request id) on every `/api/*`
-# response. HTML, CSS and JS are served straight from the assets binding for
-# performance, so they are hardened here instead. `_headers` is part of the
-# static-assets contract, which means these rules apply identically in
-# `wrangler dev` and in production.
+# Baseline hardening for the static React bundle. `_headers` is part of the
+# static-assets contract, so these rules apply identically in `wrangler dev`
+# and in production. The Worker adds the same headers (plus a request id) to
+# every `/api/*` response and to the SPA shell.
 #
 # Content-Security-Policy is deliberately left out for now: the SPA ships no
 # inline scripts, but enabling CSP safely needs a nonce/hash pipeline and an
 # end-to-end review of every asset loader, so it stays a documented follow-up.
+#
+# This file cannot vary by host, so `x-frame-options: SAMEORIGIN` is stripped
+# from the local build only: the sandbox live preview embeds the app in an
+# iframe served from another origin, and a document with SAMEORIGIN cannot be
+# framed there. `scripts/dev.mjs` removes the line from `dist/client/_headers`
+# after the build; the deployed file keeps it.
 #
 # Note: `_headers` must not be served as a file itself; Cloudflare consumes it
 # at deploy time.
 /*
   x-content-type-options: nosniff
   referrer-policy: strict-origin-when-cross-origin
-  x-frame-options: SAMEORIGIN
   permissions-policy: geolocation=(), microphone=(), camera=()
 
 /index.html
