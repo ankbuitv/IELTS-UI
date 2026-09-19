@@ -422,13 +422,20 @@ async function buildComponentPlan(
       version_duration: number | null;
     }>();
 
-  if (components.results.length === 0) {
+  // A one-file full mock has no components: its own sections ARE the exam.
+  // Group them into contiguous skill runs (Listening…, Reading…, Writing…)
+  // so the attempt still gets one timed skill session per part, in paper order.
+  let planRows = components.results;
+  if (planRows.length === 0) {
+    planRows = await inlineMockComponentRows(env, versionId);
+  }
+  if (planRows.length === 0) {
     throw ApiError.conflict('This full mock has no components configured.');
   }
 
   return {
     timed: assignment?.timing_policy !== 'UNTIMED',
-    components: components.results.map((component) => ({
+    components: planRows.map((component) => ({
       skill: component.skill,
       testVersionId: component.test_version_id,
       label: component.label || `${component.skill} ${component.test_version_id.slice(-4)}`,
@@ -436,6 +443,44 @@ async function buildComponentPlan(
       breakAfterSeconds: component.break_after_seconds ?? 0,
     })),
   };
+}
+
+/** Standard IELTS skill length, used when a mock's sections carry no timing. */
+const INLINE_SKILL_SECONDS: Record<Skill, number> = { LISTENING: 1800, READING: 3600, WRITING: 3600 };
+
+/**
+ * Derives component rows from the mock version's own sections: one component
+ * per contiguous run of the same skill, in section order (so Listening →
+ * Reading → Writing stays in paper order). The rows mirror the shape of the
+ * `mock_components` query above so the plan mapping stays identical.
+ */
+async function inlineMockComponentRows(
+  env: Env,
+  versionId: string,
+): Promise<Array<{ skill: Skill; test_version_id: string; label: string; duration_seconds: number; break_after_seconds: number; version_duration: number | null }>> {
+  const sections = await env.DB.prepare(
+    `SELECT skill, duration_seconds FROM sections WHERE test_version_id = ? ORDER BY order_index, id`,
+  )
+    .bind(versionId)
+    .all<{ skill: Skill; duration_seconds: number | null }>();
+
+  const runs: Array<{ skill: Skill; seconds: number }> = [];
+  for (const section of sections.results) {
+    const last = runs[runs.length - 1];
+    if (last && last.skill === section.skill) {
+      last.seconds += section.duration_seconds ?? 0;
+    } else {
+      runs.push({ skill: section.skill, seconds: section.duration_seconds ?? 0 });
+    }
+  }
+  return runs.map((run) => ({
+    skill: run.skill,
+    test_version_id: versionId,
+    label: run.skill.charAt(0) + run.skill.slice(1).toLowerCase(),
+    duration_seconds: run.seconds > 0 ? run.seconds : INLINE_SKILL_SECONDS[run.skill],
+    break_after_seconds: 0,
+    version_duration: null,
+  }));
 }
 
 function addSeconds(iso: string, seconds: number): string {
@@ -461,6 +506,15 @@ async function initializeAttemptSections(
   const statements: D1PreparedStatement[] = [];
   let cursorSeconds = 0;
   let firstOpen = true;
+  // Sections run continuously across the whole attempt: `section_order` is a
+  // global position (Listening 0-…, then Reading, then Writing). Using each
+  // version's own `order_index` here would interleave sections of a full mock
+  // whenever its parts number their sections from 0 (Listening 0, Reading 0-2,
+  // Writing 0-1 → 0,0,1,2,0,1), so candidates would jump between skills.
+  let globalSectionOrder = 0;
+  // A one-file mock's skill runs all point at the same version, so each of its
+  // sections must be snapshotted exactly once.
+  const seenSectionIds = new Set<string>();
 
   for (const component of components) {
     const sections = await env.DB.prepare(
@@ -483,6 +537,8 @@ async function initializeAttemptSections(
 
     const partTiming = policy.navigation !== 'FREE_NAVIGATION';
     for (const section of sections.results) {
+      if (seenSectionIds.has(section.id)) continue;
+      seenSectionIds.add(section.id);
       const deadline =
         partTiming && section.duration_seconds
           ? addSeconds(startedAt, cursorSeconds + section.duration_seconds)
@@ -502,7 +558,7 @@ async function initializeAttemptSections(
           newId('asec'),
           attemptId,
           section.id,
-          section.order_index,
+          globalSectionOrder++,
           section.skill,
           sectionDisplayLabel({ label: section.label, skill: section.skill, orderIndex: section.order_index, title: section.title }),
           section.title,

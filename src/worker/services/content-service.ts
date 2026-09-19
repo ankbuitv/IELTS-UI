@@ -626,14 +626,18 @@ function writingMinimumWords(section: AdminSection): number | null {
 }
 
 export function toValidationInput(content: AdminVersionContent): ValidationInput {
+  // A full mock is publishable with either configured components (versions of
+  // its own) or inline sections (a one-file mock: the attempt falls back to
+  // its own sections grouped by skill). Only a mock with neither is broken.
+  const hasNoContent = content.mockComponents.length === 0 && content.sections.length === 0;
   const mockComponentIssues: ValidationIssue[] =
     content.test.type === 'FULL_MOCK'
-      ? content.mockComponents.length === 0
+      ? hasNoContent
         ? [
             {
               level: 'ERROR',
               code: 'MOCK_WITHOUT_COMPONENTS',
-              message: 'A full mock needs at least one Listening, Reading or Writing component.',
+              message: 'A full mock needs at least one Listening, Reading or Writing component, or its own sections.',
             },
           ]
         : []

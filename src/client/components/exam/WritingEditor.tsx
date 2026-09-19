@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CandidateSection } from '@shared/question-types';
 import { Tabs } from '../ui';
 import { countWords } from '../../lib/format';
+import { SectionImage } from './SectionImage';
 
 export function WritingEditor({
   sections,
@@ -48,6 +49,13 @@ export function WritingEditor({
         <p style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>{active.section.instructions || active.task.prompt}</p>
         {active.task.prompt ? (
           <p style={{ fontWeight: 600, whiteSpace: 'pre-wrap' }}>{active.task.prompt}</p>
+        ) : null}
+        {active.section.image ? (
+          // Task 1 charts, maps and diagrams: the passage pane is hidden for
+          // Writing, so the picture belongs with the prompt it describes.
+          <div style={{ marginTop: 12 }}>
+            <SectionImage image={active.section.image} label={active.section.label || active.section.title || 'Writing task'} />
+          </div>
         ) : null}
       </div>
 
