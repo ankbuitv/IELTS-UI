@@ -502,10 +502,11 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
                   ) : null}
                   {activeSection.groups.map((group) =>
                     group.type === 'WRITING_TASK_1' || group.type === 'WRITING_TASK_2' ? null : (
-                      <div className="question-group" key={group.id} id={`group-${group.id}`}>
+                      <div className="question-block" key={group.id} id={`group-${group.id}`}>
                         <QuestionGroupHeader group={group} onJump={() => group.rangeFrom && jumpToQuestion(group.rangeFrom)} />
-                        <GroupOptionBank options={group.sharedOptions} numbering={group.config.optionNumbering} />
-                        <div className="question-group__body">
+                        <div className="question-group">
+                          <GroupOptionBank options={group.sharedOptions} numbering={group.config.optionNumbering} />
+                          <div className="question-group__body">
                           {group.questions.map((question) => (
                             <div
                               key={question.id}
@@ -525,6 +526,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
                               />
                             </div>
                           ))}
+                          </div>
                         </div>
                       </div>
                     ),

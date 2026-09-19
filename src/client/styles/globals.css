@@ -755,58 +755,150 @@ table.data--zebra tbody tr:nth-child(even) { background: var(--paper-muted); }
 .passage__text { white-space: pre-wrap; }
 .passage__text mark { background: #fef3c7; color: var(--ink-950); border-radius: 3px; padding: 0 2px; }
 
+/* One question group: an instruction banner, then a card of questions.
+   The banner sits outside the card so the requirement is read before the
+   question it belongs to, the way a printed paper is laid out. */
+.question-block { display: flex; flex-direction: column; gap: 10px; margin-bottom: 26px; }
+
+.q-banner {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--brand-700); color: #fff;
+  border-radius: var(--radius-lg); padding: 13px 16px;
+  box-shadow: 0 10px 24px -18px rgba(8, 145, 178, 0.9);
+}
+.q-banner__badge {
+  flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.18); color: #fff;
+}
+.q-banner__body { min-width: 0; }
+.q-banner__text { margin: 0; font-size: 0.9rem; line-height: 1.6; color: #fff; }
+.q-banner__range {
+  display: inline; margin-right: 8px; padding: 0; border: 0; background: none; font: inherit;
+  font-weight: 700; color: #fff; cursor: pointer; text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.5); text-underline-offset: 3px;
+}
+.q-banner__range:hover { text-decoration-color: #fff; }
+.q-banner__type {
+  display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16); font-size: 0.72rem; font-weight: 650;
+  text-transform: uppercase; letter-spacing: 0.06em; vertical-align: 1px;
+}
+
 .question-group {
   background: var(--paper); border: 1px solid var(--ink-200); border-radius: var(--radius-lg);
-  margin-bottom: 18px; overflow: hidden; box-shadow: var(--shadow-xs);
+  overflow: hidden; box-shadow: var(--shadow-xs);
 }
-.question-group__head { padding: 15px 18px; border-bottom: 1px solid var(--ink-100); background: var(--paper); }
-.question-group__type { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--brand-700); font-weight: 700; }
-.question-group__instructions { font-size: 0.92rem; color: var(--ink-700); white-space: pre-wrap; margin-top: 4px; }
-.question-group__options { padding: 13px 18px; border-bottom: 1px solid var(--ink-100); background: var(--paper-muted); }
-.question-group__option { display: flex; gap: 10px; font-size: 0.92rem; padding: 3px 0; }
-.question-group__option-id { flex: none; font-weight: 650; min-width: 26px; color: var(--ink-500); }
-.question-group__body { padding: 6px 0 14px; }
+.question-group__options { padding: 14px 18px; border-bottom: 1px solid var(--ink-100); background: var(--paper-muted); }
+.question-group__options-title {
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 700;
+  color: var(--ink-500); margin-bottom: 10px;
+}
+.option-bank { display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.option-bank__item { display: flex; gap: 9px; font-size: 0.88rem; align-items: baseline; }
+.option-bank__id { flex: none; font-weight: 700; color: var(--brand-700); min-width: 22px; }
+.question-group__body { padding: 4px 0 10px; }
 
-.question { display: flex; gap: 12px; padding: 12px 18px; border-left: 3px solid transparent; scroll-margin: 130px; transition: background var(--speed) var(--ease); }
+.question {
+  display: flex; gap: 12px; padding: 14px 18px; border-left: 3px solid transparent;
+  scroll-margin: 130px; transition: background var(--speed) var(--ease);
+}
+.question + .question { border-top: 1px solid var(--ink-100); }
 .question:hover { background: var(--paper-muted); }
 .question--active { border-left-color: var(--brand-600); background: var(--brand-50); }
 .question--flagged { border-left-color: var(--warning); }
-.question__number {
-  flex: none; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
-  font-weight: 650; font-size: 0.85rem; background: var(--ink-100); color: var(--ink-600);
-  border: 1px solid var(--ink-200);
-}
-.question--answered .question__number { background: var(--brand-50); color: var(--brand-700); border-color: var(--brand-200); }
+.question--answered .question__number { background: var(--brand-100); color: var(--brand-700); border-color: var(--brand-200); }
 .question--active .question__number { background: var(--brand-600); color: #fff; border-color: var(--brand-600); }
+.question__number {
+  flex: none; width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center;
+  font-weight: 700; font-size: 0.78rem; background: var(--ink-100); color: var(--ink-600);
+  border: 1px solid var(--ink-200); font-variant-numeric: tabular-nums;
+}
 .question__content { flex: 1; min-width: 0; }
-.question__prompt { margin-bottom: 8px; color: var(--ink-900); }
+.question__prompt { margin-bottom: 10px; color: var(--ink-900); font-size: 0.95rem; }
 .question__prompt p { margin: 0; white-space: pre-wrap; }
-.question__controls { display: flex; flex-direction: column; gap: 6px; }
+.q-body { line-height: 1.9; }
+.question__controls { display: flex; flex-direction: column; gap: 8px; }
 .question__flag {
-  background: none; border: none; cursor: pointer; color: var(--ink-400); font-size: 0.78rem;
-  display: inline-flex; align-items: center; gap: 5px; padding: 2px 5px; font-family: inherit;
-  border-radius: 6px; transition: color var(--speed) var(--ease), background var(--speed) var(--ease);
+  align-self: flex-start; background: none; border: 1px solid transparent; cursor: pointer; color: var(--ink-400);
+  font-size: 0.78rem; display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; font-family: inherit;
+  border-radius: 999px; transition: color var(--speed) var(--ease), background var(--speed) var(--ease), border-color var(--speed) var(--ease);
 }
 .question__flag:hover { color: var(--ink-700); background: var(--ink-100); }
-.question__flag--on { color: #b45309; font-weight: 650; }
+.question__flag--on { color: #b45309; font-weight: 650; background: var(--warning-soft); border-color: var(--warning-border); }
 .question__flag--on:hover { background: var(--warning-soft); }
 
+/* True/False/Not Given and Yes/No/Not Given: three fixed choices, so they read
+   as a segmented control instead of three stacked rows repeated per question. */
+.choice-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.choice-pill {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 84px; padding: 7px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--ink-200); background: var(--paper); color: var(--ink-700);
+  font-size: 0.84rem; font-weight: 620; letter-spacing: 0.01em;
+  transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease), color var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+.choice-pill:hover { border-color: var(--brand-300); color: var(--brand-700); background: var(--brand-50); }
+.choice-pill:focus-within { box-shadow: var(--focus-ring); }
+.choice-pill input {
+  position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0; pointer-events: none;
+}
+.choice-pill--on {
+  background: var(--brand-600); border-color: var(--brand-600); color: #fff; font-weight: 680;
+  box-shadow: 0 6px 14px -8px rgba(8, 145, 178, 0.85);
+}
+.choice-pill--on:hover { background: var(--brand-700); border-color: var(--brand-700); color: #fff; }
+.choice-pill--readonly { cursor: default; }
+
+/* Multiple choice: the option letter in its own badge, then the option text. */
+.option-list { display: flex; flex-direction: column; gap: 8px; }
 .option-row {
-  display: flex; align-items: flex-start; gap: 10px; padding: 7px 10px; border-radius: 10px;
-  cursor: pointer; border: 1px solid transparent; transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease);
+  display: flex; align-items: flex-start; gap: 11px; padding: 10px 12px; border-radius: 12px;
+  cursor: pointer; border: 1px solid var(--ink-200); background: var(--paper);
+  transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
 }
-.option-row:hover { background: var(--paper-muted); border-color: var(--ink-200); }
-.option-row input { margin-top: 3px; accent-color: var(--brand-600); width: 17px; height: 17px; flex: none; }
-.option-row--selected { background: var(--brand-50); border-color: var(--brand-200); }
+.option-row:hover { background: var(--brand-50); border-color: var(--brand-300); }
+.option-row:focus-within { box-shadow: var(--focus-ring); }
+.option-row input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.option-row__id {
+  flex: none; width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center;
+  background: var(--ink-100); color: var(--ink-600); font-size: 0.78rem; font-weight: 700;
+  transition: background var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+.option-row__text { font-size: 0.92rem; color: var(--ink-800); }
+.option-row--selected { border-color: var(--brand-500); background: var(--brand-50); box-shadow: inset 0 0 0 1px var(--brand-400); }
+.option-row--selected .option-row__id { background: var(--brand-600); color: #fff; }
+
+/* Answer boxes. The inline variant lives inside the completion text, keeps the
+   question number beside it and grows with what is typed. */
 .answer-input {
-  width: 100%; max-width: 320px; padding: 8px 11px; border: 1px solid var(--ink-300); border-radius: 9px;
-  font-family: inherit; font-size: 0.95rem;
+  width: 100%; max-width: 340px; padding: 9px 12px; border: 1px solid var(--brand-300); border-radius: 10px;
+  font-family: inherit; font-size: 0.95rem; color: var(--ink-950); background: var(--paper);
+  transition: border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease), background var(--speed) var(--ease);
 }
-.answer-input:focus { border-color: var(--focus-border); box-shadow: var(--focus-ring); outline: none; }
+.answer-input:hover:not(:disabled) { border-color: var(--brand-400); }
+.answer-input:focus { border-color: var(--brand-500); box-shadow: var(--focus-ring); outline: none; }
+.answer-input:disabled { background: var(--ink-50); color: var(--ink-600); border-color: var(--ink-200); }
+.answer-input--inline {
+  display: inline-block; width: auto; min-width: 120px; max-width: 100%;
+  margin: 0 4px; padding: 4px 10px; border-radius: 8px; vertical-align: baseline;
+  background: var(--brand-50);
+}
 .answer-input--correct { border-color: var(--success); background: var(--success-soft); }
 .answer-input--wrong { border-color: var(--danger); background: var(--danger-soft); }
-.inline-box { display: inline-flex; align-items: center; gap: 6px; }
-.inline-box__label { font-weight: 650; font-size: 0.85rem; color: var(--brand-700); }
+
+/* Number chip rendered inside completion text. */
+.q-inline { display: inline-flex; align-items: center; gap: 5px; margin: 0 2px; }
+.q-inline__number {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px;
+  border-radius: 999px; background: var(--ink-100); color: var(--ink-700);
+  font-size: 0.72rem; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.q-inline__ghost {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px;
+  margin: 0 2px; border-radius: 999px; border: 1px dashed var(--ink-300); color: var(--ink-400);
+  font-size: 0.72rem; font-weight: 650; font-variant-numeric: tabular-nums;
+}
+.question-table td { vertical-align: top; }
 
 .exam-footer {
   border-top: 1px solid var(--ink-200); background: var(--paper); padding: 9px 18px;

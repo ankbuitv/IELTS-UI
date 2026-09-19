@@ -3,6 +3,35 @@ import { QUESTION_TYPE_META } from '@shared/question-types';
 import type { CandidateQuestion, CandidateQuestionGroup, SharedOption } from '@shared/question-types';
 import type { CandidateResponse } from '@shared/answer-key';
 import { Button } from '../ui';
+import { Icon } from '../Icon';
+
+/**
+ * The True/False/Not Given and Yes/No/Not Given choices.
+ *
+ * They are defined once here rather than inline in the control: the label is a
+ * display string, never the stored value, so the internal `NOT_GIVEN` token can
+ * not leak into the interface and the option text is never printed twice.
+ */
+const TFNG_OPTIONS: SharedOption[] = [
+  { id: 'TRUE', text: 'TRUE' },
+  { id: 'FALSE', text: 'FALSE' },
+  { id: 'NOT_GIVEN', text: 'NOT GIVEN' },
+];
+
+const YNN_OPTIONS: SharedOption[] = [
+  { id: 'YES', text: 'YES' },
+  { id: 'NO', text: 'NO' },
+  { id: 'NOT_GIVEN', text: 'NOT GIVEN' },
+];
+
+/**
+ * Display label for a stored choice value (`NOT_GIVEN` → `NOT GIVEN`). Used
+ * when a value has to be shown somewhere other than the option list itself,
+ * such as the released result view.
+ */
+export function choiceLabel(value: string): string {
+  return value.replace(/_/g, ' ').trim();
+}
 
 export interface QuestionRendererProps {
   group: CandidateQuestionGroup;
@@ -46,31 +75,49 @@ export function QuestionRenderer({
     .filter(Boolean)
     .join(' ');
 
+  // Completion tasks carry their own text with `[[n]]` placeholders. When the
+  // placeholder for *this* question is present, the answer box belongs inside
+  // that text (the layout every published exam paper uses) instead of below it.
+  const inlineBodyKind = question.body?.kind;
+  const inlineText = question.body?.text ?? '';
+  const hasInlineBody =
+    (inlineBodyKind === 'SUMMARY' || inlineBodyKind === 'NOTES') && inlineText.includes(`[[${question.number}]]`);
+  const hasInlineTable =
+    question.body?.kind === 'TABLE' && (question.body.rows ?? []).some((row) => row.some((cell) => cell.includes(`[[${question.number}]]`)));
+  const answerInsideText = hasInlineBody || hasInlineTable;
+
+  const answerControl =
+    control === 'TEXT' ? (
+      <TextControl
+        value={asValues(response)[0] ?? ''}
+        onChange={(value) => onAnswer(question.id, value.trim() ? { value } : null)}
+        readOnly={readOnly}
+        ariaLabel={`Answer for question ${question.number}`}
+        correctness={correctness}
+        inline={answerInsideText}
+      />
+    ) : null;
+
   return (
     <div className={classes} id={`q-${question.number}`} onFocus={() => onFocusQuestion(question.id)}>
-      <div className="question__number" aria-hidden="true">
-        {question.number}
-      </div>
+      {answerInsideText ? null : (
+        <div className="question__number" aria-hidden="true">
+          {question.number}
+        </div>
+      )}
       <div className="question__content">
-        <div className="question__prompt">{renderPrompt(question, group)}</div>
+        <div className="question__prompt">
+          {renderPrompt(question, group, answerInsideText ? answerControl : null)}
+        </div>
         <div className="question__controls">
           {control === 'TFNG' || control === 'YNN' ? (
             <ChoiceControl
-              options={(control === 'TFNG'
-                ? [
-                    { id: 'TRUE', text: 'TRUE' },
-                    { id: 'FALSE', text: 'FALSE' },
-                    { id: 'NOT_GIVEN', text: 'NOT GIVEN' },
-                  ]
-                : [
-                    { id: 'YES', text: 'YES' },
-                    { id: 'NO', text: 'NO' },
-                    { id: 'NOT_GIVEN', text: 'NOT GIVEN' },
-                  ]) as SharedOption[]}
+              options={control === 'TFNG' ? TFNG_OPTIONS : YNN_OPTIONS}
               selected={asValues(response)}
               onSelect={(value) => onAnswer(question.id, { value })}
               readOnly={readOnly}
               name={`q-${question.id}`}
+              variant="pills"
             />
           ) : null}
 
@@ -81,6 +128,7 @@ export function QuestionRenderer({
               onSelect={(value) => onAnswer(question.id, { value })}
               readOnly={readOnly}
               name={`q-${question.id}`}
+              variant="list"
             />
           ) : null}
 
@@ -103,15 +151,7 @@ export function QuestionRenderer({
             />
           ) : null}
 
-          {control === 'TEXT' ? (
-            <TextControl
-              value={asValues(response)[0] ?? ''}
-              onChange={(value) => onAnswer(question.id, value.trim() ? { value } : null)}
-              readOnly={readOnly}
-              ariaLabel={`Answer for question ${question.number}`}
-              correctness={correctness}
-            />
-          ) : null}
+          {control === 'TEXT' && !answerInsideText ? answerControl : null}
 
           {control === 'ESSAY' ? (
             <EssayControl
@@ -129,7 +169,8 @@ export function QuestionRenderer({
               onClick={() => onToggleFlag(question.id)}
               aria-pressed={flagged}
             >
-              {flagged ? '★ Flagged for review' : '☆ Flag for review'}
+              <Icon name="flag" size={14} />
+              {flagged ? 'Flagged for review' : 'Flag for review'}
             </button>
           ) : null}
 
@@ -142,7 +183,7 @@ export function QuestionRenderer({
               </span>
               {correctness.correctAnswer ? (
                 <span className="small muted">
-                  Accepted answer: <strong>{correctness.correctAnswer}</strong>
+                  Accepted answer: <strong>{choiceLabel(correctness.correctAnswer)}</strong>
                 </span>
               ) : null}
             </div>
@@ -153,26 +194,34 @@ export function QuestionRenderer({
   );
 }
 
-function renderPrompt(question: CandidateQuestion, group: CandidateQuestionGroup) {
+function renderPrompt(question: CandidateQuestion, group: CandidateQuestionGroup, inlineAnswer: ReactNode) {
   if (question.body?.kind === 'SUMMARY' && question.body.text) {
-    return <InlineSummary text={question.body.text} questionNumber={question.number} />;
+    return <InlineBody text={question.body.text} questionNumber={question.number} inlineAnswer={inlineAnswer} />;
   }
   if (question.body?.kind === 'NOTES' && question.body.text) {
-    return <InlineSummary text={question.body.text} questionNumber={question.number} prefixOnly />;
+    return question.body.text.includes(`[[${question.number}]]`) ? (
+      <InlineBody text={question.body.text} questionNumber={question.number} inlineAnswer={inlineAnswer} />
+    ) : (
+      <p style={{ whiteSpace: 'pre-wrap' }}>{question.body.text}</p>
+    );
   }
   if (question.body?.kind === 'TABLE' && question.body.rows) {
     return (
-      <table className="data" style={{ marginBottom: 8 }}>
-        <tbody>
-          {question.body.rows.map((row, rowIndex) => (
-            <tr key={rowIndex}>
-              {row.map((cell, cellIndex) => (
-                <td key={cellIndex}>{cell}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="table-wrap" style={{ marginBottom: 8 }}>
+        <table className="data question-table">
+          <tbody>
+            {question.body.rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {row.map((cell, cellIndex) => (
+                  <td key={cellIndex}>
+                    <InlineText text={cell} questionNumber={question.number} inlineAnswer={inlineAnswer} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     );
   }
   void group;
@@ -180,34 +229,61 @@ function renderPrompt(question: CandidateQuestion, group: CandidateQuestionGroup
 }
 
 /**
- * Renders completion text with `[[12]]` placeholders. The placeholder for this
- * question is replaced by an inline answer box; other placeholders stay visible
- * as their numbers so the layout matches the source.
+ * Renders completion text with `[[12]]` placeholders.
+ *
+ * The placeholder for this question becomes the answer box itself, with its
+ * number beside it; every other placeholder stays visible as a muted number so
+ * the running order of the paper is preserved.
  */
-function InlineSummary({ text, questionNumber, prefixOnly }: { text: string; questionNumber: number; prefixOnly?: boolean }) {
-  if (prefixOnly) return <p style={{ whiteSpace: 'pre-wrap' }}>{text}</p>;
+function InlineBody({
+  text,
+  questionNumber,
+  inlineAnswer,
+}: {
+  text: string;
+  questionNumber: number;
+  inlineAnswer: ReactNode;
+}) {
+  return (
+    <p className="q-body">
+      <InlineText text={text} questionNumber={questionNumber} inlineAnswer={inlineAnswer} />
+    </p>
+  );
+}
+
+function InlineText({
+  text,
+  questionNumber,
+  inlineAnswer,
+}: {
+  text: string;
+  questionNumber: number;
+  inlineAnswer: ReactNode;
+}) {
   const parts = text.split(/(\[\[\d+\]\])/g);
   return (
-    <p style={{ whiteSpace: 'pre-wrap' }}>
+    <>
       {parts.map((part, index) => {
         const match = part.match(/^\[\[(\d+)\]\]$/);
         if (!match) return <span key={index}>{part}</span>;
         const number = Number(match[1]);
-        if (number === questionNumber) {
+        if (number === questionNumber && inlineAnswer) {
           return (
-            <span key={index} className="inline-box">
-              <span className="inline-box__label">{number}</span>
-              <span className="muted tiny">↳ answer box below</span>
+            <span key={index} className="q-inline">
+              <span className="q-inline__number" aria-hidden="true">
+                {number}
+              </span>
+              {inlineAnswer}
             </span>
           );
         }
         return (
-          <span key={index} className="muted">
+          <span key={index} className="q-inline__ghost" aria-label={`Question ${number}`}>
             {number}
           </span>
         );
       })}
-    </p>
+    </>
   );
 }
 
@@ -218,21 +294,58 @@ function asValues(response: CandidateResponse | null): string[] {
   return [];
 }
 
+/**
+ * Single-choice control.
+ *
+ * `variant="pills"` is used by True/False/Not Given and Yes/No/Not Given: three
+ * short, fixed choices that read as a segmented control, with the display label
+ * taken from the option text only (a stored value such as `NOT_GIVEN` is never
+ * printed). `variant="list"` is the multiple-choice layout, where the option
+ * letter sits in its own badge beside the option text.
+ */
 function ChoiceControl({
   options,
   selected,
   onSelect,
   readOnly,
   name,
+  variant = 'list',
 }: {
   options: SharedOption[];
   selected: string[];
   onSelect: (value: string) => void;
   readOnly?: boolean;
   name: string;
+  variant?: 'pills' | 'list';
 }) {
+  if (variant === 'pills') {
+    return (
+      <div className="choice-pills" role="radiogroup">
+        {options.map((option) => {
+          const isSelected = selected.includes(option.id);
+          return (
+            <label
+              key={option.id}
+              className={`choice-pill ${isSelected ? 'choice-pill--on' : ''} ${readOnly ? 'choice-pill--readonly' : ''}`}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={option.id}
+                checked={isSelected}
+                disabled={readOnly}
+                onChange={() => onSelect(option.id)}
+              />
+              <span>{choiceLabel(option.text || option.id)}</span>
+            </label>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
-    <div role="radiogroup">
+    <div className="option-list" role="radiogroup">
       {options.map((option) => {
         const isSelected = selected.includes(option.id);
         return (
@@ -245,10 +358,10 @@ function ChoiceControl({
               disabled={readOnly}
               onChange={() => onSelect(option.id)}
             />
-            <span>
-              <strong style={{ marginRight: 6 }}>{option.id}</strong>
-              {option.text}
+            <span className="option-row__id" aria-hidden="true">
+              {option.id}
             </span>
+            <span className="option-row__text">{option.text}</span>
           </label>
         );
       })}
@@ -284,21 +397,23 @@ function MultiSelectControl({
 
   return (
     <div>
-      <div className="tiny muted" style={{ marginBottom: 4 }}>
+      <div className="tiny muted" style={{ marginBottom: 6 }}>
         Select exactly {selectCount}. Chosen: {selected.length}/{selectCount}
       </div>
-      {options.map((option) => {
-        const isSelected = selected.includes(option.id);
-        return (
-          <label key={option.id} className={`option-row ${isSelected ? 'option-row--selected' : ''}`}>
-            <input type="checkbox" checked={isSelected} disabled={readOnly} onChange={() => toggle(option.id)} />
-            <span>
-              <strong style={{ marginRight: 6 }}>{option.id}</strong>
-              {option.text}
-            </span>
-          </label>
-        );
-      })}
+      <div className="option-list">
+        {options.map((option) => {
+          const isSelected = selected.includes(option.id);
+          return (
+            <label key={option.id} className={`option-row ${isSelected ? 'option-row--selected' : ''}`}>
+              <input type="checkbox" checked={isSelected} disabled={readOnly} onChange={() => toggle(option.id)} />
+              <span className="option-row__id" aria-hidden="true">
+                {option.id}
+              </span>
+              <span className="option-row__text">{option.text}</span>
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -345,12 +460,15 @@ function TextControl({
   readOnly,
   ariaLabel,
   correctness,
+  inline,
 }: {
   value: string;
   onChange: (value: string) => void;
   readOnly?: boolean;
   ariaLabel: string;
   correctness?: { isCorrect: boolean | null };
+  /** Rendered inside completion text, where the box grows with the answer. */
+  inline?: boolean;
 }) {
   const ref = useRef<HTMLInputElement>(null);
 
@@ -361,10 +479,17 @@ function TextControl({
 
   const handle = useCallback((next: string) => onChange(next), [onChange]);
 
-  const className =
+  const className = [
+    'answer-input',
+    inline ? 'answer-input--inline' : '',
     correctness && correctness.isCorrect !== null
-      ? `answer-input ${correctness.isCorrect ? 'answer-input--correct' : 'answer-input--wrong'}`
-      : 'answer-input';
+      ? correctness.isCorrect
+        ? 'answer-input--correct'
+        : 'answer-input--wrong'
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <input
@@ -377,6 +502,7 @@ function TextControl({
       disabled={readOnly}
       autoComplete="off"
       spellCheck={false}
+      style={inline ? { width: `${Math.max(9, (value?.length ?? 0) + 3)}ch` } : undefined}
       onChange={(event) => handle(event.target.value)}
     />
   );
@@ -477,6 +603,13 @@ export function QuestionNavStrip({
   );
 }
 
+/**
+ * The instruction banner that opens every question group.
+ *
+ * It states the question range and the requirement in one line, the way a
+ * printed paper does ("Questions 1–5 · Do the following statements agree…"), and
+ * doubles as the jump target for the group.
+ */
 export function QuestionGroupHeader({
   group,
   onJump,
@@ -484,17 +617,31 @@ export function QuestionGroupHeader({
   group: CandidateQuestionGroup;
   onJump?: () => void;
 }) {
+  const range =
+    group.rangeFrom && group.rangeTo
+      ? group.rangeFrom === group.rangeTo
+        ? `Question ${group.rangeFrom}`
+        : `Questions ${group.rangeFrom}–${group.rangeTo}`
+      : null;
+
   return (
-    <div className="question-group__head">
-      <div className="row row--between">
-        <span className="question-group__type">{typeLabel(group.type)}</span>
-        {group.rangeFrom && group.rangeTo ? (
-          <button type="button" className="btn btn--sm btn--ghost" onClick={onJump}>
-            Questions {group.rangeFrom}–{group.rangeTo}
-          </button>
-        ) : null}
+    <div className="q-banner">
+      <span className="q-banner__badge" aria-hidden="true">
+        <Icon name="list" size={16} />
+      </span>
+      <div className="q-banner__body">
+        <p className="q-banner__text">
+          {range ? (
+            <>
+              <button type="button" className="q-banner__range" onClick={onJump}>
+                {range}
+              </button>{' '}
+            </>
+          ) : null}
+          <span className="q-banner__type">{typeLabel(group.type)}</span>{' '}
+          {group.instructions || QUESTION_TYPE_META[group.type]?.defaultInstructions}
+        </p>
       </div>
-      <p className="question-group__instructions">{group.instructions}</p>
     </div>
   );
 }
@@ -503,20 +650,25 @@ export function GroupOptionBank({ options, numbering }: { options: SharedOption[
   if (options.length === 0) return null;
   return (
     <div className="question-group__options">
-      <div className="tiny muted" style={{ marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        {numbering === 'roman' ? 'List of headings' : 'Options'}
+      <div className="question-group__options-title">
+        {numbering === 'roman' ? 'List of headings' : 'Choose from'}
       </div>
-      {options.map((option) => (
-        <div className="question-group__option" key={option.id}>
-          <span className="question-group__option-id">{option.id}</span>
-          <span>{option.text}</span>
-        </div>
-      ))}
+      <div className="option-bank">
+        {options.map((option) => (
+          <div className="option-bank__item" key={option.id}>
+            <span className="option-bank__id">{option.id}</span>
+            <span>{option.text}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
+/** Human label for a question type, from the shared registry (single source). */
 function typeLabel(type: string): string {
+  const meta = QUESTION_TYPE_META[type as keyof typeof QUESTION_TYPE_META];
+  if (meta?.label) return meta.label;
   return type
     .toLowerCase()
     .split('_')

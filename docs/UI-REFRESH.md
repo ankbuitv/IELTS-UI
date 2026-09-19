@@ -66,8 +66,44 @@ sub-navigation, modals, toasts and the exam shell keep their structure and
 inherit the tightened tokens; the exam screen deliberately stays the calmest
 surface in the product.
 
-## 3. Accessibility and behaviour preserved
+## 3. The question panel rebuilt
 
+The question pane was the weakest surface in the product: a group header with a
+type label and a range button, then every question as a plain row, with each
+True/False question repeating three full-width option rows underneath it.
+
+- **Instruction banner.** Every group now opens with a filled banner stating the
+  range, the question type and the requirement, the way a printed paper does
+  ("Questions 1–5 · True / False / Not Given · Do the following statements
+  agree…"). The banner sits *outside* the question card so the requirement is
+  read before the questions it governs, and the range doubles as a jump link.
+- **Card of questions.** Questions live in one white card with hairline
+  separators, a circular number badge inline with the statement, and a soft cyan
+  wash on the active question.
+- **Fixed: the duplicated True/False labels.** The options were built inline as
+  `{ id: 'TRUE', text: 'TRUE' }` and the control printed *both* fields, so the
+  interface read `TRUETRUE`, `FALSEFALSE` and `NOT_GIVENNOT GIVEN` — the stored
+  token leaking next to its own label. The choices are now defined once, the
+  control prints the label only, and True/False/Not Given and Yes/No/Not Given
+  render as a compact segmented control instead of three stacked rows repeated
+  under every statement.
+- **Multiple choice** options became bordered rows with the letter in its own
+  badge, so the option text is what the eye lands on.
+- **Answer boxes live inside the sentence** for completion tasks. When a
+  summary, note or table body carries the `[[n]]` placeholder for the question
+  being rendered, the box is drawn at that position — number chip beside it,
+  growing with the answer — and the other placeholders stay visible as muted
+  numbers, exactly as the paper runs. Questions without an inline position keep
+  the box below the prompt.
+- Flags use the icon set, and the released-answer labels are humanised
+  (`NOT_GIVEN` is displayed as `NOT GIVEN`).
+
+## 4. Accessibility and behaviour preserved
+
+- The segmented True/False control and the multiple-choice rows are real radio
+  inputs (visually hidden, keyboard-reachable in group order), so arrow-key
+  selection and screen-reader group semantics still work; the visual state is
+  also carried by the label text, never by colour alone.
 - Focus rings, keyboard paths, `prefers-reduced-motion`, semantic landmarks and
   the textual status labels are unchanged.
 - Colour still never carries meaning alone: the navigator keeps its legend, the
@@ -76,10 +112,18 @@ surface in the product.
   for the small uppercase section labels (slate-400 on white, decorative only,
   duplicated by the nav group heading).
 
-## 4. How this pass was verified
+## 5. How this pass was verified
 
 - `npm run typecheck`, `npm run lint`, `npm test` (158 unit tests) and
   `npm run build` are green.
+- **Exam rendering check.** The same bundle was driven through a live attempt
+  (created over the API against the seeded reading test) to assert the question
+  panel itself: three groups render with their banners, each True/False question
+  yields exactly three pills labelled `TRUE`, `FALSE`, `NOT GIVEN`, and the
+  multiple-choice rows carry their letter badge. A second harness renders the
+  component directly for the completion paths that the sample content does not
+  exercise: the answer box lands inside the summary text and inside a table
+  cell, and the head badge is suppressed when the number is already in the text.
 - **Structural render check.** The SPA is bundled to an IIFE (jsdom cannot run
   ES modules) and rendered route by route in jsdom against the live Worker:
   landing, sign in, register, dashboard, practice catalogue, attempt history,
@@ -91,7 +135,7 @@ surface in the product.
 - The deployed Worker is smoke-tested on every deploy by the same `/api/health`
   probe (`schemaReady: true`) used by `deploy/github-actions-deploy.yml`.
 
-## 5. Deliberately not changed
+## 6. Deliberately not changed
 
 - No new runtime dependency (the icon set and the tokens are hand-written).
 - No layout rewrites of the exam, admin or teacher screens: they inherit the

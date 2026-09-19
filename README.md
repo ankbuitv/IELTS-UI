@@ -51,6 +51,11 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
   writing tasks.
 - Reading split-panel layout with passage navigation; listening audio player
   with a configurable playback policy (max plays, preparation time, pause/seek).
+- Paper-style question layout: every group opens with an instruction banner
+  (range, type and requirement), questions sit in one card with numbered rows,
+  True/False/Not Given is a compact segmented control rather than three repeated
+  option rows, and completion tasks draw the answer box inside the sentence at
+  its `[[n]]` position.
 - Answer keys, evidence and explanations are stored server-side only and never
   appear in a candidate payload.
 
