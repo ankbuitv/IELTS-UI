@@ -487,7 +487,7 @@ describe('section-aware structured JSON import (32)', () => {
     expect(listening.type).toBe('LISTENING_PART');
     expect(listening.label).toBe('Part 1');
     expect(listening.audioUrl).toBe('https://cdn.example.com/part1.mp3');
-    const segments = (listening.transcript as { segments: Array<Record<string, unknown>> }).segments;
+    const segments = listening.transcript?.segments ?? [];
     expect(segments).toHaveLength(2);
     expect(segments[1]).toMatchObject({ id: 'seg-2', startSeconds: 12, speaker: 'Caller' });
 
