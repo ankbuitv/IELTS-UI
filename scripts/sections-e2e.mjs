@@ -83,8 +83,8 @@ function createClient(label) {
       csrfToken = result.body?.csrfToken ?? null;
       return result.body?.user;
     },
-    async login(email) {
-      const result = await request('POST', '/api/auth/login', { email, password: PASSWORD });
+    async login(email, password = (email === process.env.ADMIN_EMAIL ? (process.env.ADMIN_PASSWORD ?? PASSWORD) : PASSWORD)) {
+      const result = await request('POST', '/api/auth/login', { email, password });
       csrfToken = result.body?.csrfToken ?? null;
       return result.body?.user;
     },

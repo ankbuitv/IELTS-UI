@@ -36,8 +36,8 @@ for (const file of ['seed/wipe.sql', 'seed/seed.sql']) {
   }
 }
 
-run(['d1', 'execute', 'DB', '--local', '--file=./seed/wipe.sql'], 'Clearing local tables');
 run(['d1', 'migrations', 'apply', 'DB', '--local'], 'Applying migrations');
+run(['d1', 'execute', 'DB', '--local', '--file=./seed/wipe.sql'], 'Clearing local tables');
 run(['d1', 'execute', 'DB', '--local', '--file=./seed/seed.sql'], 'Loading original sample content');
 
 console.log('\n✓ Local database rebuilt. The first account to register becomes the administrator.');
