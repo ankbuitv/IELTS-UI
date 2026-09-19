@@ -1203,6 +1203,8 @@ router.get('/system/schema', async (c) => {
     environment: c.env.APP_ENV,
     baseUrl: c.env.APP_BASE_URL,
     migrationCommand: 'npx wrangler d1 migrations apply DB --remote',
+    autoRepair:
+      'Deploying this Worker is sufficient: on its first request it creates missing tables and adds missing columns to existing ones (nothing is altered or dropped). The migrations command above is only needed for a brand-new database or to keep d1_migrations bookkeeping accurate.',
   });
 });
 
