@@ -227,6 +227,35 @@ export function StudentDashboardPage() {
           </div>
         </Card>
 
+        <Card
+          title="By passage / part"
+          hint="Diagnostic only — these are not standalone IELTS band scores."
+        >
+          {(data.sectionPerformance ?? []).length === 0 ? (
+            <p className="muted small">Submit a multi-part test to see per-passage and per-part performance.</p>
+          ) : (
+            <div className="stack">
+              {(data.sectionPerformance ?? []).slice(0, 8).map((section) => (
+                <div key={section.sectionId}>
+                  <div className="row row--between">
+                    <span>
+                      {section.label} <span className="tiny muted">· {SKILL_LABELS[section.skill] ?? section.skill}</span>
+                    </span>
+                    <span className="small muted">
+                      {section.correct}/{section.answered} correct · {formatPercent(section.accuracy)}
+                    </span>
+                  </div>
+                  <ProgressBar
+                    value={section.accuracy ?? 0}
+                    max={100}
+                    tone={(section.accuracy ?? 0) >= 70 ? 'success' : (section.accuracy ?? 0) >= 45 ? 'warning' : 'danger'}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
         <Card title="Task-type accuracy" hint="From server-marked answers">
           <AccuracyList
             items={data.taskTypes.map((taskType) => ({

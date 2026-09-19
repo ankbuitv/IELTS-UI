@@ -1,6 +1,7 @@
 import type { Env } from '../env';
 import type { Skill, TestType } from '../../shared/types';
 import { QUESTION_TYPE_META, isQuestionType } from '../../shared/question-types';
+import { sectionDisplayLabel } from '../../shared/sections';
 
 export interface AnalyticsFilters {
   from?: string | null;
@@ -549,10 +550,138 @@ export async function getTrends(
   }));
 }
 
+// -----------------------------------------------------------------------------
+// 41. Section analytics — performance by Reading passage / Listening part,
+// writing-task completion, time spent and unanswered counts per section.
+// Aggregates only; a passage/part score is never presented as a standalone
+// IELTS band.
+// -----------------------------------------------------------------------------
+export interface SectionPerformance {
+  sectionId: string;
+  label: string;
+  title: string;
+  skill: Skill;
+  type: string;
+  /** Distinct submitted attempts that contain this section. */
+  attempts: number;
+  answered: number;
+  correct: number;
+  accuracy: number | null;
+  /** Sum over attempts of (questions in section − answered). */
+  unanswered: number;
+  /** Mean seconds spent in the section per attempt, when part timers ran. */
+  averageSeconds: number | null;
+}
+
+export async function getSectionPerformance(
+  env: Env,
+  filters: AnalyticsFilters,
+  userId: string | null,
+  options: { classroomId?: string; userIds?: string[] } = {},
+): Promise<SectionPerformance[]> {
+  const conditions: string[] = ["a.status IN ('SUBMITTED','EXPIRED')"];
+  const bindings: unknown[] = [];
+  if (userId) {
+    conditions.push('a.user_id = ?');
+    bindings.push(userId);
+  }
+  if (options.userIds && options.userIds.length > 0) {
+    conditions.push(`a.user_id IN (${options.userIds.map(() => '?').join(',')})`);
+    bindings.push(...options.userIds);
+  }
+  if (options.classroomId) {
+    conditions.push('a.assignment_id IN (SELECT id FROM assignments WHERE classroom_id = ?)');
+    bindings.push(options.classroomId);
+  }
+  if (filters.from) {
+    conditions.push('a.started_at >= ?');
+    bindings.push(filters.from);
+  }
+  if (filters.to) {
+    conditions.push('a.started_at <= ?');
+    bindings.push(filters.to);
+  }
+  if (filters.skill) {
+    conditions.push('sec.skill = ?');
+    bindings.push(filters.skill);
+  }
+
+  const rows = await env.DB.prepare(
+    `SELECT sec.id AS section_id, sec.title, sec.label, sec.skill,
+            COALESCE(sec.type, CASE sec.skill WHEN 'READING' THEN 'READING_PASSAGE' WHEN 'LISTENING' THEN 'LISTENING_PART' ELSE 'WRITING_TASK' END) AS type,
+            sec.order_index,
+            (SELECT COUNT(*) FROM questions q WHERE q.section_id = sec.id) AS total_questions,
+            COUNT(DISTINCT a.id) AS attempts,
+            SUM(CASE WHEN aa.answer_json IS NOT NULL AND aa.answer_json != '' AND aa.answer_json != 'null' THEN 1 ELSE 0 END) AS answered,
+            SUM(CASE WHEN aa.is_correct = 1 THEN 1 ELSE 0 END) AS correct
+       FROM sections sec
+       JOIN attempts a ON a.test_version_id = sec.test_version_id
+       LEFT JOIN questions q ON q.section_id = sec.id
+       LEFT JOIN attempt_answers aa ON aa.question_id = q.id AND aa.attempt_id = a.id
+      WHERE ${conditions.join(' AND ')}
+      GROUP BY sec.id
+      ORDER BY a.test_version_id, sec.order_index`,
+  )
+    .bind(...bindings)
+    .all<{
+      section_id: string;
+      title: string;
+      label: string;
+      skill: Skill;
+      type: string;
+      order_index: number;
+      total_questions: number;
+      attempts: number;
+      answered: number | null;
+      correct: number | null;
+    }>();
+
+  // Time spent per section comes from the server-tracked part timers.
+  const timeRows = await env.DB.prepare(
+    `SELECT sec.id AS section_id, AVG(
+        CAST(julianday(COALESCE(asec.submitted_at, asec.deadline_at)) - julianday(asec.started_at) AS REAL) * 86400
+     ) AS average_seconds
+       FROM attempt_sections asec
+       JOIN attempts a ON a.id = asec.attempt_id
+       JOIN sections sec ON sec.id = asec.section_id
+      WHERE asec.started_at IS NOT NULL
+        AND a.status IN ('SUBMITTED','EXPIRED')
+        ${userId ? 'AND a.user_id = ?' : ''}
+      GROUP BY sec.id`,
+  )
+    .bind(...(userId ? [userId] : []))
+    .all<{ section_id: string; average_seconds: number | null }>();
+  const timeBySection = new Map(timeRows.results.map((row) => [row.section_id, row.average_seconds]));
+
+  return rows.results
+    .filter((row) => row.attempts > 0)
+    .map((row) => {
+      const attempts = row.attempts;
+      const answered = row.answered ?? 0;
+      const correct = row.correct ?? 0;
+      const totalSlots = row.total_questions * attempts;
+      const averageSeconds = timeBySection.get(row.section_id) ?? null;
+      return {
+        sectionId: row.section_id,
+        label: sectionDisplayLabel({ label: row.label, type: row.type, skill: row.skill, orderIndex: row.order_index, title: row.title }),
+        title: row.title,
+        skill: row.skill,
+        type: row.type,
+        attempts,
+        answered,
+        correct,
+        accuracy: answered > 0 ? Math.round((correct / answered) * 1000) / 10 : null,
+        unanswered: Math.max(0, totalSlots - answered),
+        averageSeconds: averageSeconds !== null && Number.isFinite(averageSeconds) ? Math.round(averageSeconds) : null,
+      } satisfies SectionPerformance;
+    });
+}
+
 export interface StudentDashboard {
   assignments: AssignmentSummary[];
   upcomingDeadlines: AssignmentSummary[];
   recentAttempts: AttemptSummary[];
+  sectionPerformance: SectionPerformance[];
   skillPerformance: SkillPerformance[];
   taskTypes: TaskTypePerformance[];
   trends: TrendPoint[];
@@ -566,12 +695,13 @@ export async function getStudentDashboard(
   userId: string,
   filters: AnalyticsFilters,
 ): Promise<StudentDashboard> {
-  const [assignments, attempts, skillPerformance, taskTypes, trends] = await Promise.all([
+  const [assignments, attempts, skillPerformance, taskTypes, trends, sectionPerformance] = await Promise.all([
     listStudentAssignments(env, userId),
     listAttempts(env, userId, { ...filters, limit: filters.limit ?? 60 }),
     getSkillPerformance(env, filters, userId),
     getTaskTypePerformance(env, filters, userId),
     getTrends(env, filters, userId),
+    getSectionPerformance(env, filters, userId),
   ]);
 
   const upcomingDeadlines = assignments
@@ -598,6 +728,7 @@ export async function getStudentDashboard(
     upcomingDeadlines,
     recentAttempts: attempts.filter((attempt) => attempt.submittedAt).slice(0, 8),
     skillPerformance,
+    sectionPerformance,
     taskTypes,
     trends,
     mockHistory,
@@ -634,6 +765,7 @@ export interface ClassroomAnalytics {
     integrityFlaggedAttempts: number;
   }>;
   skillPerformance: SkillPerformance[];
+  sectionPerformance: SectionPerformance[];
   taskTypes: TaskTypePerformance[];
   bandDistribution: Array<{ band: number; count: number }>;
   integritySummary: Array<{ type: string; count: number }>;
@@ -679,8 +811,9 @@ export async function getClassroomAnalytics(env: Env, classroomId: string): Prom
       flagged_attempts: number;
     }>();
 
-  const [skillPerformance, taskTypes, bandDist, integrity] = await Promise.all([
+  const [skillPerformance, sectionPerformance, taskTypes, bandDist, integrity] = await Promise.all([
     getSkillPerformance(env, {}, null, { classroomId }),
+    getSectionPerformance(env, {}, null, { classroomId }),
     getTaskTypePerformance(env, {}, null, { classroomId }),
     env.DB.prepare(
       `SELECT s.estimated_band AS band, COUNT(*) AS count
@@ -724,6 +857,7 @@ export async function getClassroomAnalytics(env: Env, classroomId: string): Prom
       integrityFlaggedAttempts: row.flagged_attempts,
     })),
     skillPerformance,
+    sectionPerformance,
     taskTypes,
     bandDistribution: bandDist.results,
     integritySummary: integrity.results,

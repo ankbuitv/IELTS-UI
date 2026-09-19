@@ -7,7 +7,25 @@
  * the release-policy check.
  */
 import type { CandidateSection } from './question-types';
+import type { Skill } from './types';
 import type { TestType } from './types';
+
+/** Server-tracked per-section attempt progress/timing, sent to the exam UI (38/39). */
+export interface AttemptSectionState {
+  sectionId: string;
+  orderIndex: number;
+  skill: Skill;
+  label: string;
+  title: string;
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'EXPIRED';
+  durationSeconds: number | null;
+  startedAt: string | null;
+  deadlineAt: string | null;
+  remainingSeconds: number | null;
+  totalQuestions: number;
+  answeredCount: number;
+  flaggedCount: number;
+}
 
 export interface CandidateTestPayload {
   testId: string;

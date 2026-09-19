@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { CandidateResponse } from '@shared/answer-key';
 import { api, describeError } from '../lib/api';
-import { Badge, Button, Card, Field, KeyValue, Notice, Stat, TextArea, TextInput, useToast } from './ui';
+import { Badge, Button, Card, Field, KeyValue, Notice, Stat, Tabs, TextArea, TextInput, useToast } from './ui';
 import { QuestionRenderer } from './exam/QuestionRenderer';
-import { BAND_DISCLAIMER, formatBand, formatDateTime, formatDuration, formatPercent, formatScore, MODE_LABELS, SKILL_LABELS, TEST_TYPE_LABELS } from '../lib/format';
+import { BAND_DISCLAIMER, formatBand, formatClock, formatDateTime, formatDuration, formatPercent, formatScore, MODE_LABELS, SKILL_LABELS, TEST_TYPE_LABELS } from '../lib/format';
 import { AccuracyList } from './charts';
 
 export interface AttemptResultPayload {
@@ -39,6 +39,24 @@ export interface AttemptResultPayload {
     bandMessage: string;
     profileId: string | null;
     profileVersion: number | null;
+    /** 36: per-section (passage/part/task) diagnostic breakdown. */
+    sectionResults: Array<{
+      sectionId: string;
+      orderIndex: number;
+      skill: string;
+      type: string;
+      label: string;
+      title: string;
+      totalQuestions: number;
+      answeredCount: number;
+      flaggedCount: number;
+      rawScore: number | null;
+      correctCount: number | null;
+      passage: { id: string; title: string; subtitle: string | null; paragraphs: Array<{ label: string; text: string }>; wordCount: number } | null;
+      audio: { assetId: string; url: string; durationSeconds: number | null } | null;
+      image: { assetId: string; url: string } | null;
+      transcript: { segments: Array<{ id: string; startSeconds: number | null; speaker: string | null; text: string }> } | null;
+    }>;
     review: Array<{
       questionId: string;
       number: number;
@@ -51,6 +69,9 @@ export interface AttemptResultPayload {
       questionType: string;
       evidence: string | null;
       explanation: string | null;
+      sectionId: string | null;
+      sectionLabel: string | null;
+      sectionOrder: number | null;
     }> | null;
     writing: Array<{
       submissionId: string;
@@ -164,69 +185,59 @@ export function ResultSummary({
             </div>
           ) : null}
 
-          {session.review && session.review.length > 0 ? (
-            <details style={{ marginTop: 10 }}>
-              <summary className="small" style={{ cursor: 'pointer' }}>
-                Question-by-question review ({session.review.length} questions)
-              </summary>
-              <div className="stack" style={{ marginTop: 12 }}>
-                <AccuracyList
-                  items={[
-                    {
-                      label: 'Correct',
-                      correct: session.review.filter((item) => item.isCorrect).length,
-                      total: session.review.length,
-                      accuracy:
-                        session.review.length > 0
-                          ? Math.round(
-                              (session.review.filter((item) => item.isCorrect).length / session.review.length) * 1000,
-                            ) / 10
-                          : null,
-                    },
-                  ]}
-                />
-                <div className="table-wrap">
-                  <table className="data">
-                    <thead>
-                      <tr>
-                        <th className="num">#</th>
-                        <th>Question</th>
-                        <th>Your answer</th>
-                        <th>Accepted answer</th>
-                        <th />
-                        {marking ? <th>Mark</th> : null}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {session.review.map((item) => (
-                        <tr key={item.questionId}>
-                          <td className="num">{item.number}</td>
-                          <td style={{ maxWidth: 360 }}>{item.prompt}</td>
-                          <td>{renderAnswer(item.candidateAnswer)}</td>
-                          <td>{item.correctAnswer ?? '—'}</td>
-                          <td>
-                            <Badge tone={item.isCorrect ? 'success' : 'danger'}>
-                              {item.isCorrect === null ? 'Not marked' : item.isCorrect ? 'Correct' : 'Incorrect'}
-                            </Badge>
-                          </td>
-                          {marking ? (
-                            <td>
-                              <QuestionMarkControls
-                                apiBase={marking.apiBase}
-                                attemptId={result.attemptId}
-                                questionId={item.questionId}
-                                current={item.isCorrect}
-                                onSaved={marking.onSaved}
-                              />
-                            </td>
+          {session.sectionResults.length > 0 ? (
+            <div style={{ marginTop: 10 }}>
+              <h4 style={{ margin: '0 0 6px' }} className="small">
+                By {session.skill === 'LISTENING' ? 'part' : session.skill === 'READING' ? 'passage' : 'task'}
+              </h4>
+              <div className="table-wrap">
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Section</th>
+                      <th className="num">Score</th>
+                      <th className="num">Correct</th>
+                      <th className="num">Answered</th>
+                      <th className="num">Flagged</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {session.sectionResults.map((section) => (
+                      <tr key={section.sectionId}>
+                        <td>
+                          {section.label}
+                          {section.title && section.title !== section.label ? (
+                            <span className="tiny muted"> · {section.title}</span>
                           ) : null}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                        </td>
+                        <td className="num">
+                          {section.rawScore !== null && section.totalQuestions > 0
+                            ? `${section.rawScore}/${section.totalQuestions}`
+                            : '—'}
+                        </td>
+                        <td className="num">{section.correctCount ?? '—'}</td>
+                        <td className="num">
+                          {section.answeredCount}/{section.totalQuestions}
+                        </td>
+                        <td className="num">{section.flaggedCount || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </details>
+              <p className="tiny muted" style={{ marginTop: 6 }}>
+                Section scores are diagnostic only — they are not converted into separate IELTS bands.
+              </p>
+            </div>
+          ) : null}
+
+          {session.review && session.review.length > 0 ? (
+            <SectionReview
+              attemptId={result.attemptId}
+              sections={session.sectionResults}
+              review={session.review}
+              marking={marking}
+            />
           ) : null}
         </Card>
       ))}
@@ -455,6 +466,173 @@ function renderAnswer(answer: { value?: string; values?: string[] } | null): str
   if (!answer) return '—';
   if (answer.values) return answer.values.length > 0 ? answer.values.join(', ') : '—';
   return answer.value && answer.value.trim() ? answer.value : '—';
+}
+
+type SectionResultRow = AttemptResultPayload['sessions'][number]['sectionResults'][number];
+type ReviewRow = NonNullable<AttemptResultPayload['sessions'][number]['review']>[number];
+
+/**
+ * 37. Section-aware review: questions are grouped under Passage/Part/Task
+ * tabs, and each part loads its own passage, transcript and audio alongside
+ * the per-question evidence and outcomes.
+ */
+function SectionReview({
+  attemptId,
+  sections,
+  review,
+  marking,
+}: {
+  attemptId: string;
+  sections: SectionResultRow[];
+  review: ReviewRow[];
+  marking?: { apiBase: '/api/admin' | '/api/teacher'; onSaved: () => Promise<void> };
+}) {
+  const reviewSections = useMemo(() => {
+    const ids: Array<{ id: string; label: string; order: number }> = [];
+    const seen = new Set<string>();
+    for (const item of review) {
+      const key = item.sectionId ?? 'none';
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ids.push({ id: key, label: item.sectionLabel ?? 'Questions', order: item.sectionOrder ?? 0 });
+    }
+    for (const section of sections) {
+      if (!seen.has(section.sectionId)) {
+        seen.add(section.sectionId);
+        ids.push({ id: section.sectionId, label: section.label, order: section.orderIndex });
+      }
+    }
+    return ids.sort((a, b) => a.order - b.order);
+  }, [review, sections]);
+
+  const [activeId, setActiveId] = useState<string>(reviewSections[0]?.id ?? 'none');
+  const activeId_ = reviewSections.some((section) => section.id === activeId) ? activeId : reviewSections[0]?.id ?? 'none';
+  const activeItems = review.filter((item) => (item.sectionId ?? 'none') === activeId_);
+  const activeSection = sections.find((section) => section.sectionId === activeId_) ?? null;
+
+  const correct = review.filter((item) => item.isCorrect).length;
+  const incorrect = review.filter((item) => item.isCorrect === false).length;
+  const unanswered = review.filter((item) => item.isCorrect !== null && item.candidateAnswer === null).length;
+
+  return (
+    <details style={{ marginTop: 10 }}>
+      <summary className="small" style={{ cursor: 'pointer' }}>
+        Question-by-question review ({review.length} questions)
+      </summary>
+      <div className="stack" style={{ marginTop: 12 }}>
+        <AccuracyList
+          items={[
+            { label: 'Correct', correct, total: review.length, accuracy: review.length > 0 ? Math.round((correct / review.length) * 1000) / 10 : null },
+            { label: 'Incorrect', correct: incorrect, total: review.length, accuracy: null },
+            { label: 'Unanswered', correct: unanswered, total: review.length, accuracy: null },
+          ]}
+        />
+
+        {reviewSections.length > 1 ? (
+          <Tabs
+            tabs={reviewSections.map((section) => ({ id: section.id, label: section.label }))}
+            value={activeId_}
+            onChange={setActiveId}
+          />
+        ) : null}
+
+        {activeSection?.audio ? (
+          <audio controls preload="none" src={activeSection.audio.url} style={{ width: '100%' }} />
+        ) : null}
+
+        {activeSection?.passage ? (
+          <details className="card" style={{ background: 'var(--paper-muted)' }}>
+            <summary className="small">
+              {activeSection.passage.title || 'Passage'} ({activeSection.passage.wordCount} words)
+            </summary>
+            <div className="passage" style={{ marginTop: 10 }}>
+              {activeSection.passage.paragraphs.map((paragraph, index) => (
+                <div className="passage__paragraph" key={index}>
+                  <span className="passage__label">{paragraph.label}</span>
+                  <span className="passage__text">{paragraph.text}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        ) : null}
+
+        {activeSection?.transcript && activeSection.transcript.segments.length > 0 ? (
+          <details className="card" style={{ background: 'var(--paper-muted)' }}>
+            <summary className="small">Transcript ({activeSection.transcript.segments.length} segments)</summary>
+            <div className="stack" style={{ marginTop: 10, gap: 6 }}>
+              {activeSection.transcript.segments.map((segment) => (
+                <p key={segment.id} className="small" style={{ margin: 0 }} id={`segment-${segment.id}`}>
+                  {segment.startSeconds !== null ? (
+                    <span className="tiny muted" style={{ marginRight: 6 }}>
+                      {formatClock(segment.startSeconds)}
+                    </span>
+                  ) : null}
+                  {segment.speaker ? <strong>{segment.speaker}: </strong> : null}
+                  {segment.text}
+                </p>
+              ))}
+            </div>
+          </details>
+        ) : null}
+
+        <div className="table-wrap">
+          <table className="data">
+            <thead>
+              <tr>
+                <th className="num">#</th>
+                <th>Question</th>
+                <th>Your answer</th>
+                <th>Accepted answer</th>
+                <th />
+                {marking ? <th>Mark</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {activeItems.map((item) => {
+                const unansweredItem = item.candidateAnswer === null || renderAnswer(item.candidateAnswer) === '—';
+                return (
+                  <tr key={item.questionId}>
+                    <td className="num">{item.number}</td>
+                    <td style={{ maxWidth: 360 }}>
+                      {item.prompt}
+                      {item.evidence ? (
+                        <div className="tiny muted" style={{ marginTop: 4 }}>
+                          Evidence: {item.evidence}
+                        </div>
+                      ) : null}
+                      {item.explanation ? (
+                        <div className="tiny muted" style={{ marginTop: 2 }}>
+                          {item.explanation}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td>{renderAnswer(item.candidateAnswer)}</td>
+                    <td>{item.correctAnswer ?? '—'}</td>
+                    <td>
+                      <Badge tone={item.isCorrect === null ? 'neutral' : unansweredItem && item.isCorrect === false ? 'warning' : item.isCorrect ? 'success' : 'danger'}>
+                        {item.isCorrect === null ? 'Not marked' : unansweredItem ? 'Unanswered' : item.isCorrect ? 'Correct' : 'Incorrect'}
+                      </Badge>
+                    </td>
+                    {marking ? (
+                      <td>
+                        <QuestionMarkControls
+                          apiBase={marking.apiBase}
+                          attemptId={attemptId}
+                          questionId={item.questionId}
+                          current={item.isCorrect}
+                          onSaved={marking.onSaved}
+                        />
+                      </td>
+                    ) : null}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  );
 }
 
 /** Read-only question rendering used by teachers and admins when reviewing. */

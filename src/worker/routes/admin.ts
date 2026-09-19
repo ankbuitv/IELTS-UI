@@ -197,6 +197,11 @@ const editableContentSchema = z.object({
     .array(
       z.object({
         skill: z.enum(SKILLS),
+        // 29: normalised structural type + display label.
+        type: z.string().max(60).nullish(),
+        label: z.string().max(120).nullish(),
+        description: z.string().max(2000).nullish(),
+        order: z.number().int().min(0).max(100).nullish(),
         title: z.string().max(300).default(''),
         subtitle: z.string().max(300).nullish(),
         instructions: z.string().max(8000).default(''),
@@ -221,6 +226,23 @@ const editableContentSchema = z.object({
             allowSeekAfterPlay: z.boolean().optional(),
           })
           .optional(),
+        // 29: segment-based listening transcript + optional section image.
+        transcript: z
+          .object({
+            segments: z
+              .array(
+                z.object({
+                  id: z.string().max(80),
+                  startSeconds: z.number().min(0).max(36_000).nullish(),
+                  speaker: z.string().max(120).nullish(),
+                  text: z.string().max(8000),
+                }),
+              )
+              .max(600),
+          })
+          .nullish(),
+        imageAssetId: z.string().max(2000).nullish(),
+        imageUrl: z.string().max(2000).nullish(),
         groups: z
           .array(
             z.object({
@@ -233,6 +255,7 @@ const editableContentSchema = z.object({
                   selectCount: z.number().int().min(1).max(10).optional(),
                   note: z.string().max(500).optional(),
                   optionNumbering: z.enum(['roman', 'alpha', 'numeric']).optional(),
+                  minimumWords: z.number().int().min(1).max(2000).optional(),
                 })
                 .default({}),
               rangeFrom: z.number().int().nullish(),

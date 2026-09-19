@@ -9,6 +9,7 @@ import { currentUser } from '../middleware/auth';
 import {
   advanceComponent,
   applyIntegrityPolicy,
+  completeSection,
   createAttempt,
   loadAttemptResult,
   loadCandidateAttemptState,
@@ -143,6 +144,18 @@ router.post('/:id/advance', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const result = await advanceComponent(c.env, user, c.req.param('id'));
+  return c.json(result);
+});
+
+/** 34/39: candidate completes the current section/part; the policy opens the next. */
+router.post('/:id/complete-section', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({ sectionId: z.string().min(1).max(64).optional() }),
+  );
+  const result = await completeSection(c.env, user, c.req.param('id'), body.sectionId ?? null);
   return c.json(result);
 });
 

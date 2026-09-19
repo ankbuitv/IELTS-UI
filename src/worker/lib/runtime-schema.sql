@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 32   Indexes: 48
+-- Tables: 33   Indexes: 50
 -- =============================================================================
 
 -- table: users
@@ -185,7 +185,8 @@ CREATE TABLE IF NOT EXISTS sections (
   config_json      TEXT NOT NULL DEFAULT '{}',        -- playback policy, etc.
   created_at       TEXT NOT NULL,
   updated_at       TEXT NOT NULL
-);
+, type TEXT
+  CHECK (type IS NULL OR type IN ('READING_PASSAGE', 'LISTENING_PART', 'WRITING_TASK')), label TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', transcript_json TEXT, image_asset_id TEXT REFERENCES assets (id) ON DELETE SET NULL);
 
 -- table: question_groups
 CREATE TABLE IF NOT EXISTS question_groups (
@@ -526,6 +527,31 @@ CREATE TABLE IF NOT EXISTS test_unlocks (
   PRIMARY KEY (user_id, test_id)
 );
 
+-- table: attempt_sections
+CREATE TABLE IF NOT EXISTS attempt_sections (
+  id              TEXT PRIMARY KEY,
+  attempt_id      TEXT NOT NULL REFERENCES attempts (id) ON DELETE CASCADE,
+  section_id      TEXT NOT NULL,
+  section_order   INTEGER NOT NULL,
+  skill           TEXT NOT NULL CHECK (skill IN ('READING', 'LISTENING', 'WRITING')),
+  label           TEXT NOT NULL DEFAULT '',
+  title           TEXT NOT NULL DEFAULT '',
+  duration_seconds INTEGER,
+  -- Section timing is only enforced when the version's policy enables it;
+  -- NULL deadlines mean "not started yet" or "no per-section timer".
+  status          TEXT NOT NULL DEFAULT 'NOT_STARTED'
+                  CHECK (status IN ('NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'EXPIRED')),
+  started_at      TEXT,
+  deadline_at     TEXT,
+  submitted_at    TEXT,
+  total_questions INTEGER NOT NULL DEFAULT 0,
+  answered_count  INTEGER NOT NULL DEFAULT 0,
+  flagged_count   INTEGER NOT NULL DEFAULT 0,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  UNIQUE (attempt_id, section_id)
+);
+
 -- index: idx_users_role
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 
@@ -669,3 +695,9 @@ CREATE INDEX IF NOT EXISTS idx_assets_kind ON assets (kind, created_at);
 
 -- index: idx_test_unlocks_test
 CREATE INDEX IF NOT EXISTS idx_test_unlocks_test ON test_unlocks (test_id);
+
+-- index: idx_sections_image
+CREATE INDEX IF NOT EXISTS idx_sections_image ON sections (image_asset_id);
+
+-- index: idx_attempt_sections_attempt
+CREATE INDEX IF NOT EXISTS idx_attempt_sections_attempt ON attempt_sections (attempt_id, section_order);
