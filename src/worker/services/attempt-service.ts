@@ -15,8 +15,32 @@ import { isCountedEvent } from '../../shared/integrity';
 import type { CandidateResponse } from '../../shared/answer-key';
 import { countWords } from '../../shared/answer-key';
 import { isQuestionType } from '../../shared/question-types';
-import type { ExamMode, ResultVisibility, Skill, TestType } from '../../shared/types';
+import { sectionDisplayLabel, type SectionPolicy } from '../../shared/sections';
+import type { CandidatePassage } from '../../shared/question-types';
+import { resolveVersionSectionPolicy, type ExamMode, ResultVisibility, Skill, TestType } from '../../shared/types';
+import { resolveAssetUrl } from './media-service';
 import { loadPlatformSettings } from '../lib/settings';
+
+/** Per-section performance block in a result view (36). */
+export interface AttemptSectionResult {
+  sectionId: string;
+  orderIndex: number;
+  skill: Skill;
+  /** Normalised structural type (READING_PASSAGE | LISTENING_PART | WRITING_TASK). */
+  type: string;
+  label: string;
+  title: string;
+  totalQuestions: number;
+  answeredCount: number;
+  flaggedCount: number;
+  rawScore: number | null;
+  correctCount: number | null;
+  /** Review material — present only after review is released (37). */
+  passage: (Omit<CandidatePassage, 'subtitle'> & { subtitle: string | null }) | null;
+  audio: { assetId: string; url: string; durationSeconds: number | null } | null;
+  image: { assetId: string; url: string } | null;
+  transcript: { segments: Array<{ id: string; startSeconds: number | null; speaker: string | null; text: string }> } | null;
+}
 
 const TRANSITION_GRACE_SECONDS = 60;
 
@@ -61,6 +85,29 @@ export interface SkillSessionRow {
   scoring_profile_id: string | null;
   scoring_profile_version: number | null;
 }
+
+/** Server-side per-section attempt state (`attempt_sections`, 38/39/40). */
+export interface AttemptSectionRow {
+  id: string;
+  attempt_id: string;
+  section_id: string;
+  section_order: number;
+  skill: Skill;
+  label: string;
+  title: string;
+  duration_seconds: number | null;
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'EXPIRED';
+  started_at: string | null;
+  deadline_at: string | null;
+  submitted_at: string | null;
+  total_questions: number;
+  answered_count: number;
+  flagged_count: number;
+}
+
+/** Candidate-visible per-section progress and timing (shared shape). */
+export type { AttemptSectionState } from '../../shared/candidate';
+import type { AttemptSectionState } from '../../shared/candidate';
 
 interface AssignmentRow {
   id: string;
@@ -276,6 +323,10 @@ export async function createAttempt(
 
   await env.DB.batch(statements);
 
+  // 38/39/40: snapshot the section structure for this attempt (also creates
+  // server-side per-section timers when the version's policy enables them).
+  await initializeAttemptSections(env, attemptId, plan.components, startedAt, resolveVersionSectionPolicy(versionConfig));
+
   await recordIntegrityEvents(env, attemptId, [
     { type: 'SESSION_START', occurredAt: startedAt, metadata: { mode, testType: test.type } },
   ]);
@@ -389,6 +440,119 @@ async function buildComponentPlan(
 
 function addSeconds(iso: string, seconds: number): string {
   return new Date(new Date(iso).getTime() + seconds * 1000).toISOString();
+}
+
+/**
+ * Snapshots the section/part structure of every component version into
+ * `attempt_sections` (38/40): historical attempts keep the structure of their
+ * original version, and progress is tracked server-side. When the version's
+ * policy enables part timing (39), cumulative deadlines are derived from each
+ * section's `duration_seconds`; otherwise deadlines stay NULL and navigation
+ * is free.
+ */
+async function initializeAttemptSections(
+  env: Env,
+  attemptId: string,
+  components: ComponentPlan['components'],
+  startedAt: string,
+  policy: SectionPolicy,
+): Promise<void> {
+  const timestamp = nowIso();
+  const statements: D1PreparedStatement[] = [];
+  let cursorSeconds = 0;
+  let firstOpen = true;
+
+  for (const component of components) {
+    const sections = await env.DB.prepare(
+      `SELECT s.id, s.skill, s.order_index, s.title, s.label, s.duration_seconds,
+              (SELECT COUNT(*) FROM questions q WHERE q.section_id = s.id) AS total_questions
+         FROM sections s
+        WHERE s.test_version_id = ?
+        ORDER BY s.order_index, s.id`,
+    )
+      .bind(component.testVersionId)
+      .all<{
+        id: string;
+        skill: Skill;
+        order_index: number;
+        title: string;
+        label: string;
+        duration_seconds: number | null;
+        total_questions: number;
+      }>();
+
+    const partTiming = policy.navigation !== 'FREE_NAVIGATION';
+    for (const section of sections.results) {
+      const deadline =
+        partTiming && section.duration_seconds
+          ? addSeconds(startedAt, cursorSeconds + section.duration_seconds)
+          : null;
+      const isActive = firstOpen && component.testVersionId === components[0]?.testVersionId;
+      if (isActive) firstOpen = false;
+      if (isActive || deadline) {
+        cursorSeconds += section.duration_seconds ?? 0;
+      }
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO attempt_sections (id, attempt_id, section_id, section_order, skill, label, title,
+                                         duration_seconds, status, started_at, deadline_at, total_questions,
+                                         created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).bind(
+          newId('asec'),
+          attemptId,
+          section.id,
+          section.order_index,
+          section.skill,
+          sectionDisplayLabel({ label: section.label, skill: section.skill, orderIndex: section.order_index, title: section.title }),
+          section.title,
+          section.duration_seconds,
+          isActive ? 'IN_PROGRESS' : 'NOT_STARTED',
+          isActive ? startedAt : null,
+          isActive ? deadline : deadline,
+          section.total_questions,
+          timestamp,
+          timestamp,
+        ),
+      );
+    }
+  }
+
+  if (statements.length > 0) {
+    for (let i = 0; i < statements.length; i += 40) {
+      await env.DB.batch(statements.slice(i, i + 40));
+    }
+  }
+}
+
+/** Recomputes answered/flagged counters per section from `attempt_answers` (38). */
+export async function refreshAttemptSectionProgress(env: Env, attemptId: string): Promise<void> {
+  const timestamp = nowIso();
+  await env.DB.prepare(
+    `UPDATE attempt_sections
+        SET answered_count = (
+              SELECT COUNT(*) FROM attempt_answers aa
+               WHERE aa.attempt_id = attempt_sections.attempt_id
+                 AND aa.question_id IN (SELECT id FROM questions WHERE section_id = attempt_sections.section_id)
+                 AND aa.answer_json IS NOT NULL AND aa.answer_json != '' AND aa.answer_json != 'null'
+            ) + COALESCE((
+              SELECT COUNT(*) FROM writing_submissions ws
+               JOIN questions q2 ON q2.id = ws.question_id
+                WHERE ws.attempt_id = attempt_sections.attempt_id
+                  AND q2.section_id = attempt_sections.section_id
+                  AND TRIM(ws.response_text) != ''
+            ), 0),
+            flagged_count = (
+              SELECT COUNT(*) FROM attempt_answers af
+               WHERE af.attempt_id = attempt_sections.attempt_id
+                 AND af.question_id IN (SELECT id FROM questions WHERE section_id = attempt_sections.section_id)
+                 AND af.is_flagged = 1
+            ),
+            updated_at = ?
+      WHERE attempt_id = ?`,
+  )
+    .bind(timestamp, attemptId)
+    .run();
 }
 
 // -----------------------------------------------------------------------------
@@ -524,6 +688,20 @@ export async function enforceTime(env: Env, attempt: AttemptRow): Promise<TimeSt
     }
   }
 
+  // ---- per-section/part timers (39, server-authoritative) ------------------
+  const partExpiry = await enforceSectionTimers(env, attempt, sessions.results);
+  if (partExpiry?.finalised) {
+    return {
+      serverNow: now,
+      attemptDeadline: attempt.deadline_at,
+      attemptRemainingSeconds: remainingSeconds(attempt.deadline_at),
+      activeSessionId: active?.id ?? null,
+      sessionRemainingSeconds: sessionRemaining,
+      sessionDeadline: active?.deadline_at ?? null,
+      autoSubmitted: true,
+    };
+  }
+
   return {
     serverNow: now,
     attemptDeadline: attempt.deadline_at,
@@ -533,6 +711,168 @@ export async function enforceTime(env: Env, attempt: AttemptRow): Promise<TimeSt
     sessionDeadline: active?.deadline_at ?? null,
     autoSubmitted: false,
   };
+}
+
+interface SectionTimerOutcome {
+  finalised: boolean;
+  advanced: boolean;
+}
+
+/**
+ * Closes sections whose part deadline has passed. Configuration decides what
+ * happens next (39): with `autoAdvanceOnPartTimeout` the next part opens
+ * immediately; otherwise the part closes and the candidate advances manually.
+ * The overall attempt deadline always remains the hard cap.
+ */
+async function enforceSectionTimers(env: Env, attempt: AttemptRow, sessions: SkillSessionRow[]): Promise<SectionTimerOutcome | null> {
+  const expired = await env.DB.prepare(
+    `SELECT * FROM attempt_sections
+      WHERE attempt_id = ? AND status = 'IN_PROGRESS' AND deadline_at IS NOT NULL AND deadline_at <= ?`,
+  )
+    .bind(attempt.id, nowIso())
+    .all<AttemptSectionRow>();
+
+  if (expired.results.length === 0) return null;
+
+  const attemptSections = (
+    await env.DB.prepare(
+      'SELECT * FROM attempt_sections WHERE attempt_id = ? ORDER BY section_order',
+    )
+      .bind(attempt.id)
+      .all<AttemptSectionRow>()
+  ).results;
+
+  // Load the policy recorded for this attempt (frozen at creation).
+  const versionRow = await env.DB.prepare('SELECT config_json FROM test_versions WHERE id = ?')
+    .bind(attempt.test_version_id)
+    .first<{ config_json: string }>();
+  const policy = resolveVersionSectionPolicy(parseJson<Record<string, unknown>>(versionRow?.config_json ?? '{}', {}));
+
+  const timestamp = nowIso();
+  let finalised = false;
+  let advanced = false;
+
+  for (const section of expired.results) {
+    await env.DB.prepare(
+      `UPDATE attempt_sections SET status = 'EXPIRED', submitted_at = ?, updated_at = ? WHERE id = ?`,
+    )
+      .bind(timestamp, timestamp, section.id)
+      .run();
+
+    const index = attemptSections.findIndex((row) => row.id === section.id);
+    const next = attemptSections
+      .slice(index + 1)
+      .find((row) => row.status === 'NOT_STARTED' && row.skill === section.skill);
+
+    if (policy.autoAdvanceOnPartTimeout && next) {
+      await env.DB.prepare(
+        `UPDATE attempt_sections SET status = 'IN_PROGRESS', started_at = ?, deadline_at = ?, updated_at = ?
+          WHERE id = ?`,
+      )
+        .bind(timestamp, next.duration_seconds ? addSeconds(timestamp, next.duration_seconds) : null, timestamp, next.id)
+        .run();
+      advanced = true;
+      continue;
+    }
+
+    const activeSession = sessions.find((session) => session.skill === section.skill && session.component_index === attempt.current_component_index);
+    const hasMoreSections = attemptSections.some((row) => row.skill === section.skill && row.status === 'NOT_STARTED');
+    if (!hasMoreSections && !policy.autoAdvanceOnPartTimeout && attempt.test_type !== 'FULL_MOCK' && activeSession) {
+      // Last part of a single-skill test timed out without auto-advance: the
+      // part time is the component time, so the attempt closes.
+      await finalizeAttempt(env, attempt, 'TIMEOUT');
+      finalised = true;
+    }
+  }
+
+  return { finalised, advanced };
+}
+
+/**
+ * Candidate finished a section/part: closes it and opens the next one the
+ * policy allows (34/39). In FREE_NAVIGATION this is advisory; in sequential
+ * modes it is the only way forward, and completed parts reopen only when
+ * `allowReturnToPreviousParts` is set.
+ */
+export async function completeSection(
+  env: Env,
+  user: AuthUser,
+  attemptId: string,
+  sectionId: string | null,
+): Promise<{ sections: AttemptSectionState[]; submitted: boolean }> {
+  const attempt = await requireOwnedAttempt(env, user, attemptId);
+  if (attempt.user_id !== user.id) throw ApiError.forbidden('This attempt belongs to another user.');
+  if (attempt.status !== 'IN_PROGRESS') throw new ApiError('ATTEMPT_LOCKED', 'This attempt is already submitted.');
+  await enforceTime(env, attempt);
+
+  const rows = await env.DB.prepare('SELECT * FROM attempt_sections WHERE attempt_id = ? ORDER BY section_order')
+    .bind(attemptId)
+    .all<AttemptSectionRow>();
+  if (rows.results.length === 0) throw ApiError.conflict('This attempt has no section state.');
+
+  const policy = await loadAttemptSectionPolicy(env, attempt);
+  const target = sectionId
+    ? rows.results.find((row) => row.section_id === sectionId)
+    : rows.results.find((row) => row.status === 'IN_PROGRESS');
+  if (!target) throw ApiError.notFound('Section not found in this attempt.');
+  if (target.status !== 'IN_PROGRESS') throw ApiError.conflict('Only the current section can be completed.');
+
+  const timestamp = nowIso();
+  await env.DB.prepare(
+    `UPDATE attempt_sections SET status = 'COMPLETED', submitted_at = ?, updated_at = ? WHERE id = ?`,
+  )
+    .bind(timestamp, timestamp, target.id)
+    .run();
+
+  const next = rows.results
+    .slice(rows.results.findIndex((row) => row.id === target.id) + 1)
+    .find((row) => row.status === 'NOT_STARTED');
+
+  let submitted = false;
+  if (next) {
+    await env.DB.prepare(
+      `UPDATE attempt_sections SET status = 'IN_PROGRESS', started_at = ?, deadline_at = ?, updated_at = ? WHERE id = ?`,
+    )
+      .bind(timestamp, next.duration_seconds ? addSeconds(timestamp, next.duration_seconds) : null, timestamp, next.id)
+      .run();
+  } else if (attempt.test_type !== 'FULL_MOCK' && policy.navigation !== 'FREE_NAVIGATION') {
+    // Advancing past the last part completes the attempt.
+    await finalizeAttempt(env, attempt, 'CANDIDATE');
+    submitted = true;
+  }
+
+  await refreshAttemptSectionProgress(env, attemptId);
+  const sections = await loadAttemptSectionState(env, attemptId);
+  return { sections, submitted };
+}
+
+async function loadAttemptSectionPolicy(env: Env, attempt: AttemptRow): Promise<SectionPolicy> {
+  const versionRow = await env.DB.prepare('SELECT config_json FROM test_versions WHERE id = ?')
+    .bind(attempt.test_version_id)
+    .first<{ config_json: string }>();
+  return resolveVersionSectionPolicy(parseJson<Record<string, unknown>>(versionRow?.config_json ?? '{}', {}));
+}
+
+/** Server-derived per-section progress for one attempt (38). */
+export async function loadAttemptSectionState(env: Env, attemptId: string): Promise<AttemptSectionState[]> {
+  const rows = await env.DB.prepare('SELECT * FROM attempt_sections WHERE attempt_id = ? ORDER BY section_order')
+    .bind(attemptId)
+    .all<AttemptSectionRow>();
+  return rows.results.map((row) => ({
+    sectionId: row.section_id,
+    orderIndex: row.section_order,
+    skill: row.skill,
+    label: row.label,
+    title: row.title,
+    status: row.status,
+    durationSeconds: row.duration_seconds,
+    startedAt: row.started_at,
+    deadlineAt: row.deadline_at,
+    remainingSeconds: row.deadline_at && row.status === 'IN_PROGRESS' ? remainingSeconds(row.deadline_at) : null,
+    totalQuestions: row.total_questions,
+    answeredCount: row.answered_count,
+    flaggedCount: row.flagged_count,
+  }));
 }
 
 function remainingSeconds(deadline: string | null): number | null {
@@ -573,6 +913,10 @@ export interface CandidateAttemptState {
   }>;
   activeComponentIndex: number;
   content: CandidateTestPayload | null;
+  /** Server-authoritative per-section progress/timing (38/39). */
+  sections: AttemptSectionState[];
+  /** Section navigation policy frozen for this attempt (34/39). */
+  sectionPolicy: SectionPolicy;
   answers: Record<string, CandidateResponse>;
   flagged: string[];
   answeredCount: number;
@@ -603,6 +947,13 @@ export async function loadCandidateAttemptState(
   const time = await enforceTime(env, attempt);
   const refreshed = await env.DB.prepare('SELECT * FROM attempts WHERE id = ?').bind(attemptId).first<AttemptRow>();
   const current = refreshed ?? attempt;
+
+  // Server-derived section progress (38) and the policy frozen for the attempt.
+  const [sectionRows, versionConfigRow] = await Promise.all([
+    loadAttemptSectionState(env, attemptId),
+    env.DB.prepare('SELECT config_json FROM test_versions WHERE id = ?').bind(current.test_version_id).first<{ config_json: string }>(),
+  ]);
+  const sectionPolicy = resolveVersionSectionPolicy(parseJson<Record<string, unknown>>(versionConfigRow?.config_json ?? '{}', {}));
 
   const [test, version, sessions, answers, writing, integrity] = await Promise.all([
     env.DB.prepare('SELECT title FROM tests WHERE id = ?').bind(current.test_id).first<{ title: string }>(),
@@ -701,6 +1052,8 @@ export async function loadCandidateAttemptState(
     })),
     activeComponentIndex: current.current_component_index,
     content,
+    sections: sectionRows,
+    sectionPolicy,
     answers: answerMap,
     flagged,
     answeredCount: answeredIds.size,
@@ -788,7 +1141,35 @@ export async function saveAnswers(
   )
     .bind(active.test_version_id)
     .all<{ id: string }>();
-  const validIds = new Set(validQuestions.results.map((row) => row.id));
+  let validIds = new Set(validQuestions.results.map((row) => row.id));
+
+  // 34/39: in sequential or locked part modes only the open part accepts
+  // answers. Legacy attempts without section rows keep unrestricted access.
+  const sectionPolicy = await loadAttemptSectionPolicy(env, attempt);
+  if (sectionPolicy.navigation !== 'FREE_NAVIGATION') {
+    const sectionRows = await env.DB.prepare(
+      'SELECT COUNT(*) AS count FROM attempt_sections WHERE attempt_id = ?',
+    )
+      .bind(attemptId)
+      .first<{ count: number }>();
+    if ((sectionRows?.count ?? 0) > 0) {
+      const openSections = await env.DB.prepare(
+        `SELECT section_id FROM attempt_sections WHERE attempt_id = ? AND status = 'IN_PROGRESS'`,
+      )
+        .bind(attemptId)
+        .all<{ section_id: string }>();
+      const openIds = new Set(openSections.results.map((row) => row.section_id));
+      const openQuestions = await env.DB.prepare(
+        `SELECT id FROM questions
+          WHERE test_version_id = ? AND section_id IN (SELECT section_id FROM attempt_sections WHERE attempt_id = ? AND status = 'IN_PROGRESS')`,
+      )
+        .bind(active.test_version_id, attemptId)
+        .all<{ id: string }>();
+      const openQuestionIds = new Set(openQuestions.results.map((row) => row.id));
+      validIds = new Set([...validIds].filter((id) => openQuestionIds.has(id)));
+      void openIds;
+    }
+  }
 
   const timestamp = nowIso();
   const statements: D1PreparedStatement[] = [];
@@ -796,7 +1177,9 @@ export async function saveAnswers(
 
   for (const update of updates) {
     if (!validIds.has(update.questionId)) {
-      throw ApiError.validation('One of the submitted questions does not belong to this attempt.');
+      throw ApiError.conflict(
+        'That question belongs to a part that is not open. Complete the current part first.',
+      );
     }
     const answered = update.response ? isNonEmptyResponse(update.response) : false;
     statements.push(
@@ -827,6 +1210,7 @@ export async function saveAnswers(
   if (statements.length > 0) await env.DB.batch(statements);
 
   const answered = await countAnswered(env, attemptId);
+  await refreshAttemptSectionProgress(env, attemptId);
   await env.DB.prepare('UPDATE attempts SET updated_at = ? WHERE id = ?').bind(timestamp, attemptId).run();
 
   return { saved, answeredCount: answered };
@@ -918,6 +1302,8 @@ export async function saveWritingResponse(
       timestamp,
     )
     .run();
+
+  await refreshAttemptSectionProgress(env, attemptId);
 
   return { wordCount };
 }
@@ -1146,6 +1532,13 @@ export async function finalizeAttempt(
         WHERE attempt_id = ?`,
     ).bind(timestamp, timestamp, attempt.id),
     env.DB.prepare(
+      `UPDATE attempt_sections
+          SET status = CASE WHEN status = 'IN_PROGRESS' THEN 'COMPLETED' WHEN status = 'NOT_STARTED' THEN 'EXPIRED' ELSE status END,
+              submitted_at = COALESCE(submitted_at, ?),
+              updated_at = ?
+        WHERE attempt_id = ?`,
+    ).bind(timestamp, timestamp, attempt.id),
+    env.DB.prepare(
       `UPDATE writing_submissions SET submitted_at = ?, updated_at = ? WHERE attempt_id = ? AND submitted_at IS NULL`,
     ).bind(timestamp, timestamp, attempt.id),
   ]);
@@ -1193,6 +1586,8 @@ export interface AttemptResultView {
       startedAt: string | null;
       submittedAt: string | null;
       status: string;
+      /** Per-section (passage/part/task) diagnostic breakdown (36). */
+      sectionResults: AttemptSectionResult[];
       review: QuestionReview[] | null;
       writing: Array<{
         submissionId: string;
@@ -1230,6 +1625,10 @@ export interface QuestionReview {
   questionType: string;
   evidence: string | null;
   explanation: string | null;
+  /** Section/part the question belongs to (37, review grouping). */
+  sectionId: string | null;
+  sectionLabel: string | null;
+  sectionOrder: number | null;
 }
 
 export async function loadAttemptResult(
@@ -1310,6 +1709,12 @@ export async function buildResultView(
       review = await buildQuestionReview(env, attempt.id, session.id, session.skill);
     }
 
+    // 36: per-section diagnostic breakdown; review material is attached only
+    // when the release policy allows review (37).
+    const sectionResults = await buildSessionSectionResults(env, attempt.id, session.test_version_id, {
+      includeReviewMaterial: release.reviewAvailable && options.includeReview,
+    });
+
     sessionViews.push({
       skillSessionId: session.id,
       componentIndex: session.component_index,
@@ -1332,6 +1737,7 @@ export async function buildResultView(
               : 'This section has no automatically marked questions.',
       profileId: session.scoring_profile_id,
       profileVersion: session.scoring_profile_version,
+      sectionResults,
       review,
       writing: writingRows.results.map((row) => ({
         submissionId: row.id,
@@ -1461,10 +1867,13 @@ async function buildQuestionReview(
 
   const rows = await env.DB.prepare(
     `SELECT q.id AS question_id, q.number, q.prompt, g.question_type,
+            q.section_id,
+            s.label AS section_label, s.order_index AS section_order,
             a.answer_json, a.is_correct, a.points,
             k.answer_json AS key_json, k.evidence, k.explanation
        FROM questions q
        JOIN question_groups g ON g.id = q.question_group_id
+       JOIN sections s ON s.id = q.section_id
        LEFT JOIN attempt_answers a ON a.question_id = q.id AND a.attempt_id = ?
        LEFT JOIN answer_keys k ON k.question_id = q.id
       WHERE q.test_version_id = (SELECT test_version_id FROM attempt_skill_sessions WHERE id = ?)
@@ -1476,6 +1885,9 @@ async function buildQuestionReview(
       number: number;
       prompt: string;
       question_type: string;
+      section_id: string;
+      section_label: string | null;
+      section_order: number | null;
       answer_json: string | null;
       is_correct: number | null;
       points: number | null;
@@ -1483,6 +1895,20 @@ async function buildQuestionReview(
       evidence: string | null;
       explanation: string | null;
     }>();
+
+  const sectionLabels = new Map<string, string>();
+  for (const row of rows.results) {
+    if (!sectionLabels.has(row.section_id)) {
+      sectionLabels.set(
+        row.section_id,
+        sectionDisplayLabel({
+          label: row.section_label,
+          orderIndex: row.section_order ?? 0,
+          title: null,
+        }),
+      );
+    }
+  }
 
   return rows.results
     .filter((row) => row.question_type !== 'WRITING_TASK_1' && row.question_type !== 'WRITING_TASK_2')
@@ -1507,8 +1933,141 @@ async function buildQuestionReview(
         questionType: row.question_type,
         evidence: row.evidence,
         explanation: row.explanation,
+        sectionId: row.section_id,
+        sectionLabel: sectionLabels.get(row.section_id) ?? null,
+        sectionOrder: row.section_order,
       } satisfies QuestionReview;
     });
+}
+
+/**
+ * Per-section performance for one skill session (36). Scores come only from
+ * server-side marking (`attempt_answers.is_correct` / `points`); nothing is
+ * converted into a standalone IELTS band here (41).
+ */
+async function buildSessionSectionResults(
+  env: Env,
+  attemptId: string,
+  versionId: string,
+  options: { includeReviewMaterial: boolean },
+): Promise<AttemptSectionResult[]> {
+  const sections = await env.DB.prepare(
+    `SELECT s.id, s.skill, s.order_index, s.title, s.label, s.type,
+            s.passage_id, s.audio_asset_id, s.image_asset_id, s.transcript_json,
+            (SELECT COUNT(*) FROM questions q WHERE q.section_id = s.id) AS total_questions,
+            (SELECT COUNT(*) FROM attempt_answers aa
+               JOIN questions q2 ON q2.id = aa.question_id
+              WHERE aa.attempt_id = ? AND q2.section_id = s.id
+                AND aa.answer_json IS NOT NULL AND aa.answer_json != '' AND aa.answer_json != 'null') AS answered_count,
+            (SELECT COUNT(*) FROM attempt_answers af
+               JOIN questions q3 ON q3.id = af.question_id
+              WHERE af.attempt_id = ? AND q3.section_id = s.id AND af.is_flagged = 1) AS flagged_count,
+            (SELECT COALESCE(SUM(aa2.points), 0) FROM attempt_answers aa2
+               JOIN questions q4 ON q4.id = aa2.question_id
+              WHERE aa2.attempt_id = ? AND q4.section_id = s.id AND aa2.is_correct = 1) AS raw_score,
+            (SELECT COUNT(*) FROM attempt_answers aa3
+               JOIN questions q5 ON q5.id = aa3.question_id
+              WHERE aa3.attempt_id = ? AND q5.section_id = s.id AND aa3.is_correct = 1) AS correct_count
+       FROM sections s
+      WHERE s.test_version_id = ?
+      ORDER BY s.order_index, s.id`,
+  )
+    .bind(attemptId, attemptId, attemptId, attemptId, versionId)
+    .all<{
+      id: string;
+      skill: Skill;
+      order_index: number;
+      title: string;
+      label: string;
+      type: string | null;
+      passage_id: string | null;
+      audio_asset_id: string | null;
+      image_asset_id: string | null;
+      transcript_json: string | null;
+      total_questions: number;
+      answered_count: number;
+      flagged_count: number;
+      raw_score: number | null;
+      correct_count: number | null;
+    }>();
+
+  const marked = sections.results.some((section) => section.correct_count !== null && section.correct_count > 0) ||
+    sections.results.some((section) => section.answered_count > 0 && section.raw_score !== null);
+
+  const passageIds = sections.results.map((row) => row.passage_id).filter((id): id is string => Boolean(id));
+  const assetIds = sections.results
+    .flatMap((row) => [row.audio_asset_id, row.image_asset_id])
+    .filter((id): id is string => Boolean(id));
+
+  const passageRows = passageIds.length
+    ? (
+        await env.DB.prepare(
+          `SELECT id, title, subtitle, body_json, word_count FROM passages WHERE id IN (${passageIds.map(() => '?').join(',')})`,
+        )
+          .bind(...passageIds)
+          .all<{ id: string; title: string; subtitle: string | null; body_json: string; word_count: number }>()
+      ).results
+    : [];
+  const passageById = new Map(passageRows.map((row) => [row.id, row]));
+
+  const assetRows = options.includeReviewMaterial && assetIds.length
+    ? (
+        await env.DB.prepare(
+          `SELECT id, kind, storage_kind, external_url, r2_key, duration_seconds FROM assets WHERE id IN (${assetIds.map(() => '?').join(',')})`,
+        )
+          .bind(...assetIds)
+          .all<{ id: string; kind: string; storage_kind: string; external_url: string | null; r2_key: string | null; duration_seconds: number | null }>()
+      ).results
+    : [];
+  const assetById = new Map(assetRows.map((row) => [row.id, row]));
+
+  return sections.results.map((row) => {
+    const passageRow = options.includeReviewMaterial && row.passage_id ? passageById.get(row.passage_id) : undefined;
+    const audioRow = options.includeReviewMaterial && row.audio_asset_id ? assetById.get(row.audio_asset_id) : undefined;
+    const imageRow = options.includeReviewMaterial && row.image_asset_id ? assetById.get(row.image_asset_id) : undefined;
+    const audioUrl = audioRow ? resolveAssetUrl(audioRow) : null;
+    const imageUrl = imageRow ? resolveAssetUrl(imageRow) : null;
+    return {
+      sectionId: row.id,
+      orderIndex: row.order_index,
+      skill: row.skill,
+      type: row.type ?? row.skill,
+      label: sectionDisplayLabel({ label: row.label, type: row.type, skill: row.skill, orderIndex: row.order_index, title: row.title }),
+      title: row.title,
+      totalQuestions: row.total_questions,
+      answeredCount: row.answered_count,
+      flaggedCount: row.flagged_count,
+      rawScore: marked ? (row.raw_score ?? 0) : null,
+      correctCount: marked ? (row.correct_count ?? 0) : null,
+      passage: passageRow
+        ? {
+            id: passageRow.id,
+            title: passageRow.title,
+            subtitle: passageRow.subtitle,
+            paragraphs: parseJson<PassageParagraphLike[]>(passageRow.body_json, []),
+            wordCount: passageRow.word_count,
+          }
+        : null,
+      audio: audioRow && audioUrl
+        ? { assetId: audioRow.id, url: audioUrl.startsWith('/') ? `/api/files/${audioRow.id}` : audioUrl, durationSeconds: audioRow.duration_seconds }
+        : null,
+      image: imageRow && imageUrl
+        ? { assetId: imageRow.id, url: imageUrl.startsWith('/') ? `/api/files/${imageRow.id}` : imageUrl }
+        : null,
+      transcript: options.includeReviewMaterial ? parseTranscriptOrNull(row.transcript_json) : null,
+    } satisfies AttemptSectionResult;
+  });
+}
+
+interface PassageParagraphLike {
+  label: string;
+  text: string;
+}
+
+function parseTranscriptOrNull(value: string | null): AttemptSectionResult['transcript'] {
+  if (!value) return null;
+  const parsed = parseJson<{ segments?: Array<{ id: string; startSeconds: number | null; speaker: string | null; text: string }> } | null>(value, null);
+  return parsed && Array.isArray(parsed.segments) ? { segments: parsed.segments } : null;
 }
 
 export { isQuestionType };

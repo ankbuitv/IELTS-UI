@@ -8,8 +8,14 @@ import { extractText, ALLOWED_IMPORT_MIME_TYPES } from '../extract';
 import { aiStatus, structureTestFromSource } from '../ai/openai';
 import { isQuestionType, QUESTION_TYPE_META, type QuestionType } from '../../shared/question-types';
 import { validateTestVersion, summariseIssues, type ValidationIssue } from '../../shared/validation';
+import {
+  defaultSectionTypeForSkill,
+  normaliseSectionType,
+  SECTION_TYPE_META,
+  type SectionType,
+} from '../../shared/sections';
 import type { AnswerKey } from '../../shared/answer-key';
-import { replaceVersionContent, type EditableContent, type EditableGroup } from './content-write-service';
+import { replaceVersionContent, type EditableContent, type EditableGroup, type EditableSection } from './content-write-service';
 import { loadAdminVersion, toValidationInput } from './content-service';
 import { recordAudit } from '../lib/audit';
 import { loadPlatformSettings } from '../lib/settings';
@@ -601,6 +607,12 @@ export function convertAiPayload(payload: unknown): ConvertedAiPayload {
   if (looksLikeEditableContent(payload)) {
     return fromEditableContent(payload as EditableContent);
   }
+  // 32: section-aware structured JSON (sections with questionGroups, explicit
+  // types, labels, passage/audio/transcript blocks). Tries the rich format
+  // first; falls back to the flatter source-document mapping.
+  if (looksLikeSectionedImport(payload)) {
+    return sectionedImportToEditableContent(payload);
+  }
   const asAi = looksLikeSourceDocument(payload) ? sourceDocumentToAiPayload(payload) : payload;
   const parsed = aiPayloadSchema.safeParse(asAi);
   if (!parsed.success) {
@@ -810,6 +822,391 @@ function looksLikeSourceDocument(payload: unknown): boolean {
   return Boolean(first && Array.isArray(first.questionGroups));
 }
 
+// -----------------------------------------------------------------------------
+// 32. Section-aware structured JSON import
+//
+// Accepts the documented format:
+//   { testTitle, testType, sections: [ { sectionNumber, type, title, label,
+//       order, passage, audio, transcript, prompt, minimumWords,
+//       questionGroups: [ { questionType, instructions, fromQuestion,
+//       toQuestion, options, configuration, questions } ] } ] }
+// Nothing assumes a fixed number of passages/parts/tasks.
+// -----------------------------------------------------------------------------
+
+function looksLikeSectionedImport(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const record = payload as Record<string, unknown>;
+  if (!Array.isArray(record.sections) || record.sections.length === 0) return false;
+  const first = record.sections[0] as Record<string, unknown> | undefined;
+  if (!first) return false;
+  // Distinguish from `looksLikeEditableContent` (already handled): the sectioned
+  // format nests groups under `questionGroups`, not `groups`.
+  return Array.isArray(first.questionGroups) || first.type != null || first.sectionNumber != null;
+}
+
+interface SectionedImportGroup {
+  questionType?: unknown;
+  type?: unknown;
+  instructions?: unknown;
+  fromQuestion?: unknown;
+  toQuestion?: unknown;
+  range?: unknown;
+  options?: unknown;
+  sharedOptions?: unknown;
+  configuration?: unknown;
+  config?: unknown;
+  questions?: unknown;
+}
+
+interface SectionedImportSection {
+  sectionNumber?: unknown;
+  type?: unknown;
+  skill?: unknown;
+  title?: unknown;
+  label?: unknown;
+  order?: unknown;
+  description?: unknown;
+  instructions?: unknown;
+  durationSeconds?: unknown;
+  passage?: unknown;
+  audio?: unknown;
+  audioUrl?: unknown;
+  transcript?: unknown;
+  image?: unknown;
+  imageUrl?: unknown;
+  prompt?: unknown;
+  minimumWords?: unknown;
+  questionGroups?: unknown;
+  groups?: unknown;
+}
+
+function sectionedImportToEditableContent(payload: unknown): ConvertedAiPayload {
+  const record = payload as {
+    testTitle?: unknown;
+    title?: unknown;
+    testType?: unknown;
+    skill?: unknown;
+    sections?: unknown;
+    answerKey?: unknown;
+    durationSeconds?: unknown;
+  };
+
+  const issues: ValidationIssue[] = [];
+  const rawSections = Array.isArray(record.sections) ? (record.sections as SectionedImportSection[]) : [];
+
+  // Top-level answer keys (optional): { questionNumber, answer, evidence, explanation }.
+  const answers = new Map<number, { answer: string; evidence: string | null; explanation: string | null }>();
+  if (Array.isArray(record.answerKey)) {
+    for (const row of record.answerKey as Array<Record<string, unknown>>) {
+      const number = typeof row.questionNumber === 'number' ? row.questionNumber : Number(row.questionNumber);
+      if (!Number.isInteger(number)) continue;
+      const answer = typeof row.answer === 'string' ? row.answer : Array.isArray(row.acceptedAnswers) ? (row.acceptedAnswers as unknown[]).join(' | ') : null;
+      answers.set(number, {
+        answer: answer ?? '',
+        evidence: typeof row.evidence === 'string' ? row.evidence : formatSourceEvidence(row.evidence),
+        explanation: typeof row.explanation === 'string' ? row.explanation : null,
+      });
+    }
+  }
+
+  const sections: EditableContent['sections'] = rawSections.map((section, index) => {
+    const sectionType = normaliseSectionType(strOr(section.type) ?? strOr(section.skill));
+    const rawGroups = (section.questionGroups ?? section.groups) as SectionedImportGroup[] | undefined;
+    const skill = sectionSkillOf(sectionType, strOr(section.skill));
+
+    if (section.type != null && !sectionType) {
+      issues.push({
+        level: 'ERROR',
+        code: 'INVALID_SECTION_TYPE',
+        message: `Section ${index + 1} has an unknown type "${String(section.type)}" (use reading_passage, listening_part or writing_task).`,
+      });
+    }
+
+    // Passage: { title, paragraphs: [{label,text}] | ["text", ...] }
+    const passage = normalisePassageBlock(section.passage);
+
+    // Audio: { url } | "https://…" — stored as a pasted URL; saving links it.
+    const audioUrl = normaliseAudioBlock(section.audio) ?? strOr(section.audioUrl);
+
+    const transcript = normaliseTranscriptBlock(section.transcript);
+
+    const imageUrl = normaliseMediaUrl(section.image) ?? strOr(section.imageUrl);
+
+    const groups = (Array.isArray(rawGroups) ? rawGroups : []).map((group, groupIndex): EditableGroup | null => {
+      const rawType = strOr(group.questionType) ?? strOr(group.type) ?? '';
+      const mappedType = resolveQuestionType(rawType);
+      if (!mappedType) {
+        issues.push({
+          level: 'ERROR',
+          code: 'AI_UNKNOWN_QUESTION_TYPE',
+          message: `Section ${index + 1}, group ${groupIndex + 1}: unknown question type "${rawType}" was ignored.`,
+        });
+        return null;
+      }
+      const meta = QUESTION_TYPE_META[mappedType];
+      const configuration = (group.configuration ?? group.config ?? {}) as Record<string, unknown>;
+
+      const sharedOptions = normaliseOptionList(group.options ?? group.sharedOptions);
+      const declared: Array<{ number: number; prompt: string; options: Array<{ id: string; text: string }>; answer: string | null; evidence: string | null; explanation: string | null }> =
+        Array.isArray(group.questions)
+          ? (group.questions as Array<Record<string, unknown>>).map((question, questionIndex) => ({
+              number: intOr(question.number) ?? questionIndex + 1,
+              prompt: strOr(question.prompt) ?? '',
+              options: normaliseOptionList(question.options),
+              answer: strOr(question.answer) ?? answers.get(intOr(question.number) ?? -1)?.answer ?? null,
+              evidence: strOr(question.evidence) ?? answers.get(intOr(question.number) ?? -1)?.evidence ?? null,
+              explanation: strOr(question.explanation) ?? answers.get(intOr(question.number) ?? -1)?.explanation ?? null,
+            }))
+          : [];
+
+      // fromQuestion/toQuestion without explicit questions scaffolds the range.
+      const from = intOr(group.fromQuestion);
+      const to = intOr(group.toQuestion);
+      const questions = declared.length > 0
+        ? declared
+        : from != null && to != null && to >= from && to - from < 60
+          ? Array.from({ length: to - from + 1 }, (_, offset) => ({
+              number: from + offset,
+              prompt: '',
+              options: [] as Array<{ id: string; text: string }>,
+              answer: answers.get(from + offset)?.answer ?? null,
+              evidence: answers.get(from + offset)?.evidence ?? null,
+              explanation: answers.get(from + offset)?.explanation ?? null,
+            }))
+          : [];
+
+      const config: Record<string, unknown> = {};
+      const selectCount = intOr(configuration.selectCount);
+      if (selectCount != null) config.selectCount = selectCount;
+      const wordLimitMax = intOr(configuration.wordLimitMax ?? configuration.wordLimit);
+      if (wordLimitMax != null) config.wordLimit = { max: wordLimitMax };
+      const optionNumbering = strOr(configuration.optionNumbering);
+      if (optionNumbering === 'roman' || optionNumbering === 'alpha' || optionNumbering === 'numeric') {
+        config.optionNumbering = optionNumbering;
+      }
+      const minimumWords = intOr(configuration.minimumWords) ?? (mappedType === 'WRITING_TASK_1' || mappedType === 'WRITING_TASK_2' ? intOr(section.minimumWords) : null);
+      if (minimumWords != null) config.minimumWords = minimumWords;
+
+      return {
+        type: mappedType,
+        instructions: strOr(group.instructions) ?? (meta ? meta.defaultInstructions : ''),
+        sharedOptions,
+        config,
+        rangeFrom: from ?? (questions.length > 0 ? Math.min(...questions.map((question) => question.number)) : null),
+        rangeTo: to ?? (questions.length > 0 ? Math.max(...questions.map((question) => question.number)) : null),
+        questions: questions.map((question) => {
+          const key = buildAnswerKey(mappedType, question.answer, sharedOptions);
+          return {
+            number: question.number,
+            prompt: question.prompt,
+            options: question.options,
+            config: {},
+            answerKey: key,
+            evidence: question.evidence,
+            explanation: question.explanation,
+          };
+        }),
+      } satisfies EditableGroup;
+    }).filter((group): group is EditableGroup => group !== null);
+
+    // Writing prompt: the section prompt doubles as the task question prompt.
+    const prompt = strOr(section.prompt);
+    if (skill === 'WRITING' && prompt) {
+      const firstGroup = groups[0];
+      if (firstGroup && firstGroup.questions.length > 0 && !firstGroup.questions[0]!.prompt) {
+        firstGroup.questions[0]!.prompt = prompt;
+      }
+    }
+
+    return {
+      skill,
+      type: sectionType ?? undefined,
+      label: strOr(section.label) ?? undefined,
+      title: strOr(section.title) ?? '',
+      subtitle: null,
+      description: strOr(section.description) ?? undefined,
+      instructions: strOr(section.instructions) ?? '',
+      durationSeconds: intOr(section.durationSeconds),
+      order: intOr(section.order) ?? intOr(section.sectionNumber) ?? undefined,
+      passage: passage,
+      audioAssetId: null,
+      audioUrl: audioUrl,
+      imageAssetId: null,
+      imageUrl: imageUrl,
+      transcript: transcript,
+      groups,
+    } satisfies EditableSection;
+  });
+
+  // Explicit order wins over array position (33 reports duplicates later).
+  const ordered = sections.every((section, index) => section.order === undefined || section.order === index)
+    ? sections
+    : sections
+        .map((section, index) => ({ section, order: section.order ?? index }))
+        .sort((a, b) => a.order - b.order)
+        .map((entry) => entry.section);
+
+  const content = withImportDefaults({ sections: ordered }, inferTestTypeFromSections(ordered, record));
+  // Writing tasks are always teacher-marked, so they are excluded from the
+  // answer-key confidence: an essay without an auto key is not a missing key.
+  const isWritingGroup = (type: string) => type === 'WRITING_TASK_1' || type === 'WRITING_TASK_2';
+  const questionCount = content.sections.reduce(
+    (total, section) => total + section.groups.reduce((inner, group) => inner + group.questions.length, 0),
+    0,
+  );
+  const answerableQuestions = content.sections.reduce(
+    (total, section) => total + section.groups.reduce((inner, group) => inner + (isWritingGroup(group.type) ? 0 : group.questions.length), 0),
+    0,
+  );
+  const answered = content.sections.reduce(
+    (total, section) =>
+      total +
+      section.groups.reduce(
+        (inner, group) =>
+          inner +
+          (isWritingGroup(group.type)
+            ? 0
+            : group.questions.filter((question) => Boolean(question.answerKey)).length),
+        0,
+      ),
+    0,
+  );
+  const confidence: ConvertedAiPayload['answerKeyConfidence'] =
+    answerableQuestions === 0 ? 'ABSENT' : answered < answerableQuestions ? 'PARTIAL' : 'PROVIDED';
+  if (questionCount === 0) {
+    issues.push({
+      level: 'ERROR',
+      code: 'SECTIONED_IMPORT_EMPTY',
+      message: 'The structured file declares no questions. Check that each questionGroup lists its questions.',
+    });
+  }
+  return { content, issues, answerKeyConfidence: confidence, questionCount };
+}
+
+function strOr(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function intOr(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) return Number(value.trim());
+  return null;
+}
+
+function resolveQuestionType(raw: string): QuestionType | null {
+  if (!raw) return null;
+  if (isQuestionType(raw)) return raw;
+  const lower = raw.toLowerCase();
+  if (isQuestionType(raw.toUpperCase().replace(/[\s-]+/g, '_'))) return raw.toUpperCase().replace(/[\s-]+/g, '_') as QuestionType;
+  return (SOURCE_QUESTION_TYPES[lower] as QuestionType | undefined) ?? null;
+}
+
+function sectionSkillOf(sectionType: ReturnType<typeof normaliseSectionType>, declaredSkill: string | null): Skill {
+  if (sectionType) return sectionTypeMeta(sectionType).skill;
+  const upper = declaredSkill?.toUpperCase();
+  if (upper === 'READING' || upper === 'LISTENING' || upper === 'WRITING') return upper;
+  return 'READING';
+}
+
+function sectionTypeMeta(type: NonNullable<ReturnType<typeof normaliseSectionType>>): { skill: Skill } {
+  return type === 'READING_PASSAGE' ? { skill: 'READING' } : type === 'LISTENING_PART' ? { skill: 'LISTENING' } : { skill: 'WRITING' };
+}
+
+function normalisePassageBlock(raw: unknown): EditableSection['passage'] | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    return { title: '', paragraphs: raw.split(/\n{2,}/).map((text, index) => ({ label: String.fromCharCode(65 + index), text: text.trim() })) };
+  }
+  const block = raw as { title?: unknown; subtitle?: unknown; paragraphs?: unknown; wordCount?: unknown; body?: unknown };
+  const paragraphsRaw = Array.isArray(block.paragraphs ?? block.body) ? (block.paragraphs ?? block.body) : null;
+  const paragraphs = ((paragraphsRaw as unknown[] | null) ?? []).map((entry, index) => {
+    if (typeof entry === 'string') return { label: String.fromCharCode(65 + index), text: entry };
+    const record = entry as Record<string, unknown>;
+    return {
+      label: strOr(record.label) ?? String.fromCharCode(65 + index),
+      text: strOr(record.text) ?? '',
+    };
+  }).filter((paragraph) => paragraph.text.length > 0);
+  return {
+    title: strOr(block.title) ?? '',
+    subtitle: strOr(block.subtitle),
+    paragraphs,
+    passageWordCount: intOr(block.wordCount),
+  };
+}
+
+function normaliseAudioBlock(raw: unknown): string | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') return raw.trim() || null;
+  if (typeof raw === 'object') {
+    const block = raw as { url?: unknown; assetId?: unknown; externalUrl?: unknown };
+    return strOr(block.url) ?? strOr(block.externalUrl) ?? strOr(block.assetId);
+  }
+  return null;
+}
+
+function normaliseMediaUrl(raw: unknown): string | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') return raw.trim() || null;
+  if (typeof raw === 'object') {
+    const block = raw as { url?: unknown };
+    return strOr(block.url);
+  }
+  return null;
+}
+
+function normaliseTranscriptBlock(raw: unknown): { segments: Array<{ id: string; startSeconds: number | null; speaker: string | null; text: string }> } | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    // Plain text transcript: one segment per non-empty line.
+    const lines = raw.split('\n').map((line) => line.trim()).filter(Boolean);
+    if (lines.length === 0) return null;
+    return {
+      segments: lines.map((text, index) => ({ id: `seg-${index + 1}`, startSeconds: null, speaker: null, text })),
+    };
+  }
+  const block = raw as { segments?: unknown };
+  if (!Array.isArray(block.segments)) return null;
+  const segments = (block.segments as Array<Record<string, unknown>>).map((entry, index) => ({
+    id: strOr(entry.id) ?? `seg-${index + 1}`,
+    startSeconds: intOr(entry.startSeconds ?? entry.start ?? entry.offsetSeconds),
+    speaker: strOr(entry.speaker ?? entry.speakerLabel),
+    text: strOr(entry.text) ?? '',
+  }));
+  return segments.length > 0 ? { segments } : null;
+}
+
+function normaliseOptionList(raw: unknown): Array<{ id: string; text: string }> {
+  if (!Array.isArray(raw)) return [];
+  const options: Array<{ id: string; text: string }> = [];
+  for (const entry of raw) {
+    if (typeof entry === 'string') {
+      const [id, ...rest] = entry.split('|');
+      if (rest.length === 0) options.push({ id: String.fromCharCode(65 + options.length), text: entry.trim() });
+      else options.push({ id: (id ?? '').trim(), text: rest.join('|').trim() });
+      continue;
+    }
+    if (entry && typeof entry === 'object') {
+      const record = entry as Record<string, unknown>;
+      const id = strOr(record.id) ?? strOr(record.value) ?? strOr(record.letter);
+      const text = strOr(record.text) ?? strOr(record.label);
+      if (id && text) options.push({ id, text });
+    }
+  }
+  return options;
+}
+
+function inferTestTypeFromSections(sections: EditableSection[], record: { testType?: unknown; skill?: unknown }): 'READING' | 'LISTENING' | 'WRITING' | 'FULL_MOCK' {
+  const declared = strOr(record.testType) ?? strOr(record.skill);
+  if (declared && ['READING', 'LISTENING', 'WRITING', 'FULL_MOCK'].includes(declared.toUpperCase())) {
+    return declared.toUpperCase() as 'READING' | 'LISTENING' | 'WRITING' | 'FULL_MOCK';
+  }
+  const skills = new Set(sections.map((section) => section.skill));
+  if (skills.size > 1) return 'FULL_MOCK';
+  const only = [...skills][0];
+  return only === 'LISTENING' || only === 'WRITING' ? only : 'READING';
+}
+
 function fromEditableContent(content: EditableContent): ConvertedAiPayload {
   const questionCount = content.sections.reduce(
     (total, section) => total + section.groups.reduce((inner, group) => inner + group.questions.length, 0),
@@ -961,11 +1358,32 @@ function withImportDefaults(
 ): EditableContent {
   const durationSeconds =
     content.durationSeconds ?? (testType === 'LISTENING' ? 1800 : 3600);
+  // Every imported section carries structural meaning: an explicit type when
+  // given, otherwise the type implied by its skill; labels fall back to the
+  // structural default ("Passage 2", "Part 3", "Task 1").
+  const ordinalByType: Record<string, number> = {};
+  const sections = content.sections.map((section) => {
+    const type = sectionTypeOrSkillDefault(section.type, section.skill);
+    ordinalByType[type] = (ordinalByType[type] ?? 0) + 1;
+    const meta = SECTION_TYPE_META[type];
+    return {
+      ...section,
+      type,
+      label: section.label?.trim() ? section.label.trim() : `${meta.ordinalNoun} ${ordinalByType[type]}`,
+      title: section.title?.trim() ? section.title : `${meta.ordinalNoun} ${ordinalByType[type]}`,
+    };
+  });
   return {
     ...content,
+    sections,
     durationSeconds,
     isCompleteTest: content.isCompleteTest ?? true,
   };
+}
+
+function sectionTypeOrSkillDefault(type: string | null | undefined, skill: Skill): SectionType {
+  const normalised = normaliseSectionType(typeof type === 'string' ? type : null);
+  return normalised ?? defaultSectionTypeForSkill(skill);
 }
 
 function titleFromPayload(payload: unknown): string | undefined {

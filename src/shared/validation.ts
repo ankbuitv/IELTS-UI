@@ -11,6 +11,7 @@
  */
 import { isQuestionType, QUESTION_TYPE_META, type QuestionType } from './question-types';
 import { isValidAnswerKeyShape, type AnswerKey } from './answer-key';
+import { isSectionType, type SectionPolicy, type SectionType } from './sections';
 import type { Skill } from './types';
 
 export type ValidationLevel = 'ERROR' | 'WARNING';
@@ -50,6 +51,7 @@ export interface ValidationQuestion {
     selectCount?: number;
     note?: string;
     optionNumbering?: 'roman' | 'alpha' | 'numeric';
+    minimumWords?: number;
   };
   answerKey?: AnswerKey | null;
 }
@@ -70,6 +72,9 @@ export interface ValidationSection {
   id: string;
   skill: Skill;
   orderIndex: number;
+  /** Normalised structural type (READING_PASSAGE | LISTENING_PART | WRITING_TASK). */
+  type?: SectionType | string | null;
+  label?: string | null;
   title: string;
   instructions: string;
   hasPassage: boolean;
@@ -77,6 +82,12 @@ export interface ValidationSection {
   /** Present when the section has a passage; enables paragraph-level checks. */
   passage?: ValidationPassage | null;
   hasAudio: boolean;
+  /** Candidate-visible prompt of a writing task section (null otherwise). */
+  promptText?: string | null;
+  /** Configured minimum word count of a writing task (null when undeclared). */
+  minimumWords?: number | null;
+  /** Segment ids of the section transcript, when present. */
+  transcript?: { segments: Array<{ id: string; text: string }> } | null;
   groups: ValidationGroup[];
 }
 
@@ -87,6 +98,15 @@ export interface ValidationInput {
   /** For FULL_MOCK versions: referenced component versions must be published. */
   mockComponentIssues?: ValidationIssue[];
   config?: { skillConfig?: Record<string, { durationSeconds?: number } | undefined> };
+  /** 34/39: section navigation and requirement policy (audio/passage gating). */
+  sectionPolicy?: Partial<SectionPolicy>;
+  /** 33: question groups found in the payload but not attached to any section. */
+  orphanGroups?: Array<{ id: string; questionType?: string | null }>;
+}
+
+/** Extracts `segment:ID` references from an evidence string. */
+function transcriptSegmentReferences(evidence: string): string[] {
+  return [...evidence.matchAll(/segment:([\w:-]+)/g)].map((match) => match[1] ?? '').filter(Boolean);
 }
 
 const WORD_LIMIT_PATTERN =
@@ -129,6 +149,9 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
     issues.push(...input.mockComponentIssues);
   }
 
+  // ---- section structure (33) ---------------------------------------------
+  issues.push(...validateSectionStructure(input));
+
   const skillBefore: Record<string, number> = {};
   let previousSkill: Skill | null = null;
 
@@ -146,14 +169,14 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
     previousSkill = section.skill;
 
     if (section.skill === 'READING') {
-      if (!section.hasPassage) {
+      if (!section.hasPassage && input.sectionPolicy?.requirePassageForReading !== false) {
         issues.push({
           level: 'ERROR',
           code: 'READING_SECTION_WITHOUT_PASSAGE',
           message: `Reading section "${section.title || section.id}" has no passage attached.`,
           sectionId: section.id,
         });
-      } else if (section.passageParagraphCount === 0) {
+      } else if (section.passageParagraphCount === 0 && section.hasPassage) {
         issues.push({
           level: 'WARNING',
           code: 'PASSAGE_WITHOUT_PARAGRAPHS',
@@ -162,7 +185,7 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
         });
       }
     }
-    if (section.skill === 'LISTENING' && !section.hasAudio) {
+    if (section.skill === 'LISTENING' && !section.hasAudio && input.sectionPolicy?.requireAudioForListening !== false) {
       issues.push({
         level: 'ERROR',
         code: 'LISTENING_SECTION_WITHOUT_AUDIO',
@@ -170,6 +193,25 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
         sectionId: section.id,
       });
     }
+    if (section.skill === 'WRITING' && !(section.promptText ?? '').trim()) {
+      issues.push({
+        level: 'ERROR',
+        code: 'WRITING_TASK_WITHOUT_PROMPT',
+        message: `Writing task "${section.title || section.id}" has no prompt. Add task instructions or a task question.`,
+        sectionId: section.id,
+      });
+    }
+    if (section.skill === 'WRITING' && (section.minimumWords ?? 0) > 2000) {
+      issues.push({
+        level: 'WARNING',
+        code: 'WRITING_MINIMUM_WORDS_UNREALISTIC',
+        message: `Writing task "${section.title || section.id}" declares a minimum of ${section.minimumWords} words.`,
+        sectionId: section.id,
+      });
+    }
+
+    // ---- transcript hygiene (33) --------------------------------------------
+    issues.push(...validateTranscript(section));
 
     // ---- passage hygiene (imports frequently get this wrong) ----------------
     if (section.passage && section.passage.paragraphs.length > 0) {
@@ -332,6 +374,24 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
         sectionId: section.id,
       });
     }
+    // The same number must not belong to two different groups of one section.
+    const numberOwner = new Map<number, string>();
+    for (const group of section.groups) {
+      for (const question of group.questions) {
+        const owner = numberOwner.get(question.number);
+        if (owner !== undefined && owner !== group.id) {
+          issues.push({
+            level: 'ERROR',
+            code: 'OVERLAPPING_GROUP_RANGES',
+            message: `Question ${question.number} appears in two question groups of this section.`,
+            sectionId: section.id,
+            groupId: group.id,
+            questionNumber: question.number,
+          });
+        }
+        numberOwner.set(question.number, group.id);
+      }
+    }
     for (let i = 1; i < allNumbers.length; i += 1) {
       const current = allNumbers[i]!;
       const previous = allNumbers[i - 1]!;
@@ -354,7 +414,170 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
     }
   }
 
+  // ---- section order vs question order (33) --------------------------------
+  issues.push(...validateSectionQuestionOrder(input.sections));
+
   void previousSkill;
+  return issues;
+}
+
+/**
+ * Structural section checks (33): duplicate ids, duplicate or missing order,
+ * invalid types and question groups that are not attached to any section.
+ */
+function validateSectionStructure(input: ValidationInput): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  const idSeen = new Set<string>();
+  const orderSeen = new Set<string>();
+  for (const section of input.sections) {
+    if (idSeen.has(section.id)) {
+      issues.push({
+        level: 'ERROR',
+        code: 'DUPLICATE_SECTION_ID',
+        message: `Section id "${section.id}" is used by more than one section.`,
+        sectionId: section.id,
+      });
+    }
+    idSeen.add(section.id);
+
+    if (!Number.isInteger(section.orderIndex) || section.orderIndex < 0) {
+      issues.push({
+        level: 'ERROR',
+        code: 'MISSING_SECTION_ORDER',
+        message: `Section "${section.title || section.id}" has no valid order. Every section needs a distinct, non-negative order.`,
+        sectionId: section.id,
+      });
+    } else if (orderSeen.has(String(section.orderIndex))) {
+      issues.push({
+        level: 'ERROR',
+        code: 'DUPLICATE_SECTION_ORDER',
+        message: `Two or more sections declare order ${section.orderIndex}. Give every section a distinct order.`,
+        sectionId: section.id,
+      });
+    }
+    orderSeen.add(String(section.orderIndex));
+
+    if (section.type != null && String(section.type).trim() !== '' && !isSectionType(String(section.type))) {
+      issues.push({
+        level: 'ERROR',
+        code: 'INVALID_SECTION_TYPE',
+        message: `Section "${section.title || section.id}" has an unknown type "${section.type}" (use READING_PASSAGE, LISTENING_PART or WRITING_TASK).`,
+        sectionId: section.id,
+      });
+    }
+  }
+
+  for (const orphan of input.orphanGroups ?? []) {
+    issues.push({
+      level: 'ERROR',
+      code: 'ORPHAN_QUESTION_GROUP',
+      message: `Question group ${orphan.questionType ? `"${orphan.questionType}" ` : ''}(${orphan.id}) is not attached to any section. Move it inside a section or remove it.`,
+      groupId: orphan.id,
+    });
+  }
+
+  return issues;
+}
+
+/**
+ * Section order must be consistent with question order (33): within a skill,
+ * question numbers must not run backwards as the section order increases.
+ */
+function validateSectionQuestionOrder(sections: ValidationSection[]): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const lastNumberBySkill = new Map<string, { number: number; sectionId: string; title: string }>();
+  for (const section of sections) {
+    const numbers = section.groups
+      .flatMap((group) => group.questions.map((question) => question.number))
+      .sort((a, b) => a - b);
+    if (numbers.length === 0) continue;
+    const first = numbers[0]!;
+    const previous = lastNumberBySkill.get(section.skill);
+    if (previous && first <= previous.number) {
+      issues.push({
+        level: 'ERROR',
+        code: 'SECTION_QUESTION_ORDER_CONFLICT',
+        message: `Section "${section.title || section.id}" starts at question ${first}, but the previous ${section.skill.toLowerCase()} section "${previous.title}" already used numbers up to ${previous.number}. Renumber so questions follow section order.`,
+        sectionId: section.id,
+      });
+    }
+    lastNumberBySkill.set(section.skill, { number: numbers[numbers.length - 1]!, sectionId: section.id, title: section.title || section.id });
+  }
+  return issues;
+}
+
+/**
+ * Transcript checks (33): unique non-empty segment ids and evidence that
+ * references segments via `segment:ID` must point at a real segment.
+ */
+function validateTranscript(section: ValidationSection): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const transcript = section.transcript;
+
+  const segmentIds = new Set<string>();
+  if (transcript) {
+    for (const segment of transcript.segments) {
+      const id = (segment.id ?? '').trim();
+      if (!id) {
+        issues.push({
+          level: 'ERROR',
+          code: 'TRANSCRIPT_SEGMENT_WITHOUT_ID',
+          message: `Transcript of "${section.title || section.id}" contains a segment without an id.`,
+          sectionId: section.id,
+        });
+        continue;
+      }
+      if (segmentIds.has(id)) {
+        issues.push({
+          level: 'ERROR',
+          code: 'DUPLICATE_TRANSCRIPT_SEGMENT',
+          message: `Transcript of "${section.title || section.id}" uses segment id "${id}" twice.`,
+          sectionId: section.id,
+        });
+      }
+      segmentIds.add(id);
+      if (!(segment.text ?? '').trim()) {
+        issues.push({
+          level: 'WARNING',
+          code: 'TRANSCRIPT_SEGMENT_WITHOUT_TEXT',
+          message: `Transcript segment "${id}" has no text.`,
+          sectionId: section.id,
+        });
+      }
+    }
+  }
+
+  for (const group of section.groups) {
+    for (const question of group.questions) {
+      const evidence = question.evidence ?? '';
+      if (!evidence.includes('segment:')) continue;
+      if (!transcript) {
+        issues.push({
+          level: 'ERROR',
+          code: 'TRANSCRIPT_SEGMENT_NOT_FOUND',
+          message: `Evidence for question ${question.number} references a transcript segment, but "${section.title || section.id}" has no transcript.`,
+          sectionId: section.id,
+          groupId: group.id,
+          questionNumber: question.number,
+        });
+        continue;
+      }
+      for (const reference of transcriptSegmentReferences(evidence)) {
+        if (!segmentIds.has(reference)) {
+          issues.push({
+            level: 'ERROR',
+            code: 'TRANSCRIPT_SEGMENT_NOT_FOUND',
+            message: `Evidence for question ${question.number} references transcript segment "${reference}", which does not exist in "${section.title || section.id}".`,
+            sectionId: section.id,
+            groupId: group.id,
+            questionNumber: question.number,
+          });
+        }
+      }
+    }
+  }
+
   return issues;
 }
 

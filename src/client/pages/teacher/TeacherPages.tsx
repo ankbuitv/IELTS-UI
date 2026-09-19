@@ -203,6 +203,19 @@ interface ClassroomDetailResponse {
       integrityFlaggedAttempts: number;
     }>;
     skillPerformance: Array<{ skill: string; rawScore: number; totalQuestions: number; accuracy: number | null; latestBand: number | null }>;
+    sectionPerformance?: Array<{
+      sectionId: string;
+      label: string;
+      title: string;
+      skill: string;
+      type: string;
+      attempts: number;
+      answered: number;
+      correct: number;
+      accuracy: number | null;
+      unanswered: number;
+      averageSeconds: number | null;
+    }>;
     taskTypes: Array<{ label: string; correct: number; answered: number; accuracy: number | null }>;
     bandDistribution: Array<{ band: number; count: number }>;
     integritySummary: Array<{ type: string; count: number }>;
@@ -321,6 +334,48 @@ export function ClassroomPage() {
               />
             </Card>
           </div>
+
+          {data.analytics.sectionPerformance && data.analytics.sectionPerformance.length > 0 ? (
+            <Card
+              title="Performance by passage / part"
+              hint="Diagnostic only — passage and part scores are never converted into standalone IELTS bands."
+            >
+              <div className="table-wrap">
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Section</th>
+                      <th>Skill</th>
+                      <th className="num">Attempts</th>
+                      <th className="num">Answered</th>
+                      <th className="num">Correct</th>
+                      <th className="num">Accuracy</th>
+                      <th className="num">Unanswered</th>
+                      <th className="num">Avg time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.analytics.sectionPerformance.map((section) => (
+                      <tr key={section.sectionId}>
+                        <td>{section.label}</td>
+                        <td>{SKILL_LABELS[section.skill] ?? section.skill}</td>
+                        <td className="num">{section.attempts}</td>
+                        <td className="num">{section.answered}</td>
+                        <td className="num">{section.correct}</td>
+                        <td className="num">{section.accuracy !== null ? `${section.accuracy}%` : '—'}</td>
+                        <td className="num">{section.unanswered}</td>
+                        <td className="num">
+                          {section.averageSeconds !== null
+                            ? `${Math.floor(section.averageSeconds / 60)}m ${section.averageSeconds % 60}s`
+                            : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ) : null}
 
           <Card title="Integrity event summary" hint="Counts of observable events across this classroom's attempts">
             {data.analytics.integritySummary.length === 0 ? (

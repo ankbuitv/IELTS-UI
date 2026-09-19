@@ -2,6 +2,14 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { QUESTION_TYPES, QUESTION_TYPE_META } from '@shared/question-types';
 import type { QuestionType } from '@shared/question-types';
+import {
+  SECTION_TYPES,
+  SECTION_TYPE_META,
+  defaultSectionTypeForSkill,
+  isSectionType,
+  type SectionType,
+  type TranscriptSegment,
+} from '@shared/sections';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import {
@@ -26,9 +34,11 @@ import {
 import { formatDateTime, TEST_TYPE_LABELS } from '../../lib/format';
 import {
   countAnswersForGroup,
+  duplicateSection,
   emptyGroup,
   emptyQuestion,
   emptySection,
+  moveItem,
   toEditable,
   type AdminVersionContentResponse,
   type EditableContent,
@@ -36,6 +46,184 @@ import {
   type EditableQuestion,
   type EditableSection,
 } from './content-types';
+
+const SECTION_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  SECTION_TYPES.map((type) => [type, SECTION_TYPE_META[type].label]),
+);
+
+/** Reads the draft's section policy with platform defaults filled in. */
+function resolvePolicyForDraft(draft: EditableContent): SectionPolicyConfig {
+  const raw = (draft.config as { sectionPolicy?: Partial<SectionPolicyConfig> } | null)?.sectionPolicy ?? {};
+  return {
+    navigation: raw.navigation ?? 'FREE_NAVIGATION',
+    allowReturnToPreviousParts: raw.allowReturnToPreviousParts ?? true,
+    autoAdvanceOnPartTimeout: raw.autoAdvanceOnPartTimeout ?? false,
+    requireAudioForListening: raw.requireAudioForListening ?? true,
+    requirePassageForReading: raw.requirePassageForReading ?? true,
+  };
+}
+
+interface SectionPolicyConfig {
+  navigation: 'FREE_NAVIGATION' | 'SEQUENTIAL_PARTS' | 'LOCKED_PARTS';
+  allowReturnToPreviousParts: boolean;
+  autoAdvanceOnPartTimeout: boolean;
+  requireAudioForListening: boolean;
+  requirePassageForReading: boolean;
+}
+
+/** Section navigation/timing policy editor (34/39) — stored in version config. */
+function SectionPolicyEditor({
+  policy,
+  readOnly,
+  onChange,
+}: {
+  policy: SectionPolicyConfig;
+  readOnly?: boolean;
+  onChange: (policy: SectionPolicyConfig) => void;
+}) {
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <span className="field__label">Section / part policy</span>
+        <span className="tiny muted">Applies within each skill; the server enforces the timers.</span>
+      </div>
+      <div className="grid grid--2" style={{ marginTop: 8 }}>
+        <Field label="Navigation" hint="Sequential parts advance in order; free navigation allows moving between all parts.">
+          {(id) => (
+            <Select
+              id={id}
+              value={policy.navigation}
+              disabled={readOnly}
+              onChange={(event) => {
+                const navigation = event.target.value as SectionPolicyConfig['navigation'];
+                onChange({
+                  ...policy,
+                  navigation,
+                  allowReturnToPreviousParts:
+                    navigation === 'LOCKED_PARTS' ? false : policy.allowReturnToPreviousParts,
+                });
+              }}
+            >
+              <option value="FREE_NAVIGATION">Free navigation (any part, any time)</option>
+              <option value="SEQUENTIAL_PARTS">Sequential parts (advance in order)</option>
+              <option value="LOCKED_PARTS">Locked parts (no return to earlier parts)</option>
+            </Select>
+          )}
+        </Field>
+        <div className="stack" style={{ gap: 6 }}>
+          <Checkbox
+            checked={policy.allowReturnToPreviousParts}
+            disabled={readOnly || policy.navigation === 'LOCKED_PARTS'}
+            label="May return to previous parts"
+            onChange={(checked) => onChange({ ...policy, allowReturnToPreviousParts: checked })}
+          />
+          <Checkbox
+            checked={policy.autoAdvanceOnPartTimeout}
+            disabled={readOnly}
+            label="Advance automatically when a part timer expires"
+            onChange={(checked) => onChange({ ...policy, autoAdvanceOnPartTimeout: checked })}
+          />
+          <Checkbox
+            checked={policy.requireAudioForListening}
+            disabled={readOnly}
+            label="Listening parts require audio before publish"
+            onChange={(checked) => onChange({ ...policy, requireAudioForListening: checked })}
+          />
+          <Checkbox
+            checked={policy.requirePassageForReading}
+            disabled={readOnly}
+            label="Reading sections require a passage before publish"
+            onChange={(checked) => onChange({ ...policy, requirePassageForReading: checked })}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function resolveSectionType(section: Pick<EditableSection, 'type' | 'skill'>): SectionType {
+  if (typeof section.type === 'string' && isSectionType(section.type)) return section.type;
+  return defaultSectionTypeForSkill(section.skill);
+}
+
+/**
+ * Transcript editor: one segment per line as `mm:ss | Speaker | text`
+ * (`mm:ss` and speaker optional). Segment ids are generated (`seg-N`) so
+ * answer evidence can reference them (`segment:seg-3`).
+ */
+function TranscriptEditor({
+  transcript,
+  readOnly,
+  onChange,
+}: {
+  transcript: { segments: TranscriptSegment[] } | null;
+  readOnly?: boolean;
+  onChange: (transcript: { segments: TranscriptSegment[] } | null) => void;
+}) {
+  const toLine = (segment: TranscriptSegment): string => {
+    const time =
+      segment.startSeconds !== null && segment.startSeconds !== undefined
+        ? `${String(Math.floor(segment.startSeconds / 60)).padStart(2, '0')}:${String(segment.startSeconds % 60).padStart(2, '0')}`
+        : '';
+    return [time, segment.speaker ?? '', segment.text].map((part) => part.trim()).join(' | ');
+  };
+  const parseLine = (line: string, index: number): TranscriptSegment => {
+    const parts = line.split('|').map((part) => part.trim());
+    let startSeconds: number | null = null;
+    let cursor = 0;
+    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(parts[0] ?? '')) {
+      const [minutes, seconds] = (parts[0] ?? '0:0').split(':');
+      startSeconds = Number(minutes) * 60 + Number(seconds);
+      cursor = 1;
+    }
+    let speaker: string | null = null;
+    if (parts.length > cursor + 1) {
+      speaker = parts[cursor] || null;
+      cursor += 1;
+    }
+    return {
+      id: `seg-${index + 1}`,
+      startSeconds,
+      speaker,
+      text: parts.slice(cursor).join(' | '),
+    };
+  };
+
+  const lines = (transcript?.segments ?? []).map(toLine);
+  return (
+    <div className="stack">
+      <Field
+        label="Transcript (review material)"
+        hint="One segment per line: `mm:ss | Speaker | text` — the timestamp and speaker are optional. Referenced from marking evidence as segment:seg-2."
+      >
+        {(id) => (
+          <TextArea
+            id={id}
+            rows={5}
+            spellCheck={false}
+            disabled={readOnly}
+            value={lines.join('\n')}
+            placeholder={'00:05 | W: | Good morning, how can I help?\n00:12 | M: | I’d like to open an account…'}
+            onChange={(event) => {
+              const text = event.target.value;
+              if (!text.trim()) {
+                onChange(null);
+                return;
+              }
+              onChange({
+                segments: text
+                  .split('\n')
+                  .map((line) => line.trim())
+                  .filter(Boolean)
+                  .map(parseLine),
+              });
+            }}
+          />
+        )}
+      </Field>
+    </div>
+  );
+}
 
 interface ValidationIssue {
   level: 'ERROR' | 'WARNING' | 'INFO';
@@ -922,34 +1110,93 @@ function VersionEditorBody({
                 />
               </div>
             </div>
+            <SectionPolicyEditor
+              policy={resolvePolicyForDraft(draft)}
+              readOnly={readOnly}
+              onChange={(policy) =>
+                setDraft({ ...draft, config: { ...(draft.config ?? {}), sectionPolicy: policy } })
+              }
+            />
           </Card>
 
-          {draft.sections.map((section, sectionIndex) => (
+          {draft.sections.map((section, sectionIndex) => {
+            const sectionTypeName = SECTION_TYPE_LABELS[resolveSectionType(section)] ?? section.skill;
+            const sectionQuestionCount = section.groups.reduce((sum, group) => sum + countAnswersForGroup(group), 0);
+            return (
             <Card
               key={`section-${sectionIndex}`}
-              title={`${sectionIndex + 1}. ${section.title || '(untitled section)'}`}
-              hint={`${section.skill} · ${section.groups.length} groups`}
+              title={`${sectionIndex + 1}. ${section.label || section.title || '(untitled section)'}`}
+              hint={`${sectionTypeName} · ${section.skill} · ${section.groups.length} group${section.groups.length === 1 ? '' : 's'} · ${sectionQuestionCount} questions`}
               actions={
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={readOnly}
-                  onClick={() =>
-                    setDraft({ ...draft, sections: draft.sections.filter((_, index) => index !== sectionIndex) })
-                  }
-                >
-                  Remove
-                </Button>
+                <div className="row" style={{ gap: 6 }}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={readOnly || sectionIndex === 0}
+                    aria-label="Move section up"
+                    title="Move up"
+                    onClick={() =>
+                      setDraft({ ...draft, sections: moveItem(draft.sections, sectionIndex, -1) })
+                    }
+                  >
+                    ↑
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={readOnly || sectionIndex === draft.sections.length - 1}
+                    aria-label="Move section down"
+                    title="Move down"
+                    onClick={() =>
+                      setDraft({ ...draft, sections: moveItem(draft.sections, sectionIndex, 1) })
+                    }
+                  >
+                    ↓
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={readOnly}
+                    title="Duplicate this section with all its groups and questions"
+                    onClick={() => {
+                      const next = [...draft.sections];
+                      next.splice(sectionIndex + 1, 0, duplicateSection(section));
+                      setDraft({ ...draft, sections: next });
+                    }}
+                  >
+                    Duplicate
+                  </Button>
+                  <ConfirmButton
+                    size="sm"
+                    variant="ghost"
+                    title={`Delete “${section.label || section.title || `section ${sectionIndex + 1}`}”?`}
+                    confirmLabel="Delete section"
+                    body={
+                      <p className="small">
+                        This removes the section and all of its question groups, questions and answer keys from the
+                        draft. The change is only stored once you press <strong>Save content</strong>.
+                      </p>
+                    }
+                    onConfirm={() =>
+                      setDraft({ ...draft, sections: draft.sections.filter((_, index) => index !== sectionIndex) })
+                    }
+                  >
+                    Delete
+                  </ConfirmButton>
+                </div>
               }
             >
               <div className="grid grid--3">
-                <Field label="Skill">
+                <Field label="Skill" hint={`Structural type: ${sectionTypeName}`}>
                   {(id) => (
                     <Select
                       id={id}
                       value={section.skill}
                       disabled={readOnly}
-                      onChange={(event) => updateSection(sectionIndex, { skill: event.target.value as EditableSection['skill'] })}
+                      onChange={(event) => {
+                        const skill = event.target.value as EditableSection['skill'];
+                        updateSection(sectionIndex, { skill, type: defaultSectionTypeForSkill(skill) });
+                      }}
                     >
                       <option value="READING">Reading</option>
                       <option value="LISTENING">Listening</option>
@@ -957,12 +1204,23 @@ function VersionEditorBody({
                     </Select>
                   )}
                 </Field>
+                <Field label="Label" hint="Shown in exam navigation, e.g. “Passage 2” or “Part 3”.">
+                  {(id) => (
+                    <TextInput
+                      id={id}
+                      value={section.label ?? ''}
+                      placeholder={`${SECTION_TYPE_LABELS[resolveSectionType(section)]} ${sectionIndex + 1}`}
+                      disabled={readOnly}
+                      onChange={(event) => updateSection(sectionIndex, { label: event.target.value || null })}
+                    />
+                  )}
+                </Field>
                 <Field label="Title">
                   {(id) => (
                     <TextInput id={id} value={section.title} disabled={readOnly} onChange={(event) => updateSection(sectionIndex, { title: event.target.value })} />
                   )}
                 </Field>
-                <Field label="Duration (seconds)">
+                <Field label="Duration (seconds)" hint="Optional per-part timer; enforcement depends on the section policy.">
                   {(id) => (
                     <TextInput
                       id={id}
@@ -973,6 +1231,18 @@ function VersionEditorBody({
                     />
                   )}
                 </Field>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <Field label="Description" hint="One line shown to candidates under the section label.">
+                    {(id) => (
+                      <TextInput
+                        id={id}
+                        value={section.description ?? ''}
+                        disabled={readOnly}
+                        onChange={(event) => updateSection(sectionIndex, { description: event.target.value || null })}
+                      />
+                    )}
+                  </Field>
+                </div>
               </div>
               <Field label="Section instructions">
                 {(id) => (
@@ -1209,6 +1479,37 @@ function VersionEditorBody({
                 </div>
               ) : null}
 
+              {section.skill === 'LISTENING' || section.transcript ? (
+                <TranscriptEditor
+                  transcript={section.transcript ?? null}
+                  readOnly={readOnly}
+                  onChange={(transcript) => updateSection(sectionIndex, { transcript })}
+                />
+              ) : null}
+
+              {section.skill !== 'WRITING' ? (
+                <Field
+                  label="Section image URL (optional)"
+                  hint="Diagram or chart shown with this section. Saving the content attaches the HTTPS link automatically."
+                >
+                  {(id) => (
+                    <TextInput
+                      id={id}
+                      type="url"
+                      value={section.imageUrl ?? (section.imageAssetId ? `asset:${section.imageAssetId}` : '')}
+                      disabled={readOnly}
+                      placeholder="https://cdn.example.com/diagram.png"
+                      onChange={(event) =>
+                        updateSection(sectionIndex, {
+                          imageUrl: event.target.value || null,
+                          imageAssetId: event.target.value ? section.imageAssetId : null,
+                        })
+                      }
+                    />
+                  )}
+                </Field>
+              ) : null}
+
               <div className="stack" style={{ marginTop: 14 }}>
                 {section.groups.map((group, groupIndex) => (
                   <GroupEditor
@@ -1221,6 +1522,30 @@ function VersionEditorBody({
                         groups: section.groups.filter((_, index) => index !== groupIndex),
                       })
                     }
+                    onMove={(direction) =>
+                      updateSection(sectionIndex, { groups: moveItem(section.groups, groupIndex, direction) })
+                    }
+                    onDuplicate={() => {
+                      const next = [...section.groups];
+                      next.splice(groupIndex + 1, 0, {
+                        ...group,
+                        config: { ...group.config },
+                        sharedOptions: group.sharedOptions.map((option) => ({ ...option })),
+                        questions: group.questions.map((question) => ({
+                          ...question,
+                          options: question.options.map((option) => ({ ...option })),
+                          config: { ...question.config },
+                          answerKey: question.answerKey
+                            ? question.answerKey.kind === 'CHOICE'
+                              ? { ...question.answerKey, values: [...question.answerKey.values] }
+                              : question.answerKey.kind === 'TEXT'
+                                ? { ...question.answerKey, accept: [...question.answerKey.accept] }
+                                : { ...question.answerKey }
+                            : null,
+                        })),
+                      });
+                      updateSection(sectionIndex, { groups: next });
+                    }}
                     onQuestionChange={(questionIndex, patch) => updateQuestion(sectionIndex, groupIndex, questionIndex, patch)}
                   />
                 ))}
@@ -1233,18 +1558,23 @@ function VersionEditorBody({
                 </Button>
               </div>
             </Card>
-          ))}
+            );
+          })}
 
-          <div className="row">
-            <Button disabled={readOnly} onClick={() => setDraft({ ...draft, sections: [...draft.sections, emptySection('READING')] })}>
-              Add reading section
-            </Button>
-            <Button disabled={readOnly} onClick={() => setDraft({ ...draft, sections: [...draft.sections, emptySection('LISTENING')] })}>
-              Add listening section
-            </Button>
-            <Button disabled={readOnly} onClick={() => setDraft({ ...draft, sections: [...draft.sections, emptySection('WRITING')] })}>
-              Add writing section
-            </Button>
+          <div className="row" style={{ flexWrap: 'wrap' }}>
+            {(['READING', 'LISTENING', 'WRITING'] as const).map((skill) => {
+              const ordinal = draft.sections.filter((entry) => entry.skill === skill).length + 1;
+              const noun = skill === 'READING' ? 'reading passage' : skill === 'LISTENING' ? 'listening part' : 'writing task';
+              return (
+                <Button
+                  key={skill}
+                  disabled={readOnly}
+                  onClick={() => setDraft({ ...draft, sections: [...draft.sections, emptySection(skill, ordinal)] })}
+                >
+                  + Add {noun} {ordinal}
+                </Button>
+              );
+            })}
           </div>
 
           {testType === 'FULL_MOCK' ? (
@@ -1452,18 +1782,28 @@ function GroupEditor({
   readOnly,
   onChange,
   onRemove,
+  onMove,
+  onDuplicate,
   onQuestionChange,
 }: {
   group: EditableGroup;
   readOnly?: boolean;
   onChange: (patch: Partial<EditableGroup>) => void;
   onRemove: () => void;
+  onMove?: (direction: -1 | 1) => void;
+  onDuplicate?: () => void;
   onQuestionChange: (questionIndex: number, patch: Partial<EditableQuestion>) => void;
 }) {
   const meta = QUESTION_TYPE_META[group.type];
   const usesOptions = Boolean(meta?.needsSharedOptions);
   const firstNumber = group.questions[0]?.number ?? 1;
   const nextNumber = group.questions.at(-1)?.number ?? firstNumber - 1;
+  const rangeText =
+    group.rangeFrom != null && group.rangeTo != null
+      ? `Questions ${group.rangeFrom}–${group.rangeTo}`
+      : group.questions.length > 0
+        ? `Questions ${Math.min(...group.questions.map((question) => question.number))}–${Math.max(...group.questions.map((question) => question.number))}`
+        : 'No question range';
 
   return (
     <div className="card card--nested">
@@ -1471,10 +1811,35 @@ function GroupEditor({
         <div className="row" style={{ gap: 8, alignItems: 'center' }}>
           <Badge tone="accent">{meta?.label ?? group.type}</Badge>
           <span className="tiny muted">{group.questions.length} questions</span>
+          <span className="tiny muted">{rangeText}</span>
         </div>
-        <Button size="sm" variant="ghost" disabled={readOnly} onClick={onRemove}>
-          Remove group
-        </Button>
+        <div className="row" style={{ gap: 6 }}>
+          {onMove ? (
+            <>
+              <Button size="sm" variant="ghost" disabled={readOnly} title="Move group up" aria-label="Move group up" onClick={() => onMove(-1)}>
+                ↑
+              </Button>
+              <Button size="sm" variant="ghost" disabled={readOnly} title="Move group down" aria-label="Move group down" onClick={() => onMove(1)}>
+                ↓
+              </Button>
+            </>
+          ) : null}
+          {onDuplicate ? (
+            <Button size="sm" variant="ghost" disabled={readOnly} title="Duplicate group" onClick={onDuplicate}>
+              Duplicate
+            </Button>
+          ) : null}
+          <ConfirmButton
+            size="sm"
+            variant="ghost"
+            title="Remove this question group?"
+            confirmLabel="Remove group"
+            body={<p className="small">The group and its questions are removed from the draft; save content to store the change.</p>}
+            onConfirm={onRemove}
+          >
+            Remove
+          </ConfirmButton>
+        </div>
       </div>
 
       <div className="grid grid--3">
@@ -1557,6 +1922,23 @@ function GroupEditor({
             />
           )}
         </Field>
+        {group.type === 'WRITING_TASK_1' || group.type === 'WRITING_TASK_2' ? (
+          <Field label="Minimum words" hint="Shown with the task; validation warns when the prompt is missing.">
+            {(id) => (
+              <TextInput
+                id={id}
+                type="number"
+                min={1}
+                max={2000}
+                value={group.config.minimumWords ?? ''}
+                disabled={readOnly}
+                onChange={(event) =>
+                  onChange({ config: { ...group.config, minimumWords: event.target.value ? Number(event.target.value) : undefined } })
+                }
+              />
+            )}
+          </Field>
+        ) : null}
       </div>
 
       <div className="stack" style={{ marginTop: 10 }}>

@@ -6,6 +6,7 @@
  * (server-only) and are never represented here.
  */
 import type { Skill } from './types';
+import type { SectionPolicy, SectionTranscript, SectionType } from './sections';
 
 export const QUESTION_TYPES = [
   'TRUE_FALSE_NOT_GIVEN',
@@ -259,6 +260,8 @@ export interface QuestionGroupConfig {
   note?: string;
   /** For matching headings, the numbering style: 'roman' | 'alpha' | 'numeric'. */
   optionNumbering?: 'roman' | 'alpha' | 'numeric';
+  /** For WRITING_TASK groups: the candidate-visible minimum word count. */
+  minimumWords?: number;
 }
 
 export interface PassageParagraph {
@@ -306,6 +309,12 @@ export interface CandidateAudio {
   playback: AudioPlaybackPolicy;
 }
 
+export interface CandidateImage {
+  assetId: string;
+  url: string;
+  altText: string | null;
+}
+
 export interface AudioPlaybackPolicy {
   /** How many times the recording may be played. 1 = exam standard. */
   maxPlays: number;
@@ -328,14 +337,26 @@ export interface CandidateSection {
   id: string;
   skill: Skill;
   orderIndex: number;
+  /** Normalised structural type — READING_PASSAGE | LISTENING_PART | WRITING_TASK (29). */
+  type: SectionType;
+  /** Short display label ("Passage 1", "Part 2", "Task 1"); falls back structurally. */
+  label: string;
   title: string;
   subtitle: string | null;
+  /** One-line candidate-facing description of the section. */
+  description: string;
   instructions: string;
   durationSeconds: number | null;
   passage: CandidatePassage | null;
   audio: CandidateAudio | null;
+  /** Optional diagram / chart media shown with the section. */
+  image: CandidateImage | null;
+  /** Listening transcript — only exposed when the payload policy allows it. */
+  transcript: SectionTranscript | null;
   groups: CandidateQuestionGroup[];
   /** Writing tasks are rendered as essays rather than numbered questions. */
   writingTasks: CandidateQuestion[];
   questionNumbers: number[];
 }
+
+export type { SectionPolicy, SectionTranscript, SectionType };

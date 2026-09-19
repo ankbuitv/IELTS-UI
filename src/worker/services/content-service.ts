@@ -17,6 +17,15 @@ import type {
   SharedOption,
 } from '../../shared/question-types';
 import { isQuestionType, type QuestionType } from '../../shared/question-types';
+import {
+  defaultSectionTypeForSkill,
+  isSectionType,
+  parseTranscript,
+  sectionDisplayLabel,
+  type SectionTranscript,
+  type SectionType,
+} from '../../shared/sections';
+import type { SectionPolicy } from '../../shared/sections';
 import type { Skill, TestStatus, TestType } from '../../shared/types';
 import {
   summariseIssues,
@@ -69,6 +78,11 @@ interface SectionRow {
   audio_asset_id: string | null;
   duration_seconds: number | null;
   config_json: string;
+  type: string | null;
+  label: string;
+  description: string;
+  transcript_json: string | null;
+  image_asset_id: string | null;
 }
 
 interface PassageRow {
@@ -145,6 +159,11 @@ export interface CandidateTestPayload {
 export interface LoadCandidateOptions {
   /** Include audio URLs (needs an asset base path). */
   fileBasePath?: string;
+  /**
+   * Include listening transcripts in the payload. Off during a live exam
+   * (transcripts are review material); on for staff preview and review mode.
+   */
+  includeTranscripts?: boolean;
 }
 
 export async function loadCandidateTest(
@@ -179,9 +198,10 @@ export async function loadCandidateTest(
               visibility, test_version_id
          FROM assets
         WHERE test_version_id = ?
-           OR id IN (SELECT audio_asset_id FROM sections WHERE test_version_id = ? AND audio_asset_id IS NOT NULL)`,
+           OR id IN (SELECT audio_asset_id FROM sections WHERE test_version_id = ? AND audio_asset_id IS NOT NULL)
+           OR id IN (SELECT image_asset_id FROM sections WHERE test_version_id = ? AND image_asset_id IS NOT NULL)`,
     )
-      .bind(versionId, versionId)
+      .bind(versionId, versionId, versionId)
       .all<AssetRow>(),
   ]);
 
@@ -247,16 +267,35 @@ export async function loadCandidateTest(
         }
       : null;
 
+    const imageRow = section.image_asset_id ? assetById.get(section.image_asset_id) : undefined;
+    const resolvedImageUrl = imageRow ? resolveAssetUrl(imageRow) : null;
+    const image = imageRow && resolvedImageUrl
+      ? {
+          assetId: imageRow.id,
+          url: resolvedImageUrl.startsWith('/') ? `${basePath}/${imageRow.id}` : resolvedImageUrl,
+          altText: imageRow.alt_text,
+        }
+      : null;
+
+    const sectionType: SectionType = section.type && isSectionType(section.type)
+      ? section.type
+      : defaultSectionTypeForSkill(section.skill);
+
     return {
       id: section.id,
       skill: section.skill,
       orderIndex: index,
+      type: sectionType,
+      label: sectionDisplayLabel({ label: section.label, type: section.type, skill: section.skill, orderIndex: index, title: section.title }),
       title: section.title,
       subtitle: section.subtitle,
+      description: section.description ?? '',
       instructions: section.instructions,
       durationSeconds: section.duration_seconds,
       passage,
       audio,
+      image,
+      transcript: options.includeTranscripts ? parseTranscript(section.transcript_json) : null,
       groups: candidateGroups,
       writingTasks,
       questionNumbers: candidateGroups.flatMap((g) => g.questions.map((q) => q.number)).sort((a, b) => a - b),
@@ -323,8 +362,11 @@ export interface AdminSection {
   id: string;
   skill: Skill;
   orderIndex: number;
+  type: SectionType;
+  label: string;
   title: string;
   subtitle: string | null;
+  description: string;
   instructions: string;
   durationSeconds: number | null;
   passage: {
@@ -337,6 +379,9 @@ export interface AdminSection {
   audioAssetId: string | null;
   audioAsset: AssetRow | null;
   playback: Partial<AudioPlaybackPolicy>;
+  transcript: SectionTranscript | null;
+  imageAssetId: string | null;
+  imageAsset: AssetRow | null;
   groups: AdminGroup[];
 }
 
@@ -397,13 +442,14 @@ export async function loadAdminVersion(env: Env, versionId: string): Promise<Adm
       `SELECT id, kind, storage_kind, external_url, r2_key, filename, mime, size_bytes, duration_seconds, alt_text,
               visibility, test_version_id
          FROM assets
-        WHERE kind = 'AUDIO'
+        WHERE kind IN ('AUDIO', 'IMAGE')
            OR test_version_id = ?
            OR id IN (SELECT audio_asset_id FROM sections WHERE test_version_id = ? AND audio_asset_id IS NOT NULL)
+           OR id IN (SELECT image_asset_id FROM sections WHERE test_version_id = ? AND image_asset_id IS NOT NULL)
         ORDER BY created_at DESC
-        LIMIT 120`,
+        LIMIT 160`,
     )
-      .bind(versionId, versionId)
+      .bind(versionId, versionId, versionId)
       .all<AssetRow>(),
     env.DB.prepare('SELECT * FROM mock_components WHERE mock_version_id = ? ORDER BY order_index').bind(versionId).all<{
       id: string;
@@ -434,13 +480,20 @@ export async function loadAdminVersion(env: Env, versionId: string): Promise<Adm
     const sectionGroups = groups.results.filter((g) => g.section_id === section.id);
     const passageRow = section.passage_id ? passageById.get(section.passage_id) : undefined;
     const audioRow = section.audio_asset_id ? assetById.get(section.audio_asset_id) : undefined;
+    const imageRow = section.image_asset_id ? assetById.get(section.image_asset_id) : undefined;
     const sectionConfig = parseJson<{ playback?: Partial<AudioPlaybackPolicy> }>(section.config_json, {});
     return {
       id: section.id,
       skill: section.skill,
       orderIndex: section.order_index,
+      type:
+        section.type && isSectionType(section.type)
+          ? section.type
+          : defaultSectionTypeForSkill(section.skill),
+      label: section.label ?? '',
       title: section.title,
       subtitle: section.subtitle,
+      description: section.description ?? '',
       instructions: section.instructions,
       durationSeconds: section.duration_seconds,
       passage: passageRow
@@ -455,6 +508,9 @@ export async function loadAdminVersion(env: Env, versionId: string): Promise<Adm
       audioAssetId: section.audio_asset_id,
       audioAsset: audioRow ?? null,
       playback: sectionConfig.playback ?? {},
+      transcript: parseTranscript(section.transcript_json),
+      imageAssetId: section.image_asset_id,
+      imageAsset: imageRow ?? null,
       groups: sectionGroups.map((group) => {
         const groupQuestions = questions.results
           .filter((q) => q.question_group_id === group.id)
@@ -549,6 +605,26 @@ function questionBodyText(body: AdminQuestion['body']): string | null {
   return text.length > 0 ? text : null;
 }
 
+/** The candidate-visible prompt of a writing task section (instructions + task prompts). */
+function writingPromptOf(section: AdminSection): string | null {
+  if (section.skill !== 'WRITING') return null;
+  const taskPrompts = section.groups
+    .flatMap((group) => group.questions.map((question) => question.prompt.trim()))
+    .filter(Boolean);
+  const parts = [section.instructions.trim(), ...taskPrompts].filter(Boolean);
+  return parts.length > 0 ? parts.join('\n') : null;
+}
+
+/** Configured minimum word count of a writing task section, when declared. */
+function writingMinimumWords(section: AdminSection): number | null {
+  for (const group of section.groups) {
+    const minimum = group.config.minimumWords;
+    if (typeof minimum === 'number' && minimum > 0) return minimum;
+  }
+  const match = `${section.instructions}`.match(/at least\s+(\d{2,4})\s+words/i);
+  return match?.[1] ? Number(match[1]) : null;
+}
+
 export function toValidationInput(content: AdminVersionContent): ValidationInput {
   const mockComponentIssues: ValidationIssue[] =
     content.test.type === 'FULL_MOCK'
@@ -566,10 +642,13 @@ export function toValidationInput(content: AdminVersionContent): ValidationInput
   return {
     testType: content.test.type,
     title: content.test.title,
+    sectionPolicy: (content.version.config as { sectionPolicy?: Partial<SectionPolicy> } | null)?.sectionPolicy,
     sections: content.sections.map((section) => ({
       id: section.id,
       skill: section.skill,
       orderIndex: section.orderIndex,
+      type: section.type,
+      label: section.label,
       title: section.title,
       instructions: section.instructions,
       hasPassage: Boolean(section.passage && section.passage.paragraphs.length >= 0 && section.passage.id),
@@ -586,6 +665,11 @@ export function toValidationInput(content: AdminVersionContent): ValidationInput
           }
         : null,
       hasAudio: Boolean(section.audioAssetId),
+      promptText: writingPromptOf(section),
+      minimumWords: writingMinimumWords(section),
+      transcript: section.transcript
+        ? { segments: section.transcript.segments.map((segment) => ({ id: segment.id, text: segment.text })) }
+        : null,
       groups: section.groups.map((group) => ({
         id: group.id,
         type: group.type,
@@ -662,8 +746,9 @@ export async function cloneVersionContent(env: Env, fromVersionId: string, toVer
     statements.push(
       env.DB.prepare(
         `INSERT INTO sections (id, test_version_id, skill, order_index, title, subtitle, instructions, passage_id,
-                               audio_asset_id, duration_seconds, config_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                               audio_asset_id, duration_seconds, config_json, type, label, description,
+                               transcript_json, image_asset_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
         newSectionId,
         toVersionId,
@@ -676,6 +761,11 @@ export async function cloneVersionContent(env: Env, fromVersionId: string, toVer
         section.audioAssetId,
         section.durationSeconds,
         JSON.stringify(section.playback ? { playback: section.playback } : {}),
+        section.type,
+        section.label,
+        section.description,
+        section.transcript ? JSON.stringify(section.transcript) : null,
+        section.imageAssetId,
         timestamp,
         timestamp,
       ),
@@ -812,13 +902,18 @@ export function buildFrozenSnapshot(content: AdminVersionContent): Record<string
       id: section.id,
       skill: section.skill,
       orderIndex: section.orderIndex,
+      type: section.type,
+      label: section.label,
       title: section.title,
       subtitle: section.subtitle,
+      description: section.description,
       instructions: section.instructions,
       durationSeconds: section.durationSeconds,
       passage: section.passage,
       audioAssetId: section.audioAssetId,
       playback: section.playback,
+      transcript: section.transcript,
+      imageAssetId: section.imageAssetId,
       groups: section.groups.map((group) => ({
         id: group.id,
         orderIndex: group.orderIndex,

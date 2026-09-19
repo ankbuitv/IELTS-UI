@@ -146,6 +146,11 @@ export function PracticePage() {
               ) : null}
               <h3 style={{ marginTop: 10 }}>{test.title}</h3>
               <p className="small muted">{test.summary || 'Practice material.'}</p>
+              {test.structure?.summaryLine ? (
+                <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+                  {test.structure.summaryLine}
+                </p>
+              ) : null}
               <KeyValue
                 items={[
                   ['Questions', test.type === 'FULL_MOCK' ? `${test.mockComponentCount} components` : String(test.totalQuestions)],

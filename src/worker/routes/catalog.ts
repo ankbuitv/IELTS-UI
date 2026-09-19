@@ -9,9 +9,69 @@ import { loadCandidateTest } from '../services/content-service';
 import { verifyAndUnlock } from '../services/access-code-service';
 import { loadScoringProfile } from '../services/marking-service';
 import { estimateBand } from '../../shared/scoring';
+import { buildStructureSummary, type TestStructureSummary } from '../../shared/sections';
 import type { TestType } from '../../shared/types';
 
 const router = new Hono<AppBindings>();
+
+/** SQL expression: the effective structural type of a section row. */
+const EFFECTIVE_SECTION_TYPE = `COALESCE(s.type, CASE s.skill WHEN 'READING' THEN 'READING_PASSAGE' WHEN 'LISTENING' THEN 'LISTENING_PART' ELSE 'WRITING_TASK' END)`;
+
+interface SectionCounts {
+  passages: number;
+  parts: number;
+  tasks: number;
+}
+
+async function countSectionsByVersionIds(db: D1Database, versionIds: string[]): Promise<Map<string, SectionCounts>> {
+  const byVersion = new Map<string, SectionCounts>();
+  if (versionIds.length === 0) return byVersion;
+  const rows = await db.prepare(
+    `SELECT s.test_version_id AS version_id,
+            SUM(CASE WHEN ${EFFECTIVE_SECTION_TYPE} = 'READING_PASSAGE' THEN 1 ELSE 0 END) AS passages,
+            SUM(CASE WHEN ${EFFECTIVE_SECTION_TYPE} = 'LISTENING_PART' THEN 1 ELSE 0 END) AS parts,
+            SUM(CASE WHEN ${EFFECTIVE_SECTION_TYPE} = 'WRITING_TASK' THEN 1 ELSE 0 END) AS tasks
+       FROM sections s
+      WHERE s.test_version_id IN (${versionIds.map(() => '?').join(',')})
+      GROUP BY s.test_version_id`,
+  )
+    .bind(...versionIds)
+    .all<{ version_id: string; passages: number | null; parts: number | null; tasks: number | null }>();
+  for (const row of rows.results) {
+    byVersion.set(row.version_id, { passages: row.passages ?? 0, parts: row.parts ?? 0, tasks: row.tasks ?? 0 });
+  }
+  return byVersion;
+}
+
+function summarise(row: {
+  type: TestType;
+  total_questions: number;
+  duration_seconds: number | null;
+  own?: SectionCounts;
+  components?: Array<{ counts: SectionCounts; duration: number }>;
+}): TestStructureSummary {
+  let passages = row.own?.passages ?? 0;
+  let parts = row.own?.parts ?? 0;
+  let tasks = row.own?.tasks ?? 0;
+  let durationSeconds = row.duration_seconds;
+  if (row.type === 'FULL_MOCK' && row.components && row.components.length > 0) {
+    for (const component of row.components) {
+      passages += component.counts.passages;
+      parts += component.counts.parts;
+      tasks += component.counts.tasks;
+    }
+    if (durationSeconds === null) {
+      durationSeconds = row.components.reduce((total, component) => total + component.duration, 0);
+    }
+  }
+  return buildStructureSummary({
+    passages,
+    parts,
+    tasks,
+    questions: row.total_questions,
+    durationSeconds,
+  });
+}
 
 /**
  * Published-test catalogue. Candidate-safe: only summaries are returned, never
@@ -49,6 +109,32 @@ router.get('/tests', requireAuth, async (c) => {
       unlocked: number;
     }>();
 
+  // 42: structure lines on the library cards come from the real section data.
+  const ownCounts = await countSectionsByVersionIds(
+    c.env.DB,
+    rows.results.filter((row) => row.type !== 'FULL_MOCK').map((row) => row.version_id),
+  );
+  const mockVersionIds = rows.results.filter((row) => row.type === 'FULL_MOCK').map((row) => row.version_id);
+  const mockComponents = new Map<string, Array<{ counts: SectionCounts; duration: number }>>();
+  if (mockVersionIds.length > 0) {
+    const componentRows = await c.env.DB.prepare(
+      `SELECT mc.mock_version_id, mc.test_version_id, mc.duration_seconds
+         FROM mock_components mc
+        WHERE mc.mock_version_id IN (${mockVersionIds.map(() => '?').join(',')})
+        ORDER BY mc.mock_version_id, mc.order_index`,
+    )
+      .bind(...mockVersionIds)
+      .all<{ mock_version_id: string; test_version_id: string; duration_seconds: number }>();
+    const counts = await countSectionsByVersionIds(c.env.DB, [...new Set(componentRows.results.map((row) => row.test_version_id))]);
+    for (const row of componentRows.results) {
+      const list = mockComponents.get(row.mock_version_id) ?? [];
+      mockComponents.set(row.mock_version_id, [
+        ...list,
+        { counts: counts.get(row.test_version_id) ?? { passages: 0, parts: 0, tasks: 0 }, duration: row.duration_seconds ?? 0 },
+      ]);
+    }
+  }
+
   // Staff bypass access codes, so the client never prompts them.
   const staffBypass = user.role !== 'STUDENT';
   return c.json({
@@ -68,6 +154,13 @@ router.get('/tests', requireAuth, async (c) => {
       mockComponentCount: row.component_count,
       requiresAccessCode: row.requires_code === 1,
       unlocked: staffBypass || row.requires_code !== 1 || row.unlocked === 1,
+      structure: summarise({
+        type: row.type,
+        total_questions: row.total_questions,
+        duration_seconds: row.duration_seconds,
+        own: ownCounts.get(row.version_id),
+        components: mockComponents.get(row.version_id),
+      }),
     })),
   });
 });

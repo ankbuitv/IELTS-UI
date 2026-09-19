@@ -3,6 +3,8 @@ import { api, ApiRequestError, describeError } from '../../lib/api';
 import type { CandidateResponse } from '@shared/answer-key';
 import type { IntegrityEventType } from '@shared/integrity';
 import type { CandidateTestPayload } from '@shared/candidate';
+import type { AttemptSectionState } from '@shared/candidate';
+import type { SectionPolicy } from '@shared/sections';
 
 export interface AttemptComponentState {
   componentIndex: number;
@@ -43,6 +45,9 @@ export interface AttemptState {
   components: AttemptComponentState[];
   activeComponentIndex: number;
   content: CandidateTestPayload | null;
+  /** Server-authoritative per-section progress and timers (38/39). */
+  sections: AttemptSectionState[];
+  sectionPolicy: SectionPolicy;
   answers: Record<string, CandidateResponse>;
   flagged: string[];
   answeredCount: number;
@@ -82,6 +87,7 @@ export interface ExamSessionApi {
   saveWriting: (questionId: string, text: string) => void;
   submit: (options?: { confirmUnanswered?: boolean }) => Promise<void>;
   advanceComponent: () => Promise<void>;
+  completeSection: (sectionId?: string) => Promise<void>;
   reload: () => Promise<void>;
   setWarning: (message: string | null) => void;
   logIntegrity: (type: IntegrityEventType, metadata?: Record<string, unknown>) => void;
@@ -442,6 +448,11 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     advanceComponent: async () => {
       await flushAnswers();
       await api.post(`/api/attempts/${attemptId}/advance`, {});
+      await load();
+    },
+    completeSection: async (sectionId?: string) => {
+      await flushAnswers();
+      await api.post(`/api/attempts/${attemptId}/complete-section`, sectionId ? { sectionId } : {});
       await load();
     },
     reload: load,

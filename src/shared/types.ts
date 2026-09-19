@@ -45,6 +45,8 @@ export type ContentOrigin = (typeof CONTENT_ORIGINS)[number];
 export const ASSIGNMENT_STATUSES = ['NOT_STARTED', 'IN_PROGRESS', 'SUBMITTED', 'OVERDUE'] as const;
 export type AssignmentProgressStatus = (typeof ASSIGNMENT_STATUSES)[number];
 
+import { DEFAULT_SECTION_POLICY, type SectionPolicy } from './sections';
+
 /** Keys stored in `test_versions.config_json`. */
 export interface TestVersionConfig {
   /** Default mode offered when this test is started outside an assignment. */
@@ -53,7 +55,15 @@ export interface TestVersionConfig {
   defaultResultVisibility?: ResultVisibility;
   /** Per-skill overrides, e.g. `{ READING: { durationSeconds: 3600 } }`. */
   skillConfig?: Partial<Record<Skill, { durationSeconds?: number; instructions?: string }>>;
+  /** Section/part navigation + timing policy (34, 39). Server enforced. */
+  sectionPolicy?: Partial<SectionPolicy>;
   allowSelfService?: boolean;
+}
+
+/** Fully resolved section policy for a version (defaults filled in). */
+export function resolveVersionSectionPolicy(config: unknown): SectionPolicy {
+  const sectionPolicy = (config as { sectionPolicy?: Partial<SectionPolicy> } | null)?.sectionPolicy;
+  return { ...DEFAULT_SECTION_POLICY, ...(sectionPolicy ?? {}) } as SectionPolicy;
 }
 
 export interface ApiError {

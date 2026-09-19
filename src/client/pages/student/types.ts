@@ -73,11 +73,26 @@ export interface AssignmentSummary {
   bestBand: number | null;
 }
 
+export interface SectionPerformance {
+  sectionId: string;
+  label: string;
+  title: string;
+  skill: string;
+  type: string;
+  attempts: number;
+  answered: number;
+  correct: number;
+  accuracy: number | null;
+  unanswered: number;
+  averageSeconds: number | null;
+}
+
 export interface StudentDashboard {
   assignments: AssignmentSummary[];
   upcomingDeadlines: AssignmentSummary[];
   recentAttempts: AttemptSummary[];
   skillPerformance: SkillPerformance[];
+  sectionPerformance: SectionPerformance[];
   taskTypes: TaskTypePerformance[];
   trends: TrendPoint[];
   mockHistory: AttemptSummary[];
@@ -101,4 +116,13 @@ export interface CatalogTest {
   mockComponentCount: number;
   requiresAccessCode: boolean;
   unlocked: boolean;
+  /** "3 passages • 40 questions • 60 min" — computed from the real content. */
+  structure?: {
+    passages: number;
+    parts: number;
+    tasks: number;
+    questions: number;
+    minutes: number | null;
+    summaryLine: string;
+  };
 }

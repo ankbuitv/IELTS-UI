@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CandidateQuestion, CandidateSection } from '@shared/question-types';
+import type { AttemptSectionState } from '@shared/candidate';
+import { DEFAULT_SECTION_POLICY, type SectionPolicy } from '@shared/sections';
 import { Button, Modal, Notice } from '../ui';
 import { PassagePane } from './PassagePane';
 import { AudioPlayer } from './AudioPlayer';
@@ -17,15 +19,29 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showUnansweredWarning, setShowUnansweredWarning] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [advancedToNext, setAdvancedToNext] = useState(false);
   const questionRefs = useRef<Map<string, HTMLElement>>(new Map());
   const warnedRef = useRef<string | null>(null);
 
   const content = state?.content ?? null;
   const sections = useMemo(() => content?.sections ?? [], [content]);
+  const sectionPolicy: SectionPolicy = state?.sectionPolicy ?? DEFAULT_SECTION_POLICY;
+  const sectionProgress: AttemptSectionState[] = state?.sections ?? [];
 
   const allQuestions = useMemo(() => {
     return sections.flatMap((section) => section.groups.flatMap((group) => group.questions));
+  }, [sections]);
+
+  const questionsBySection = useMemo(() => {
+    const map = new Map<string, CandidateQuestion[]>();
+    for (const section of sections) {
+      map.set(
+        section.id,
+        section.groups.flatMap((group) => group.questions),
+      );
+    }
+    return map;
   }, [sections]);
 
   const objectiveQuestions = useMemo(
@@ -59,12 +75,53 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
     return numbers;
   }, [state, allQuestions]);
 
+  // ---------------------------------------------------------------------
+  // 34. Section navigation: server progress decides the default part and,
+  // in sequential modes, which parts are open. Free navigation allows every
+  // part at any time. Attempts without stored section rows (legacy) are free.
+  // ---------------------------------------------------------------------
+  const defaultSectionId = useMemo(() => {
+    if (sections.length === 0) return null;
+    const inProgress = sectionProgress.find((row) => row.status === 'IN_PROGRESS');
+    if (inProgress && sections.some((section) => section.id === inProgress.sectionId)) return inProgress.sectionId;
+    return sections[0]!.id;
+  }, [sections, sectionProgress]);
+
+  const [pickedSectionId, setPickedSectionId] = useState<string | null>(null);
+  const activeSectionId =
+    pickedSectionId && sections.some((section) => section.id === pickedSectionId)
+      ? pickedSectionId
+      : defaultSectionId;
+  const activeSection = sections.find((section) => section.id === activeSectionId) ?? sections[0] ?? null;
+
+  const isSectionOpen = useCallback(
+    (sectionId: string): boolean => {
+      if (sectionPolicy.navigation === 'FREE_NAVIGATION' || sectionProgress.length === 0) return true;
+      const progress = sectionProgress.find((row) => row.sectionId === sectionId);
+      if (!progress) return true;
+      if (progress.status === 'IN_PROGRESS') return true;
+      if (progress.status === 'COMPLETED') return sectionPolicy.allowReturnToPreviousParts;
+      return false; // NOT_STARTED parts open in order in sequential modes
+    },
+    [sectionPolicy, sectionProgress],
+  );
+
+  const activeSectionQuestions = useMemo(
+    () => (activeSection ? questionsBySection.get(activeSection.id) ?? [] : []),
+    [activeSection, questionsBySection],
+  );
+
+  const activeObjectiveQuestions = useMemo(
+    () => activeSectionQuestions.filter((question) => !isEssay(question, sections)),
+    [activeSectionQuestions, sections],
+  );
+
   const unansweredCount = objectiveQuestions.length - answeredNumbers.size;
+  const activeUnansweredCount = activeObjectiveQuestions.filter((question) => !answeredNumbers.has(question.number)).length;
   const currentQuestion = allQuestions.find((question) => question.id === currentQuestionId) ?? null;
+  const isWritingSection = Boolean(activeSection && (activeSection.skill === 'WRITING' || activeSection.writingTasks.length > 0));
   const hasWritingTasks = sections.some((section) => section.writingTasks.length > 0);
-  const isWritingSkill = state?.components[state.activeComponentIndex]?.skill === 'WRITING';
-  const isWriting = isWritingSkill || (hasWritingTasks && !sections.some((section) => section.groups.some((group) => group.type !== 'WRITING_TASK_1' && group.type !== 'WRITING_TASK_2')));
-  const activeSection = sections.find((section) => section.writingTasks.length > 0) ?? sections[0] ?? null;
+  const isWriting = isWritingSection || (hasWritingTasks && !sections.some((section) => section.groups.some((group) => group.type !== 'WRITING_TASK_1' && group.type !== 'WRITING_TASK_2')));
 
   const jumpToQuestion = useCallback((number: number) => {
     const question = allQuestions.find((item) => item.number === number);
@@ -76,14 +133,40 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
     (element?.querySelector('input, select, textarea') as HTMLElement | null)?.focus();
   }, [allQuestions]);
 
+  const switchToSection = useCallback(
+    (sectionId: string) => {
+      if (!isSectionOpen(sectionId)) {
+        toast.push('This part is not open yet. Complete the current part first.', 'warning');
+        return;
+      }
+      setPickedSectionId(sectionId);
+      setDrawerOpen(false);
+      const firstQuestion = (questionsBySection.get(sectionId) ?? [])[0];
+      if (firstQuestion) setCurrentQuestionId(firstQuestion.id);
+    },
+    [isSectionOpen, questionsBySection, toast],
+  );
+
+  // Keep the picked section aligned with server-driven auto-advance (e.g. a
+  // part timer expired and the policy advanced the attempt automatically).
+  useEffect(() => {
+    setPickedSectionId((picked) => {
+      if (!picked) return picked;
+      const progress = sectionProgress.find((row) => row.sectionId === picked);
+      if (progress && progress.status === 'IN_PROGRESS') return picked;
+      if (sectionPolicy.navigation === 'FREE_NAVIGATION') return picked;
+      return null; // fall back to the server's current part
+    });
+  }, [sectionProgress, sectionPolicy.navigation]);
+
   // Keyboard navigation between questions (accessible exam controls).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.altKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
         event.preventDefault();
-        const index = allQuestions.findIndex((question) => question.id === currentQuestionId);
-        const nextIndex = event.key === 'ArrowDown' ? Math.min(allQuestions.length - 1, index + 1) : Math.max(0, index - 1);
-        const next = allQuestions[nextIndex];
+        const index = activeSectionQuestions.findIndex((question) => question.id === currentQuestionId);
+        const nextIndex = event.key === 'ArrowDown' ? Math.min(activeSectionQuestions.length - 1, index + 1) : Math.max(0, index - 1);
+        const next = activeSectionQuestions[nextIndex];
         if (next) jumpToQuestion(next.number);
       }
       if (event.altKey && event.key.toLowerCase() === 'f' && currentQuestionId) {
@@ -93,7 +176,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [allQuestions, currentQuestionId, jumpToQuestion, session]);
+  }, [activeSectionQuestions, currentQuestionId, jumpToQuestion, session]);
 
   useEffect(() => {
     if (!state) return;
@@ -154,6 +237,15 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
           : session.saveStatus === 'error'
             ? 'Save problem — check your connection'
             : 'Autosave active';
+
+  const sequential = sectionPolicy.navigation !== 'FREE_NAVIGATION' && sectionProgress.length > 0;
+  const nextClosedSection = sequential
+    ? sections.find((section) => {
+        const progress = sectionProgress.find((row) => row.sectionId === section.id);
+        return progress ? progress.status === 'NOT_STARTED' : false;
+      }) ?? null
+    : null;
+  const activeProgress = activeSection ? sectionProgress.find((row) => row.sectionId === activeSection.id) ?? null : null;
 
   return (
     <div className="exam-root">
@@ -219,7 +311,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
         ) : null}
 
         {!isWriting ? (
-          <div className="exam-topbar__progress nowrap" title="Answered questions in this section">
+          <div className="exam-topbar__progress nowrap" title="Answered questions in this test">
             <span className="tiny muted">
               Answered {answeredNumbers.size}/{objectiveQuestions.length}
             </span>
@@ -274,6 +366,59 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
         </div>
       ) : null}
 
+      {sections.length > 1 ? (
+        <nav className="section-nav" aria-label="Test sections">
+          {sections.map((section) => {
+            const progress = sectionProgress.find((row) => row.sectionId === section.id) ?? null;
+            const sectionQuestionIds = questionsBySection.get(section.id) ?? [];
+            const answeredInSection =
+              progress?.answeredCount ??
+              sectionQuestionIds.filter((question) => answeredNumbers.has(question.number)).length;
+            const totalInSection = progress?.totalQuestions ?? sectionQuestionIds.length;
+            const open = isSectionOpen(section.id);
+            return (
+              <button
+                key={section.id}
+                type="button"
+                className={[
+                  'section-nav__chip',
+                  section.id === activeSection?.id ? 'section-nav__chip--current' : '',
+                  progress?.status === 'COMPLETED' ? 'section-nav__chip--done' : '',
+                  !open ? 'section-nav__chip--locked' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => switchToSection(section.id)}
+                aria-current={section.id === activeSection?.id ? 'true' : undefined}
+                title={open ? section.title || section.label : 'This part is not open yet'}
+              >
+                <span className="section-nav__label">
+                  {section.id === activeSection?.id ? '●' : progress?.status === 'COMPLETED' ? '✓' : open ? '○' : '🔒'} {section.label}
+                </span>
+                <span className="section-nav__count">
+                  {section.skill === 'WRITING'
+                    ? state.writing.some((entry) => section.writingTasks.some((task) => task.id === entry.questionId && entry.text.trim().length > 0))
+                      ? 'done'
+                      : '—'
+                    : `${answeredInSection}/${totalInSection}`}
+                </span>
+                {progress?.status === 'IN_PROGRESS' && progress.remainingSeconds !== null ? (
+                  <span className={`section-nav__timer ${progress.remainingSeconds <= 60 ? 'section-nav__timer--critical' : ''}`}>
+                    {formatClock(progress.remainingSeconds)}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+          <div style={{ flex: 1 }} />
+          {allQuestions.length > 0 ? (
+            <Button size="sm" variant="ghost" onClick={() => setDrawerOpen(true)}>
+              All questions
+            </Button>
+          ) : null}
+        </nav>
+      ) : null}
+
       <div className="exam-mobile-tabs tabs" style={{ margin: '0 12px' }}>
         <button aria-selected={mobilePane === 'PASSAGE'} onClick={() => setMobilePane('PASSAGE')} type="button">
           {isWriting ? 'Task' : 'Passage / audio'}
@@ -290,32 +435,39 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
             aria-label="Reading passage and audio"
           >
             <div className="exam-pane__header">
-              <span className="exam-pane__title">
-                {sections.some((section) => section.passage) ? 'Reading passage' : 'Listening'}
-              </span>
+              <span className="exam-pane__title">{activeSection?.label || (activeSection?.passage ? 'Reading passage' : 'Listening')}</span>
               <span className="tiny muted">
-                {sections.some((section) => section.passage)
+                {activeSection?.passage
                   ? 'Scroll independently — text is selectable'
                   : 'Audio plays according to the test policy'}
               </span>
             </div>
-            {sections
-              .filter((section) => section.audio)
-              .map((section) => (
-                <div key={section.id} style={{ padding: 16 }}>
-                  <AudioPlayer
-                    audio={section.audio!}
-                    sectionTitle={section.title || 'Listening part'}
-                    onEvent={(type, metadata) => session.logIntegrity(type, metadata)}
-                  />
-                  {section.instructions ? (
-                    <p className="small muted" style={{ whiteSpace: 'pre-wrap' }}>
-                      {section.instructions}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-            <PassagePane sections={sections} activeSectionId={activeSection?.id ?? null} />
+            {activeSection?.description ? (
+              <p className="small muted" style={{ padding: '10px 16px 0' }}>
+                {activeSection.description}
+              </p>
+            ) : null}
+            {activeSection?.audio ? (
+              <div style={{ padding: 16 }}>
+                <AudioPlayer
+                  audio={activeSection.audio}
+                  sectionTitle={activeSection.title || 'Listening part'}
+                  onEvent={(type, metadata) => session.logIntegrity(type, metadata)}
+                />
+              </div>
+            ) : null}
+            {activeSection?.image ? (
+              <div style={{ padding: '0 16px 12px' }}>
+                <img
+                  src={activeSection.image.url}
+                  alt={activeSection.image.altText ?? `Image for ${activeSection.label}`}
+                  style={{ maxWidth: '100%', borderRadius: 8 }}
+                />
+              </div>
+            ) : null}
+            {activeSection ? (
+              <PassagePane sections={[activeSection]} activeSectionId={activeSection.id} showInstructions />
+            ) : null}
           </section>
         ) : null}
 
@@ -323,99 +475,122 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
           className={`exam-pane exam-pane--questions ${mobilePane === 'PASSAGE' && !isWriting ? 'pane-hidden-mobile' : ''}`}
         >
           <div className="exam-pane__header">
-            <span className="exam-pane__title">{isWriting ? 'Writing tasks' : 'Questions'}</span>
+            <span className="exam-pane__title">{isWriting ? activeSection?.label || 'Writing tasks' : 'Questions'}</span>
             <span className="tiny muted">
-              {isWriting ? 'Your response is saved automatically' : `${unansweredCount} unanswered`}
+              {isWriting
+                ? 'Your response is saved automatically'
+                : `${activeUnansweredCount} unanswered in ${activeSection?.label ?? 'this part'}`}
             </span>
           </div>
 
           <div className="exam-pane__scroll">
-            {isWriting ? (
-              <WritingEditor
-                sections={sections}
-                answers={state.writing}
-                onSave={(questionId, text) => session.saveWriting(questionId, text)}
-              />
-            ) : (
-              sections.map((section) => (
-                <div key={section.id}>
-                  {section.writingTasks.length > 0 ? (
+            {activeSection ? (
+              isWritingSection ? (
+                <WritingEditor
+                  sections={[activeSection]}
+                  answers={state.writing}
+                  onSave={(questionId, text) => session.saveWriting(questionId, text)}
+                />
+              ) : (
+                <>
+                  {activeSection.writingTasks.length > 0 ? (
                     <WritingEditor
-                      sections={[section]}
+                      sections={[activeSection]}
                       answers={state.writing}
                       onSave={(questionId, text) => session.saveWriting(questionId, text)}
                     />
                   ) : null}
-                  {section.groups.map((group) =>
+                  {activeSection.groups.map((group) =>
                     group.type === 'WRITING_TASK_1' || group.type === 'WRITING_TASK_2' ? null : (
-                    <div className="question-group" key={group.id} id={`group-${group.id}`}>
-                      <QuestionGroupHeader group={group} onJump={() => group.rangeFrom && jumpToQuestion(group.rangeFrom)} />
-                      <GroupOptionBank options={group.sharedOptions} numbering={group.config.optionNumbering} />
-                      <div className="question-group__body">
-                        {group.questions.map((question) => (
-                          <div
-                            key={question.id}
-                            ref={(element) => {
-                              if (element) questionRefs.current.set(question.id, element);
-                            }}
-                          >
-                            <QuestionRenderer
-                              group={group}
-                              question={question}
-                              response={state.answers[question.id] ?? null}
-                              flagged={state.flagged.includes(question.id)}
-                              active={currentQuestionId === question.id}
-                              onAnswer={(questionId, response) => session.setAnswer(questionId, response)}
-                              onToggleFlag={(questionId) => session.toggleFlag(questionId)}
-                              onFocusQuestion={setCurrentQuestionId}
-                            />
-                          </div>
-                        ))}
+                      <div className="question-group" key={group.id} id={`group-${group.id}`}>
+                        <QuestionGroupHeader group={group} onJump={() => group.rangeFrom && jumpToQuestion(group.rangeFrom)} />
+                        <GroupOptionBank options={group.sharedOptions} numbering={group.config.optionNumbering} />
+                        <div className="question-group__body">
+                          {group.questions.map((question) => (
+                            <div
+                              key={question.id}
+                              ref={(element) => {
+                                if (element) questionRefs.current.set(question.id, element);
+                              }}
+                            >
+                              <QuestionRenderer
+                                group={group}
+                                question={question}
+                                response={state.answers[question.id] ?? null}
+                                flagged={state.flagged.includes(question.id)}
+                                active={currentQuestionId === question.id}
+                                onAnswer={(questionId, response) => session.setAnswer(questionId, response)}
+                                onToggleFlag={(questionId) => session.toggleFlag(questionId)}
+                                onFocusQuestion={setCurrentQuestionId}
+                              />
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
                     ),
                   )}
-                </div>
-              ))
-            )}
+                </>
+              )
+            ) : null}
           </div>
 
         </section>
       </div>
 
-      {!isWriting && allQuestions.length > 0 ? (
+      {!isWriting && activeSectionQuestions.length > 0 ? (
         <QuestionNavStrip
-          numbers={allQuestions.map((question) => question.number)}
+          numbers={activeSectionQuestions.map((question) => question.number)}
           answeredNumbers={answeredNumbers}
           flaggedNumbers={flaggedNumbers}
           currentNumber={currentQuestion?.number ?? null}
           onSelect={jumpToQuestion}
           extra={
-            state.components.length > 1 && state.activeComponentIndex < state.components.length - 1 ? (
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={async () => {
-                  if (!advancedToNext) {
-                    setAdvancedToNext(true);
-                    toast.push(
-                      'Section time is running. Continue when you are ready — you cannot return to this section.',
-                      'warning',
-                    );
-                    return;
-                  }
-                  await session.advanceComponent();
-                  setAdvancedToNext(false);
-                }}
-              >
-                {advancedToNext
-                  ? 'Confirm: move to next section'
-                  : `Next section (${state.components[state.activeComponentIndex + 1]?.label ?? ''})`}
-              </Button>
-            ) : null
+            <>
+              {nextClosedSection && activeProgress?.status === 'IN_PROGRESS' ? (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={async () => {
+                    if (!advancedToNext) {
+                      setAdvancedToNext(true);
+                      toast.push(
+                        sectionPolicy.allowReturnToPreviousParts
+                          ? 'You can return to earlier parts while time remains.'
+                          : 'You cannot return to this part after continuing.',
+                        'warning',
+                      );
+                      return;
+                    }
+                    await session.completeSection(activeSection?.id);
+                    setAdvancedToNext(false);
+                  }}
+                >
+                  {advancedToNext
+                    ? 'Confirm: continue'
+                    : `Continue to ${nextClosedSection.label}`}
+                </Button>
+              ) : null}
+            </>
           }
         />
       ) : null}
+
+      <AllQuestionsDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        sections={sections}
+        answeredNumbers={answeredNumbers}
+        flaggedNumbers={flaggedNumbers}
+        currentNumber={currentQuestion?.number ?? null}
+        activeSectionId={activeSection?.id ?? null}
+        sectionProgress={sectionProgress}
+        onSelect={(number) => {
+          // Jumping to a question may require opening its section first.
+          const owner = sections.find((section) => section.questionNumbers.includes(number));
+          if (owner && owner.id !== activeSection?.id) switchToSection(owner.id);
+          jumpToQuestion(number);
+        }}
+      />
 
       <Modal
         open={submitOpen}
@@ -482,4 +657,89 @@ function UnansweredWarning({ count, onCancel, onConfirm }: { count: number; onCa
 
 function isEssay(question: CandidateQuestion, sections: CandidateSection[]): boolean {
   return sections.some((section) => section.writingTasks.some((task) => task.id === question.id));
+}
+
+/**
+ * 35. All Questions drawer: every question grouped under its section/part
+ * label, with unanswered / answered / current / flagged visual states.
+ */
+export function AllQuestionsDrawer({
+  open,
+  onClose,
+  sections,
+  answeredNumbers,
+  flaggedNumbers,
+  currentNumber,
+  activeSectionId,
+  sectionProgress,
+  onSelect,
+}: {
+  open: boolean;
+  onClose: () => void;
+  sections: CandidateSection[];
+  answeredNumbers: Set<number>;
+  flaggedNumbers: Set<number>;
+  currentNumber: number | null;
+  activeSectionId: string | null;
+  sectionProgress: AttemptSectionState[];
+  onSelect: (number: number) => void;
+}) {
+  return (
+    <Modal
+      open={open}
+      title="All questions"
+      onClose={onClose}
+      actions={
+        <Button onClick={onClose}>Close</Button>
+      }
+    >
+      <div className="stack">
+        {sections.map((section) => {
+          const progress = sectionProgress.find((row) => row.sectionId === section.id) ?? null;
+          const numbers = section.questionNumbers;
+          const answeredInSection = numbers.filter((number) => answeredNumbers.has(number)).length;
+          return (
+            <div key={section.id} className="stack" style={{ gap: 6 }}>
+              <div className="row row--between">
+                <strong className={section.id === activeSectionId ? 'text-accent' : ''}>{section.label}</strong>
+                <span className="tiny muted">
+                  {section.skill === 'WRITING'
+                    ? `${section.writingTasks.length} task${section.writingTasks.length === 1 ? '' : 's'}`
+                    : `${answeredInSection}/${numbers.length} answered`}
+                  {progress && progress.status === 'COMPLETED' ? ' · completed' : ''}
+                </span>
+              </div>
+              {section.skill === 'WRITING' ? (
+                <p className="tiny muted">{section.writingTasks.map((task) => (task.config.note ? String(task.config.note) : `Task ${task.number}`)).join(' · ') || 'Writing task'}</p>
+              ) : (
+                <div className="nav-strip" role="list" aria-label={`${section.label} questions`}>
+                  {numbers.map((number) => (
+                    <button
+                      key={number}
+                      type="button"
+                      role="listitem"
+                      className={[
+                        'nav-strip__item',
+                        answeredNumbers.has(number) ? 'nav-strip__item--answered' : '',
+                        flaggedNumbers.has(number) ? 'nav-strip__item--flagged' : '',
+                        currentNumber === number ? 'nav-strip__item--current' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => onSelect(number)}
+                      aria-label={`Question ${number}${answeredNumbers.has(number) ? ', answered' : ', unanswered'}${
+                        flaggedNumbers.has(number) ? ', flagged' : ''
+                      }`}
+                    >
+                      {number}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Modal>
+  );
 }
