@@ -461,6 +461,12 @@ async function initializeAttemptSections(
   const statements: D1PreparedStatement[] = [];
   let cursorSeconds = 0;
   let firstOpen = true;
+  // Sections run continuously across the whole attempt: `section_order` is a
+  // global position (Listening 0-…, then Reading, then Writing). Using each
+  // version's own `order_index` here would interleave sections of a full mock
+  // whenever its parts number their sections from 0 (Listening 0, Reading 0-2,
+  // Writing 0-1 → 0,0,1,2,0,1), so candidates would jump between skills.
+  let globalSectionOrder = 0;
 
   for (const component of components) {
     const sections = await env.DB.prepare(
@@ -502,7 +508,7 @@ async function initializeAttemptSections(
           newId('asec'),
           attemptId,
           section.id,
-          section.order_index,
+          globalSectionOrder++,
           section.skill,
           sectionDisplayLabel({ label: section.label, skill: section.skill, orderIndex: section.order_index, title: section.title }),
           section.title,
