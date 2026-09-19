@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 33   Indexes: 50
+-- Tables: 34   Indexes: 52
 -- =============================================================================
 
 -- table: users
@@ -552,6 +552,20 @@ CREATE TABLE IF NOT EXISTS attempt_sections (
   UNIQUE (attempt_id, section_id)
 );
 
+-- table: vocabulary_entries
+CREATE TABLE IF NOT EXISTS vocabulary_entries (
+  id           TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  term         TEXT NOT NULL,
+  meaning      TEXT NOT NULL DEFAULT '',
+  note         TEXT,
+  source       TEXT,
+  review_count INTEGER NOT NULL DEFAULT 0,
+  last_reviewed_at TEXT,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+
 -- index: idx_users_role
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 
@@ -701,3 +715,9 @@ CREATE INDEX IF NOT EXISTS idx_sections_image ON sections (image_asset_id);
 
 -- index: idx_attempt_sections_attempt
 CREATE INDEX IF NOT EXISTS idx_attempt_sections_attempt ON attempt_sections (attempt_id, section_order);
+
+-- index: idx_vocabulary_user_term
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vocabulary_user_term ON vocabulary_entries (user_id, term);
+
+-- index: idx_vocabulary_user_created
+CREATE INDEX IF NOT EXISTS idx_vocabulary_user_created ON vocabulary_entries (user_id, created_at DESC);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stripFramingHeader } from '../../scripts/lib/local-preview-headers.mjs';
 import {
   fromBase64Url,
   generateLoginCode,
@@ -143,5 +144,20 @@ describe('id and time helpers', () => {
     expect(parseJson('{"a":1}', {})).toEqual({ a: 1 });
     expect(parseJson('broken', { fallback: true })).toEqual({ fallback: true });
     expect(parseJson(null, [])).toEqual([]);
+  });
+});
+
+describe('development framing', () => {
+  it('strips x-frame-options from the local build only', () => {
+    const source = ['/*', '  x-content-type-options: nosniff', '  x-frame-options: SAMEORIGIN', '  referrer-policy: no-referrer', ''].join('\n');
+    const local = stripFramingHeader(source);
+    expect(local).not.toContain('x-frame-options');
+    expect(local).toContain('x-content-type-options: nosniff');
+    expect(local).toContain('referrer-policy: no-referrer');
+  });
+
+  it('leaves a file without the header unchanged', () => {
+    const source = '/*\n  x-content-type-options: nosniff\n';
+    expect(stripFramingHeader(source)).toBe(source);
   });
 });

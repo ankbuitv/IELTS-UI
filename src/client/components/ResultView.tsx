@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { CandidateResponse } from '@shared/answer-key';
 import { api, describeError } from '../lib/api';
 import { Badge, Button, Card, Field, KeyValue, Notice, Stat, Tabs, TextArea, TextInput, useToast } from './ui';
 import { QuestionRenderer } from './exam/QuestionRenderer';
-import { BAND_DISCLAIMER, formatBand, formatClock, formatDateTime, formatDuration, formatPercent, formatScore, MODE_LABELS, SKILL_LABELS, TEST_TYPE_LABELS } from '../lib/format';
+import { TranscriptView } from './exam/TranscriptView';
+import { AnswerExplanation, evidenceSegmentId } from './exam/AnswerExplanation';
+import { BAND_DISCLAIMER, formatBand, formatDateTime, formatDuration, formatPercent, formatScore, MODE_LABELS, SKILL_LABELS, TEST_TYPE_LABELS } from '../lib/format';
 import { AccuracyList } from './charts';
 
 export interface AttemptResultPayload {
@@ -506,9 +508,12 @@ function SectionReview({
   }, [review, sections]);
 
   const [activeId, setActiveId] = useState<string>(reviewSections[0]?.id ?? 'none');
+  const [highlightSegment, setHighlightSegment] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const activeId_ = reviewSections.some((section) => section.id === activeId) ? activeId : reviewSections[0]?.id ?? 'none';
   const activeItems = review.filter((item) => (item.sectionId ?? 'none') === activeId_);
   const activeSection = sections.find((section) => section.sectionId === activeId_) ?? null;
+  const explainable = activeItems.filter((item) => item.evidence || item.explanation);
 
   const correct = review.filter((item) => item.isCorrect).length;
   const incorrect = review.filter((item) => item.isCorrect === false).length;
@@ -537,7 +542,13 @@ function SectionReview({
         ) : null}
 
         {activeSection?.audio ? (
-          <audio controls preload="none" src={activeSection.audio.url} style={{ width: '100%' }} />
+          <audio
+            ref={audioRef}
+            controls
+            preload="none"
+            src={activeSection.audio.url}
+            style={{ width: '100%' }}
+          />
         ) : null}
 
         {activeSection?.passage ? (
@@ -557,22 +568,62 @@ function SectionReview({
         ) : null}
 
         {activeSection?.transcript && activeSection.transcript.segments.length > 0 ? (
-          <details className="card" style={{ background: 'var(--paper-muted)' }}>
+          <details className="card" open>
             <summary className="small">Transcript ({activeSection.transcript.segments.length} segments)</summary>
-            <div className="stack" style={{ marginTop: 10, gap: 6 }}>
-              {activeSection.transcript.segments.map((segment) => (
-                <p key={segment.id} className="small" style={{ margin: 0 }} id={`segment-${segment.id}`}>
-                  {segment.startSeconds !== null ? (
-                    <span className="tiny muted" style={{ marginRight: 6 }}>
-                      {formatClock(segment.startSeconds)}
-                    </span>
-                  ) : null}
-                  {segment.speaker ? <strong>{segment.speaker}: </strong> : null}
-                  {segment.text}
-                </p>
-              ))}
+            <div style={{ marginTop: 12 }}>
+              <TranscriptView transcript={activeSection.transcript} highlightSegmentId={highlightSegment} />
             </div>
           </details>
+        ) : null}
+
+        {explainable.length > 0 ? (
+          <Card title="Why these answers" hint="Evidence and explanations released with this result">
+            <div className="stack">
+              {explainable.map((item) => (
+                <div key={item.questionId} className="review-q" id={`review-q-${item.number}`}>
+                  <div className="review-q__head">
+                    <span className="review-q__number">{item.number}</span>
+                    <span className="review-q__prompt">{item.prompt}</span>
+                    <Badge
+                      tone={item.isCorrect === null ? 'neutral' : item.isCorrect ? 'success' : 'danger'}
+                    >
+                      {item.isCorrect === null ? 'Not marked' : item.isCorrect ? 'Correct' : 'Incorrect'}
+                    </Badge>
+                  </div>
+                  <div className="review-q__answers">
+                    <span className="review-q__answer">
+                      Your answer: <strong>{renderAnswer(item.candidateAnswer)}</strong>
+                    </span>
+                    {item.correctAnswer ? (
+                      <span className="review-q__answer review-q__answer--key">
+                        Accepted: <strong>{item.correctAnswer}</strong>
+                      </span>
+                    ) : null}
+                  </div>
+                  <AnswerExplanation
+                    number={item.number}
+                    evidence={item.evidence}
+                    explanation={item.explanation}
+                    correctAnswer={item.correctAnswer}
+                    transcriptSegmentId={evidenceSegmentId(item.evidence)}
+                    onListenFrom={
+                      activeSection?.audio
+                        ? (segmentId) => {
+                            const segment = activeSection.transcript?.segments.find((row) => row.id === segmentId);
+                            setHighlightSegment(segmentId);
+                            if (!segment || segment.startSeconds === null) return;
+                            const audio = audioRef.current;
+                            if (!audio) return;
+                            audio.currentTime = segment.startSeconds;
+                            void audio.play();
+                          }
+                        : undefined
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </Card>
         ) : null}
 
         <div className="table-wrap">

@@ -1,13 +1,21 @@
+import type { ReactNode } from 'react';
 import type { CandidateSection } from '@shared/question-types';
 
 export function PassagePane({
   sections,
   activeSectionId,
   showInstructions,
+  children,
 }: {
   sections: CandidateSection[];
   activeSectionId?: string | null;
   showInstructions?: boolean;
+  /**
+   * Extra material that belongs with the source text (a listening transcript,
+   * for example). It renders inside the same scroll region as the passage so
+   * the pane keeps a single scrollbar.
+   */
+  children?: ReactNode;
 }) {
   const withPassages = sections.filter((section) => section.passage);
   if (withPassages.length === 0) {
@@ -17,6 +25,7 @@ export function PassagePane({
           This part does not include a reading passage. Use the questions on the right; the audio and instructions for
           each part are shown above the questions.
         </p>
+        {children}
       </div>
     );
   }
@@ -46,6 +55,7 @@ export function PassagePane({
           {activeSectionId === section.id ? <span className="tiny muted">Currently answering questions from this passage.</span> : null}
         </article>
       ))}
+      {children}
     </div>
   );
 }
