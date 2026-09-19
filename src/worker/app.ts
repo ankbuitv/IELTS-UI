@@ -4,7 +4,7 @@ import { ApiError } from './lib/errors';
 import { securityHeaders } from './lib/http';
 import { attachAuth } from './middleware/auth';
 import { newId } from './lib/ids';
-import { ensureSchema, isMissingSchemaError, missingTables, MISSING_SCHEMA_HINT } from './lib/ensure-schema';
+import { ensureSchema, isMissingSchemaError, schemaDrift, MISSING_SCHEMA_HINT } from './lib/ensure-schema';
 
 import authRoutes from './routes/auth';
 import catalogRoutes from './routes/catalog';
@@ -117,18 +117,27 @@ interface DatabaseProbe {
   reachable: boolean;
   schemaReady: boolean;
   missingTables?: string[];
+  missingColumns?: string[];
+  unhealableColumns?: string[];
 }
 
 /**
  * Reports whether the bound D1 database answers and whether the application
- * tables exist. Never throws: the health probe must stay readable even when the
- * database is the thing that is broken.
+ * schema is current — tables *and* columns. Never throws: the health probe
+ * must stay readable even when the database is the thing that is broken.
  */
 async function probeDatabase(env: AppBindings['Bindings']): Promise<DatabaseProbe> {
   try {
-    const missing = await missingTables(env);
-    return { reachable: true, schemaReady: missing.length === 0, missingTables: missing };
+    const drift = await schemaDrift(env);
+    return {
+      reachable: true,
+      schemaReady: drift.missingTables.length === 0 && drift.missingColumns.length === 0,
+      missingTables: drift.missingTables,
+      missingColumns: drift.missingColumns,
+      unhealableColumns: drift.unhealableColumns,
+    };
   } catch (error) {
     return { reachable: false, schemaReady: false, missingTables: [(error as Error)?.message ?? 'unknown'] };
   }
 }
+
