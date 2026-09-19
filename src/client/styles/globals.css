@@ -738,7 +738,7 @@ table.data--zebra tbody tr:nth-child(even) { background: var(--paper-muted); }
 
 .exam-body { flex: 1; display: flex; min-height: 0; }
 .exam-pane { display: flex; flex-direction: column; min-height: 0; background: var(--paper); }
-.exam-pane--passage { width: 53%; border-right: 1px solid var(--ink-200); }
+.exam-pane--passage { width: var(--passage-share, 53%); border-right: 1px solid var(--ink-200); }
 .exam-pane--questions { flex: 1; background: var(--canvas); }
 .exam-pane__header {
   padding: 11px 18px; border-bottom: 1px solid var(--ink-200); background: var(--paper);
@@ -1004,7 +1004,6 @@ table.data--zebra tbody tr:nth-child(even) { background: var(--paper-muted); }
 .dot--warning { background: var(--warning); }
 .dot--critical { background: var(--danger); }
 
-.exam-mobile-tabs { display: none; }
 .pane-switch { display: none; }
 
 /* ---------------------------------------------------------- admin/teacher */
@@ -1032,11 +1031,7 @@ table.data--zebra tbody tr:nth-child(even) { background: var(--paper-muted); }
 @media (max-width: 960px) {
   .public-hero__inner { grid-template-columns: 1fr; }
   .public-hero { padding: 52px 20px 58px; }
-  .exam-body { flex-direction: column; }
-  .exam-pane--passage { width: 100%; border-right: none; border-bottom: 1px solid var(--ink-200); flex: 1; }
-  .exam-pane--questions { flex: 1; }
-  .exam-mobile-tabs { display: flex; }
-  .pane-hidden-mobile { display: none; }
+  .exam-view__text { display: none; }
   .kv { grid-template-columns: 1fr; }
   .kv dt { font-weight: 620; }
 }
@@ -1398,3 +1393,48 @@ table.data--zebra tbody tr:nth-child(even) { background: var(--paper-muted); }
 .review-q__answers { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 2px 36px; font-size: 0.88rem; color: var(--ink-600); }
 .review-q__answer--key { color: #047857; }
 .review-q .explain { margin: 8px 0 2px 36px; background: var(--paper); }
+
+/* --------------------------------------------------- exam layout: two panes */
+/* Side by side is the default at every width the layout can afford, because
+   reading the passage and answering from it is the actual task. The candidate
+   switches to a single pane (or back) with the View control, and can drag the
+   divider; below 760px the first visit still opens on the questions, which is
+   the only usable layout on a phone. */
+.exam-view {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 7px 14px; border-bottom: 1px solid var(--ink-200); background: var(--paper);
+}
+.exam-view__label {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--ink-400); margin-right: 4px;
+}
+.exam-view__option {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--ink-200); border-radius: 999px; background: var(--paper);
+  padding: 5px 12px; font-family: inherit; font-size: 0.8rem; font-weight: 620; color: var(--ink-600);
+  cursor: pointer;
+  transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+.exam-view__option:hover { border-color: var(--brand-300); color: var(--brand-700); }
+.exam-view__option--on {
+  background: var(--brand-600); border-color: var(--brand-600); color: #fff;
+  box-shadow: 0 0 0 2px var(--brand-200);
+}
+
+.exam-body--split .exam-pane--passage { flex: 0 0 var(--passage-share, 53%); min-width: 0; }
+.exam-body--split .exam-pane--questions { flex: 1 1 0; min-width: 0; }
+.exam-body--single .exam-pane { flex: 1 1 auto; width: auto; border-right: none; }
+
+/* Drag handle: thin, obvious on hover, and a real separator for screen readers. */
+.exam-divider {
+  flex: 0 0 7px; cursor: col-resize; background: linear-gradient(90deg, transparent 0 3px, var(--ink-200) 3px 4px, transparent 4px);
+  touch-action: none;
+}
+.exam-divider:hover,
+.exam-divider:active { background: linear-gradient(90deg, transparent 0 2px, var(--brand-400, var(--brand-300)) 2px 5px, transparent 5px); }
+
+@media (max-width: 760px) {
+  .exam-body--split .exam-pane--passage { flex: 0 0 46%; }
+  .exam-pane__scroll { padding: 14px 12px 96px; }
+  .passage { font-size: 1rem; line-height: 1.75; }
+}

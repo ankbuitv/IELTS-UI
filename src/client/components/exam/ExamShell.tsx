@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { CandidateQuestion, CandidateSection } from '@shared/question-types';
 import type { AttemptSectionState } from '@shared/candidate';
@@ -20,7 +20,9 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
   const toast = useToast();
   const navigate = useNavigate();
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
-  const [mobilePane, setMobilePane] = useState<'PASSAGE' | 'QUESTIONS'>('QUESTIONS');
+  const [paneMode, setPaneMode] = useState<PaneMode>(readStoredPaneMode);
+  const [passageWidth, setPassageWidth] = useState<number>(readStoredPassageWidth);
+  const examBodyRef = useRef<HTMLDivElement | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showUnansweredWarning, setShowUnansweredWarning] = useState(false);
@@ -134,7 +136,8 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
     const question = allQuestions.find((item) => item.number === number);
     if (!question) return;
     setCurrentQuestionId(question.id);
-    setMobilePane('QUESTIONS');
+    // Jumping to a question is useless if the question pane is hidden.
+    setPaneMode((mode) => (mode === 'PASSAGE' ? 'QUESTIONS' : mode));
     const element = document.getElementById(`q-${number}`);
     element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     (element?.querySelector('input, select, textarea') as HTMLElement | null)?.focus();
@@ -470,21 +473,39 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
         </nav>
       ) : null}
 
-      <div className="exam-mobile-tabs tabs" style={{ margin: '0 12px' }}>
-        <button aria-selected={mobilePane === 'PASSAGE'} onClick={() => setMobilePane('PASSAGE')} type="button">
-          {isWriting ? 'Task' : 'Passage / audio'}
-        </button>
-        <button aria-selected={mobilePane === 'QUESTIONS'} onClick={() => setMobilePane('QUESTIONS')} type="button">
-          Questions
-        </button>
+      <div className="exam-view" role="group" aria-label="Exam layout">
+        <span className="exam-view__label">View</span>
+        {(
+          [
+            { mode: 'SPLIT', label: isWriting ? 'Task & answer' : 'Passage & questions', icon: 'layers' },
+            { mode: 'PASSAGE', label: isWriting ? 'Task only' : 'Passage only', icon: 'book' },
+            { mode: 'QUESTIONS', label: 'Questions only', icon: 'list' },
+          ] as const
+        ).map((option) => (
+          <button
+            key={option.mode}
+            type="button"
+            className={`exam-view__option ${paneMode === option.mode ? 'exam-view__option--on' : ''}`}
+            aria-pressed={paneMode === option.mode}
+            onClick={() => {
+              setPaneMode(option.mode);
+              storePaneMode(option.mode);
+            }}
+            title={option.label}
+          >
+            <Icon name={option.icon} size={14} />
+            <span className="exam-view__text">{option.label}</span>
+          </button>
+        ))}
       </div>
 
-      <div className="exam-body">
-        {!isWriting ? (
-          <section
-            className={`exam-pane exam-pane--passage ${mobilePane === 'QUESTIONS' ? 'pane-hidden-mobile' : ''}`}
-            aria-label="Reading passage and audio"
-          >
+      <div
+        className={`exam-body ${paneMode === 'SPLIT' ? 'exam-body--split' : 'exam-body--single'}`}
+        ref={examBodyRef}
+        style={paneMode === 'SPLIT' ? ({ '--passage-share': `${passageWidth}%` } as CSSProperties) : undefined}
+      >
+        {!isWriting && paneMode !== 'QUESTIONS' ? (
+          <section className="exam-pane exam-pane--passage" aria-label="Reading passage and audio">
             <div className="exam-pane__header">
               <span className="exam-pane__title">{activeSection?.label || (activeSection?.passage ? 'Reading passage' : 'Listening')}</span>
               <span className="tiny muted">
@@ -517,23 +538,51 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
               </div>
             ) : null}
             {activeSection ? (
-              <PassagePane sections={[activeSection]} activeSectionId={activeSection.id} showInstructions />
-            ) : null}
-            {activeSection?.transcript && activeSection.transcript.segments.length > 0 ? (
-              <section className="exam-pane__section" aria-label="Transcript">
-                <div className="exam-pane__section-head">
-                  <span className="exam-pane__section-title">Transcript</span>
-                  <span className="tiny muted">Released with the review material</span>
-                </div>
-                <TranscriptView transcript={activeSection.transcript} highlightSegmentId={highlightSegmentId} />
-              </section>
+              <PassagePane sections={[activeSection]} activeSectionId={activeSection.id} showInstructions>
+                {activeSection.transcript && activeSection.transcript.segments.length > 0 ? (
+                  <section className="exam-pane__section" aria-label="Transcript">
+                    <div className="exam-pane__section-head">
+                      <span className="exam-pane__section-title">Transcript</span>
+                      <span className="tiny muted">Released with the review material</span>
+                    </div>
+                    <TranscriptView transcript={activeSection.transcript} highlightSegmentId={highlightSegmentId} />
+                  </section>
+                ) : null}
+              </PassagePane>
             ) : null}
           </section>
         ) : null}
 
-        <section
-          className={`exam-pane exam-pane--questions ${mobilePane === 'PASSAGE' && !isWriting ? 'pane-hidden-mobile' : ''}`}
-        >
+        {!isWriting && paneMode === 'SPLIT' ? (
+          <div
+            className="exam-divider"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize the passage and question panes"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              const body = examBodyRef.current;
+              if (!body) return;
+              const rect = body.getBoundingClientRect();
+              if (rect.width === 0) return;
+              const share = ((event.clientX - rect.left) / rect.width) * 100;
+              const clamped = Math.min(72, Math.max(26, share));
+              setPassageWidth(clamped);
+              storePassageWidth(clamped);
+            }}
+            onPointerUp={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              }
+            }}
+          />
+        ) : null}
+
+        <section className="exam-pane exam-pane--questions">
           <div className="exam-pane__header">
             <span className="exam-pane__title">{isWriting ? activeSection?.label || 'Writing tasks' : 'Questions'}</span>
             <span className="tiny muted">
@@ -694,7 +743,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
           <p className="small muted">You can come back to this attempt from “My tests” at any time before it closes.</p>
           <div className="row" style={{ justifyContent: 'flex-end' }}>
             <Button onClick={() => setExitOpen(false)}>Keep working</Button>
-            <Button variant="primary" onClick={() => void navigate('/student')}>
+            <Button variant="primary" onClick={() => void navigate('/history')}>
               Save &amp; exit
             </Button>
           </div>
@@ -779,6 +828,47 @@ function UnansweredWarning({ count, onCancel, onConfirm }: { count: number; onCa
       </div>
     </div>
   );
+}
+
+/** How the exam body is laid out; the candidate picks, we remember. */
+type PaneMode = 'SPLIT' | 'PASSAGE' | 'QUESTIONS';
+
+function readStoredPaneMode(): PaneMode {
+  try {
+    const stored = window.localStorage.getItem('exam.paneMode');
+    if (stored === 'SPLIT' || stored === 'PASSAGE' || stored === 'QUESTIONS') return stored;
+  } catch {
+    // Private modes can refuse storage; fall through to the width default.
+  }
+  // Side by side whenever there is room for two readable columns; a narrow
+  // phone opens on the questions because two columns are unusable there.
+  return typeof window !== 'undefined' && window.innerWidth >= 560 ? 'SPLIT' : 'QUESTIONS';
+}
+
+function storePaneMode(mode: PaneMode): void {
+  try {
+    window.localStorage.setItem('exam.paneMode', mode);
+  } catch {
+    // Not fatal: the layout still applies for this session.
+  }
+}
+
+function readStoredPassageWidth(): number {
+  try {
+    const stored = Number(window.localStorage.getItem('exam.passageWidth'));
+    if (Number.isFinite(stored) && stored >= 26 && stored <= 72) return stored;
+  } catch {
+    // Ignore and use the default split.
+  }
+  return 50;
+}
+
+function storePassageWidth(value: number): void {
+  try {
+    window.localStorage.setItem('exam.passageWidth', String(Math.round(value)));
+  } catch {
+    // Not fatal.
+  }
 }
 
 function isEssay(question: CandidateQuestion, sections: CandidateSection[]): boolean {

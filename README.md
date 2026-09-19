@@ -51,6 +51,9 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
   writing tasks.
 - Reading split-panel layout with passage navigation; listening audio player
   with a configurable playback policy (max plays, preparation time, pause/seek).
+- Passage and questions share the screen by default (a remembered View control
+  switches to a single pane, and a draggable divider resizes the split), so
+  reading and answering never require flipping between tabs.
 - Visible division into sections: a section tab strip under the header (label,
   `answered/total`, completed tick, lock for parts that are not open yet and the
   per-section timer) and a sticky exam footer with the palette, **All questions**

@@ -203,6 +203,26 @@ self-test flip card that records how often a word was reviewed. Mutations are
 CSRF-protected like every other write. The authoring side is documented in
 [`docs/QUESTION-AUTHORING.md`](QUESTION-AUTHORING.md).
 
+### 6.6 Two panes, always (and a way out of the test that works)
+
+The candidate could not see the passage and the questions at the same time
+below 960px: the old layout stacked the panes and left a tab switcher in charge,
+which turned reading-and-answering into constant tab flipping. The layout is now
+driven by a choice, not by the viewport:
+
+- The exam body is a **vertical split by default at every width that can afford
+  two readable columns** (≥ 560px), each pane scrolling on its own. The
+  transcript renders inside the passage pane's scroll region, so the left column
+  keeps a single scrollbar.
+- A **View** control (`Passage & questions` / `Passage only` / `Questions only`)
+  is always visible and remembered per browser, and a **draggable divider**
+  resizes the split between 26% and 72% (also remembered). Jumping to a question
+  from the palette reveals the question pane instead of silently answering into
+  a hidden column.
+- **Save & exit** used to navigate to `/student`, a route that does not exist,
+  so it landed on the not-found page. It now goes to `/history`, where the
+  in-progress attempt is listed with its resume action.
+
 ## 7. Deliberately not changed
 
 - No new runtime dependency (the icon set and the tokens are hand-written).
