@@ -1211,6 +1211,40 @@ table.data--zebra tbody tr:nth-child(even) { background: var(--paper-muted); }
 .exam-topbar__vocab { background: var(--danger-soft); border-color: var(--danger-border); color: #b91c1c; }
 .exam-topbar__vocab:hover { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
 
+/* Section image: contained figure + full-screen lightbox (SectionImage.tsx).
+   Layout lives inline on the elements; these rules only add the interactive
+   affordances (hover hint, focus ring, close button) that inline styles cannot. */
+.exam-figure__img { transition: filter var(--speed) var(--ease); }
+.exam-figure:hover .exam-figure__img { filter: brightness(0.96); }
+.exam-figure__img:focus-visible { box-shadow: var(--focus-ring) inset; outline: none; }
+.exam-figure__hint {
+  position: absolute; right: 10px; bottom: 10px; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em;
+  color: var(--paper); background: rgba(15, 23, 42, 0.62); backdrop-filter: blur(2px);
+  opacity: 0; transform: translateY(2px);
+  transition: opacity var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+.exam-figure:hover .exam-figure__hint,
+.exam-figure:focus-within .exam-figure__hint { opacity: 1; transform: none; }
+.exam-lightbox__close {
+  position: absolute; top: 16px; right: 16px; width: 38px; height: 38px; border-radius: 12px;
+  display: grid; place-items: center; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.28); background: rgba(15, 23, 42, 0.55); color: var(--paper);
+  transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease);
+}
+.exam-lightbox__close:hover { background: rgba(15, 23, 42, 0.8); border-color: rgba(255, 255, 255, 0.5); }
+.exam-lightbox__close:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.45); }
+.exam-lightbox__hint {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); white-space: nowrap;
+  font-size: 0.74rem; font-weight: 600; color: rgba(255, 255, 255, 0.78);
+  padding: 4px 10px; border-radius: 999px; background: rgba(15, 23, 42, 0.5);
+}
+@media (pointer: coarse) {
+  /* No hover on touch: keep the enlarge affordance visible. */
+  .exam-figure__hint { opacity: 1; transform: none; }
+}
+
 /* One row of section tabs, the reference's "Section 1 | 0/10". */
 .exam-sections {
   display: flex; align-items: center; gap: 12px; padding: 7px 14px;

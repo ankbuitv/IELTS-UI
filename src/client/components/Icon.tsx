@@ -48,7 +48,8 @@ export type IconName =
   | 'file'
   | 'upload'
   | 'play'
-  | 'list';
+  | 'list'
+  | 'expand';
 
 const PATHS: Record<IconName, ReactElement> = {
   grid: (
@@ -280,6 +281,14 @@ const PATHS: Record<IconName, ReactElement> = {
       <path d="M4.5 6.5h.01" />
       <path d="M4.5 12h.01" />
       <path d="M4.5 17.5h.01" />
+    </>
+  ),
+  expand: (
+    <>
+      <path d="M14.5 4.5H19.5V9.5" />
+      <path d="M19.5 4.5 14 10" />
+      <path d="M9.5 19.5H4.5V14.5" />
+      <path d="M4.5 19.5 10 14" />
     </>
   ),
 };

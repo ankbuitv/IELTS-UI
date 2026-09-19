@@ -9,6 +9,7 @@ import { Icon } from '../Icon';
 import { PassagePane } from './PassagePane';
 import { AudioPlayer } from './AudioPlayer';
 import { QuestionGroupHeader, GroupOptionBank, QuestionRenderer } from './QuestionRenderer';
+import { SectionImage } from './SectionImage';
 import { TranscriptView } from './TranscriptView';
 import { WritingEditor } from './WritingEditor';
 import { formatClock, MODE_LABELS, SKILL_LABELS } from '../../lib/format';
@@ -530,11 +531,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
             ) : null}
             {activeSection?.image ? (
               <div style={{ padding: '0 16px 12px' }}>
-                <img
-                  src={activeSection.image.url}
-                  alt={activeSection.image.altText ?? `Image for ${activeSection.label}`}
-                  style={{ maxWidth: '100%', borderRadius: 8 }}
-                />
+                <SectionImage image={activeSection.image} label={activeSection.label} />
               </div>
             ) : null}
             {activeSection ? (
