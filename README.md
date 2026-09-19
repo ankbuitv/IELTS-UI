@@ -143,18 +143,24 @@ cp .env.example .dev.vars 2>/dev/null || true
 #   SESSION_SECRET=<random string>   # required
 #   OPENAI_API_KEY=<optional>        # enables AI structuring
 
-# 2. Build the SPA, migrate the local database, load sample content
-npm run build:client
-npm run db:migrate:local
-npm run db:seed:local
-
-# 3. Run the Worker (serves API + SPA on http://localhost:8787)
-npm run dev:api
+# 2. Build the SPA and start the Worker (serves API + SPA on :8787)
+npm run dev
 ```
 
-Open <http://localhost:8787/> and register — **the first account becomes the
-administrator** (the register form offers this only while no administrator
-exists).
+`npm run dev` (and `npm run dev:api`) is a one-command start-up: it applies the
+D1 migrations, loads `seed/seed.sql` when the local database has no tests yet,
+starts the Worker and then provisions the demo accounts below and publishes the
+sample tests. The local D1 file lives in `.wrangler/state`, which is not carried
+between machines, containers or CI sandboxes — this is why a start-up that does
+not migrate would otherwise greet you with *"The platform database is not
+initialised yet"*.
+
+Open <http://localhost:8787/> and sign in with a demo account, or register —
+**the first account becomes the administrator** (the register form offers this
+only while no administrator exists).
+
+For a completely fresh local database (wipe, migrate, re-seed):
+`npm run db:reset:local && npm run db:demo`.
 
 For UI work with hot reload, run `npm run dev:client` (Vite on `:5173`, proxying
 `/api` to the Worker on `:8787`).
@@ -168,8 +174,8 @@ to a clearly-marked local value so a fresh clone starts without configuration.
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Build the client, then run the Worker with assets on `:8787` |
-| `npm run dev:api` | Worker only (no rebuild) |
+| `npm run dev` | Build the client, prepare the local database, then run the Worker on `:8787` |
+| `npm run dev:api` | Same start-up without rebuilding the client |
 | `npm run dev:client` | Vite dev server with HMR, proxying `/api` |
 | `npm run build` | Typecheck everything, then build the client |
 | `npm run typecheck` | Worker, client and Node tsconfigs |
@@ -178,6 +184,7 @@ to a clearly-marked local value so a fresh clone starts without configuration.
 | `npm run test:integration` | End-to-end acceptance run against a live Worker |
 | `npm run db:migrate:local` / `:remote` | Apply D1 migrations |
 | `npm run db:seed:local` / `:remote` | Load the original sample content |
+| `npm run db:demo` | Create the demo accounts and publish the sample tests (needs a running Worker) |
 | `npm run db:reset:local` | Wipe, migrate and re-seed the **local** database |
 | `npm run deploy` | Build and deploy the Worker |
 
@@ -187,7 +194,19 @@ to a clearly-marked local value so a fresh clone starts without configuration.
 
 `seed/seed.sql` inserts two draft tests (a 13-question reading practice set and
 a two-task writing set) plus two 40-question conversion tables. Nothing is
-published, so the publish workflow can be demonstrated end to end.
+published in the SQL, so the publish workflow can be demonstrated end to end;
+`npm run db:demo` (run automatically by `npm run dev`) then creates three demo
+accounts and publishes both tests so the platform is immediately explorable:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `admin@demo.test` | `Demo-Passw0rd!23` |
+| Teacher | `teacher@demo.test` | `Demo-Passw0rd!23` |
+| Student | `student@demo.test` | `Demo-Passw0rd!23` |
+
+Override them with `DEMO_PASSWORD`, or point the script at another Worker with
+`DEMO_BASE_URL`. The accounts are created through the public API, never by
+writing passwords into the database.
 
 `npm run test:integration` then creates its own accounts and content. A green
 run leaves demo accounts in the local database (password
