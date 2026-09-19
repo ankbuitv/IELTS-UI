@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { BrandLogo } from '../../components/BrandLogo';
+import { Icon, type IconName } from '../../components/Icon';
 import { Button, Field, Notice, PasswordInput, TextInput } from '../../components/ui';
 import { api, describeError } from '../../lib/api';
 
@@ -35,43 +36,85 @@ export function LandingPage() {
             </p>
           </div>
 
-          <div className="public-hero__card">
-            <h2>What a session looks like</h2>
-            <p className="tiny muted" style={{ marginBottom: 0 }}>
-              The same shell from practice to a full mock: passage on the left, questions on the right, a timer the
-              server controls.
-            </p>
-            <div className="hero-preview">
-              <div className="hero-preview__row">
-                <span className="skill-chip skill-reading">Reading</span>
-                <span>Passage + 13 questions</span>
-                <span className="hero-preview__badge">40 min</span>
+          <div className="app-window" aria-hidden="true">
+            <div className="app-window__bar">
+              <span className="app-window__dots">
+                <span className="app-window__dot app-window__dot--brand" />
+                <span className="app-window__dot app-window__dot--violet" />
+                <span className="app-window__dot" />
+              </span>
+              <span className="app-window__url">ai-eo / dashboard</span>
+            </div>
+            <div className="app-window__body">
+              <div className="app-window__rail">
+                <span className="app-window__rail-item app-window__rail-item--active">
+                  <Icon name="grid" size={14} /> Dashboard
+                </span>
+                <span className="app-window__rail-item">
+                  <Icon name="book" size={14} /> Practice tests
+                </span>
+                <span className="app-window__rail-item">
+                  <Icon name="clock" size={14} /> My attempts
+                </span>
+                <span className="app-window__rail-item">
+                  <Icon name="users" size={14} /> Classrooms
+                </span>
+                <span className="app-window__rail-item">
+                  <Icon name="chart" size={14} /> My progress
+                </span>
               </div>
-              <div className="hero-preview__row">
-                <span className="skill-chip skill-listening">Listening</span>
-                <span>Audio panel + note completion</span>
-                <span className="hero-preview__badge">30 min</span>
-              </div>
-              <div className="hero-preview__row">
-                <span className="skill-chip skill-writing">Writing</span>
-                <span>Task 1 and Task 2 with word counts</span>
-                <span className="hero-preview__badge">60 min</span>
-              </div>
-              <div className="hero-preview__row">
-                <span className="skill-chip skill-mock">Full mock</span>
-                <span>Listening → Reading → Writing</span>
-                <span className="hero-preview__badge">Sequence</span>
+              <div className="app-window__main">
+                <div className="app-window__heading">
+                  <strong>Your practice at a glance</strong>
+                  <span className="skill-chip skill-reading">Reading</span>
+                </div>
+                <div className="app-window__stats">
+                  <span className="app-window__stat">
+                    <span>Attempts</span>
+                    <strong>12</strong>
+                  </span>
+                  <span className="app-window__stat">
+                    <span>Accuracy</span>
+                    <strong>78%</strong>
+                  </span>
+                  <span className="app-window__stat">
+                    <span>Est. band</span>
+                    <strong>7.0</strong>
+                  </span>
+                </div>
+                <div className="hero-preview__row">
+                  <Icon name="book" size={15} />
+                  <span>Reading — The Return of the Night Train</span>
+                  <span className="hero-preview__badge">13 questions</span>
+                </div>
+                <div className="hero-preview__row">
+                  <Icon name="headphones" size={15} />
+                  <span>Listening — Section 1 note completion</span>
+                  <span className="hero-preview__badge">30 min</span>
+                </div>
+                <div className="hero-preview__row">
+                  <Icon name="pen" size={15} />
+                  <span>Writing — Task 1 and Task 2</span>
+                  <span className="hero-preview__badge">Marked by a teacher</span>
+                </div>
+                <div className="hero-preview__row">
+                  <Icon name="layers" size={15} />
+                  <span>Full mock — Listening → Reading → Writing</span>
+                  <span className="hero-preview__badge">Sequence</span>
+                </div>
               </div>
             </div>
-            <p className="tiny muted" style={{ marginTop: 14, marginBottom: 0 }}>
-              Estimated bands are a practice signal, never an official IELTS result.
-            </p>
           </div>
+          <p className="tiny muted" style={{ gridColumn: '1 / -1', marginTop: -24 }}>
+            Estimated bands come from conversion tables your administrator configures. They are a practice signal,
+            never an official IELTS result.
+          </p>
         </div>
       </section>
 
       <section className="public-section" id="skills">
         <div className="public-section__head">
+          <span className="public-eyebrow">Skills</span>
           <h2>Four skills, one consistent exam shell</h2>
           <p>
             Each skill keeps its own colour across the dashboards and analytics, so a class report can be read at a
@@ -81,24 +124,28 @@ export function LandingPage() {
         <div className="grid grid--4">
           <SkillCard
             skill="reading"
+            icon="book"
             name="Reading"
             detail="TRUE/FALSE/NOT GIVEN, matching headings and information, completion and short answer tasks, with a readability-first passage pane."
             meta="40 questions · 60 min"
           />
           <SkillCard
             skill="listening"
+            icon="headphones"
             name="Listening"
             detail="A calm audio panel with policy-driven play limits, section information and note, table and sentence completion."
             meta="40 questions · 30 min"
           />
           <SkillCard
             skill="writing"
+            icon="pen"
             name="Writing"
             detail="Task 1 and Task 2 with autosave, live word counts, prompt cards and human marking by a teacher."
             meta="2 tasks · 60 min"
           />
           <SkillCard
             skill="mock"
+            icon="layers"
             name="Full mock"
             detail="Listening, Reading and Writing in sequence with a clear progression indicator and server-controlled section timing."
             meta="Complete test"
@@ -109,6 +156,7 @@ export function LandingPage() {
       <section className="public-section public-section--muted" id="teachers">
         <div className="public-section__inner">
           <div className="public-section__head">
+            <span className="public-eyebrow">For teachers</span>
             <h2>Built for teachers, not for a leaderboard</h2>
             <p>
               Classrooms, assignments and reports designed to be scanned: alignment, whitespace, status badges and
@@ -116,15 +164,15 @@ export function LandingPage() {
             </p>
           </div>
           <div className="grid grid--3">
-            <Feature icon="🏫" title="Classrooms and secure invitations">
+            <Feature icon="users" title="Classrooms and secure invitations">
               Create a classroom, share a single-use invitation code, enrol by email and keep every class isolated.
               Teachers can only ever read their own classes and students.
             </Feature>
-            <Feature icon="🗓" title="Assignments with real rules">
+            <Feature icon="calendar" title="Assignments with real rules">
               Assign a published version with a deadline, attempt limit, timing policy and result-release policy
               (immediate, score only, after the deadline or no review).
             </Feature>
-            <Feature icon="📈" title="Reports that stay honest">
+            <Feature icon="trendingUp" title="Reports that stay honest">
               Class analytics, band distributions, task-type accuracy and integrity summaries. Observable events are
               recorded, never declared as proof of cheating.
             </Feature>
@@ -134,30 +182,31 @@ export function LandingPage() {
 
       <section className="public-section" id="features">
         <div className="public-section__head">
+          <span className="public-eyebrow">Platform</span>
           <h2>What the platform does</h2>
           <p>Everything is served from one Worker: the API, the candidate app and the teacher and admin consoles.</p>
         </div>
         <div className="grid grid--3">
-          <Feature icon="⏱" title="Server-authoritative timing">
+          <Feature icon="clock" title="Server-authoritative timing">
             Deadlines are recomputed on the server on every request. Refreshing the page, changing the system clock or
             reconnecting never grants extra time.
           </Feature>
-          <Feature icon="🔒" title="Answer keys stay server-side">
+          <Feature icon="lock" title="Answer keys stay server-side">
             Objective sections are marked in the Worker against protected keys. Correct answers reach the browser only
             when a result is released.
           </Feature>
-          <Feature icon="🧾" title="Versioned, immutable content">
+          <Feature icon="file" title="Versioned, immutable content">
             Publishing freezes a version. Later edits create a new version, so an attempt never changes after the fact.
           </Feature>
-          <Feature icon="📥" title="Import with human review">
+          <Feature icon="upload" title="Import with human review">
             Paste structured reading JSON or upload a document; the platform extracts structure, validates it and stops
             at review. Nothing is published automatically and no answer key is invented.
           </Feature>
-          <Feature icon="🧮" title="Estimated bands, clearly labelled">
+          <Feature icon="target" title="Estimated bands, clearly labelled">
             Reading and Listening estimates use your own versioned conversion profile, and the interface always labels
             them as estimates. Writing is marked by a person.
           </Feature>
-          <Feature icon="♿" title="Accessible by default">
+          <Feature icon="check" title="Accessible by default">
             Keyboard navigation, visible focus, semantic labels, colour never carrying meaning alone, and reduced-motion
             support throughout.
           </Feature>
@@ -206,16 +255,22 @@ function SkillCard({
   name,
   detail,
   meta,
+  icon,
 }: {
   skill: 'reading' | 'listening' | 'writing' | 'mock';
   name: string;
   detail: string;
   meta: string;
+  icon: IconName;
 }) {
   return (
     <article className={`feature skill-card skill-${skill}`}>
-      <span className="skill-chip">Skill</span>
-      <h3 style={{ marginTop: 10 }}>{name}</h3>
+      <div className="skill-card__head">
+        <span className="skill-card__icon">
+          <Icon name={icon} size={18} />
+        </span>
+        <h3 style={{ margin: 0 }}>{name}</h3>
+      </div>
       <p className="skill-card__meta">{meta}</p>
       <p className="muted small" style={{ marginBottom: 0 }}>
         {detail}
@@ -224,12 +279,20 @@ function SkillCard({
   );
 }
 
-function Feature({ title, icon, children }: { title: string; icon?: string; children: React.ReactNode }) {
+function Feature({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon?: IconName;
+  children: React.ReactNode;
+}) {
   return (
     <article className="feature">
       {icon ? (
         <div className="feature__icon" aria-hidden="true">
-          {icon}
+          <Icon name={icon} size={19} />
         </div>
       ) : null}
       <h3>{title}</h3>
@@ -276,7 +339,7 @@ function AuthScreen({
           {points.map((point) => (
             <li key={point.title}>
               <span className="auth__tick" aria-hidden="true">
-                ✓
+                <Icon name="check" size={12} strokeWidth={3} />
               </span>
               <span>
                 <strong>{point.title}</strong>

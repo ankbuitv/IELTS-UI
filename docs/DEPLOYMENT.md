@@ -11,9 +11,40 @@ configuration file does not exist:
 ```
 
 That error always means the build step was skipped. Fix it with one of the
-two configurations below — never with `npx wrangler deploy` alone.
+options below — never with `npx wrangler deploy` alone.
 
-## Option A — Cloudflare dashboard (Workers Builds, recommended)
+> **A deployed Worker is not a migrated database.** The most common live-site
+> failure is `503 STORAGE_UNAVAILABLE` — *"The platform database is not
+> initialised yet, so accounts cannot be created or read"*. The upload
+> succeeded, but the remote D1 database never had the migrations applied, so it
+> has no `users` table. Run `npx wrangler d1 migrations apply DB --remote`, then
+> redeploy or use Option D below, which does both in the right order.
+
+## Option A — GitHub Actions (migrations + deploy on every push)
+
+`deploy/github-actions-deploy.yml` runs the full pipeline on each push to
+`main`: typecheck → lint → unit tests → `wrangler d1 migrations apply DB
+--remote` → build → `wrangler deploy` → a `/api/health` smoke test that fails
+the run when the deployment cannot read its database.
+
+**Activate it by copying the file to `.github/workflows/deploy.yml`** (GitHub
+UI: *Add file → Create new file*, paste, commit). It ships outside `.github/`
+because the GitHub App used by this workspace is not granted the `workflows`
+permission, and a commit that creates or edits a workflow file is rejected on
+push with *"refusing to allow a GitHub App to create or update workflow"*.
+
+Add two repository secrets (**Settings → Secrets and variables → Actions**):
+
+| Secret | Value |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | API token with **Workers Scripts: Edit** and **D1: Edit** |
+| `CLOUDFLARE_ACCOUNT_ID` | the account id from the Cloudflare dashboard URL |
+
+The database name and id are read from `wrangler.jsonc`; nothing is duplicated
+in the workflow. Trigger it manually with **Actions → Deploy to Cloudflare → Run
+workflow** after adding the secrets.
+
+## Option B — Cloudflare dashboard (Workers Builds)
 
 In the Worker → Settings → Build configuration:
 
@@ -25,7 +56,7 @@ In the Worker → Settings → Build configuration:
 `npm run build` typechecks the Worker, client and scripts, then runs
 `vite build`, which emits the SPA into `dist/client`.
 
-## Option B — single deploy command
+## Option C — single deploy command
 
 If the dashboard only offers one command field, use the repo script that
 builds first:
@@ -36,10 +67,11 @@ npm run deploy
 
 `deploy` is defined as `npm run build && wrangler deploy`.
 
-## Option C — deploy from your machine
+## Option D — deploy from your machine
 
 ```bash
 npm ci
+npx wrangler d1 migrations apply DB --remote   # required if the database is new
 npm run deploy
 ```
 

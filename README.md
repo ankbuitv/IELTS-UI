@@ -229,6 +229,23 @@ log entries.
 
 Full guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
+**A deployed Worker is not a migrated database.** A live site that answers
+
+```json
+{"error":{"code":"STORAGE_UNAVAILABLE","message":"The platform database is not initialised yet, so accounts cannot be created or read."}}
+```
+
+is uploaded correctly and bound to a D1 database that has no tables yet. Fix it
+with `npx wrangler d1 migrations apply DB --remote` and deploy again — or let
+the bundled pipeline do both in the right order: copy
+[`deploy/github-actions-deploy.yml`](deploy/github-actions-deploy.yml) to
+`.github/workflows/deploy.yml` and it runs typecheck → lint → tests → remote
+migrations → build → deploy → `/api/health` smoke test on every push to `main`.
+Add `CLOUDFLARE_API_TOKEN` (Workers Scripts:Edit, D1:Edit) and
+`CLOUDFLARE_ACCOUNT_ID` as repository secrets to enable it. (The file ships
+outside `.github/` because the GitHub App used by this workspace is not allowed
+to push workflow files.)
+
 The client **must be built before** `wrangler deploy` runs (the Worker serves
 the SPA from `dist/client`). In the Cloudflare dashboard set:
 
@@ -300,6 +317,9 @@ full-mock flows. The recorded output of a green run is in
 
 ## Documentation
 
+- [`docs/UI-REFRESH.md`](docs/UI-REFRESH.md) — the light workspace pass: one
+  visual language (white shell, icon set, product-first landing page), what it
+  replaced, and how it was verified without a browser.
 - [`docs/MODERNISATION-REPORT.md`](docs/MODERNISATION-REPORT.md) — the visual
   modernisation and object-storage removal pass: tokens, components, pages,
   accessibility, remaining optional storage references and current bindings.
