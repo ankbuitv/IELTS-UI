@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: './tests/e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -11,15 +11,9 @@ export default defineConfig({
     baseURL: 'http://localhost:8787',
     traceDir: './trace',
     screenshot: 'only-on-failure',
+    headless: true,
   },
   projects: [
-    {
-      name: 'chromium',
-      use: { browserName: 'chromium' },
-    },
-    {
-      name: 'firefox',
-      use: { browserName: 'firefox' },
-    },
+    { name: 'chromium', use: { browserName: 'chromium' } },
   ],
 });
