@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 39   Indexes: 55
+-- Tables: 39   Indexes: 56
 -- =============================================================================
 
 -- table: users
@@ -603,7 +603,7 @@ CREATE TABLE IF NOT EXISTS speaking_sessions (
   marked_at      TEXT,
   created_at     TEXT NOT NULL,
   updated_at     TEXT NOT NULL
-);
+, score_source TEXT, scored_by TEXT REFERENCES users (id) ON DELETE SET NULL, scored_at TEXT);
 
 -- table: speaking_responses
 CREATE TABLE IF NOT EXISTS speaking_responses (
@@ -806,3 +806,6 @@ CREATE INDEX IF NOT EXISTS idx_ai_scores_user ON ai_scores (user_id, created_at 
 
 -- index: idx_speaking_sessions_user
 CREATE INDEX IF NOT EXISTS idx_speaking_sessions_user ON speaking_sessions (user_id, created_at DESC);
+
+-- index: idx_speaking_sessions_status
+CREATE INDEX IF NOT EXISTS idx_speaking_sessions_status ON speaking_sessions (status, created_at DESC);

@@ -432,7 +432,7 @@ export async function scoreSpeakingSessionWithAi(
   await env.DB.prepare(
     `UPDATE speaking_sessions
         SET overall_band = ?, criteria_json = ?, feedback = ?, provider_id = ?, provider_model = ?,
-            status = 'MARKED', marked_at = ?, updated_at = ?
+            score_source = 'AI', scored_at = ?, status = 'MARKED', marked_at = ?, updated_at = ?
       WHERE id = ?`,
   )
     .bind(
@@ -447,6 +447,7 @@ export async function scoreSpeakingSessionWithAi(
       grade.feedback,
       grade.providerId,
       grade.providerModel,
+      timestamp,
       timestamp,
       timestamp,
       sessionId,
@@ -478,7 +479,7 @@ export async function scoreSpeakingSessionWithAi(
 /** The stored AI score of a Speaking session, if any. */
 export async function loadSpeakingScore(env: Env, sessionId: string): Promise<AiGradeResult | null> {
   const row = await env.DB.prepare(
-    `SELECT band, criteria_json, feedback, provider_id, provider_model
+    `SELECT overall_band AS band, criteria_json, feedback, provider_id, provider_model
        FROM speaking_sessions WHERE id = ? AND status = 'MARKED'`,
   )
     .bind(sessionId)

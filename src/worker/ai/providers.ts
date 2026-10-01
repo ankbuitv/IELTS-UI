@@ -4,7 +4,11 @@ import { newId, nowIso, parseJson } from '../lib/ids';
 import {
   buildProviderEndpoint,
   buildTranscriptionEndpoint,
+  cloudModelTag,
+  isLocalBaseUrl,
+  isOllamaCloudBaseUrl,
   normaliseBaseUrl,
+  providerNeedsKey,
   toPublicProvider,
   type AiProviderConfig,
   type AiProviderKind,
@@ -48,10 +52,31 @@ export async function loadProviders(env: Env): Promise<AiProviderConfig[]> {
   const stored = parseJson<StoredProviders>(row?.value_json ?? '', { providers: [] });
   const providers = Array.isArray(stored.providers) ? stored.providers.map(normaliseProvider) : [];
 
+  // Environment fallback: Worker secrets still work without any database
+  // configuration, so a deployment keeps running across a lost `ai_providers`
+  // row. `OLLAMA_API_KEYS` is a comma-separated list — each key becomes its own
+  // provider so the failover in `completeChat` rotates across them.
+  const ollamaKeys = parseKeyList([env.OLLAMA_API_KEYS, env.OLLAMA_API_KEY]);
+  const now = nowIso();
+  ollamaKeys.forEach((apiKey, index) => {
+    if (providers.some((provider) => (provider.apiKey ?? '').trim() === apiKey)) return;
+    providers.push({
+      id: `env-ollama-${index + 1}`,
+      label: ollamaKeys.length > 1 ? `Ollama Cloud (secret #${index + 1})` : 'Ollama Cloud (Worker secret)',
+      kind: 'OLLAMA',
+      baseUrl: normaliseBaseUrl(env.OLLAMA_BASE_URL ?? '') || 'https://ollama.com/v1',
+      model: (env.OLLAMA_MODEL ?? '').trim() || 'gpt-oss:120b-cloud',
+      apiKey,
+      enabled: true,
+      isDefault: !providers.some((provider) => provider.isDefault),
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
+
   // Environment fallback: an OPENAI_API_KEY secret still works without any
   // database configuration, so an existing deployment keeps running.
   if (env.OPENAI_API_KEY && !providers.some((provider) => (provider.apiKey ?? '').trim())) {
-    const now = nowIso();
     providers.push({
       id: ENV_PROVIDER_ID,
       label: 'OpenAI (Worker secret)',
@@ -60,7 +85,7 @@ export async function loadProviders(env: Env): Promise<AiProviderConfig[]> {
       model: env.OPENAI_MODEL || 'gpt-4.1',
       apiKey: env.OPENAI_API_KEY,
       enabled: true,
-      isDefault: providers.length === 0,
+      isDefault: !providers.some((provider) => provider.isDefault),
       sttModel: env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe',
       createdAt: now,
       updatedAt: now,
@@ -68,6 +93,25 @@ export async function loadProviders(env: Env): Promise<AiProviderConfig[]> {
   }
 
   return providers;
+}
+
+/**
+ * Splits a comma/newline-separated secret into individual keys, trimmed and
+ * de-duplicated in order. Blank entries are dropped so a trailing comma in a
+ * `.dev.vars` line cannot create a keyless provider.
+ */
+export function parseKeyList(values: Array<string | undefined>): string[] {
+  const seen = new Set<string>();
+  const keys: string[] = [];
+  for (const value of values) {
+    for (const part of (value ?? '').split(/[,\n;]+/)) {
+      const key = part.trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      keys.push(key);
+    }
+  }
+  return keys;
 }
 
 function normaliseProvider(raw: AiProviderConfig): AiProviderConfig {
@@ -81,6 +125,7 @@ function normaliseProvider(raw: AiProviderConfig): AiProviderConfig {
     model: (raw.model ?? '').trim(),
     ...(typeof raw.apiKey === 'string' && raw.apiKey ? { apiKey: raw.apiKey } : {}),
     enabled: raw.enabled !== false,
+    requiresKey: raw.requiresKey !== false && !isLocalBaseUrl(raw.baseUrl ?? ''),
     isDefault: raw.isDefault === true,
     ...(raw.sttModel ? { sttModel: raw.sttModel } : {}),
     createdAt: raw.createdAt ?? nowIso(),
@@ -118,6 +163,9 @@ export async function saveProviders(
       model: draft.model.trim(),
       ...(apiKey ? { apiKey } : {}),
       enabled: draft.enabled !== false,
+      requiresKey:
+        (draft.requiresKey ?? previous?.requiresKey ?? true) &&
+        !isLocalBaseUrl(normaliseBaseUrl(draft.baseUrl)),
       isDefault: draft.isDefault === true,
       ...(draft.sttModel ? { sttModel: draft.sttModel } : {}),
       createdAt: previous?.createdAt ?? timestamp,
@@ -150,7 +198,7 @@ export interface ResolvedProvider {
 /** The provider that will be used, or a clear reason why none can be. */
 export async function resolveProvider(env: Env, providerId?: string): Promise<ResolvedProvider> {
   const providers = await loadProviders(env);
-  const usable = providers.filter((provider) => provider.enabled && (provider.apiKey ?? '').trim() && provider.model);
+  const usable = providers.filter((provider) => isUsable(provider));
   if (usable.length === 0) {
     throw new ApiError(
       'AI_UNAVAILABLE',
@@ -166,10 +214,16 @@ export async function resolveProvider(env: Env, providerId?: string): Promise<Re
   return { provider: chosen, apiKey: (chosen.apiKey ?? '').trim() };
 }
 
+/** Enabled, with a model, and with a key when its endpoint needs one. */
+export function isUsable(provider: AiProviderConfig): boolean {
+  if (!provider.enabled || !provider.model) return false;
+  return providerNeedsKey(provider) ? Boolean((provider.apiKey ?? '').trim()) : true;
+}
+
 /** Status for the admin screens and for feature gates. Never contacts the network. */
 export async function providerStatus(env: Env): Promise<AiStatus> {
   const providers = await loadProviders(env);
-  const usable = providers.filter((provider) => provider.enabled && (provider.apiKey ?? '').trim() && provider.model);
+  const usable = providers.filter((provider) => isUsable(provider));
   if (usable.length === 0) {
     return {
       available: false,
@@ -259,9 +313,7 @@ export async function completeChat(env: Env, request: CompletionRequest): Promis
   // is skipped and the next usable one answers the request. A caller that named
   // a provider explicitly still gets that provider first.
   const providers = await loadProviders(env);
-  const usable = providers.filter(
-    (candidate) => candidate.enabled && (candidate.apiKey ?? '').trim() && candidate.model,
-  );
+  const usable = providers.filter((candidate) => isUsable(candidate));
   const ordered = [provider, ...usable.filter((candidate) => candidate.id !== provider.id)];
   let lastError: unknown = null;
 
@@ -314,7 +366,7 @@ async function postChat(
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        authorization: `Bearer ${apiKey}`,
+        ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(request.timeoutMs ?? 120_000),
@@ -337,6 +389,14 @@ async function postChat(
       );
     }
     if (response.status === 404) {
+      // Ollama's hosted models carry a `-cloud` suffix. An admin who typed the
+      // bare tag (`gpt-oss:120b`) gets one automatic retry with the suffix
+      // rather than an error they cannot interpret.
+      if (provider.kind === 'OLLAMA' && isOllamaCloudBaseUrl(provider.baseUrl) && cloudModelTag(provider.model) !== provider.model) {
+        const retryModel = cloudModelTag(provider.model);
+        console.warn('ai_provider_model_cloud_retry', provider.id, provider.model, retryModel);
+        return postChat({ ...provider, model: retryModel }, apiKey, request);
+      }
       throw new ApiError(
         'AI_UNAVAILABLE',
         `The AI provider “${provider.label}” does not offer the model “${provider.model}” (status 404). Check the model name.`,

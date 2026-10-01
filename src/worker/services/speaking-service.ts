@@ -43,6 +43,8 @@ export interface SpeakingSessionView {
     feedback: string;
     markedAt: string | null;
     providerModel: string | null;
+    /** 'AI' when the marking machine produced the band, 'TEACHER' when a human did. */
+    scoreSource: 'AI' | 'TEACHER' | null;
     createdAt: string;
   };
   topic: {
@@ -214,6 +216,157 @@ export async function markSpeakingSessionAsStaff(
   return scoreSpeakingSessionWithAi(env, sessionId, options);
 }
 
+export interface SpeakingQueueItem {
+  sessionId: string;
+  studentId: string;
+  studentEmail: string;
+  studentName: string;
+  topicTitle: string;
+  mode: string;
+  status: string;
+  overallBand: number | null;
+  scoreSource: 'AI' | 'TEACHER' | null;
+  providerModel: string | null;
+  feedback: string;
+  parts: number;
+  audioParts: number;
+  words: number;
+  createdAt: string;
+  markedAt: string | null;
+}
+
+/**
+ * Speaking sessions for staff review, newest first. A teacher sees their own
+ * classrooms' candidates; an administrator sees everyone. The AI grades first,
+ * so this queue is normally a spot-check list rather than a backlog.
+ */
+export async function listSpeakingQueue(
+  env: Env,
+  user: AuthUser,
+  options: { unmarkedOnly?: boolean; limit?: number } = {},
+): Promise<{ sessions: SpeakingQueueItem[]; unmarkedCount: number }> {
+  const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+  const teacherFilter =
+    user.role === 'ADMIN'
+      ? ''
+      : `AND (
+           EXISTS (
+             SELECT 1 FROM classroom_members student
+             JOIN classrooms c ON c.id = student.classroom_id
+            WHERE student.user_id = s.user_id AND student.status = 'ACTIVE'
+              AND (c.teacher_id = ?
+                   OR EXISTS (
+                     SELECT 1 FROM classroom_members ct
+                      WHERE ct.classroom_id = c.id AND ct.user_id = ?
+                        AND ct.role = 'CO_TEACHER' AND ct.status = 'ACTIVE'
+                   ))
+           )
+         )`;
+  const unmarkedFilter = options.unmarkedOnly ? 'AND s.overall_band IS NULL' : '';
+  const bindings = user.role === 'ADMIN' ? [] : [user.id, user.id];
+
+  const rows = await env.DB.prepare(
+    `SELECT s.id, s.user_id, s.mode, s.status, s.topic_title, s.overall_band, s.score_source, s.provider_model,
+            s.feedback, s.created_at, s.marked_at,
+            u.email, p.display_name,
+            (SELECT COUNT(*) FROM speaking_responses r WHERE r.session_id = s.id) AS parts,
+            (SELECT COUNT(*) FROM speaking_responses r
+               JOIN speaking_recording_blobs b ON b.response_id = r.id
+              WHERE r.session_id = s.id) AS audio_parts,
+            (SELECT COALESCE(SUM(r.words), 0) FROM speaking_responses r WHERE r.session_id = s.id) AS words
+       FROM speaking_sessions s
+       JOIN users u ON u.id = s.user_id
+       LEFT JOIN user_profiles p ON p.user_id = u.id
+      WHERE s.status != 'IN_PROGRESS'
+        ${teacherFilter}
+        ${unmarkedFilter}
+      ORDER BY CASE WHEN s.overall_band IS NULL THEN 0 ELSE 1 END, COALESCE(s.marked_at, s.created_at) DESC
+      LIMIT ${limit}`,
+  )
+    .bind(...bindings)
+    .all<{
+      id: string;
+      user_id: string;
+      mode: string;
+      status: string;
+      topic_title: string;
+      overall_band: number | null;
+      score_source: 'AI' | 'TEACHER' | null;
+      provider_model: string | null;
+      feedback: string;
+      created_at: string;
+      marked_at: string | null;
+      email: string;
+      display_name: string | null;
+      parts: number;
+      audio_parts: number;
+      words: number;
+    }>();
+
+  const unmarked = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM speaking_sessions s
+      WHERE s.status != 'IN_PROGRESS' AND s.overall_band IS NULL ${teacherFilter}`,
+  )
+    .bind(...bindings)
+    .first<{ n: number }>();
+
+  return {
+    unmarkedCount: unmarked?.n ?? 0,
+    sessions: rows.results.map((row) => ({
+      sessionId: row.id,
+      studentId: row.user_id,
+      studentEmail: row.email,
+      studentName: row.display_name ?? row.email,
+      topicTitle: row.topic_title,
+      mode: row.mode,
+      status: row.status,
+      overallBand: row.overall_band,
+      scoreSource: row.score_source ?? (row.overall_band !== null ? 'AI' : null),
+      providerModel: row.provider_model,
+      feedback: row.feedback,
+      parts: row.parts,
+      audioParts: row.audio_parts,
+      words: row.words,
+      createdAt: row.created_at,
+      markedAt: row.marked_at,
+    })),
+  };
+}
+
+/** A teacher's (or admin's) own band for a session. Always wins over the AI. */
+export async function setSpeakingBand(
+  env: Env,
+  user: AuthUser,
+  sessionId: string,
+  input: { band: number | null; feedback?: string },
+): Promise<SpeakingSessionView> {
+  const session = await requireOwnedSession(env, user, sessionId);
+  const band =
+    input.band === null || Number.isNaN(input.band)
+      ? null
+      : Math.min(9, Math.max(0, Math.round(input.band * 2) / 2));
+  const timestamp = nowIso();
+  await env.DB.prepare(
+    `UPDATE speaking_sessions
+        SET overall_band = ?, feedback = ?, score_source = ?, scored_by = ?, scored_at = ?, marked_at = ?,
+            status = CASE WHEN ? IS NULL THEN 'SUBMITTED' ELSE 'MARKED' END, updated_at = ?
+      WHERE id = ?`,
+  )
+    .bind(
+      band,
+      (input.feedback ?? '').slice(0, 4000),
+      band === null ? null : 'TEACHER',
+      user.id,
+      timestamp,
+      timestamp,
+      band,
+      timestamp,
+      session.id,
+    )
+    .run();
+  return requireSession(env, user, sessionId);
+}
+
 export async function deleteSpeakingSession(env: Env, user: AuthUser, sessionId: string): Promise<void> {
   const session = await requireOwnedSession(env, user, sessionId);
   await env.DB.prepare('DELETE FROM speaking_sessions WHERE id = ?').bind(session.id).run();
@@ -257,7 +410,7 @@ async function requireSession(env: Env, user: AuthUser, sessionId: string): Prom
   const session = await requireOwnedSession(env, user, sessionId);
   const row = await env.DB.prepare(
     `SELECT id, status, mode, topic_set_id, topic_title, part_count, overall_band, feedback, marked_at,
-            provider_model, created_at
+            provider_model, score_source, created_at
        FROM speaking_sessions WHERE id = ?`,
   )
     .bind(session.id)
@@ -272,6 +425,7 @@ async function requireSession(env: Env, user: AuthUser, sessionId: string): Prom
       feedback: string;
       marked_at: string | null;
       provider_model: string | null;
+      score_source: 'AI' | 'TEACHER' | null;
       created_at: string;
     }>();
   if (!row) throw ApiError.notFound('Speaking session not found.');
@@ -297,6 +451,7 @@ async function requireSession(env: Env, user: AuthUser, sessionId: string): Prom
       feedback: row.feedback,
       markedAt: row.marked_at,
       providerModel: row.provider_model,
+      scoreSource: row.score_source ?? (row.overall_band !== null ? 'AI' : null),
       createdAt: row.created_at,
     },
     topic: topic

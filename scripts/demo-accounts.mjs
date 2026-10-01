@@ -54,33 +54,57 @@ function createClient() {
   return {
     get: (path) => request(path),
     post: (path, json) => request(path, { method: 'POST', json }),
-    useSession: (token, csrf) => {
-      sessionToken = token;
-      csrfToken = csrf;
-    },
-    get csrfToken() {
-      return csrfToken;
-    },
+    patch: (path, json) => request(path, { method: 'PATCH', json }),
   };
 }
 
 const log = (...args) => console.log(...args);
 
-async function ensureAccount(client, account, { registerPath = '/api/auth/register' } = {}) {
-  const payload = {
-    email: account.email,
-    password: PASSWORD,
-    displayName: account.displayName,
-    bootstrapAdmin: account.role === 'ADMIN',
-  };
+async function ensureAccount(client, account, { registerPath = '/api/auth/register', register = true } = {}) {
+  if (register) {
+    const payload = {
+      email: account.email,
+      password: PASSWORD,
+      displayName: account.displayName,
+      bootstrapAdmin: account.role === 'ADMIN',
+    };
 
-  const registered = await client.post(registerPath, payload);
-  if (registered.status === 201) return { created: true, ...registered };
+    const registered = await client.post(registerPath, payload);
+    if (registered.status === 201) return { created: true, ...registered };
+  }
 
   const loggedIn = await client.post('/api/auth/login', { email: account.email, password: PASSWORD });
   if (loggedIn.status === 200) return { created: false, ...loggedIn };
 
   return { created: false, status: loggedIn.status, body: loggedIn.body };
+}
+
+/**
+ * Signs in as the demo teacher, creating the account through the admin API when
+ * it is missing and *promoting* it when an older run registered it as a student.
+ * Public sign-up only ever creates students, so a teacher must come from here.
+ */
+async function ensureTeacher(admin, account) {
+  const client = createClient();
+  const existing = await ensureAccount(client, account, { register: false });
+  if (existing.body?.user?.role === account.role) {
+    return { created: false, promoted: false, role: account.role };
+  }
+
+  if (existing.body?.user) {
+    const promoted = await admin.patch(`/api/admin/users/${existing.body.user.id}`, { role: account.role });
+    if (promoted.status === 200) return { created: false, promoted: true, role: account.role };
+    return { created: false, promoted: false, error: promoted.body };
+  }
+
+  const created = await admin.post('/api/admin/users', {
+    email: account.email,
+    displayName: account.displayName,
+    role: account.role,
+    password: PASSWORD,
+  });
+  if (created.status === 201) return { created: true, promoted: false, role: account.role };
+  return { created: false, promoted: false, error: created.body };
 }
 
 async function main() {
@@ -104,24 +128,18 @@ async function main() {
     console.error('✗ Could not obtain an administrator session. Details:', JSON.stringify(adminAccount.body));
     process.exit(1);
   }
-  admin.useSession(adminAccount.body.sessionToken ?? null, adminAccount.body.csrfToken ?? null);
   log(`  ✓ admin    ${ACCOUNTS.admin.email} (${adminAccount.created ? 'created' : 'existing'})`);
 
-  // 2. Teacher, created by the administrator (public sign-up only makes students).
-  const teacher = createClient();
-  const teacherAccount = await ensureAccount(teacher, ACCOUNTS.teacher);
-  if (!teacherAccount.body?.user) {
-    const created = await admin.post('/api/admin/users', {
-      email: ACCOUNTS.teacher.email,
-      displayName: ACCOUNTS.teacher.displayName,
-      role: 'TEACHER',
-      password: PASSWORD,
-    });
-    if (created.status !== 201) {
-      log(`  · teacher  ${ACCOUNTS.teacher.email} present already (${created.status})`);
-    } else {
-      log(`  ✓ teacher  ${ACCOUNTS.teacher.email} (created)`);
-    }
+  // 2. Teacher, created (or promoted) by the administrator: public sign-up only
+  //    makes students, and a database seeded by an earlier run may hold this
+  //    address as a student.
+  const teacherState = await ensureTeacher(admin, ACCOUNTS.teacher);
+  if (teacherState.error) {
+    log(`  ! teacher  ${ACCOUNTS.teacher.email} could not be prepared: ${JSON.stringify(teacherState.error)}`);
+  } else if (teacherState.created) {
+    log(`  ✓ teacher  ${ACCOUNTS.teacher.email} (created)`);
+  } else if (teacherState.promoted) {
+    log(`  ✓ teacher  ${ACCOUNTS.teacher.email} (role promoted to TEACHER)`);
   } else {
     log(`  · teacher  ${ACCOUNTS.teacher.email} present already`);
   }

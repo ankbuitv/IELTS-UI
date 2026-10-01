@@ -75,6 +75,7 @@ export function AiProvidersPanel() {
         enabled: true,
         isDefault: (current ?? []).length === 0,
         sttModel: '',
+        requiresKey: true,
         hasKey: false,
         keyHint: null,
         createdAt: new Date().toISOString(),
@@ -98,6 +99,7 @@ export function AiProvidersPanel() {
           // Only send the key when the admin typed one; otherwise the server keeps
           // the stored value. An empty typed value clears it.
           ...(draft.keyTouched ? { apiKey: draft.apiKey } : {}),
+          requiresKey: draft.requiresKey,
           enabled: draft.enabled,
           isDefault: draft.isDefault,
           sttModel: draft.sttModel || null,
@@ -121,6 +123,7 @@ export function AiProvidersPanel() {
         kind: draft.kind,
         baseUrl: draft.baseUrl,
         model: draft.model,
+        requiresKey: draft.requiresKey,
         // Send the typed key when there is one; the server falls back to the stored key.
         ...(draft.keyTouched || draft.apiKey ? { apiKey: draft.apiKey } : {}),
       });
@@ -249,14 +252,25 @@ export function AiProvidersPanel() {
             </Field>
             <Field label="API key" hint="Chỉ ghi khi cần đặt hoặc đổi key. Để trống = giữ nguyên key đã lưu.">
               {(id) => (
-                <TextInput
-                  id={id}
-                  type="password"
-                  autoComplete="off"
-                  value={draft.apiKey}
-                  placeholder={draft.hasKey ? '········ (đã lưu)' : 'dán key vào đây'}
-                  onChange={(event) => update(draft.id, { apiKey: event.target.value, keyTouched: true })}
-                />
+                <>
+                  <TextInput
+                    id={id}
+                    type="password"
+                    autoComplete="off"
+                    value={draft.apiKey}
+                    placeholder={draft.requiresKey ? (draft.hasKey ? '········ (đã lưu)' : 'dán key vào đây') : 'không cần key'}
+                    disabled={!draft.requiresKey}
+                    onChange={(event) => update(draft.id, { apiKey: event.target.value, keyTouched: true })}
+                  />
+                  <label className="display-menu__toggle">
+                    <input
+                      type="checkbox"
+                      checked={!draft.requiresKey}
+                      onChange={(event) => update(draft.id, { requiresKey: !event.target.checked })}
+                    />
+                    <span>Máy chủ nội bộ, không cần API key (ví dụ Ollama chạy local)</span>
+                  </label>
+                </>
               )}
             </Field>
             <Field label="Model chép lời (speech-to-text)" hint="Tuỳ chọn. Có thì Speaking mới chép lời được ở server.">

@@ -30,6 +30,11 @@ export interface AiProviderConfig {
   model: string;
   /** Write-only. Never returned by any endpoint. */
   apiKey?: string;
+  /**
+   * False for a server that does not authenticate (a local Ollama daemon, an
+   * in-cluster gateway). Defaults to true: cloud endpoints always need a key.
+   */
+  requiresKey?: boolean;
   enabled: boolean;
   isDefault: boolean;
   /** Optional speech-to-text model (OpenAI-compatible `/audio/transcriptions`). */
@@ -48,6 +53,8 @@ export interface AiProviderPublic {
   enabled: boolean;
   isDefault: boolean;
   sttModel: string | null;
+  /** False when the endpoint needs no authentication (local Ollama daemon). */
+  requiresKey: boolean;
   /** True when a key is stored. The key itself is never sent. */
   hasKey: boolean;
   /** Last two characters of the key, for an admin to recognise it. */
@@ -80,16 +87,35 @@ export const PROVIDER_KIND_LABELS: Record<AiProviderKind, string> = {
   OPENAI_COMPATIBLE: 'OpenAI-compatible gateway',
 };
 
+/**
+ * The hosted Ollama models carry a `-cloud` suffix; a self-hosted daemon uses
+ * the bare tag. `cloudModelTag()` adds the suffix for ollama.com so an admin who
+ * types `gpt-oss:120b` still reaches the right model.
+ */
+export const OLLAMA_CLOUD_HOST = 'ollama.com';
+
+export function isOllamaCloudBaseUrl(baseUrl: string): boolean {
+  const host = (normaliseBaseUrl(baseUrl) || '').replace(/^[a-z]+:\/\//i, '');
+  return /^(?:[^/]+\.)?ollama\.com(?::\d+)?(?:\/|$)/i.test(host);
+}
+
+/** `gpt-oss:120b` → `gpt-oss:120b-cloud`; already-suffixed tags are untouched. */
+export function cloudModelTag(model: string): string {
+  const trimmed = (model ?? '').trim();
+  if (!trimmed || /-cloud$|:cloud$/.test(trimmed)) return trimmed;
+  return `${trimmed}-cloud`;
+}
+
 /** Models offered as one-tap presets; the field itself stays free text. */
 export const MODEL_PRESETS: Array<{ id: string; label: string; kind?: AiProviderKind }> = [
-  { id: 'gpt-oss:120b', label: 'gpt-oss:120b — strongest open reasoning model', kind: 'OLLAMA' },
-  { id: 'gpt-oss:20b', label: 'gpt-oss:20b — fast, cheap', kind: 'OLLAMA' },
-  { id: 'gemma3:27b', label: 'gemma3:27b — balanced quality', kind: 'OLLAMA' },
-  { id: 'gemma3:12b', label: 'gemma3:12b — fast', kind: 'OLLAMA' },
-  { id: 'qwen3:32b', label: 'qwen3:32b', kind: 'OLLAMA' },
-  { id: 'deepseek-v3.1:671b', label: 'deepseek-v3.1:671b — cloud, large', kind: 'OLLAMA' },
-  { id: 'kimi-k2:1t', label: 'kimi-k2:1t — cloud, large', kind: 'OLLAMA' },
-  { id: 'glm-4.6', label: 'glm-4.6 — cloud', kind: 'OLLAMA' },
+  { id: 'gpt-oss:120b-cloud', label: 'gpt-oss:120b-cloud — strongest open reasoning model', kind: 'OLLAMA' },
+  { id: 'gemma4:31b-cloud', label: 'gemma4:31b-cloud — Google, balanced quality', kind: 'OLLAMA' },
+  { id: 'gpt-oss:20b-cloud', label: 'gpt-oss:20b-cloud — fast, cheap', kind: 'OLLAMA' },
+  { id: 'gemma3:27b-cloud', label: 'gemma3:27b-cloud — previous generation', kind: 'OLLAMA' },
+  { id: 'qwen3-coder:480b-cloud', label: 'qwen3-coder:480b-cloud — large', kind: 'OLLAMA' },
+  { id: 'deepseek-v3.2:cloud', label: 'deepseek-v3.2:cloud', kind: 'OLLAMA' },
+  { id: 'gpt-oss:120b', label: 'gpt-oss:120b — local Ollama daemon only', kind: 'OLLAMA' },
+  { id: 'gemma3:27b', label: 'gemma3:27b — local Ollama daemon only', kind: 'OLLAMA' },
   { id: 'gpt-4.1', label: 'gpt-4.1', kind: 'OPENAI' },
   { id: 'gpt-4.1-mini', label: 'gpt-4.1-mini', kind: 'OPENAI' },
   { id: 'gpt-5-mini', label: 'gpt-5-mini', kind: 'OPENAI' },
@@ -100,6 +126,13 @@ export const SPEECH_TO_TEXT_MODELS: Array<{ id: string; label: string }> = [
   { id: 'whisper-1', label: 'whisper-1 (OpenAI)' },
   { id: 'whisper-large-v3', label: 'whisper-large-v3 (self-hosted)' },
 ];
+
+/** True for a host that is only reachable from the machine running the Worker. */
+export function isLocalBaseUrl(baseUrl: string): boolean {
+  const host = (normaliseBaseUrl(baseUrl) || '').replace(/^[a-z]+:\/\//i, '').split('/')[0] ?? '';
+  const hostname = host.split(':')[0] ?? '';
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === 'host.docker.internal';
+}
 
 /** Trims a trailing slash so `${baseUrl}/chat/completions` is always well formed. */
 export function normaliseBaseUrl(raw: string): string {
@@ -137,6 +170,7 @@ export interface AiProviderDraft {
   model?: string;
   /** Omit to keep the stored key, send an empty string to clear it. */
   apiKey?: string;
+  requiresKey?: boolean;
   enabled?: boolean;
   isDefault?: boolean;
   sttModel?: string | null;
@@ -146,6 +180,10 @@ export interface AiProviderDraft {
  * Redacts a stored provider for transport to the browser. Never let a raw key
  * reach a response body: `hasKey`/`keyHint` are all the UI needs.
  */
+export function providerNeedsKey(provider: Pick<AiProviderConfig, 'requiresKey'>): boolean {
+  return provider.requiresKey !== false;
+}
+
 export function toPublicProvider(
   provider: AiProviderConfig & { apiKey?: string | undefined },
 ): AiProviderPublic {
@@ -159,6 +197,7 @@ export function toPublicProvider(
     enabled: provider.enabled,
     isDefault: provider.isDefault,
     sttModel: provider.sttModel ?? null,
+    requiresKey: provider.requiresKey !== false,
     hasKey: key.trim().length > 0,
     keyHint: key.trim().length >= 4 ? key.trim().slice(-4) : null,
     createdAt: provider.createdAt,

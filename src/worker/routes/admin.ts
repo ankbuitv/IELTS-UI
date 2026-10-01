@@ -1165,6 +1165,8 @@ const providerSchema = z.object({
   model: z.string().min(1).max(120),
   /** Omit to keep the stored key; send "" to clear it. */
   apiKey: z.string().max(400).optional(),
+  /** False for an endpoint that needs no authentication (local Ollama daemon). */
+  requiresKey: z.boolean().optional(),
   enabled: z.boolean().optional(),
   isDefault: z.boolean().optional(),
   sttModel: z.string().max(80).nullable().optional(),

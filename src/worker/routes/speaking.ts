@@ -9,11 +9,13 @@ import { base64ToBytes, parseRange } from '../services/blob-store';
 import {
   createSpeakingSession,
   deleteSpeakingSession,
+  listSpeakingQueue,
   listSpeakingSessions,
   loadSpeakingAudio,
   loadSpeakingSession,
   markSpeakingSessionAsStaff,
   saveSpeakingResponse,
+  setSpeakingBand,
   speakingCatalog,
   submitSpeakingSession,
 } from '../services/speaking-service';
@@ -34,6 +36,34 @@ router.get('/catalog', (c) => {
 router.get('/sessions', async (c) => {
   const sessions = await listSpeakingSessions(c.env, currentUser(c));
   return c.json({ sessions });
+});
+
+/**
+ * Staff review queue: every submitted session (the marking machine grades first,
+ * so this is normally a spot-check list). Teachers see their own classrooms.
+ */
+router.get('/review-queue', requireRole('TEACHER', 'ADMIN'), async (c) => {
+  const unmarkedOnly = c.req.query('unmarked') === '1';
+  const limit = Number.parseInt(c.req.query('limit') ?? '50', 10);
+  const queue = await listSpeakingQueue(c.env, currentUser(c), {
+    unmarkedOnly,
+    limit: Number.isFinite(limit) ? limit : 50,
+  });
+  return c.json(queue);
+});
+
+/** A human band always replaces the AI estimate and is labelled as such. */
+router.post('/sessions/:id/score', requireRole('TEACHER', 'ADMIN'), async (c) => {
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      band: z.number().min(0).max(9).nullable(),
+      feedback: z.string().max(4000).optional(),
+    }),
+  );
+  const session = await setSpeakingBand(c.env, currentUser(c), c.req.param('id'), body);
+  return c.json(session);
 });
 
 router.post('/sessions', async (c) => {

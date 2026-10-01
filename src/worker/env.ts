@@ -33,6 +33,15 @@ export interface Env {
   SESSION_SECRET?: string;
   /** Optional: when unset, AI import reports itself as unavailable. */
   OPENAI_API_KEY?: string;
+  /**
+   * Ollama Cloud (https://ollama.com) keys. `OLLAMA_API_KEYS` holds a
+   * comma-separated list: every key becomes its own provider row, so the
+   * failover in `completeChat` rotates across them when one is rate limited.
+   */
+  OLLAMA_API_KEY?: string;
+  OLLAMA_API_KEYS?: string;
+  OLLAMA_MODEL?: string;
+  OLLAMA_BASE_URL?: string;
 }
 
 export interface ImportQueueMessage {
