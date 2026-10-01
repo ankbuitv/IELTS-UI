@@ -252,8 +252,31 @@ export interface CompletionResult {
  * OpenAI, where strict structured outputs are guaranteed.
  */
 export async function completeChat(env: Env, request: CompletionRequest): Promise<CompletionResult> {
-  const { provider, apiKey } = await resolveProvider(env, request.providerId);
-  return postChat(provider, apiKey, request);
+  const { provider } = await resolveProvider(env, request.providerId);
+
+  // Failover: when an admin has added several providers (for example two Ollama
+  // cloud keys with different rate limits), a rate-limited or rejected provider
+  // is skipped and the next usable one answers the request. A caller that named
+  // a provider explicitly still gets that provider first.
+  const providers = await loadProviders(env);
+  const usable = providers.filter(
+    (candidate) => candidate.enabled && (candidate.apiKey ?? '').trim() && candidate.model,
+  );
+  const ordered = [provider, ...usable.filter((candidate) => candidate.id !== provider.id)];
+  let lastError: unknown = null;
+
+  for (const candidate of ordered) {
+    try {
+      return await postChat(candidate, (candidate.apiKey ?? '').trim(), { ...request, providerId: undefined });
+    } catch (error) {
+      lastError = error;
+      const retryable =
+        error instanceof ApiError && (error.code === 'RATE_LIMITED' || error.code === 'AI_UNAVAILABLE');
+      if (!retryable || ordered.length === 1) throw error;
+      console.warn('ai_provider_failover', provider.id, '->', candidate.id, (error as ApiError).code);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('No AI provider could answer the request.');
 }
 
 /** The transport shared by `completeChat` and the admin connection test. */

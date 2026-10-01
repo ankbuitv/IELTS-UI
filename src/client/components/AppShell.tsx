@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { DisplayMenu } from './DisplayMenu';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from './BrandLogo';
@@ -31,6 +32,7 @@ const PAGE_TITLES: Array<[prefix: string, title: string]> = [
   ['/exam', 'Exam in progress'],
   ['/classrooms', 'Classrooms'],
   ['/analytics', 'My progress'],
+  ['/speaking', 'Speaking practice'],
   ['/vocabulary', 'Vocabulary notebook'],
   ['/profile', 'Profile'],
 ];
@@ -84,6 +86,7 @@ export function AppShell() {
     primary.push({ to: '/history', label: 'My attempts', icon: 'clock' });
     primary.push({ to: '/classrooms', label: 'Classrooms', icon: 'users' });
     primary.push({ to: '/analytics', label: 'My progress', icon: 'chart' });
+    primary.push({ to: '/speaking', label: 'Speaking + AI', icon: 'mic' });
     primary.push({ to: '/vocabulary', label: 'Vocabulary', icon: 'sparkle' });
     primary.push({ to: '/profile', label: 'Profile', icon: 'user' });
   }
@@ -228,6 +231,7 @@ export function AppShell() {
                 <span className="topbar__meta topbar__meta--role">{user.displayName}</span>
               </span>
               <div className="topbar__actions">
+                <DisplayMenu />
                 <NavLink to="/practice" className="btn btn--sm btn--primary">
                   <Icon name="play" size={14} />
                   Start practising

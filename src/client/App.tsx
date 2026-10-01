@@ -14,6 +14,7 @@ import {
 } from './pages/student/StudentPages';
 import { StudentDashboardPage } from './pages/student/Dashboard';
 import { VocabularyPage } from './pages/student/VocabularyPage';
+import { SpeakingPage } from './pages/student/SpeakingPage';
 import { TakeExamPage } from './pages/exam/TakeExam';
 import { TeacherHomePage, ClassroomPage, AssignmentPage, StudentDetailPage } from './pages/teacher/TeacherPages';
 import { AdminWritingQueuePage, TeacherWritingQueuePage } from './pages/staff/WritingQueue';
@@ -107,6 +108,22 @@ export function App() {
           element={
             <RequireAuth>
               <StudentClassroomsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="speaking"
+          element={
+            <RequireAuth>
+              <SpeakingPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="speaking/:sessionId"
+          element={
+            <RequireAuth>
+              <SpeakingPage />
             </RequireAuth>
           }
         />
