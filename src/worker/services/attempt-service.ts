@@ -137,6 +137,13 @@ export interface CreateAttemptInput {
   assignmentId?: string;
   /** Supplied when starting a code-protected test for the first time. */
   accessCode?: string;
+  /**
+   * Practice a subset of the test's sections ("passage 1", "passages 1-2",
+   * "listening part 3"). Marking, timing and the candidate payload all use the
+   * snapshot taken from this list, so a short practice set is marked out of its
+   * own questions and additionally projected to a full-test band.
+   */
+  sectionIds?: string[];
   mode?: ExamMode;
   clientMeta?: Record<string, unknown>;
 }
@@ -259,8 +266,30 @@ export async function createAttempt(
 
   const startedAt = nowIso();
 
+  // Optional practice scope: only the requested sections are snapshotted, timed
+  // and marked. Assignments always run the whole test.
+  let scopedSectionIds: string[] | null = null;
+  let scopedSections: Array<{ id: string; skill: Skill; duration_seconds: number | null }> = [];
+  if (!assignment && input.sectionIds && input.sectionIds.length > 0) {
+    const requested = [...new Set(input.sectionIds)];
+    const rows = await env.DB.prepare(
+      `SELECT id, skill, duration_seconds FROM sections WHERE test_version_id = ? AND id IN (${requested
+        .map(() => '?')
+        .join(', ')}) ORDER BY order_index, id`,
+    )
+      .bind(versionId, ...requested)
+      .all<{ id: string; skill: Skill; duration_seconds: number | null }>();
+    if (rows.results.length === 0) {
+      throw ApiError.validation('None of the selected parts belong to this test version.');
+    }
+    scopedSections = rows.results;
+    scopedSectionIds = rows.results.map((section) => section.id);
+  }
+
   // Build the component plan: one session per skill, or one per mock component.
-  const plan = await buildComponentPlan(env, test.type, versionId, version.duration_seconds, versionConfig, assignment);
+  const plan = scopedSections.length > 0
+    ? buildScopedComponentPlan(scopedSections, versionConfig, versionId)
+    : await buildComponentPlan(env, test.type, versionId, version.duration_seconds, versionConfig, assignment);
 
   const attemptId = newId('att');
   const statements: D1PreparedStatement[] = [
@@ -325,7 +354,14 @@ export async function createAttempt(
 
   // 38/39/40: snapshot the section structure for this attempt (also creates
   // server-side per-section timers when the version's policy enables them).
-  await initializeAttemptSections(env, attemptId, plan.components, startedAt, resolveVersionSectionPolicy(versionConfig));
+  await initializeAttemptSections(
+    env,
+    attemptId,
+    plan.components,
+    startedAt,
+    resolveVersionSectionPolicy(versionConfig),
+    scopedSectionIds ?? undefined,
+  );
 
   await recordIntegrityEvents(env, attemptId, [
     { type: 'SESSION_START', occurredAt: startedAt, metadata: { mode, testType: test.type } },
@@ -445,6 +481,38 @@ async function buildComponentPlan(
   };
 }
 
+/**
+ * Component plan for a partial practice set: contiguous runs of the chosen
+ * sections become one timed session per skill, using the sum of the section
+ * durations (falling back to the standard skill length when a section carries
+ * none). Nothing about the full test is loaded or timed.
+ */
+function buildScopedComponentPlan(
+  sections: Array<{ skill: Skill; duration_seconds: number | null }>,
+  versionConfig: { skillConfig?: Partial<Record<Skill, { durationSeconds?: number }>> },
+  versionId: string,
+): ComponentPlan {
+  const runs: Array<{ skill: Skill; seconds: number }> = [];
+  for (const section of sections) {
+    const last = runs[runs.length - 1];
+    if (last && last.skill === section.skill) last.seconds += section.duration_seconds ?? 0;
+    else runs.push({ skill: section.skill, seconds: section.duration_seconds ?? 0 });
+  }
+  return {
+    timed: true,
+    components: runs.map((run) => ({
+      skill: run.skill,
+      testVersionId: versionId,
+      label: `${run.skill.charAt(0)}${run.skill.slice(1).toLowerCase()} practice`,
+      durationSeconds:
+        run.seconds > 0
+          ? run.seconds
+          : (versionConfig.skillConfig?.[run.skill]?.durationSeconds ?? INLINE_SKILL_SECONDS[run.skill]),
+      breakAfterSeconds: 0,
+    })),
+  };
+}
+
 /** Standard IELTS skill length, used when a mock's sections carry no timing. */
 const INLINE_SKILL_SECONDS: Record<Skill, number> = { LISTENING: 1800, READING: 3600, WRITING: 3600 };
 
@@ -501,6 +569,7 @@ async function initializeAttemptSections(
   components: ComponentPlan['components'],
   startedAt: string,
   policy: SectionPolicy,
+  onlySectionIds?: string[],
 ): Promise<void> {
   const timestamp = nowIso();
   const statements: D1PreparedStatement[] = [];
@@ -536,7 +605,9 @@ async function initializeAttemptSections(
       }>();
 
     const partTiming = policy.navigation !== 'FREE_NAVIGATION';
+    const allowed = onlySectionIds ? new Set(onlySectionIds) : null;
     for (const section of sections.results) {
+      if (allowed && !allowed.has(section.id)) continue;
       if (seenSectionIds.has(section.id)) continue;
       seenSectionIds.add(section.id);
       const deadline =
@@ -1037,6 +1108,13 @@ export async function loadCandidateAttemptState(
   if (activeSession && current.status === 'IN_PROGRESS') {
     const loaded = await loadCandidateTest(env, activeSession.test_version_id);
     content = loaded.payload;
+    // A practice attempt that covers a subset of the version shows only the
+    // sections it was created for: the candidate never sees questions that are
+    // not part of the set they started.
+    const scope = new Set(sectionRows.map((row) => row.sectionId));
+    if (scope.size > 0 && scope.size < content.sections.length) {
+      content = { ...content, sections: content.sections.filter((section) => scope.has(section.id)) };
+    }
   }
 
   const answerMap: Record<string, CandidateResponse> = {};

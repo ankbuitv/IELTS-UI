@@ -1,9 +1,16 @@
 import type { Env } from '../env';
 import { ApiError } from '../lib/errors';
 import { QUESTION_TYPES } from '../../shared/question-types';
+import type { AiStatus } from '../../shared/ai';
+import { completeJson, providerStatus, transcribeWithProvider, type ChatContentPart } from './providers';
 
 /**
- * Server-side OpenAI integration used by the AI-assisted import pipeline.
+ * AI-assisted import structuring.
+ *
+ * This module is provider-agnostic: it resolves whichever provider an
+ * administrator configured in Admin -> Settings -> AI providers (Ollama cloud
+ * with `gpt-oss:120b` / `gemma3:27b`, OpenAI, or any OpenAI-compatible
+ * gateway). See `./providers.ts` for transport and key handling.
  *
  * Guarantees:
  *  - the API key never leaves the Worker; it is never returned by any endpoint,
@@ -13,21 +20,9 @@ import { QUESTION_TYPES } from '../../shared/question-types';
  *    does not contain answers the structured output must mark them absent.
  */
 
-export interface AiStatus {
-  available: boolean;
-  model?: string;
-  reason?: string;
-}
-
-export function aiStatus(env: Env): AiStatus {
-  if (!env.OPENAI_API_KEY) {
-    return {
-      available: false,
-      reason:
-        'AI import is unavailable: no OpenAI API key is configured for this Worker. Manual authoring and manual import remain available.',
-    };
-  }
-  return { available: true, model: env.OPENAI_MODEL || 'gpt-4.1' };
+/** Reports the AI provider status. Keys are never included. */
+export async function aiStatus(env: Env): Promise<AiStatus> {
+  return providerStatus(env);
 }
 
 export const STRUCTURED_TEST_SCHEMA_NAME = 'ielts_style_test_structure';
@@ -164,119 +159,53 @@ export async function structureTestFromSource(
   env: Env,
   request: AiStructureRequest,
 ): Promise<AiStructureResponse> {
-  const status = aiStatus(env);
+  const status = await aiStatus(env);
   if (!status.available) throw new ApiError('AI_UNAVAILABLE', status.reason ?? 'AI import is unavailable.');
 
-  const model = env.OPENAI_MODEL || 'gpt-4.1';
   const sourceText = (request.sourceText ?? '').slice(0, 120_000);
 
   if (!sourceText.trim() && (!request.imageDataUrls || request.imageDataUrls.length === 0) && !request.audioTranscript) {
     throw new ApiError('VALIDATION_FAILED', 'There is no extracted text or image to structure.');
   }
 
-  const userContent: Array<Record<string, unknown>> = [
-    {
-      type: 'input_text',
-      text: [
-        `File name: ${request.filename}`,
-        request.titleHint ? `Title hint: ${request.titleHint}` : null,
-        request.audioTranscript ? `Audio transcript:\n${request.audioTranscript.slice(0, 60_000)}` : null,
-        sourceText ? `Source text:\n\n${sourceText}` : null,
-        'Return the structured test as JSON.',
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
-    },
-  ];
+  const promptText = [
+    `File name: ${request.filename}`,
+    request.titleHint ? `Title hint: ${request.titleHint}` : null,
+    request.audioTranscript ? `Audio transcript:\n${request.audioTranscript.slice(0, 60_000)}` : null,
+    sourceText ? `Source text:\n\n${sourceText}` : null,
+    request.imageDataUrls?.length
+      ? `${request.imageDataUrls.length} page image(s) were supplied; work only from the text that accompanies them.`
+      : null,
+    'Return the structured test as JSON.',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 
+  const userContent: ChatContentPart[] = [{ type: 'text', text: promptText }];
   for (const dataUrl of request.imageDataUrls ?? []) {
-    userContent.push({ type: 'input_image', image_url: dataUrl });
+    userContent.push({ type: 'image_url', image_url: { url: dataUrl } });
   }
 
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${env.OPENAI_API_KEY}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      input: [
-        { role: 'system', content: [{ type: 'input_text', text: SYSTEM_PROMPT }] },
-        { role: 'user', content: userContent },
-      ],
-      text: {
-        format: {
-          type: 'json_schema',
-          name: STRUCTURED_TEST_SCHEMA_NAME,
-          strict: true,
-          schema: STRUCTURED_TEST_JSON_SCHEMA,
-        },
-      },
-    }),
+  const result = await completeJson<unknown>(env, {
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: request.imageDataUrls?.length ? userContent : promptText },
+    ],
+    temperature: 0.1,
+    jsonSchema: { name: STRUCTURED_TEST_SCHEMA_NAME, schema: STRUCTURED_TEST_JSON_SCHEMA as unknown as Record<string, unknown> },
+    timeoutMs: 180_000,
   });
 
-  if (!response.ok) {
-    const detail = await response.text();
-    console.error('openai_error', response.status, detail.slice(0, 500));
-    if (response.status === 429) {
-      throw new ApiError('RATE_LIMITED', 'The AI provider is rate limiting requests. Try again shortly.');
-    }
-    throw new ApiError('AI_UNAVAILABLE', `The AI provider rejected the request (status ${response.status}).`);
-  }
-
-  const body = (await response.json()) as {
-    output_text?: string;
-    output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
-    usage?: { input_tokens?: number; output_tokens?: number };
+  return {
+    payload: result.data,
+    model: result.provider.model,
+    ...(result.usage ? { usage: result.usage } : {}),
   };
-
-  const text =
-    body.output_text ??
-    (body.output ?? [])
-      .flatMap((item) => item.content ?? [])
-      .filter((part) => part.type === 'output_text' || typeof part.text === 'string')
-      .map((part) => part.text ?? '')
-      .join('');
-
-  if (!text) throw new ApiError('AI_UNAVAILABLE', 'The AI provider returned an empty response.');
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new ApiError('AI_UNAVAILABLE', 'The AI response was not valid JSON. Nothing was saved.');
-  }
-
-  const usage = body.usage
-    ? { inputTokens: body.usage.input_tokens, outputTokens: body.usage.output_tokens }
-    : undefined;
-
-  return { payload: parsed, model, ...(usage ? { usage } : {}) };
 }
 
-/** Optional transcription for Listening audio imports. */
+/** Optional transcription for Listening audio imports, via the configured provider. */
 export async function transcribeAudio(env: Env, file: File): Promise<string> {
-  const status = aiStatus(env);
+  const status = await aiStatus(env);
   if (!status.available) throw new ApiError('AI_UNAVAILABLE', 'AI import is unavailable.');
-
-  const form = new FormData();
-  form.append('file', file);
-  form.append('model', env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe');
-  form.append('response_format', 'json');
-
-  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { authorization: `Bearer ${env.OPENAI_API_KEY}` },
-    body: form,
-  });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    console.error('openai_transcribe_error', response.status, detail.slice(0, 300));
-    throw new ApiError('AI_UNAVAILABLE', 'Transcription failed.');
-  }
-
-  const body = (await response.json()) as { text?: string };
-  return body.text ?? '';
+  return transcribeWithProvider(env, file);
 }

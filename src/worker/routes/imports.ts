@@ -147,7 +147,7 @@ router.get('/', async (c) => {
 
   return c.json({
     imports: rows.results,
-    ai: aiStatus(c.env),
+    ai: await aiStatus(c.env),
   });
 });
 

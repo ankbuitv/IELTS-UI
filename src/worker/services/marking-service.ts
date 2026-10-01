@@ -12,6 +12,7 @@ import { resolveActiveProfileId } from './scoring-profile-service';
 interface MarkQuestionRow {
   id: string;
   number: number;
+  section_id: string;
   question_type: string;
   key_json: string | null;
   config_json: string | null;
@@ -34,6 +35,12 @@ export interface SessionMarkResult {
   bandMessage: string;
   profileId: string | null;
   profileVersion: number | null;
+  /** True when the band was projected from a partial practice set. */
+  projected?: boolean;
+  /** Questions in the full skill of the version, when a projection was made. */
+  fullTotal?: number;
+  /** Per-section (part) raw scores, for part-by-part marking feedback. */
+  sections?: Array<{ sectionId: string; rawScore: number; total: number }>;
 }
 
 export interface AttemptMarkResult {
@@ -77,6 +84,23 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
       total_questions: number;
     }>();
 
+  // Practice attempts may run a subset of a test's sections ("practise passage
+  // 2", "parts 1-2"). `attempt_sections` is the snapshot of what this attempt
+  // actually covered, so marking counts exactly those questions — a full mock
+  // whose skills share one version no longer scores Listening questions inside
+  // the Reading component.
+  const scopeRows = await env.DB.prepare(
+    `SELECT skill, section_id FROM attempt_sections WHERE attempt_id = ?`,
+  )
+    .bind(attemptId)
+    .all<{ skill: Skill; section_id: string }>();
+  const scopeBySkill = new Map<Skill, string[]>();
+  for (const row of scopeRows.results) {
+    const list = scopeBySkill.get(row.skill) ?? [];
+    list.push(row.section_id);
+    scopeBySkill.set(row.skill, list);
+  }
+
   const sessionResults: SessionMarkResult[] = [];
   const statements: D1PreparedStatement[] = [];
   const markedAt = nowIso();
@@ -91,15 +115,18 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
         totalQuestions: 0,
         band: null,
         bandAvailable: false,
-        bandMessage: 'Writing is assessed by a teacher or administrator.',
+        bandMessage: 'Writing is reviewed by a teacher; an AI estimate can be requested alongside it.',
         profileId: null,
         profileVersion: null,
       });
       continue;
     }
 
+    const scopeSectionIds = scopeBySkill.get(session.skill) ?? [];
+    const scoped = scopeSectionIds.length > 0;
+    const placeholders = scopeSectionIds.map(() => '?').join(', ');
     const questions = await env.DB.prepare(
-      `SELECT q.id, q.number,
+      `SELECT q.id, q.number, q.section_id,
               q.config_json,
               g.config_json AS group_config_json,
               g.question_type AS question_type,
@@ -107,11 +134,28 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
          FROM questions q
          JOIN question_groups g ON g.id = q.question_group_id
          LEFT JOIN answer_keys k ON k.question_id = q.id
-        WHERE q.test_version_id = ?
+        WHERE q.test_version_id = ?${scoped ? ` AND q.section_id IN (${placeholders})` : ''}
         ORDER BY q.number`,
     )
-      .bind(session.test_version_id)
+      .bind(session.test_version_id, ...scopeSectionIds)
       .all<MarkQuestionRow>();
+
+    // The same query without the section filter, used only to project a band
+    // when the candidate practised a subset ("1 of 4 passages").
+    const allSkillQuestions = scoped
+      ? await env.DB.prepare(
+          `SELECT q.id, q.number, q.section_id, q.config_json, g.config_json AS group_config_json,
+                  g.question_type AS question_type, k.answer_json AS key_json
+             FROM questions q
+             JOIN question_groups g ON g.id = q.question_group_id
+             LEFT JOIN answer_keys k ON k.question_id = q.id
+            WHERE q.test_version_id = ?
+              AND q.section_id IN (SELECT id FROM sections WHERE test_version_id = ? AND skill = ?)
+            ORDER BY q.number`,
+        )
+          .bind(session.test_version_id, session.test_version_id, session.skill)
+          .all<MarkQuestionRow>()
+      : null;
 
     const responses = await env.DB.prepare(
       `SELECT question_id, answer_json, is_flagged FROM attempt_answers
@@ -124,6 +168,7 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
 
     let rawScore = 0;
     let totalQuestions = 0;
+    const perSection = new Map<string, { rawScore: number; total: number }>();
 
     for (const question of questions.results) {
       if (!isQuestionType(question.question_type)) continue;
@@ -136,6 +181,8 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
         continue;
       }
       totalQuestions += 1;
+      const bucket = perSection.get(question.section_id) ?? { rawScore: 0, total: 0 };
+      bucket.total += 1;
 
       const responseRow = responseByQuestion.get(question.id);
       const response = responseRow?.answer_json
@@ -147,6 +194,8 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
 
       const graded = gradeAnswer(question.question_type, key, response, config);
       rawScore += graded.points;
+      bucket.rawScore += graded.points;
+      perSection.set(question.section_id, bucket);
 
       statements.push(
         env.DB.prepare(
@@ -183,13 +232,27 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
       profileRow = fallbackId ? await loadScoringProfile(env, fallbackId) : null;
     }
 
+    // A partial practice ("1 passage", "2 passages") is marked honestly and
+    // additionally *projected* to a full-test band, clearly labelled as a
+    // projection, so a short practice set still gives a usable indication.
+    let projected = false;
+    let fullTotal = totalQuestions;
+    let bandRawScore = rawScore;
+    if (allSkillQuestions && totalQuestions > 0) {
+      fullTotal = countKeyed(allSkillQuestions.results);
+      if (fullTotal > totalQuestions) {
+        projected = true;
+        bandRawScore = Math.round((rawScore / totalQuestions) * fullTotal);
+      }
+    }
+
     const bandEstimate = settings.bandEstimationEnabled
       ? estimateBand({
           profile: profileRow,
           skill: session.skill,
-          rawScore,
-          totalQuestions,
-          isCompleteTest: session.is_complete_test === 1,
+          rawScore: bandRawScore,
+          totalQuestions: fullTotal,
+          isCompleteTest: projected ? true : session.is_complete_test === 1,
         })
       : {
           available: false as const,
@@ -215,6 +278,16 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
       ),
     );
 
+    // Persist each part's own score so the result screen can show
+    // "Passage 2: 8/10" without recomputing anything in the browser.
+    for (const [sectionId, bucket] of perSection) {
+      statements.push(
+        env.DB.prepare(
+          'UPDATE attempt_sections SET raw_score = ?, total_marked = ?, updated_at = ? WHERE attempt_id = ? AND section_id = ?',
+        ).bind(bucket.rawScore, bucket.total, markedAt, attemptId, sectionId),
+      );
+    }
+
     sessionResults.push({
       skillSessionId: session.id,
       skill: session.skill,
@@ -222,9 +295,18 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
       totalQuestions,
       band: bandEstimate.available ? bandEstimate.band : null,
       bandAvailable: bandEstimate.available,
-      bandMessage: bandEstimate.available ? bandEstimate.note : bandEstimate.message,
+      bandMessage: bandEstimate.available
+        ? `${bandEstimate.note}${projected ? ` Projected from ${totalQuestions} of ${fullTotal} questions in this practice set.` : ''}`
+        : bandEstimate.message,
       profileId: profileRow?.id ?? null,
       profileVersion: profileRow?.version ?? null,
+      projected,
+      fullTotal,
+      sections: [...perSection.entries()].map(([sectionId, bucket]) => ({
+        sectionId,
+        rawScore: bucket.rawScore,
+        total: bucket.total,
+      })),
     });
 
     if (statements.length > 40) {
@@ -260,6 +342,19 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
     estimatedBand: averageBand(sessionResults),
     sessions: sessionResults,
   };
+}
+
+/** Counts questions that carry a usable answer key (the same rule as marking). */
+function countKeyed(rows: MarkQuestionRow[]): number {
+  let total = 0;
+  for (const question of rows) {
+    if (!isQuestionType(question.question_type)) continue;
+    if (question.question_type === 'WRITING_TASK_1' || question.question_type === 'WRITING_TASK_2') continue;
+    const key = question.key_json ? parseJson<AnswerKey | null>(question.key_json, null) : null;
+    if (!key || (key.kind === 'CHOICE' && key.values.length === 0) || (key.kind === 'TEXT' && key.accept.length === 0)) continue;
+    total += 1;
+  }
+  return total;
 }
 
 /** Multi-skill attempts report an average of the available skill bands (rounded to 0.5). */
@@ -372,8 +467,9 @@ export async function setWritingScore(
     band: number | null;
     feedback?: string;
     criteria?: Record<string, number>;
-    source: 'TEACHER' | 'ADMIN';
-    scoredBy: string;
+    /** 'AI' is written by `ai-marking-service` and is always replaced by a human score without warning the human. */
+    source: 'TEACHER' | 'ADMIN' | 'AI';
+    scoredBy: string | null;
   },
 ): Promise<{ attemptId: string }> {
   const submission = await env.DB.prepare('SELECT id, attempt_id FROM writing_submissions WHERE id = ?')
