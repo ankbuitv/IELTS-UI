@@ -49,7 +49,14 @@ export type IconName =
   | 'upload'
   | 'play'
   | 'list'
-  | 'expand';
+  | 'expand'
+  | 'mic'
+  | 'pause'
+  | 'stop'
+  | 'rotate'
+  | 'trash'
+  | 'download'
+  | 'wand';
 
 const PATHS: Record<IconName, ReactElement> = {
   grid: (
@@ -273,6 +280,38 @@ const PATHS: Record<IconName, ReactElement> = {
     </>
   ),
   play: <path d="M7.5 4.5 19 12 7.5 19.5z" />,
+  pause: (
+    <>
+      <rect x="7" y="5" width="3.4" height="14" rx="1.2" />
+      <rect x="13.6" y="5" width="3.4" height="14" rx="1.2" />
+    </>
+  ),
+  stop: <rect x="6.5" y="6.5" width="11" height="11" rx="2.2" />,
+  mic: (
+    <>
+      <rect x="9.2" y="3" width="5.6" height="10.5" rx="2.8" />
+      <path d="M5.8 11.4a6.2 6.2 0 0 0 12.4 0M12 17.6V21M9 21h6" />
+    </>
+  ),
+  rotate: (
+    <>
+      <path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1" />
+      <path d="M20.5 4.4V9h-4.7" />
+      <rect x="8.4" y="8.4" width="7.2" height="9.4" rx="1.6" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M4.8 6.8h14.4M9.6 6.8V4.9h4.8v1.9M7 6.8l.8 12.1a1.6 1.6 0 0 0 1.6 1.5h5.2a1.6 1.6 0 0 0 1.6-1.5l.8-12.1" />
+    </>
+  ),
+  download: <path d="M12 4v10.4M7.6 10.6 12 15l4.4-4.4M5 19h14" />,
+  wand: (
+    <>
+      <path d="M5 19 16.2 7.8M14.4 5.4l1.2-1.2M19.8 10.8l-1.2 1.2M18.6 5.4l1.2-1.2M4.2 10.8l1.2 1.2" />
+      <path d="m15.2 4.2 4.6 4.6" />
+    </>
+  ),
   list: (
     <>
       <path d="M8.5 6.5h11" />

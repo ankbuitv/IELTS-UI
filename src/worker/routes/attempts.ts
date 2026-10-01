@@ -18,6 +18,7 @@ import {
   saveWritingResponse,
   submitAttempt,
 } from '../services/attempt-service';
+import { scoreWritingSubmissionWithAi } from '../services/ai-marking-service';
 import { INTEGRITY_EVENT_TYPES } from '../../shared/integrity';
 import { EXAM_MODES } from '../../shared/types';
 import { recordAudit } from '../lib/audit';
@@ -113,6 +114,63 @@ router.post('/:id/writing', async (c) => {
   );
   const result = await saveWritingResponse(c.env, user, c.req.param('id'), body.questionId, body.text);
   return c.json({ ok: true, ...result, savedAt: new Date().toISOString() });
+});
+
+/**
+ * Candidate-triggered AI feedback on the Writing tasks of their own attempt.
+ * Available once the attempt is submitted; the band is labelled an estimate and
+ * a teacher's score always takes precedence.
+ */
+router.post('/:id/ai-mark-writing', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const attemptId = c.req.param('id');
+  const attempt = await c.env.DB.prepare(
+    'SELECT id, user_id, status FROM attempts WHERE id = ?',
+  )
+    .bind(attemptId)
+    .first<{ id: string; user_id: string; status: string }>();
+  if (!attempt) throw ApiError.notFound('Attempt not found.');
+  if (attempt.user_id !== user.id && user.role === 'STUDENT') {
+    throw ApiError.forbidden('That attempt belongs to another candidate.');
+  }
+
+  const submissions = await c.env.DB.prepare(
+    `SELECT id FROM writing_submissions WHERE attempt_id = ? AND TRIM(response_text) != '' ORDER BY created_at`,
+  )
+    .bind(attemptId)
+    .all<{ id: string }>();
+  if (submissions.results.length === 0) {
+    throw ApiError.validation('There is no Writing response to mark on this attempt.');
+  }
+
+  const body = await parseBody(c, z.object({ providerId: z.string().max(64).optional() }).optional());
+  const grades = [];
+  const failures: Array<{ submissionId: string; message: string }> = [];
+  for (const submission of submissions.results) {
+    try {
+      grades.push(
+        await scoreWritingSubmissionWithAi(c.env, submission.id, {
+          ...(body?.providerId ? { providerId: body.providerId } : {}),
+        }),
+      );
+    } catch (error) {
+      failures.push({
+        submissionId: submission.id,
+        message: error instanceof ApiError ? error.message : 'The AI provider could not mark this response.',
+      });
+    }
+  }
+
+  if (grades.length === 0) {
+    throw new ApiError('AI_UNAVAILABLE', failures[0]?.message ?? 'The AI provider could not mark this attempt.');
+  }
+  return c.json({
+    ok: true,
+    marked: grades.length,
+    failures,
+    scores: grades.map((grade) => ({ band: grade.band, feedback: grade.feedback, criteria: grade.criteria })),
+  });
 });
 
 router.post('/:id/integrity', async (c) => {

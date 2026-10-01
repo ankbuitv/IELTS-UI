@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { AppBindings } from '../env';
 import { ApiError } from '../lib/errors';
 import { normaliseExternalUrl } from '../services/media-service';
+import { putBlob } from '../services/blob-store';
 import { assertCsrf, assertSameOrigin, clientIp } from '../lib/http';
 import { parseBody, parseQuery } from '../lib/validate';
 import { requireAuth, requireRole } from '../middleware/auth';
@@ -28,6 +29,8 @@ import { buildResultView } from '../services/attempt-service';
 import type { AttemptRow } from '../services/attempt-service';
 import { getAdminAnalytics } from '../services/analytics-service';
 import { aiStatus } from '../ai/openai';
+import { listPublicProviders, saveProviders, testProvider } from '../ai/providers';
+import { AI_PROVIDER_KINDS, type AiProviderConfig } from '../../shared/ai';
 import { validateConversionRanges } from '../../shared/scoring';
 import { QUESTION_TYPES } from '../../shared/question-types';
 import { TEST_TYPES, SKILLS, ROLES, CONTENT_ORIGINS } from '../../shared/types';
@@ -48,7 +51,7 @@ router.get('/dashboard', async (c) => {
   const analytics = await getAdminAnalytics(c.env);
   return c.json({
     analytics,
-    ai: aiStatus(c.env),
+    ai: await aiStatus(c.env),
     runtime: { environment: c.env.APP_ENV, baseUrl: c.env.APP_BASE_URL },
   });
 });
@@ -1151,6 +1154,76 @@ function safeJson(value: string): unknown {
   }
 }
 
+// ---------------------------------------------------------------------------
+// AI providers (multiple endpoints; keys are write-only)
+// ---------------------------------------------------------------------------
+const providerSchema = z.object({
+  id: z.string().min(1).max(64).optional(),
+  label: z.string().min(1).max(80),
+  kind: z.enum(AI_PROVIDER_KINDS),
+  baseUrl: z.string().min(8).max(300),
+  model: z.string().min(1).max(120),
+  /** Omit to keep the stored key; send "" to clear it. */
+  apiKey: z.string().max(400).optional(),
+  /** False for an endpoint that needs no authentication (local Ollama daemon). */
+  requiresKey: z.boolean().optional(),
+  enabled: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+  sttModel: z.string().max(80).nullable().optional(),
+});
+
+router.get('/ai/providers', async (c) => {
+  return c.json({ providers: await listPublicProviders(c.env), ai: await aiStatus(c.env) });
+});
+
+router.put('/ai/providers', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ providers: z.array(providerSchema).max(20) }));
+
+  const providers = await saveProviders(
+    c.env,
+    body.providers.map((provider) => ({
+      ...provider,
+      sttModel: provider.sttModel ?? null,
+    })) as Array<Partial<AiProviderConfig> & { id?: string; apiKey?: string | null }>,
+    actor.id,
+  );
+
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'AI_PROVIDERS_UPDATE',
+    entityType: 'platform_settings',
+    metadata: { count: providers.length, default: providers.find((provider) => provider.isDefault)?.label ?? null },
+    ip: clientIp(c),
+  });
+
+  return c.json({ providers, ai: await aiStatus(c.env) });
+});
+
+/** One small live round trip so an admin can validate a key/model pair. */
+router.post('/ai/providers/test', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, providerSchema);
+  const result = await testProvider(c.env, {
+    id: body.id ?? '',
+    label: body.label,
+    kind: body.kind,
+    baseUrl: body.baseUrl,
+    model: body.model,
+    apiKey: body.apiKey,
+  });
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'AI_PROVIDER_TEST',
+    entityType: 'platform_settings',
+    metadata: { label: body.label, model: body.model, ok: result.ok },
+    ip: clientIp(c),
+  });
+  return c.json(result);
+});
+
 router.get('/settings', async (c) => {
   const rows = await c.env.DB.prepare('SELECT key, value_json, updated_at FROM platform_settings').all<{
     key: string;
@@ -1158,8 +1231,13 @@ router.get('/settings', async (c) => {
     updated_at: string;
   }>();
   const settings: Record<string, unknown> = {};
-  for (const row of rows.results) settings[row.key] = safeJson(row.value_json);
-  return c.json({ settings, ai: aiStatus(c.env) });
+  for (const row of rows.results) {
+    // Stored provider objects contain API keys. The generic settings reader
+    // must never return them: the dedicated endpoint returns redacted copies.
+    if (row.key === 'ai_providers') continue;
+    settings[row.key] = safeJson(row.value_json);
+  }
+  return c.json({ settings, ai: await aiStatus(c.env) });
 });
 
 router.patch('/settings', async (c) => {
@@ -1242,6 +1320,94 @@ router.get('/assets', async (c) => {
     .all<Record<string, unknown>>();
 
   return c.json({ assets: rows.results });
+});
+
+/**
+ * Uploads media into D1 instead of linking it.
+ *
+ * The browser sends base64 (a `FileReader` data URL), the Worker chunks it into
+ * `asset_blobs`, and `/api/files/:id` streams it back with Range support. No
+ * object storage and no external link, which is what makes "just upload the
+ * listening audio" possible in V1.
+ */
+router.post('/assets/upload', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      filename: z.string().min(1).max(160),
+      mime: z.string().min(3).max(120),
+      /** `data:<mime>;base64,...` or the bare payload. */
+      dataBase64: z.string().min(8).max(24_000_000),
+      kind: z.enum(['PDF', 'DOC', 'IMAGE', 'AUDIO', 'OTHER']).optional(),
+      altText: z.string().max(500).nullish(),
+      durationSeconds: z.number().min(0).max(36_000).nullish(),
+      testVersionId: z.string().max(64).nullish(),
+      visibility: z.enum(['PRIVATE', 'ATTEMPT']).optional(),
+    }),
+  );
+
+  const payload = body.dataBase64.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
+  const bytes = Math.round((payload.length * 3) / 4);
+  const maxBytes = Number.parseInt(c.env.MAX_UPLOAD_BYTES || '26214400', 10);
+  if (bytes > maxBytes) {
+    throw ApiError.validation(
+      `That file is ${(bytes / 1_048_576).toFixed(1)} MB; the platform limit is ${(maxBytes / 1_048_576).toFixed(0)} MB.`,
+    );
+  }
+
+  const kind = body.kind ?? kindForMime(body.mime, body.filename);
+  const id = newId('ast');
+  const timestamp = nowIso();
+
+  await c.env.DB.prepare(
+    `INSERT INTO assets (id, kind, storage_kind, external_url, filename, mime, size_bytes, alt_text,
+                         duration_seconds, visibility, test_version_id, uploaded_by, created_at, updated_at)
+     VALUES (?, ?, 'OBJECT_STORAGE', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      id,
+      kind,
+      body.filename,
+      body.mime,
+      bytes,
+      body.altText ?? null,
+      body.durationSeconds ?? null,
+      body.visibility ?? (kind === 'AUDIO' || kind === 'IMAGE' ? 'ATTEMPT' : 'PRIVATE'),
+      body.testVersionId ?? null,
+      actor.id,
+      timestamp,
+      timestamp,
+    )
+    .run();
+
+  const stored = await putBlob(c.env, 'asset_blobs', 'asset_id', id, payload, { mime: body.mime });
+
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'ASSET_UPLOAD',
+    entityType: 'asset',
+    entityId: id,
+    metadata: { filename: body.filename, mime: body.mime, bytes: stored.bytes, chunks: stored.chunks },
+    ip: clientIp(c),
+  });
+
+  return c.json(
+    {
+      asset: {
+        id,
+        kind,
+        filename: body.filename,
+        mime: body.mime,
+        sizeBytes: stored.bytes,
+        storageKind: 'OBJECT_STORAGE',
+        // Same-origin delivery URL: what an editor or a test version should use.
+        url: `/api/files/${id}`,
+      },
+    },
+    201,
+  );
 });
 
 router.post('/assets', async (c) => {

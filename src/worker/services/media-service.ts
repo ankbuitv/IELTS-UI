@@ -54,14 +54,24 @@ export function resolveAssetUrl(asset: AssetStorageRow): string | null {
     // Bundled demo media lives under /media/ in the static bundle.
     return asset.external_url && asset.external_url.startsWith('/') ? asset.external_url : null;
   }
-  // OBJECT_STORAGE is a documented extension point, not a V1 code path.
+  if (asset.storage_kind === 'OBJECT_STORAGE') {
+    // An uploaded file lives in D1 (`asset_blobs`) and is streamed by
+    // `/api/files/:assetId` with Range support, so the exam player can seek.
+    // No external URL is involved and nothing is publicly reachable.
+    return `/api/files/${asset.id}`;
+  }
   return null;
 }
 
 /**
- * Optional future adapter hook. V1 always returns `false`, so no caller can
- * accidentally depend on object storage being present.
+ * True when the deployment can store uploaded media. V1 always can: uploads are
+ * kept in D1 as chunked base64 (`asset_blobs`), which needs no bucket.
  */
 export function hasObjectStorage(_env: Env): boolean {
-  return false;
+  return true;
+}
+
+/** True when this asset's bytes are stored in D1 rather than fetched from a URL. */
+export function isInlineAsset(storageKind: string): boolean {
+  return storageKind === 'OBJECT_STORAGE';
 }

@@ -158,9 +158,9 @@ you intend to deploy.
 npm install
 
 # 1. Local secrets (git-ignored)
-cp .env.example .dev.vars 2>/dev/null || true
 #   SESSION_SECRET=<random string>   # required
-#   OPENAI_API_KEY=<optional>        # enables AI structuring
+#   OLLAMA_API_KEYS=<key>,<key>      # AI marking: Ollama Cloud keys, comma-separated
+#   OLLAMA_MODEL=gpt-oss:120b-cloud  # or gemma4:31b-cloud (also a wrangler.jsonc var)
 
 # 2. Build the SPA and start the Worker (serves API + SPA on :8787)
 npm run dev
@@ -289,7 +289,8 @@ the build step was skipped.
 npx wrangler d1 create ielts-platform-db
 npx wrangler d1 migrations apply DB --remote
 npx wrangler secret put SESSION_SECRET      # required
-npx wrangler secret put OPENAI_API_KEY      # optional: enables AI structuring
+npx wrangler secret put OLLAMA_API_KEYS     # AI marking (comma-separated keys = key rotation)
+npx wrangler secret put OPENAI_API_KEY      # optional alternative provider
 npm run deploy
 ```
 

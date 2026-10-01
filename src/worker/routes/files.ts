@@ -4,7 +4,8 @@ import { ApiError } from '../lib/errors';
 import { requireAuth } from '../middleware/auth';
 import { currentUser } from '../middleware/auth';
 import type { AuthUser } from '../lib/auth-types';
-import { resolveAssetUrl } from '../services/media-service';
+import { isInlineAsset, resolveAssetUrl } from '../services/media-service';
+import { base64ToBytes, getBlob, parseRange } from '../services/blob-store';
 
 const router = new Hono<AppBindings>();
 
@@ -47,15 +48,48 @@ router.get('/:assetId', async (c) => {
   const allowed = await canAccessAsset(c, user, asset);
   if (!allowed) throw ApiError.forbidden('You are not authorized to access this file.');
 
+  // Uploaded media is streamed from D1 with Range support (the player seeks).
+  if (isInlineAsset(asset.storage_kind)) {
+    const stored = await getBlob(c.env, 'asset_blobs', 'asset_id', asset.id);
+    if (!stored) {
+      throw new ApiError('NOT_FOUND', 'This asset was registered but no file was uploaded for it yet.');
+    }
+    const bytes = base64ToBytes(stored.base64);
+    const mime = asset.mime || stored.mime || 'application/octet-stream';
+    const headers: Record<string, string> = {
+      'content-type': mime,
+      'accept-ranges': 'bytes',
+      'cache-control': 'private, max-age=60',
+    };
+    const range = parseRange(c.req.header('range') ?? null, bytes.byteLength);
+    if (range === 'unsatisfiable') {
+      return new Response(null, {
+        status: 416,
+        headers: { ...headers, 'content-range': `bytes */${bytes.byteLength}` },
+      });
+    }
+    if (range) {
+      const slice = bytes.slice(range.start, range.end + 1);
+      return new Response(slice, {
+        status: 206,
+        headers: {
+          ...headers,
+          'content-length': String(slice.byteLength),
+          'content-range': `bytes ${range.start}-${range.end}/${bytes.byteLength}`,
+        },
+      });
+    }
+    return new Response(bytes, { headers: { ...headers, 'content-length': String(bytes.byteLength) } });
+  }
+
   const url = resolveAssetUrl(asset);
   if (!url) {
     throw new ApiError(
       'NOT_FOUND',
-      'This asset has no media URL yet. An administrator can add an external HTTPS link for it.',
+      'This asset has no media URL yet. An administrator can add an external HTTPS link or upload a file for it.',
     );
   }
 
-  if (url.startsWith('/')) return c.redirect(url, 302);
   return c.redirect(url, 302);
 });
 

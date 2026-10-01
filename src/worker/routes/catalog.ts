@@ -135,6 +135,43 @@ router.get('/tests', requireAuth, async (c) => {
     }
   }
 
+  // Sections are listed so the library can offer short practice sets
+  // ("passage 1", "parts 1-2") that create a *scoped* attempt: only the chosen
+  // sections are timed, shown and marked.
+  const sectionRows = await c.env.DB.prepare(
+    `SELECT s.id, s.test_version_id, s.label, s.title, s.skill, s.order_index, s.duration_seconds,
+            (SELECT COUNT(*) FROM questions q WHERE q.section_id = s.id) AS total_questions
+       FROM sections s
+      WHERE s.test_version_id IN (${rows.results.map(() => '?').join(',')})
+      ORDER BY s.test_version_id, s.order_index, s.id`,
+  )
+    .bind(...rows.results.map((row) => row.version_id))
+    .all<{
+      id: string;
+      test_version_id: string;
+      label: string;
+      title: string;
+      skill: string;
+      order_index: number;
+      duration_seconds: number | null;
+      total_questions: number;
+    }>()
+    .catch(() => ({ results: [] as Array<{ id: string; test_version_id: string; label: string; title: string; skill: string; order_index: number; duration_seconds: number | null; total_questions: number }> }));
+
+  const sectionsByVersion = new Map<string, Array<{ id: string; label: string; title: string; skill: string; totalQuestions: number; durationSeconds: number | null }>>();
+  for (const section of sectionRows.results) {
+    const list = sectionsByVersion.get(section.test_version_id) ?? [];
+    list.push({
+      id: section.id,
+      label: section.label || section.title || `Part ${list.length + 1}`,
+      title: section.title,
+      skill: section.skill,
+      totalQuestions: section.total_questions,
+      durationSeconds: section.duration_seconds,
+    });
+    sectionsByVersion.set(section.test_version_id, list);
+  }
+
   // Staff bypass access codes, so the client never prompts them.
   const staffBypass = user.role !== 'STUDENT';
   return c.json({
@@ -161,6 +198,10 @@ router.get('/tests', requireAuth, async (c) => {
         own: ownCounts.get(row.version_id),
         components: mockComponents.get(row.version_id),
       }),
+      // Empty for a code-protected test the candidate has not unlocked.
+      sections: row.requires_code === 1 && !staffBypass && row.unlocked !== 1
+        ? []
+        : (sectionsByVersion.get(row.version_id) ?? []),
     })),
   });
 });

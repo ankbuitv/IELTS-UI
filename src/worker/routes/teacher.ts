@@ -28,6 +28,7 @@ import {
 import { getClassroomAnalytics, getSkillPerformance, getTaskTypePerformance, getTrends, listAttempts } from '../services/analytics-service';
 import { buildResultView } from '../services/attempt-service';
 import { listWritingQueue, markQuestionManually, setWritingScore } from '../services/marking-service';
+import { scoreWritingSubmissionWithAi } from '../services/ai-marking-service';
 import { recordAudit } from '../lib/audit';
 import { EXAM_MODES, RESULT_VISIBILITIES, TIMING_POLICIES } from '../../shared/types';
 
@@ -470,6 +471,39 @@ router.post('/attempts/:attemptId/question-marks', async (c) => {
     ip: clientIp(c),
   });
   return c.json({ ok: true, ...totals });
+});
+
+/**
+ * AI first-pass marking for one Writing submission. The result is stored as
+ * `scoring_source = 'AI'` and a teacher can still override it with a normal
+ * writing-scores call; the AI feedback stays in the audit table either way.
+ */
+router.post('/writing-submissions/:submissionId/ai-score', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const submission = await c.env.DB.prepare(
+    `SELECT w.id, a.user_id FROM writing_submissions w JOIN attempts a ON a.id = w.attempt_id WHERE w.id = ?`,
+  )
+    .bind(c.req.param('submissionId'))
+    .first<{ id: string; user_id: string }>();
+  if (!submission) throw ApiError.notFound('Writing submission not found.');
+  await requireStudentAccess(c.env, user, submission.user_id);
+
+  const body = await parseBody(c, z.object({ providerId: z.string().max(64).optional() }).optional());
+  const grade = await scoreWritingSubmissionWithAi(c.env, submission.id, {
+    actorUserId: user.id,
+    ...(body?.providerId ? { providerId: body.providerId } : {}),
+  });
+
+  await recordAudit(c.env, {
+    actorUserId: user.id,
+    action: 'WRITING_AI_SCORE',
+    entityType: 'writing_submission',
+    entityId: submission.id,
+    metadata: { band: grade.band, provider: grade.providerModel },
+    ip: clientIp(c),
+  });
+  return c.json({ ok: true, score: grade });
 });
 
 router.post('/writing-scores', async (c) => {

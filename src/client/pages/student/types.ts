@@ -125,4 +125,18 @@ export interface CatalogTest {
     minutes: number | null;
     summaryLine: string;
   };
+  /**
+   * The version's sections, in order. Used by the practice picker to start a
+   * scoped attempt ("passage 2", "parts 1-2") that is timed, shown and marked
+   * against exactly those sections. Empty for a code-protected test that the
+   * candidate has not unlocked.
+   */
+  sections?: Array<{
+    id: string;
+    label: string;
+    title: string;
+    skill: string;
+    totalQuestions: number;
+    durationSeconds: number | null;
+  }>;
 }

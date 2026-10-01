@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 34   Indexes: 52
+-- Tables: 39   Indexes: 56
 -- =============================================================================
 
 -- table: users
@@ -405,20 +405,6 @@ CREATE TABLE IF NOT EXISTS writing_submissions (
   UNIQUE (attempt_id, question_id)
 );
 
--- table: writing_scores
-CREATE TABLE IF NOT EXISTS writing_scores (
-  id                    TEXT PRIMARY KEY,
-  writing_submission_id TEXT NOT NULL UNIQUE REFERENCES writing_submissions (id) ON DELETE CASCADE,
-  band                  REAL,
-  criteria_json         TEXT NOT NULL DEFAULT '{}',
-  feedback              TEXT NOT NULL DEFAULT '',
-  scoring_source        TEXT NOT NULL CHECK (scoring_source IN ('TEACHER', 'ADMIN', 'IMPORTED')),
-  scored_by             TEXT REFERENCES users (id) ON DELETE SET NULL,
-  scored_at             TEXT NOT NULL,
-  created_at            TEXT NOT NULL,
-  updated_at            TEXT NOT NULL
-);
-
 -- table: imports
 CREATE TABLE IF NOT EXISTS imports (
   id                TEXT PRIMARY KEY,
@@ -548,7 +534,7 @@ CREATE TABLE IF NOT EXISTS attempt_sections (
   answered_count  INTEGER NOT NULL DEFAULT 0,
   flagged_count   INTEGER NOT NULL DEFAULT 0,
   created_at      TEXT NOT NULL,
-  updated_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL, raw_score INTEGER, total_marked INTEGER,
   UNIQUE (attempt_id, section_id)
 );
 
@@ -564,6 +550,96 @@ CREATE TABLE IF NOT EXISTS vocabulary_entries (
   last_reviewed_at TEXT,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
+);
+
+-- table: writing_scores
+CREATE TABLE IF NOT EXISTS "writing_scores" (
+  id                    TEXT PRIMARY KEY,
+  writing_submission_id TEXT NOT NULL UNIQUE REFERENCES writing_submissions (id) ON DELETE CASCADE,
+  band                  REAL,
+  criteria_json         TEXT NOT NULL DEFAULT '{}',
+  feedback              TEXT NOT NULL DEFAULT '',
+  scoring_source        TEXT NOT NULL CHECK (scoring_source IN ('TEACHER', 'ADMIN', 'IMPORTED', 'AI')),
+  scored_by             TEXT REFERENCES users (id) ON DELETE SET NULL,
+  scored_at             TEXT NOT NULL,
+  created_at            TEXT NOT NULL,
+  updated_at            TEXT NOT NULL
+);
+
+-- table: ai_scores
+CREATE TABLE IF NOT EXISTS ai_scores (
+  id                TEXT PRIMARY KEY,
+  user_id           TEXT REFERENCES users (id) ON DELETE SET NULL,
+  entity_type       TEXT NOT NULL CHECK (entity_type IN ('WRITING', 'SPEAKING', 'IMPORT', 'QUESTION')),
+  entity_id         TEXT NOT NULL,
+  kind              TEXT NOT NULL DEFAULT 'BAND',
+  provider_id       TEXT,
+  provider_model    TEXT,
+  band              REAL,
+  criteria_json     TEXT NOT NULL DEFAULT '{}',
+  feedback          TEXT NOT NULL DEFAULT '',
+  raw_json          TEXT NOT NULL DEFAULT '{}',
+  prompt_tokens     INTEGER,
+  completion_tokens INTEGER,
+  created_at        TEXT NOT NULL
+);
+
+-- table: speaking_sessions
+CREATE TABLE IF NOT EXISTS speaking_sessions (
+  id             TEXT PRIMARY KEY,
+  user_id        TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  mode           TEXT NOT NULL DEFAULT 'PRACTICE' CHECK (mode IN ('PRACTICE', 'MOCK')),
+  status         TEXT NOT NULL DEFAULT 'IN_PROGRESS'
+                 CHECK (status IN ('IN_PROGRESS', 'SUBMITTED', 'MARKED', 'FAILED')),
+  topic_set_id   TEXT NOT NULL,
+  topic_title    TEXT NOT NULL DEFAULT '',
+  part_count     INTEGER NOT NULL DEFAULT 3,
+  overall_band   REAL,
+  transcript     TEXT NOT NULL DEFAULT '',
+  feedback       TEXT NOT NULL DEFAULT '',
+  criteria_json  TEXT NOT NULL DEFAULT '{}',
+  provider_id    TEXT,
+  provider_model TEXT,
+  marked_at      TEXT,
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL
+, score_source TEXT, scored_by TEXT REFERENCES users (id) ON DELETE SET NULL, scored_at TEXT);
+
+-- table: speaking_responses
+CREATE TABLE IF NOT EXISTS speaking_responses (
+  id               TEXT PRIMARY KEY,
+  session_id       TEXT NOT NULL REFERENCES speaking_sessions (id) ON DELETE CASCADE,
+  part             INTEGER NOT NULL CHECK (part IN (1, 2, 3)),
+  prompt_text      TEXT NOT NULL DEFAULT '',
+  transcript       TEXT NOT NULL DEFAULT '',
+  duration_seconds REAL NOT NULL DEFAULT 0,
+  words            INTEGER NOT NULL DEFAULT 0,
+  mime             TEXT,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL,
+  UNIQUE (session_id, part)
+);
+
+-- table: speaking_recording_blobs
+CREATE TABLE IF NOT EXISTS speaking_recording_blobs (
+  response_id TEXT NOT NULL REFERENCES speaking_responses (id) ON DELETE CASCADE,
+  chunk_index INTEGER NOT NULL,
+  data_b64    TEXT NOT NULL,
+  bytes       INTEGER NOT NULL DEFAULT 0,
+  mime        TEXT NOT NULL DEFAULT 'audio/webm',
+  created_at  TEXT NOT NULL,
+  PRIMARY KEY (response_id, chunk_index)
+);
+
+-- table: asset_blobs
+CREATE TABLE IF NOT EXISTS asset_blobs (
+  asset_id    TEXT NOT NULL REFERENCES assets (id) ON DELETE CASCADE,
+  chunk_index INTEGER NOT NULL,
+  data_b64    TEXT NOT NULL,
+  bytes       INTEGER NOT NULL DEFAULT 0,
+  mime        TEXT NOT NULL DEFAULT 'application/octet-stream',
+  created_at  TEXT NOT NULL,
+  PRIMARY KEY (asset_id, chunk_index)
 );
 
 -- index: idx_users_role
@@ -677,9 +753,6 @@ CREATE INDEX IF NOT EXISTS idx_integrity_type ON integrity_events (type);
 -- index: idx_writing_attempt
 CREATE INDEX IF NOT EXISTS idx_writing_attempt ON writing_submissions (attempt_id);
 
--- index: idx_writing_scores_source
-CREATE INDEX IF NOT EXISTS idx_writing_scores_source ON writing_scores (scoring_source);
-
 -- index: idx_imports_status
 CREATE INDEX IF NOT EXISTS idx_imports_status ON imports (status);
 
@@ -721,3 +794,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_vocabulary_user_term ON vocabulary_entries
 
 -- index: idx_vocabulary_user_created
 CREATE INDEX IF NOT EXISTS idx_vocabulary_user_created ON vocabulary_entries (user_id, created_at DESC);
+
+-- index: idx_writing_scores_source
+CREATE INDEX IF NOT EXISTS idx_writing_scores_source ON writing_scores (scoring_source);
+
+-- index: idx_ai_scores_entity
+CREATE INDEX IF NOT EXISTS idx_ai_scores_entity ON ai_scores (entity_type, entity_id, created_at DESC);
+
+-- index: idx_ai_scores_user
+CREATE INDEX IF NOT EXISTS idx_ai_scores_user ON ai_scores (user_id, created_at DESC);
+
+-- index: idx_speaking_sessions_user
+CREATE INDEX IF NOT EXISTS idx_speaking_sessions_user ON speaking_sessions (user_id, created_at DESC);
+
+-- index: idx_speaking_sessions_status
+CREATE INDEX IF NOT EXISTS idx_speaking_sessions_status ON speaking_sessions (status, created_at DESC);

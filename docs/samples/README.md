@@ -8,13 +8,25 @@ IELTS, British Council, IDP or Cambridge material.
 | `cities-knowledge-and-adaptation.json` | Import paste format (`testType` + `passages` + inline answers) |
 | `cities-knowledge-and-adaptation.source.json` | Authoring format (`schemaVersion` + `questionGroups` + `answerKey`) |
 | `full-test.json` | One-file `FULL_MOCK` (`testType: FULL_MOCK` + every section inline, no mock components) |
+| `reading-four-passages.json` | Four separate Reading passages in one file (40 questions, Q1–40) |
 
 The first two files describe the same 40-question Academic-style Reading set,
 **Cities, Knowledge and Adaptation**. Paste either into Admin → Imports. Extra
 JSON after the first object is ignored, so concatenating the two files no longer
 fails with `Unexpected non-whitespace character after JSON`.
 
-All three files also work in the **version editor's JSON tab**
+`reading-four-passages.json` is the multi-passage answer to "four reading tests in
+one JSON": four independent passages (each its own paragraph set A–E) with five
+question groups apiece, covering TRUE/FALSE/NOT GIVEN, YES/NO/NOT GIVEN,
+multiple choice, matching information, matching headings, sentence completion
+and summary completion. Every question carries its answer, a verbatim passage
+quote as marking evidence and a short explanation, so Applying it produces a
+publishable 40-question READING test with no manual key entry.
+`tests/unit/reading-sample.test.ts` runs it through the same conversion and
+validator the importer uses, so the file cannot drift out of the platform's
+evidence rules unnoticed.
+
+All four files also work in the **version editor's JSON tab**
 (Admin → Tests → version → Edit content → JSON): *Parse into outline* and
 *Save content* run them through the same shared conversion as the import
 pipeline (`src/shared/import-convert.ts`), so an import-format paste is turned

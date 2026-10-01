@@ -13,6 +13,7 @@ import { SectionImage } from './SectionImage';
 import { TranscriptView } from './TranscriptView';
 import { WritingEditor } from './WritingEditor';
 import { formatClock, MODE_LABELS, SKILL_LABELS } from '../../lib/format';
+import { DisplayMenu, OrientationHint } from '../DisplayMenu';
 import { useToast } from '../ui';
 import type { ExamSessionApi } from './useExamSession';
 
@@ -375,6 +376,9 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
             Học từ vựng
           </button>
 
+          {/* Text size / spacing / theme, reachable mid-exam on a phone. */}
+          <DisplayMenu compact />
+
           {session.sessionRemainingSeconds !== null ? (
             <span className={`exam-timer ${timerTone}`} aria-live="off" title="Time remaining">
               <Icon name="clock" size={16} strokeWidth={2.1} />
@@ -483,6 +487,9 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
           </div>
         </nav>
       ) : null}
+
+      {/* Phones held upright: ask for landscape once (dismissible). */}
+      <OrientationHint skill={activeSection?.skill ?? state?.testType ?? 'READING'} />
 
       <div className="exam-view" role="group" aria-label="Exam layout">
         <span className="exam-view__label">View</span>

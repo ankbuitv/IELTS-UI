@@ -50,19 +50,21 @@ export function PracticePage() {
 
   const { data, loading, error, reload } = useAsync<{ tests: CatalogTest[] }>(() => api.get('/api/tests'), []);
 
-  const start = async (test: CatalogTest, code?: string) => {
+  const start = async (test: CatalogTest, code?: string, sectionIds?: string[]) => {
     if (test.requiresAccessCode && !test.unlocked && !code) {
       setCodePrompt(test);
       setAccessCode('');
       setCodeError(null);
       return;
     }
-    setStarting(test.id);
+    setStarting(sectionIds ? `${test.id}:${sectionIds.join(',')}` : test.id);
     setCodeError(null);
     try {
       const result = await api.post<{ attemptId: string }>('/api/attempts', {
         testId: test.id,
         mode: strict ? 'STANDARD_EXAM' : 'PRACTICE',
+        // A scoped practice set: only these sections are timed, shown and marked.
+        ...(sectionIds && sectionIds.length > 0 ? { sectionIds } : {}),
         ...(code ? { accessCode: code } : {}),
       });
       navigate(`/exam/${result.attemptId}`);
@@ -173,6 +175,50 @@ export function PracticePage() {
               >
                 {test.requiresAccessCode && !test.unlocked ? 'Unlock & start' : 'Start attempt'}
               </Button>
+
+              {/* Short practice sets: one section, or the first N. Every set is
+                  marked on its own questions (and projected to a full-test band). */}
+              {(test.sections?.length ?? 0) > 1 ? (
+                <div style={{ marginTop: 12 }}>
+                  <div className="tiny muted" style={{ marginBottom: 6 }}>
+                    Hoặc luyện nhanh từng phần — máy chấm riêng phần đó:
+                  </div>
+                  <div className="set-picker">
+                    {(test.sections ?? []).map((section, index) => (
+                      <button
+                        key={section.id}
+                        type="button"
+                        className="set-chip"
+                        disabled={starting !== null}
+                        onClick={() => void start(test, undefined, [section.id])}
+                        title={`${section.totalQuestions} câu${section.durationSeconds ? ` · ${Math.round(section.durationSeconds / 60)} phút` : ''}`}
+                      >
+                        {section.label || `Phần ${index + 1}`}
+                        <span className="set-chip__count">{section.totalQuestions} câu</span>
+                      </button>
+                    ))}
+                    {[2, 3, 4]
+                      .filter((count) => count <= (test.sections?.length ?? 0))
+                      .map((count) => (
+                        <button
+                          key={count}
+                          type="button"
+                          className="set-chip set-chip--all"
+                          disabled={starting !== null}
+                          onClick={() =>
+                            void start(
+                              test,
+                              undefined,
+                              (test.sections ?? []).slice(0, count).map((section) => section.id),
+                            )
+                          }
+                        >
+                          {count} phần đầu
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -311,7 +357,7 @@ export function AttemptHistoryPage() {
 // ---------------------------------------------------------------------------
 export function AttemptResultPage() {
   const { attemptId = '' } = useParams();
-  const { data, loading, error } = useAsync<AttemptResultPayload>(
+  const { data, loading, error, reload } = useAsync<AttemptResultPayload>(
     () => api.get(`/api/attempts/${attemptId}/result`),
     [attemptId],
   );
@@ -334,7 +380,7 @@ export function AttemptResultPage() {
           Back to history
         </Link>
       </div>
-      <ResultSummary result={data} />
+      <ResultSummary result={data} onRefresh={reload} />
     </div>
   );
 }

@@ -413,7 +413,7 @@ export async function runImportStage(env: Env, message: ImportQueueMessage): Pro
 
     if (stage === 'AI_STRUCTURE') {
       const platformSettings = await loadPlatformSettings(env);
-      const status = aiStatus(env);
+      const status = await aiStatus(env);
       if (!platformSettings.aiImportEnabled) {
         await env.DB.prepare(
           `UPDATE import_jobs SET status = 'SKIPPED', error = ?, log_json = ?, finished_at = ?, updated_at = ? WHERE id = ?`,

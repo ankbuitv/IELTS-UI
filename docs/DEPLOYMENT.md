@@ -89,7 +89,9 @@ npx wrangler d1 execute DB --remote --file=./seed/seed.sql   # optional sample c
 
 # 3. Secrets (server-side only; never committed)
 npx wrangler secret put SESSION_SECRET      # required
-npx wrangler secret put OPENAI_API_KEY      # optional: enables AI structuring
+npx wrangler secret put OLLAMA_API_KEYS     # required for AI marking: comma-separated
+                                            # Ollama Cloud keys (failover across keys)
+npx wrangler secret put OPENAI_API_KEY      # optional alternative provider
 
 # 4. Deploy
 npm run deploy

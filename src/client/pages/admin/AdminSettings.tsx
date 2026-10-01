@@ -19,6 +19,8 @@ import {
   useToast,
 } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
+import { AiProvidersPanel } from './AdminAiProviders';
+import { Icon } from '../../components/Icon';
 
 interface AssetRow {
   id: string;
@@ -39,7 +41,7 @@ interface AssetRow {
 }
 
 export function AdminSettingsPage() {
-  const [tab, setTab] = useState<'settings' | 'assets' | 'audit'>('settings');
+  const [tab, setTab] = useState<'settings' | 'ai' | 'assets' | 'audit'>('settings');
 
   return (
     <div className="stack">
@@ -55,7 +57,8 @@ export function AdminSettingsPage() {
       <Tabs
         tabs={[
           { id: 'settings', label: 'Platform settings' },
-          { id: 'assets', label: 'Assets' },
+          { id: 'ai', label: 'AI providers' },
+          { id: 'assets', label: 'Media' },
           { id: 'audit', label: 'Audit log' },
         ]}
         value={tab}
@@ -63,6 +66,7 @@ export function AdminSettingsPage() {
       />
 
       {tab === 'settings' ? <SettingsPanel /> : null}
+      {tab === 'ai' ? <AiProvidersPanel /> : null}
       {tab === 'assets' ? <AssetsPanel /> : null}
       {tab === 'audit' ? <AuditPanel /> : null}
     </div>
@@ -97,12 +101,12 @@ function SettingsPanel() {
 
   return (
     <div className="stack">
-      <Card title="AI provider">
+      <Card title="AI provider" hint="Nhiều provider, nhiều API key, có tự chuyển khi bị giới hạn — xem tab “AI providers”.">
         <KeyValue
           items={[
             ['Status', data.ai.available ? 'Configured' : 'Not configured'],
             ['Model', data.ai.model ?? '—'],
-            ['Note', data.ai.reason ?? 'Structuring runs server-side only; the key is never sent to the browser.'],
+            ['Note', data.ai.reason ?? 'Keys live on the server only and are never sent to the browser.'],
           ]}
         />
       </Card>
@@ -230,12 +234,109 @@ function AssetsPanel() {
   };
 
   const urlLooksValid = /^https:\/\/\S+$/i.test(url.trim());
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [lastUploaded, setLastUploaded] = useState<{ id: string; filename: string; url: string; sizeBytes: number } | null>(null);
+
+  /**
+   * Upload instead of linking: the file is read in the browser, sent as base64,
+   * chunked into D1 by the Worker and streamed back from /api/files/:id with
+   * Range support. This is what removes the "paste an audio URL" step.
+   */
+  const uploadFile = async (file: File) => {
+    if (file.size > 25 * 1024 * 1024) {
+      toast.push('File lớn hơn 25 MB. Hãy nén audio trước khi tải lên.', 'error');
+      return;
+    }
+    setUploading(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('Không đọc được file.'));
+        reader.readAsDataURL(file);
+      });
+      const result = await api.post<{ asset: { id: string; filename: string; url: string; sizeBytes: number } }>(
+        '/api/admin/assets/upload',
+        {
+          filename: file.name,
+          mime: file.type || 'application/octet-stream',
+          dataBase64: base64,
+          kind: file.type.startsWith('audio/') ? 'AUDIO' : file.type.startsWith('image/') ? 'IMAGE' : undefined,
+          altText: altText.trim() || undefined,
+          testVersionId: versionId.trim() || undefined,
+        },
+      );
+      setLastUploaded(result.asset);
+      await reload();
+      toast.push('Đã tải media lên. Không cần link ngoài nữa.', 'success');
+    } catch (uploadError) {
+      toast.push(describeError(uploadError), 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="stack">
       <Card
-        title="Register a media URL"
-        hint="V1 links to media instead of storing it: paste an HTTPS URL that you have the right to use."
+        title="Tải file lên (khuyến nghị)"
+        hint="Audio bài nghe, hình minh hoạ. File được lưu trong hệ thống và phát qua /api/files/:id — không cần link."
+      >
+        <div
+          className={`dropzone ${dragOver ? 'dropzone--over' : ''}`}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragOver(false);
+            const file = event.dataTransfer.files?.[0];
+            if (file) void uploadFile(file);
+          }}
+        >
+          <Icon name="upload" size={22} />
+          <span>Kéo thả file vào đây, hoặc</span>
+          <label className="btn btn--sm btn--secondary" style={{ cursor: 'pointer' }}>
+            {uploading ? 'Đang tải lên…' : 'Chọn file từ máy'}
+            <input
+              type="file"
+              accept="audio/*,image/*"
+              hidden
+              disabled={uploading}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void uploadFile(file);
+                event.target.value = '';
+              }}
+            />
+          </label>
+          <span className="tiny muted">Audio (mp3, m4a, webm, ogg…) hoặc ảnh (png, jpg, webp…). Tối đa 25 MB.</span>
+        </div>
+        {lastUploaded ? (
+          <div className="row" style={{ marginTop: 10, gap: 8 }}>
+            <Badge tone="success">Đã tải</Badge>
+            <span className="small">{lastUploaded.filename}</span>
+            <code className="mono small">/api/files/{lastUploaded.id}</code>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                void navigator.clipboard?.writeText(`${window.location.origin}${lastUploaded.url}`);
+                toast.push('Đã copy URL. Dán vào ô audio của bài test, hoặc dùng asset id trong editor.', 'info');
+              }}
+            >
+              Copy URL
+            </Button>
+          </div>
+        ) : null}
+      </Card>
+
+      <Card
+        title="Hoặc dùng link ngoài"
+        hint="Chỉ dùng khi file đã nằm ở nơi khác và bạn có quyền sử dụng."
       >
         <div className="grid grid--2">
           <Field label="HTTPS media URL" required hint="Audio for Listening, images and charts for Reading/Writing.">
