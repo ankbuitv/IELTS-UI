@@ -76,6 +76,7 @@
     "SESSION_COOKIE_NAME": "ielts_session",
     "OPENAI_MODEL": "gpt-4.1",
     "OPENAI_TRANSCRIBE_MODEL": "gpt-4o-transcribe",
+    "AI_PROVIDERS": "",
     "MAX_UPLOAD_BYTES": "26214400",
     "LOGIN_RATE_LIMIT_PER_15MIN": "10",
     "AI_RATE_LIMIT_PER_HOUR": "30"

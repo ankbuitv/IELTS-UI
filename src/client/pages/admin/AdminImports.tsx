@@ -103,7 +103,14 @@ export function AdminImportsPage() {
   const query = queryString({ status: status || undefined });
   const { data, loading, error, reload } = useAsync<{
     imports: ImportRow[];
-    ai: { available: boolean; model?: string; reason?: string };
+    ai: {
+      available: boolean;
+      model?: string;
+      reason?: string;
+      providerCount?: number;
+      defaultProviderId?: string;
+      providers?: Array<{ id: string; name: string; kind: string; model: string; isDefault: boolean }>;
+    };
   }>(() => api.get(`/api/admin/imports${query}`), [query]);
 
   return (
@@ -235,6 +242,8 @@ export function AdminImportsPage() {
         {selected ? (
           <ImportDetailView
             importId={selected}
+            providers={data?.ai.providers ?? []}
+            defaultProviderId={data?.ai.defaultProviderId}
             onChanged={reload}
             onApplied={async (testId) => {
               await reload();
@@ -410,10 +419,14 @@ function ImportDetailView({
   importId,
   onChanged,
   onApplied,
+  providers,
+  defaultProviderId,
 }: {
   importId: string;
   onChanged: () => Promise<void>;
   onApplied: (testId: string) => Promise<void>;
+  providers: Array<{ id: string; name: string; kind: string; model: string; isDefault: boolean }>;
+  defaultProviderId?: string;
 }) {
   const toast = useToast();
   const { data, loading, error, reload } = useAsync<ImportDetail>(
@@ -425,6 +438,7 @@ function ImportDetailView({
   const [applyTarget, setApplyTarget] = useState('');
   const [busy, setBusy] = useState(false);
   const [showPayload, setShowPayload] = useState(false);
+  const [providerId, setProviderId] = useState(defaultProviderId ?? '');
 
   if (loading) return <Loading label="Loading import…" />;
   if (error) return <Notice tone="danger">{error}</Notice>;
@@ -464,13 +478,28 @@ function ImportDetailView({
             ['Target test', record.targetTestTitle ?? 'Not applied yet'],
           ]}
         />
-        <div className="row" style={{ marginTop: 12 }}>
+        <div className="row" style={{ marginTop: 12, alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+          {providers.length > 1 ? (
+            <label className="field">
+              <span className="field__label">AI provider</span>
+              <select value={providerId} onChange={(event) => setProviderId(event.target.value)}>
+                {providers.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.name} · {provider.model}
+                    {provider.id === defaultProviderId ? ' (default)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <Button
             loading={busy}
             onClick={async () => {
               setBusy(true);
               try {
-                await api.post(`/api/admin/imports/${importId}/process`, {});
+                await api.post(`/api/admin/imports/${importId}/process`, {
+                  providerId: providerId || undefined,
+                });
                 await reload();
                 await onChanged();
                 toast.push('Extraction finished. Review the structured draft before applying it.', 'success');

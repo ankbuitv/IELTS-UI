@@ -13,12 +13,14 @@ import {
   Loading,
   Notice,
   Stat,
+  Select,
   Tabs,
   TextArea,
   TextInput,
   useToast,
 } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
+import { QUESTION_TYPES } from '@shared/question-types';
 
 interface AssetRow {
   id: string;
@@ -39,7 +41,7 @@ interface AssetRow {
 }
 
 export function AdminSettingsPage() {
-  const [tab, setTab] = useState<'settings' | 'assets' | 'audit'>('settings');
+  const [tab, setTab] = useState<'settings' | 'assets' | 'audit' | 'ai'>('settings');
 
   return (
     <div className="stack">
@@ -55,6 +57,7 @@ export function AdminSettingsPage() {
       <Tabs
         tabs={[
           { id: 'settings', label: 'Platform settings' },
+          { id: 'ai', label: 'AI providers' },
           { id: 'assets', label: 'Assets' },
           { id: 'audit', label: 'Audit log' },
         ]}
@@ -63,6 +66,7 @@ export function AdminSettingsPage() {
       />
 
       {tab === 'settings' ? <SettingsPanel /> : null}
+      {tab === 'ai' ? <AiPanel /> : null}
       {tab === 'assets' ? <AssetsPanel /> : null}
       {tab === 'audit' ? <AuditPanel /> : null}
     </div>
@@ -73,7 +77,14 @@ function SettingsPanel() {
   const toast = useToast();
   const { data, loading, error, reload } = useAsync<{
     settings: Record<string, unknown>;
-    ai: { available: boolean; model?: string; reason?: string };
+    ai: {
+      available: boolean;
+      model?: string;
+      reason?: string;
+      providerCount?: number;
+      defaultProviderId?: string;
+      providers?: Array<{ id: string; name: string; kind: string; model: string; isDefault: boolean }>;
+    };
   }>(() => api.get('/api/admin/settings'), []);
 
   const [form, setForm] = useState<{
@@ -101,10 +112,25 @@ function SettingsPanel() {
         <KeyValue
           items={[
             ['Status', data.ai.available ? 'Configured' : 'Not configured'],
-            ['Model', data.ai.model ?? '—'],
-            ['Note', data.ai.reason ?? 'Structuring runs server-side only; the key is never sent to the browser.'],
+            ['Default model', data.ai.model ?? '—'],
+            ['Providers', String(data.ai.providerCount ?? 0)],
+            [
+              'Note',
+              data.ai.reason ??
+                'Structuring and grading run server-side only; API keys are never sent to the browser. Manage providers under the “AI providers” tab.',
+            ],
           ]}
         />
+        {data.ai.providers && data.ai.providers.length > 0 ? (
+          <ul className="small" style={{ margin: '12px 0 0 18px' }}>
+            {data.ai.providers.map((provider) => (
+              <li key={provider.id}>
+                <span className="mono">{provider.name}</span> — {provider.kind} · {provider.model}
+                {provider.isDefault ? ' (default)' : ''}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </Card>
 
       <Card title="Behaviour switches" hint="Changes apply to new requests immediately and are written to the audit log.">
@@ -467,5 +493,494 @@ function AuditPanel() {
         <Stat label="Audit retention" value="Unbounded" hint="Prune with a scheduled query if your policy requires retention limits." />
       </Card>
     </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// AI providers + AI grading assistant
+// -----------------------------------------------------------------------------
+
+interface MaskedProvider {
+  id: string;
+  name: string;
+  kind: 'openai' | 'openai-compatible' | 'ollama';
+  baseUrl: string;
+  model: string;
+  isDefault: boolean;
+  apiKeyMasked: string;
+}
+
+interface AiProviderStatus {
+  available: boolean;
+  model?: string;
+  reason?: string;
+  providerCount?: number;
+  defaultProviderId?: string;
+  providers?: Array<{ id: string; name: string; kind: string; model: string; isDefault: boolean }>;
+}
+
+interface ProviderForm {
+  id: string;
+  name: string;
+  kind: 'openai' | 'openai-compatible' | 'ollama';
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  isDefault: boolean;
+}
+
+const EMPTY_FORM: ProviderForm = {
+  id: '',
+  name: '',
+  kind: 'openai-compatible',
+  baseUrl: 'https://llm.chutes.ai/v1',
+  apiKey: '',
+  model: '',
+  isDefault: false,
+};
+
+const KIND_HINTS: Record<ProviderForm['kind'], string> = {
+  openai: 'OpenAI hosted API. Base URL is fixed to https://api.openai.com/v1.',
+  'openai-compatible': 'Any OpenAI-compatible endpoint (Chutes, Groq, OpenRouter, vLLM/SGLang…).',
+  ollama: 'Local or remote Ollama server (native /api/chat). Base URL defaults to http://localhost:11434.',
+};
+
+export function AiPanel() {
+  const toast = useToast();
+  const { data, loading, error, reload } = useAsync<{
+    status: AiProviderStatus;
+    providers: MaskedProvider[];
+    storedInDb: boolean;
+  }>(() => api.get('/api/admin/ai/providers'), []);
+
+  const [form, setForm] = useState<ProviderForm | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const providers = data?.providers ?? [];
+  // Local working copy: existing providers carry a null apiKey so the server
+  // keeps their stored secret; only edited/new keys are sent.
+  const startAdd = () => setForm({ ...EMPTY_FORM });
+  const startEdit = (provider: MaskedProvider) =>
+    setForm({
+      id: provider.id,
+      name: provider.name,
+      kind: provider.kind,
+      baseUrl: provider.baseUrl,
+      apiKey: '',
+      model: provider.model,
+      isDefault: provider.isDefault,
+    });
+  const resetForm = () => {
+    setForm(null);
+    setSaveError(null);
+  };
+
+  const save = async () => {
+    if (!form) return;
+    if (!form.name.trim()) {
+      setSaveError('Provider name is required.');
+      return;
+    }
+    if (!form.model.trim()) {
+      setSaveError('Model is required.');
+      return;
+    }
+    if (form.kind !== 'ollama' && !form.id && !form.apiKey.trim()) {
+      setSaveError('An API key is required for a new OpenAI-compatible provider.');
+      return;
+    }
+    setBusy(true);
+    setSaveError(null);
+    try {
+      const working: ProviderForm[] = providers.map((provider) => ({
+        id: provider.id,
+        name: provider.name,
+        kind: provider.kind,
+        baseUrl: provider.baseUrl,
+        apiKey: '',
+        model: provider.model,
+        isDefault: provider.isDefault,
+      }));
+      const entry: ProviderForm = {
+        ...form,
+        id: form.id || `p_${Math.random().toString(36).slice(2, 10)}`,
+      };
+      const existingIndex = working.findIndex((item) => item.id === entry.id);
+      if (existingIndex >= 0) working[existingIndex] = entry;
+      else working.push(entry);
+
+      await api.patch('/api/admin/ai/providers', { providers: working });
+      await reload();
+      resetForm();
+      toast.push('AI providers saved.', 'success');
+    } catch (saveError) {
+      setSaveError(describeError(saveError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm('Remove this AI provider?')) return;
+    setBusy(true);
+    try {
+      const working: ProviderForm[] = providers
+        .filter((provider) => provider.id !== id)
+        .map((provider) => ({
+          id: provider.id,
+          name: provider.name,
+          kind: provider.kind,
+          baseUrl: provider.baseUrl,
+          apiKey: '',
+          model: provider.model,
+          isDefault: provider.isDefault,
+        }));
+      await api.patch('/api/admin/ai/providers', { providers: working });
+      await reload();
+      toast.push('Provider removed.', 'success');
+    } catch (removeError) {
+      toast.push(describeError(removeError), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) return <Loading label="Loading AI providers…" />;
+  if (error) return <Notice tone="danger">{error}</Notice>;
+
+  const status = data?.status;
+
+  return (
+    <div className="stack">
+      <Card
+        title="AI providers"
+        hint="Add any number of OpenAI, OpenAI-compatible (Chutes, Groq, OpenRouter, self-hosted vLLM/SGLang) or local Ollama providers. Keys stay server-side and are never sent to the browser."
+      >
+        <KeyValue
+          items={[
+            ['Status', status?.available ? 'Configured' : 'Not configured'],
+            ['Default model', status?.model ?? '—'],
+            ['Configured providers', String(status?.providerCount ?? 0)],
+            [
+              'Storage',
+              data?.storedInDb
+                ? 'Saved in database (editable here)'
+                : 'From environment / OPENAI_API_KEY (save below to move into the database)',
+            ],
+          ]}
+        />
+
+        {providers.length > 0 ? (
+          <table className="table" style={{ marginTop: 16 }}>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Kind</th>
+                <th>Model</th>
+                <th>Base URL</th>
+                <th>API key</th>
+                <th>Default</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {providers.map((provider) => (
+                <tr key={provider.id}>
+                  <td className="tiny">{provider.name}</td>
+                  <td>
+                    <Badge tone="violet">{provider.kind}</Badge>
+                  </td>
+                  <td className="tiny">{provider.model}</td>
+                  <td className="tiny">{provider.baseUrl || '—'}</td>
+                  <td className="tiny mono">{provider.apiKeyMasked || '—'}</td>
+                  <td>{provider.isDefault ? '✓' : ''}</td>
+                  <td className="row" style={{ gap: 8 }}>
+                    <Button size="sm" variant="secondary" onClick={() => startEdit(provider)} disabled={busy}>
+                      Edit
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => remove(provider.id)} disabled={busy}>
+                      Remove
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyState title="No AI providers yet">
+            <p>Add a provider below to enable AI structuring and AI grading.</p>
+          </EmptyState>
+        )}
+
+        <div style={{ marginTop: 16 }}>
+          {form ? (
+            <div className="card" style={{ padding: 16 }}>
+              <h3 style={{ marginTop: 0 }}>{form.id ? 'Edit provider' : 'Add provider'}</h3>
+              <div className="grid grid--2">
+                <Field label="Name" required>
+                  {(id) => (
+                    <TextInput
+                      id={id}
+                      value={form.name}
+                      placeholder="e.g. Chutes gpt-oss"
+                      onChange={(event) => setForm({ ...form, name: event.target.value })}
+                    />
+                  )}
+                </Field>
+                <Field label="Kind" required>
+                  {(id) => (
+                    <Select
+                      id={id}
+                      value={form.kind}
+                      onChange={(event) =>
+                        setForm({ ...form, kind: event.target.value as ProviderForm['kind'] })
+                      }
+                    >
+                      <option value="openai-compatible">OpenAI-compatible</option>
+                      <option value="openai">OpenAI</option>
+                      <option value="ollama">Ollama (local)</option>
+                    </Select>
+                  )}
+                </Field>
+                <Field label="Model" required hint="e.g. gpt-oss:120b, gemma4:31b, openai/gpt-oss-120b, gpt-4.1">
+                  {(id) => (
+                    <TextInput
+                      id={id}
+                      value={form.model}
+                      placeholder="gpt-oss:120b"
+                      onChange={(event) => setForm({ ...form, model: event.target.value })}
+                    />
+                  )}
+                </Field>
+                <Field label="Base URL" hint={KIND_HINTS[form.kind]}>
+                  {(id) => (
+                    <TextInput
+                      id={id}
+                      value={form.baseUrl}
+                      placeholder={form.kind === 'ollama' ? 'http://localhost:11434' : 'https://llm.chutes.ai/v1'}
+                      onChange={(event) => setForm({ ...form, baseUrl: event.target.value })}
+                    />
+                  )}
+                </Field>
+                <Field
+                  label="API key"
+                  hint={form.id ? 'Leave blank to keep the existing key.' : 'Required for OpenAI-compatible / OpenAI.'}
+                >
+                  {(id) => (
+                    <TextInput
+                      id={id}
+                      type="password"
+                      autoComplete="off"
+                      value={form.apiKey}
+                      placeholder={form.id ? '•••• (unchanged)' : ''}
+                      onChange={(event) => setForm({ ...form, apiKey: event.target.value })}
+                    />
+                  )}
+                </Field>
+                <div className="row" style={{ alignItems: 'center', gap: 8 }}>
+                  <Checkbox
+                    checked={form.isDefault}
+                    onChange={(checked) => setForm({ ...form, isDefault: checked })}
+                    label="Use as default provider"
+                  />
+                </div>
+              </div>
+              {saveError ? (
+                <Notice tone="danger">{saveError}</Notice>
+              ) : null}
+              <div className="row" style={{ marginTop: 12, gap: 8 }}>
+                <Button variant="primary" loading={busy} onClick={save}>
+                  {form.id ? 'Save provider' : 'Add provider'}
+                </Button>
+                <Button onClick={resetForm} disabled={busy}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="primary" onClick={startAdd}>
+              Add provider
+            </Button>
+          )}
+        </div>
+      </Card>
+
+      <GradePanel providers={providers} defaultProviderId={status?.defaultProviderId} />
+    </div>
+  );
+}
+
+interface AiGradeResult {
+  correct: boolean;
+  score: number;
+  confidence: 'high' | 'medium' | 'low';
+  feedback: string;
+  reasoning: string;
+  model: string;
+  providerId: string;
+}
+
+function GradePanel({
+  providers,
+  defaultProviderId,
+}: {
+  providers: MaskedProvider[];
+  defaultProviderId?: string;
+}) {
+  const [questionType, setQuestionType] = useState('');
+  const [questionPrompt, setQuestionPrompt] = useState('');
+  const [passageText, setPassageText] = useState('');
+  const [officialAnswer, setOfficialAnswer] = useState('');
+  const [candidateAnswer, setCandidateAnswer] = useState('');
+  const [providerId, setProviderId] = useState(defaultProviderId ?? '');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<AiGradeResult | null>(null);
+  const [gradeError, setGradeError] = useState<string | null>(null);
+
+  const grade = async () => {
+    if (!candidateAnswer.trim()) {
+      setGradeError('Enter a candidate answer to grade.');
+      return;
+    }
+    setBusy(true);
+    setGradeError(null);
+    setResult(null);
+    try {
+      const response = await api.post<{ result: AiGradeResult }>('/api/admin/ai/grade', {
+        questionType: questionType || undefined,
+        questionPrompt,
+        passageText: passageText || null,
+        officialAnswer: officialAnswer || null,
+        candidateAnswer,
+        providerId: providerId || undefined,
+      });
+      setResult(response.result);
+    } catch (gradeError) {
+      setGradeError(describeError(gradeError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card
+      title="AI grading assistant"
+      hint="Get a second opinion on a candidate answer. The platform's published scores stay deterministic; this is an advisory tool for open-ended reading answers and writing."
+    >
+      <div className="grid grid--2">
+        <Field label="Question type" hint="Optional — helps the model grade correctly.">
+          {(id) => (
+            <Select id={id} value={questionType} onChange={(event) => setQuestionType(event.target.value)}>
+              <option value="">— unknown / auto —</option>
+              {QUESTION_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="Provider" hint="Which configured model should grade this?">
+          {(id) => (
+            <Select
+              id={id}
+              value={providerId}
+              onChange={(event) => setProviderId(event.target.value)}
+              disabled={providers.length === 0}
+            >
+              {providers.length === 0 ? (
+                <option value="">No providers configured</option>
+              ) : (
+                providers.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.name} · {provider.model}
+                    {provider.id === defaultProviderId ? ' (default)' : ''}
+                  </option>
+                ))
+              )}
+            </Select>
+          )}
+        </Field>
+      </div>
+
+      <Field label="Question prompt" required>
+        {(id) => (
+          <TextArea
+            id={id}
+            rows={3}
+            value={questionPrompt}
+            placeholder="e.g. Complete the sentence with ONE WORD from the passage."
+            onChange={(event) => setQuestionPrompt(event.target.value)}
+          />
+        )}
+      </Field>
+      <Field label="Passage / transcript" hint="Optional — give the model the evidence to judge against.">
+        {(id) => (
+          <TextArea
+            id={id}
+            rows={5}
+            value={passageText}
+            placeholder="Paste the relevant paragraph(s)…"
+            onChange={(event) => setPassageText(event.target.value)}
+          />
+        )}
+      </Field>
+      <div className="grid grid--2">
+        <Field label="Official answer" hint="Optional accepted answer(s).">
+          {(id) => (
+            <TextArea
+              id={id}
+              rows={3}
+              value={officialAnswer}
+              placeholder="e.g. store"
+              onChange={(event) => setOfficialAnswer(event.target.value)}
+            />
+          )}
+        </Field>
+        <Field label="Candidate answer" required>
+          {(id) => (
+            <TextArea
+              id={id}
+              rows={3}
+              value={candidateAnswer}
+              placeholder="The learner's response…"
+              onChange={(event) => setCandidateAnswer(event.target.value)}
+            />
+          )}
+        </Field>
+      </div>
+
+      {gradeError ? <Notice tone="danger">{gradeError}</Notice> : null}
+
+      <div className="row" style={{ marginTop: 12 }}>
+        <Button variant="primary" loading={busy} onClick={grade} disabled={providers.length === 0}>
+          Grade with AI
+        </Button>
+      </div>
+
+      {result ? (
+        <div className="card" style={{ marginTop: 16, padding: 16 }}>
+          <KeyValue
+            items={[
+              ['Verdict', result.correct ? 'Credit (partial or full)' : 'No credit'],
+              ['Score', `${Math.round(result.score * 100)}%`],
+              ['Confidence', result.confidence],
+              ['Model', `${result.model} (${result.providerId})`],
+            ]}
+          />
+          {result.feedback ? (
+            <p>
+              <strong>Feedback:</strong> {result.feedback}
+            </p>
+          ) : null}
+          {result.reasoning ? (
+            <p className="small">
+              <strong>Reasoning:</strong> {result.reasoning}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </Card>
   );
 }

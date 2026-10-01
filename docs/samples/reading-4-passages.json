@@ -1,0 +1,253 @@
+{
+  "testTitle": "IELTS Reading Practice — Four Passages (Sample)",
+  "testType": "READING",
+  "durationSeconds": 3600,
+  "sections": [
+    {
+      "sectionNumber": 1,
+      "type": "reading_passage",
+      "label": "Passage 1",
+      "title": "The quiet power of boredom",
+      "instructions": "You should spend about 20 minutes on Questions 1–10.",
+      "order": 0,
+      "passage": {
+        "title": "The quiet power of boredom",
+        "paragraphs": [
+          { "label": "A", "text": "Boredom has a poor reputation. It is the feeling we rush to extinguish with a phone, a snack or a quick scroll, as though it were a minor malfunction of the mind rather than a normal signal. Yet psychologists increasingly argue that boredom is not a problem to be solved but a prompt to be heeded. When nothing in our environment holds our attention, the mind begins to wander, and wandering is where a surprising amount of original thinking begins." },
+          { "label": "B", "text": "Researchers distinguish between two broad kinds of boredom. The milder, more open variety arrives when a task is easy or repetitive and the mind is left free to drift. The heavier variety, sometimes called reactive boredom, arrives with a sense of being trapped and restless, and it is the kind most likely to make people reach for distractions. The difference matters because the lighter form is linked to imagination, while the heavier form tends to produce irritability and withdrawal." },
+          { "label": "C", "text": "In one well-known study, participants who were made to copy numbers from a phone book for fifteen minutes later performed better on an unusual-use task than participants who had been entertained the whole time. The tedious copying seemed to loosen something in their thinking. The researchers suggested that a quiet, under-stimulated interval gives the brain room to make unusual connections that a busy schedule crowds out." },
+          { "label": "D", "text": "There is also a creative argument for protecting fallow time. Many writers and inventors describe their best ideas arriving not at the desk but in the shower, on a walk or while staring out of a train window. These moments share a common feature: the conscious mind is occupied with something gentle and automatic, leaving the rest of the mind to work below the surface. Boredom, in this sense, is the doorway to that deeper work." },
+          { "label": "E", "text": "Boredom may even help with motivation. When every idle moment is filled with polished, professional entertainment, people lose the gentle discomfort that pushes them to begin something of their own. A little boredom restores agency: it reminds us that we, not an algorithm, get to decide what to do next. The empty afternoon becomes an invitation rather than an emergency." },
+          { "label": "F", "text": "None of this is a case for deliberate misery. Prolonged, helpless boredom is a genuine risk, especially for people who are isolated or unemployed. The useful claim is narrower: brief, ordinary boredom is a healthy signal, and the habitual suppression of it may cost us more imagination than we realise. Leaving gaps in the day is not laziness; it is maintenance for a mind that is otherwise never allowed to rest." }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "MATCHING_HEADINGS",
+          "instructions": "Choose the correct heading for each paragraph from the list below. There are more headings than you need.",
+          "fromQuestion": 1,
+          "toQuestion": 5,
+          "configuration": { "optionNumbering": "roman" },
+          "sharedOptions": [
+            { "id": "i", "text": "A case built on extreme cases rather than everyday experience" },
+            { "id": "ii", "text": "How boredom can return initiative to the individual" },
+            { "id": "iii", "text": "A misunderstood feeling with a useful function" },
+            { "id": "iv", "text": "Evidence that dull tasks can sharpen invention" },
+            { "id": "v", "text": "Two forms of boredom and why they differ" },
+            { "id": "vi", "text": "The dangers of constant distraction" }
+          ],
+          "questions": [
+            { "number": 1, "prompt": "Paragraph A", "answer": "iii", "evidence": "Paragraph A", "explanation": "The paragraph reframes boredom as a normal signal with a function rather than a malfunction." },
+            { "number": 2, "prompt": "Paragraph B", "answer": "v", "evidence": "Paragraph B", "explanation": "The paragraph separates two kinds of boredom and explains why they matter differently." },
+            { "number": 3, "prompt": "Paragraph C", "answer": "iv", "evidence": "Paragraph C", "explanation": "The phone-book study is offered as evidence that tedious work can aid inventive thinking." },
+            { "number": 4, "prompt": "Paragraph E", "answer": "ii", "evidence": "Paragraph E", "explanation": "The paragraph argues boredom restores agency and the freedom to choose one's own activity." },
+            { "number": 5, "prompt": "Paragraph F", "answer": "vi", "evidence": "Paragraph F", "explanation": "The closing paragraph warns that always suppressing boredom may cost us imagination." }
+          ]
+        },
+        {
+          "questionType": "TRUE_FALSE_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the information given in the passage? Write TRUE, FALSE or NOT GIVEN.",
+          "fromQuestion": 6,
+          "toQuestion": 8,
+          "questions": [
+            { "number": 6, "prompt": "Most psychologists now believe boredom should be eliminated as quickly as possible.", "answer": "FALSE", "evidence": "Paragraph A", "explanation": "The passage says psychologists increasingly argue boredom is a prompt to be heeded, not a problem to be solved." },
+            { "number": 7, "prompt": "Reactive boredom is more likely than the milder form to lead people to seek distractions.", "answer": "TRUE", "evidence": "Paragraph B", "explanation": "The heavier, reactive form is described as the kind most likely to make people reach for distractions." },
+            { "number": 8, "prompt": "The phone-book study proved that boredom causes long-term improvements in intelligence.", "answer": "NOT_GIVEN", "evidence": "Paragraph C", "explanation": "The study reports a one-off creative task result; no claim about long-term intelligence is made." }
+          ]
+        },
+        {
+          "questionType": "SENTENCE_COMPLETION",
+          "instructions": "Complete the sentences below. Choose ONE WORD ONLY from the passage for each answer.",
+          "fromQuestion": 9,
+          "toQuestion": 10,
+          "configuration": { "wordLimitMax": 1 },
+          "questions": [
+            { "number": 9, "prompt": "An under-stimulated interval gives the brain room to make unusual [[9]].", "answer": "connections", "evidence": "Paragraph C", "explanation": "The passage states a quiet interval gives the brain room to make unusual connections." },
+            { "number": 10, "prompt": "Brief boredom acts as a healthy [[10]] that should not always be suppressed.", "answer": "signal", "evidence": "Paragraph F", "explanation": "The passage calls ordinary boredom a healthy signal and warns against its habitual suppression." }
+          ]
+        }
+      ]
+    },
+    {
+      "sectionNumber": 2,
+      "type": "reading_passage",
+      "label": "Passage 2",
+      "title": "Why cities are learning to sleep in the dark",
+      "instructions": "You should spend about 20 minutes on Questions 11–20.",
+      "order": 1,
+      "passage": {
+        "title": "Why cities are learning to sleep in the dark",
+        "paragraphs": [
+          { "label": "A", "text": "For most of human history, night was dark by necessity. Then electric light arrived, and within a century the night sky over cities had been erased. Today a different idea is spreading: that darkness, too, is infrastructure worth protecting. A growing number of towns dim their lamps after midnight, not to save money alone but to recover something they did not know they had lost." },
+          { "label": "B", "text": "The argument rests on ecology. Artificial light at night disrupts the migration of birds, the hunting patterns of bats, and the reproduction of many insects. Street lighting tuned to the wrong spectrum can pull moths into a fatal orbit and break the food chains that depend on them. When a town dims itself, local surveys often record a quick return of nocturnal wildlife." },
+          { "label": "C", "text": "Human health is part of the case as well. Exposure to bright, blue-rich light in the late hours can delay the body's production of melatonin and disturb sleep. Several municipalities have begun replacing cool white lamps with warmer, lower outputs, and dimming them on a schedule that follows the natural fall of night rather than a fixed timetable." },
+          { "label": "D", "text": "Opponents worry about safety. The intuitive belief is that brighter streets are safer streets, yet the evidence is mixed. Some studies find little relationship between overall lighting levels and crime, while others find that targeted lighting at specific crossings and pathways helps more than blanket illumination. The question, then, is not simply how much light but where and when it falls." },
+          { "label": "E", "text": "Technology makes the compromise easier. Adaptive systems sense movement and brighten only the stretch of pavement in use, then fade again. Such systems cut energy use and light spill while preserving the reassurance of light where a person actually walks. The same sensors that dim a lane can also count footsteps and feed a town's planning data." },
+          { "label": "F", "text": "None of this requires a city to choose between darkness and security. It asks instead for light that is intentional: dimmed in the small hours, warmed in its colour, and aimed at the ground rather than the sky. A dark sky is not a backward luxury but a measurable sign of a place that has learned to use light with restraint." }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "MCQ_SINGLE",
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "fromQuestion": 11,
+          "toQuestion": 14,
+          "questions": [
+            { "number": 11, "prompt": "What is the main reason some towns are dimming their lights at night?", "options": [ { "id": "A", "text": "To reduce the cost of electricity for residents" }, { "id": "B", "text": "To protect darkness as valuable infrastructure" }, { "id": "C", "text": "To comply with international lighting laws" }, { "id": "D", "text": "To make the night sky brighter for tourism" } ], "answer": "B", "evidence": "Paragraph A", "explanation": "The paragraph says towns dim lamps to recover darkness, treating it as infrastructure worth protecting." },
+            { "number": 12, "prompt": "According to the passage, artificial light at night can affect wildlife by", "options": [ { "id": "A", "text": "improving the hunting success of bats" }, { "id": "B", "text": "disrupting migration, hunting and reproduction" }, { "id": "C", "text": "attracting birds away from cities" }, { "id": "D", "text": "strengthening insect food chains" } ], "answer": "B", "evidence": "Paragraph B", "explanation": "The passage lists disruption to bird migration, bat hunting and insect reproduction." },
+            { "number": 13, "prompt": "What change have some municipalities made to street lighting for health reasons?", "options": [ { "id": "A", "text": "They have removed all street lighting" }, { "id": "B", "text": "They now use warmer, dimmer lamps on a schedule" }, { "id": "C", "text": "They have increased blue-rich output" }, { "id": "D", "text": "They keep lights at full power all night" } ], "answer": "B", "evidence": "Paragraph C", "explanation": "The passage says towns replaced cool white lamps with warmer, lower outputs dimmed on a schedule." },
+            { "number": 14, "prompt": "What does the passage say about the link between lighting and crime?", "options": [ { "id": "A", "text": "Brighter streets always reduce crime significantly" }, { "id": "B", "text": "The evidence is mixed and depends on placement" }, { "id": "C", "text": "Crime rises whenever lighting is reduced" }, { "id": "D", "text": "Lighting has no effect on public safety" } ], "answer": "B", "evidence": "Paragraph D", "explanation": "The passage says the evidence is mixed and that targeted lighting helps more than blanket illumination." }
+          ]
+        },
+        {
+          "questionType": "MATCHING_INFORMATION",
+          "instructions": "Which paragraph contains the following information? Write the correct letter, A–F. You may use any letter more than once.",
+          "fromQuestion": 15,
+          "toQuestion": 18,
+          "sharedOptions": [
+            { "id": "A", "text": "Paragraph A" }, { "id": "B", "text": "Paragraph B" }, { "id": "C", "text": "Paragraph C" }, { "id": "D", "text": "Paragraph D" }, { "id": "E", "text": "Paragraph E" }, { "id": "F", "text": "Paragraph F" }
+          ],
+          "questions": [
+            { "number": 15, "prompt": "a description of systems that brighten only where people are present", "answer": "E", "evidence": "Paragraph E", "explanation": "Paragraph E describes adaptive systems that sense movement and brighten only the used stretch of pavement." },
+            { "number": 16, "prompt": "a claim that safety depends more on placement than on total brightness", "answer": "D", "evidence": "Paragraph D", "explanation": "Paragraph D argues the question is where and when light falls, not simply how much." },
+            { "number": 17, "prompt": "the idea that darkness can return quickly when lighting is reduced", "answer": "B", "evidence": "Paragraph B", "explanation": "Paragraph B says local surveys often record a quick return of nocturnal wildlife when a town dims." },
+            { "number": 18, "prompt": "a suggestion that intentional, restrained light is a modern achievement", "answer": "F", "evidence": "Paragraph F", "explanation": "Paragraph F presents intentional, restrained lighting as a sign of maturity rather than a luxury." }
+          ]
+        },
+        {
+          "questionType": "SHORT_ANSWER",
+          "instructions": "Answer the questions below. Write NO MORE THAN TWO WORDS for each answer.",
+          "fromQuestion": 19,
+          "toQuestion": 20,
+          "configuration": { "wordLimitMax": 2 },
+          "questions": [
+            { "number": 19, "prompt": "Which substance, whose production is delayed by late bright light, helps regulate sleep?", "answer": "melatonin", "evidence": "Paragraph C", "explanation": "Paragraph C names melatonin, whose production is delayed by bright late-night light." },
+            { "number": 20, "prompt": "Besides energy saving, what do adaptive sensors help a town collect for planning?", "answer": "footsteps", "evidence": "Paragraph E", "explanation": "Paragraph E says the same sensors can count footsteps and feed planning data." }
+          ]
+        }
+      ]
+    },
+    {
+      "sectionNumber": 3,
+      "type": "reading_passage",
+      "label": "Passage 3",
+      "title": "The mathematics of friendship",
+      "instructions": "You should spend about 20 minutes on Questions 21–30.",
+      "order": 2,
+      "passage": {
+        "title": "The mathematics of friendship",
+        "paragraphs": [
+          { "label": "A", "text": "Sociologists have long noticed a curious pattern in personal networks. The people we know can be sorted into layers: a handful we are closest to, a wider circle we are fond of, and a still larger band of acquaintances we would recognise but rarely see. This structure is remarkably consistent across cultures, suggesting it reflects something about human capacity rather than fashion." },
+          { "label": "B", "text": "One influential account proposes that each layer demands a predictable multiple of contact time. To keep a friend in the closest layer, the theory holds, a person must invest roughly weekly attention; the next layer, about monthly; the next, annually. The numbers are approximate, but they capture a real constraint: attention is a budget, and every promotion into a closer layer draws from a finite store." },
+          { "label": "C", "text": "The total size of a person's active network also appears to plateau. Large surveys find that even the most sociable individuals rarely sustain more than about 150 relationships that feel genuinely personal. Beyond that, names blur and obligations thin. This ceiling is sometimes called the limitation of a mind that evolved for smaller ancestral groups." },
+          { "label": "D", "text": "Technology complicates the picture. Online tools make it trivial to accumulate thousands of weakly tied contacts, yet the inner layers do not expand to match. People report feeling more connected and, at the same time, more stretched. The instruments of connection have outrun the psychology of connection, leaving a gap between the size of a list and the depth of a bond." },
+          { "label": "E", "text": "There is a practical lesson here for organisations. Teams that grow past a certain size begin to fragment into subgroups that no longer share context. The pattern is not a failure of morale but a predictable effect of how many relationships any member can hold at once. Small, overlapping units tend to preserve the trust that larger ones lose." },
+          { "label": "F", "text": "None of this reduces friendship to arithmetic. Affection, loyalty and luck still decide who lands in which layer, and the layers shift across a lifetime. What the numbers offer is a gentle reminder that closeness is built from repeated, unglamorous attention, and that no message sent in bulk can substitute for the time a real relationship requires." }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "TRUE_FALSE_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the information given in the passage? Write TRUE, FALSE or NOT GIVEN.",
+          "fromQuestion": 21,
+          "toQuestion": 24,
+          "questions": [
+            { "number": 21, "prompt": "The layered structure of personal networks is found in many different cultures.", "answer": "TRUE", "evidence": "Paragraph A", "explanation": "Paragraph A says the structure is remarkably consistent across cultures." },
+            { "number": 22, "prompt": "The time required for each friendship layer has been proven to the exact minute.", "answer": "FALSE", "evidence": "Paragraph B", "explanation": "The passage says the numbers are approximate, not exact." },
+            { "number": 23, "prompt": "The most sociable people can maintain more than 200 genuinely personal relationships.", "answer": "FALSE", "evidence": "Paragraph C", "explanation": "Paragraph C says even the most sociable rarely sustain more than about 150." },
+            { "number": 24, "prompt": "Online contact has been shown to double the size of a person's innermost friendship layer.", "answer": "NOT_GIVEN", "evidence": "Paragraph D", "explanation": "The passage says inner layers do not expand to match online contacts; it does not claim a specific doubling." }
+          ]
+        },
+        {
+          "questionType": "SENTENCE_COMPLETION",
+          "instructions": "Complete the sentences below. Choose ONE WORD ONLY from the passage for each answer.",
+          "fromQuestion": 25,
+          "toQuestion": 27,
+          "configuration": { "wordLimitMax": 1 },
+          "questions": [
+            { "number": 25, "prompt": "Attention is described as a [[25]] that cannot be endless.", "answer": "budget", "evidence": "Paragraph B", "explanation": "Paragraph B calls attention a budget that is finite." },
+            { "number": 26, "prompt": "A person's active network reaches a natural [[26]] at about 150.", "answer": "plateau", "evidence": "Paragraph C", "explanation": "Paragraph C says the total size appears to plateau at about 150." },
+            { "number": 27, "prompt": "Very large teams tend to lose the [[27]] that smaller units keep.", "answer": "trust", "evidence": "Paragraph E", "explanation": "Paragraph E says larger groups lose the trust that smaller, overlapping units preserve." }
+          ]
+        },
+        {
+          "questionType": "MCQ_SINGLE",
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "fromQuestion": 28,
+          "toQuestion": 30,
+          "questions": [
+            { "number": 28, "prompt": "What does the writer suggest about online social tools?", "options": [ { "id": "A", "text": "They automatically deepen the closest friendships" }, { "id": "B", "text": "They let people collect many weak contacts without enlarging inner layers" }, { "id": "C", "text": "They have removed the need for any personal contact" }, { "id": "D", "text": "They reduce the total size of social networks" } ], "answer": "B", "evidence": "Paragraph D", "explanation": "Paragraph D says it is trivial to accumulate weak contacts while inner layers do not expand." },
+            { "number": 29, "prompt": "The writer treats the 150-relationship ceiling as", "options": [ { "id": "A", "text": "a flaw in modern technology" }, { "id": "B", "text": "evidence of a limited ancestral mind" }, { "id": "C", "text": "a goal everyone should reach" }, { "id": "D", "text": "a reason to avoid all groups" } ], "answer": "B", "evidence": "Paragraph C", "explanation": "Paragraph C frames the ceiling as a limitation of a mind evolved for smaller groups." },
+            { "number": 30, "prompt": "What is the writer's final attitude toward the mathematical view of friendship?", "options": [ { "id": "A", "text": "It fully explains every friendship" }, { "id": "B", "text": "It is useful but does not replace genuine affection" }, { "id": "C", "text": "It should replace emotional explanations" }, { "id": "D", "text": "It is entirely wrong" } ], "answer": "B", "evidence": "Paragraph F", "explanation": "Paragraph F says the numbers are a reminder, not a reduction of friendship to arithmetic." }
+          ]
+        }
+      ]
+    },
+    {
+      "sectionNumber": 4,
+      "type": "reading_passage",
+      "label": "Passage 4",
+      "title": "Urban mining: reclaiming the city's hidden materials",
+      "instructions": "You should spend about 20 minutes on Questions 31–40.",
+      "order": 3,
+      "passage": {
+        "title": "Urban mining: reclaiming the city's hidden materials",
+        "paragraphs": [
+          { "label": "A", "text": "Every building, phone and discarded laptop is a concentrated store of metals that someone once dug from the earth. The practice of recovering those materials from the built environment, rather than from a mine, is called urban mining. Its appeal is simple: the concentration of copper, gold and rare elements in electronic waste can exceed that in natural ore, and the material is already above ground, sorted by accident of ownership." },
+          { "label": "B", "text": "The logic is partly environmental. Conventional mining scars landscapes, consumes vast amounts of water, and produces waste that must be contained for generations. Recovering metal from old equipment avoids some of that harm, provided the recovery itself is clean. The catch is that crude recycling often trades one pollution problem for another when it is done without controls." },
+          { "label": "C", "text": "Economics decides what gets recovered. When the price of a metal is high, collection and refining become worthwhile; when it falls, the same material is dumped. This volatility means the industry lurches between boom and neglect, and valuable resources are lost in the quiet years. A steadier policy signal, such as a levy on landfilling, can smooth the cycle." },
+          { "label": "D", "text": "Design is the quieter lever. Equipment that is glued, sealed and mixed together is expensive to take apart, so its materials are rarely reclaimed. Products built to be opened, identified and separated flip the economics before a single item reaches a recycling plant. The cheapest gram of recovered metal is the one a manufacturer made easy to remove." },
+          { "label": "E", "text": "There are limits. Not every city has the infrastructure, and informal collectors who do much of the world's recycling often work in hazardous conditions for little pay. A just urban-mining system has to protect those workers and capture the material they already handle, rather than displace them. Efficiency and fairness pull in the same direction only when both are designed for." },
+          { "label": "F", "text": "Urban mining will not replace conventional extraction, and it should not be sold as a complete answer to resource demand. What it offers is a different habit: treating the city as a stockpile to be tended, where yesterday's device becomes tomorrow's supply. That shift in perspective may matter as much as any tonne of metal recovered." }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "MATCHING_HEADINGS",
+          "instructions": "Choose the correct heading for each paragraph from the list below. There are more headings than you need.",
+          "fromQuestion": 31,
+          "toQuestion": 35,
+          "configuration": { "optionNumbering": "roman" },
+          "sharedOptions": [
+            { "id": "i", "text": "A perspective shift as valuable as the material itself" },
+            { "id": "ii", "text": "Why recovered material is sometimes cleaner to obtain" },
+            { "id": "iii", "text": "The role of product design in recovering metals" },
+            { "id": "iv", "text": "Prices that decide what is worth saving" },
+            { "id": "v", "text": "What urban mining means and why it can pay" },
+            { "id": "vi", "text": "Fairness for the people who already do the work" },
+            { "id": "vii", "text": "The impossibility of recycling anything" }
+          ],
+          "questions": [
+            { "number": 31, "prompt": "Paragraph A", "answer": "v", "evidence": "Paragraph A", "explanation": "Paragraph A defines urban mining and explains why it can pay." },
+            { "number": 32, "prompt": "Paragraph B", "answer": "ii", "evidence": "Paragraph B", "explanation": "Paragraph B explains the environmental case for recovery over conventional mining." },
+            { "number": 33, "prompt": "Paragraph C", "answer": "iv", "evidence": "Paragraph C", "explanation": "Paragraph C describes how metal prices determine what gets recovered." },
+            { "number": 34, "prompt": "Paragraph D", "answer": "iii", "evidence": "Paragraph D", "explanation": "Paragraph D argues that design determines whether materials can be reclaimed." },
+            { "number": 35, "prompt": "Paragraph F", "answer": "i", "evidence": "Paragraph F", "explanation": "Paragraph F closes with a shift in perspective as important as the metal." }
+          ]
+        },
+        {
+          "questionType": "YES_NO_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the views of the writer? Write YES, NO or NOT GIVEN.",
+          "fromQuestion": 36,
+          "toQuestion": 38,
+          "questions": [
+            { "number": 36, "prompt": "The writer believes crude, uncontrolled recycling can create new pollution.", "answer": "YES", "evidence": "Paragraph B", "explanation": "Paragraph B says crude recycling can trade one pollution problem for another." },
+            { "number": 37, "prompt": "A steady levy on landfilling would remove all volatility in metal prices.", "answer": "NO", "evidence": "Paragraph C", "explanation": "Paragraph C says a levy can smooth the cycle, not remove all volatility." },
+            { "number": 38, "prompt": "The writer claims informal collectors are paid more than factory workers.", "answer": "NOT_GIVEN", "evidence": "Paragraph E", "explanation": "Paragraph E says informal collectors are often poorly paid; no comparison with factory workers is made." }
+          ]
+        },
+        {
+          "questionType": "SUMMARY_COMPLETION",
+          "instructions": "Complete the summary below. Choose ONE WORD ONLY from the passage for each answer.",
+          "fromQuestion": 39,
+          "toQuestion": 40,
+          "configuration": { "wordLimitMax": 1 },
+          "questions": [
+            { "number": 39, "prompt": "Equipment that is glued and sealed is costly to [[39]], so its metals are seldom reused.", "answer": "dismantle", "evidence": "Paragraph D", "explanation": "Paragraph D says glued, sealed equipment is expensive to take apart." },
+            { "number": 40, "prompt": "A fair system must protect workers and [[40]] the material they already handle.", "answer": "capture", "evidence": "Paragraph E", "explanation": "Paragraph E says a just system should capture the material informal collectors already handle." }
+          ]
+        }
+      ]
+    }
+  ]
+}

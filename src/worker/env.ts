@@ -24,6 +24,15 @@ export interface Env {
   SESSION_COOKIE_NAME: string;
   OPENAI_MODEL: string;
   OPENAI_TRANSCRIBE_MODEL: string;
+  /**
+   * Optional JSON array of AI providers (OpenAI, OpenAI-compatible or Ollama).
+   * When set it overrides the legacy OPENAI_API_KEY fallback. The admin UI
+   * (Settings → AI providers) is the preferred, database-backed way to manage
+   * providers; this variable is a convenient deploy-time fallback. The value
+   * contains secrets, so set it with `wrangler secret put AI_PROVIDERS`, never
+   * commit it.
+   */
+  AI_PROVIDERS?: string;
   MAX_UPLOAD_BYTES: string;
   LOGIN_RATE_LIMIT_PER_15MIN: string;
   AI_RATE_LIMIT_PER_HOUR: string;
@@ -39,6 +48,8 @@ export interface ImportQueueMessage {
   importId: string;
   stage: 'EXTRACT' | 'AI_STRUCTURE';
   requestedBy: string;
+  /** Optional AI provider selection for the AI_STRUCTURE stage. */
+  providerId?: string | null;
 }
 
 export interface AppVariables {

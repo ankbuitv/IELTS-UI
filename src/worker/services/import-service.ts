@@ -413,7 +413,7 @@ export async function runImportStage(env: Env, message: ImportQueueMessage): Pro
 
     if (stage === 'AI_STRUCTURE') {
       const platformSettings = await loadPlatformSettings(env);
-      const status = aiStatus(env);
+      const status = await aiStatus(env);
       if (!platformSettings.aiImportEnabled) {
         await env.DB.prepare(
           `UPDATE import_jobs SET status = 'SKIPPED', error = ?, log_json = ?, finished_at = ?, updated_at = ? WHERE id = ?`,
@@ -464,6 +464,7 @@ export async function runImportStage(env: Env, message: ImportQueueMessage): Pro
         sourceText: text,
         filename: row.filename,
         titleHint: row.title,
+        providerId: message.providerId ?? null,
       });
 
       const converted = convertAiPayload(structured.payload);
@@ -531,11 +532,16 @@ export async function runImportStage(env: Env, message: ImportQueueMessage): Pro
 }
 
 /** Runs extraction and AI structuring synchronously (used when no queue exists). */
-export async function runImportPipelineInline(env: Env, importId: string, requestedBy: string): Promise<void> {
+export async function runImportPipelineInline(
+  env: Env,
+  importId: string,
+  requestedBy: string,
+  providerId?: string | null,
+): Promise<void> {
   const errors: string[] = [];
   for (const stage of ['EXTRACT', 'AI_STRUCTURE'] as const) {
     try {
-      await runImportStage(env, { importId, stage, requestedBy });
+      await runImportStage(env, { importId, stage, requestedBy, providerId });
     } catch (error) {
       errors.push(`${stage}: ${(error as Error).message}`);
       break;

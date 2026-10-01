@@ -147,7 +147,7 @@ router.get('/', async (c) => {
 
   return c.json({
     imports: rows.results,
-    ai: aiStatus(c.env),
+    ai: await aiStatus(c.env),
   });
 });
 
@@ -253,7 +253,15 @@ router.post('/:id/process', async (c) => {
   const existing = await c.env.DB.prepare('SELECT status FROM imports WHERE id = ?').bind(importId).first<{ status: string }>();
   if (!existing) throw ApiError.notFound('Import not found.');
 
-  await runImportPipelineInline(c.env, importId, user.id);
+  let providerId: string | null | undefined;
+  try {
+    const body = (await c.req.json()) as { providerId?: string } | null;
+    if (body && typeof body.providerId === 'string' && body.providerId.trim()) providerId = body.providerId.trim();
+  } catch {
+    // No JSON body (empty POST) is allowed; the default provider is used.
+  }
+
+  await runImportPipelineInline(c.env, importId, user.id, providerId);
   const detail = await loadImportDetail(c.env, importId);
 
   await recordAudit(c.env, {

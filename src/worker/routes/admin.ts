@@ -27,7 +27,15 @@ import { schemaReport } from '../lib/ensure-schema';
 import { buildResultView } from '../services/attempt-service';
 import type { AttemptRow } from '../services/attempt-service';
 import { getAdminAnalytics } from '../services/analytics-service';
-import { aiStatus } from '../ai/openai';
+import { aiStatus, gradeWithAi } from '../ai/openai';
+import {
+  loadDbProviders,
+  mergeProviderSecrets,
+  normaliseProvider,
+  resolveAiProviders,
+  toMaskedProvider,
+  type AiProvider,
+} from '../ai/providers';
 import { validateConversionRanges } from '../../shared/scoring';
 import { QUESTION_TYPES } from '../../shared/question-types';
 import { TEST_TYPES, SKILLS, ROLES, CONTENT_ORIGINS } from '../../shared/types';
@@ -48,7 +56,7 @@ router.get('/dashboard', async (c) => {
   const analytics = await getAdminAnalytics(c.env);
   return c.json({
     analytics,
-    ai: aiStatus(c.env),
+    ai: await aiStatus(c.env),
     runtime: { environment: c.env.APP_ENV, baseUrl: c.env.APP_BASE_URL },
   });
 });
@@ -1159,7 +1167,7 @@ router.get('/settings', async (c) => {
   }>();
   const settings: Record<string, unknown> = {};
   for (const row of rows.results) settings[row.key] = safeJson(row.value_json);
-  return c.json({ settings, ai: aiStatus(c.env) });
+  return c.json({ settings, ai: await aiStatus(c.env) });
 });
 
 router.patch('/settings', async (c) => {
@@ -1186,6 +1194,108 @@ router.patch('/settings', async (c) => {
   });
 
   return c.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// AI providers (OpenAI / OpenAI-compatible / Ollama)
+// ---------------------------------------------------------------------------
+
+router.get('/ai/providers', async (c) => {
+  const providers = await resolveAiProviders(c.env);
+  const existing = (await loadDbProviders(c.env)) ?? [];
+  return c.json({
+    status: await aiStatus(c.env),
+    // When the DB has no providers the list falls back to environment-derived
+    // providers; show those so the administrator can adopt them into the DB.
+    providers: providers.map(toMaskedProvider),
+    storedInDb: existing.length > 0,
+  });
+});
+
+router.patch('/ai/providers', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      providers: z
+        .array(
+          z.object({
+            id: z.string().min(1).max(64),
+            name: z.string().min(1).max(120),
+            kind: z.enum(['openai', 'openai-compatible', 'ollama']),
+            baseUrl: z.string().max(500).nullable().optional(),
+            apiKey: z.string().max(2000).nullable().optional(),
+            model: z.string().min(1).max(200),
+            isDefault: z.boolean().optional(),
+          }),
+        )
+        .max(20),
+    }),
+  );
+
+  const normalised = body.providers.map(normaliseProvider);
+  if (normalised.some((provider) => provider === null)) {
+    throw ApiError.validation('One or more providers is invalid (every provider needs a model and a supported kind).');
+  }
+
+  // At most one default; if none flagged, make the first usable one default.
+  const usable = normalised.filter((provider): provider is AiProvider => provider !== null);
+  const hasDefault = usable.some((provider) => provider.isDefault);
+  if (!hasDefault && usable.length > 0) usable[0]!.isDefault = true;
+
+  // Preserve secrets the client did not resend (masked values are never posted).
+  const existing = (await loadDbProviders(c.env)) ?? [];
+  const merged = mergeProviderSecrets(usable, existing);
+
+  const timestamp = nowIso();
+  await c.env.DB.prepare(
+    `INSERT INTO platform_settings (key, value_json, updated_by, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+  )
+    .bind('ai_providers', JSON.stringify(merged), actor.id, timestamp)
+    .run();
+
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'AI_PROVIDERS_UPDATE',
+    entityType: 'platform_settings',
+    metadata: { count: merged.length },
+    ip: clientIp(c),
+  });
+
+  return c.json({ ok: true, providers: merged.map(toMaskedProvider) });
+});
+
+router.post('/ai/grade', async (c) => {
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      questionType: z.string().max(64).optional(),
+      questionPrompt: z.string().min(1).max(10_000),
+      passageText: z.string().max(60_000).nullable().optional(),
+      officialAnswer: z.string().max(10_000).nullable().optional(),
+      candidateAnswer: z.string().max(20_000),
+      options: z
+        .array(z.object({ id: z.string().max(40), text: z.string().max(2000) }))
+        .max(60)
+        .optional(),
+      providerId: z.string().max(64).optional(),
+    }),
+  );
+
+  const result = await gradeWithAi(c.env, {
+    questionType: body.questionType,
+    questionPrompt: body.questionPrompt,
+    passageText: body.passageText ?? null,
+    officialAnswer: body.officialAnswer ?? null,
+    candidateAnswer: body.candidateAnswer,
+    options: body.options,
+    providerId: body.providerId ?? null,
+  });
+
+  return c.json({ result });
 });
 
 // ---------------------------------------------------------------------------

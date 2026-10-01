@@ -108,8 +108,18 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
 - Imports without object storage: **paste reading JSON or text**, or upload a
   document whose text is extracted during the request and stored in D1. Then
   validate → review → apply to a draft → publish. AI structuring is optional: if
-  no API key is present, extraction and manual editing still work, and AI never
-  publishes by itself.
+  no provider is configured, extraction and manual editing still work, and AI
+  never publishes by itself.
+- **Multiple AI providers.** Any number of providers can be configured —
+  OpenAI, any OpenAI-compatible endpoint (Chutes, Groq, OpenRouter, a
+  self-hosted vLLM/SGLang server) or a local/remote Ollama server. Configure them
+  in **Administration → Settings → AI providers** (stored server-side in
+  `platform_settings`) or with the `AI_PROVIDERS` environment variable. API keys
+  are never returned to the browser. See [AI providers](#ai-providers).
+- **AI grading assistant.** Besides structuring imports, an LLM can give a second
+  opinion on a candidate answer (open-ended reading answers and writing). The
+  platform's published scores stay deterministic; the assistant is an advisory
+  tool in the admin UI, not auto-scoring.
 - Structured reading JSON is validated before it can be published: answer fields
   leaked into student-visible content, duplicate/missing question numbers,
   malformed ranges, answer keys pointing at options that do not exist, invalid
@@ -160,7 +170,8 @@ npm install
 # 1. Local secrets (git-ignored)
 cp .env.example .dev.vars 2>/dev/null || true
 #   SESSION_SECRET=<random string>   # required
-#   OPENAI_API_KEY=<optional>        # enables AI structuring
+#   AI_PROVIDERS=<optional JSON array of providers>   # enables AI (see below)
+#   OPENAI_API_KEY=<optional>        # legacy single OpenAI key fallback
 
 # 2. Build the SPA and start the Worker (serves API + SPA on :8787)
 npm run dev
@@ -289,9 +300,53 @@ the build step was skipped.
 npx wrangler d1 create ielts-platform-db
 npx wrangler d1 migrations apply DB --remote
 npx wrangler secret put SESSION_SECRET      # required
-npx wrangler secret put OPENAI_API_KEY      # optional: enables AI structuring
+npx wrangler secret put AI_PROVIDERS        # optional: JSON array of providers (recommended)
+npx wrangler secret put OPENAI_API_KEY      # optional: legacy single OpenAI key fallback
 npm run deploy
 ```
+
+---
+
+## AI providers
+
+The AI import pipeline and the AI grading assistant are provider-agnostic. A
+provider is one of:
+
+| `kind` | Use for | Default base URL |
+| --- | --- | --- |
+| `openai` | OpenAI's hosted API | `https://api.openai.com/v1` |
+| `openai-compatible` | Chutes, Groq, OpenRouter, self-hosted vLLM/SGLang | _(you supply it)_ |
+| `ollama` | Local/remote Ollama (native `/api/chat`) | `http://localhost:11434` |
+
+**Two ways to configure providers:**
+
+1. **In the app** — *Administration → Settings → AI providers*. Add as many as you
+   like, mark one as default, and edit/remove them. Keys are masked in the UI and
+   never leave the server. Saving stores them in `platform_settings` and overrides
+   the environment fallback.
+2. **Via environment / secrets** — set `AI_PROVIDERS` to a JSON array. This is the
+   fallback used when the database has no providers configured. For example, two
+   Chutes (cloud Ollama) models:
+
+   ```json
+   [
+     {"id":"chutes-gpt-oss","name":"Chutes gpt-oss:120b","kind":"openai-compatible","baseUrl":"https://llm.chutes.ai/v1","apiKey":"<your-key>","model":"gpt-oss:120b","isDefault":true},
+     {"id":"chutes-gemma4","name":"Chutes gemma4:31b","kind":"openai-compatible","baseUrl":"https://llm.chutes.ai/v1","apiKey":"<your-key>","model":"gemma4:31b"}
+   ]
+   ```
+
+   A legacy `OPENAI_API_KEY` (plus `OPENAI_MODEL`) still works as a single
+   OpenAI provider.
+
+When several providers are configured, the import screen lets you pick which one
+structures a given document; the grading assistant lets you pick which one grades
+an answer. aiStatus (used by `/api/auth/status` and the admin dashboard) reports
+`available` only when at least one usable provider exists.
+
+> **Note on grading:** the deterministic server-side scoring of reading/listening
+> remains the source of truth for published scores. The AI grading assistant is an
+> advisory tool that returns `correct` / `score` / `confidence` / `feedback` for a
+> single answer; it is never used to auto-publish a band.
 
 `APP_BASE_URL` in `wrangler.jsonc` must match the deployed origin: it is used
 for the same-origin check, absolute links and cookie attributes.

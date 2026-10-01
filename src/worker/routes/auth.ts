@@ -20,6 +20,7 @@ import { recordAudit } from '../lib/audit';
 import { currentUser } from '../middleware/auth';
 import { parseBody } from '../lib/validate';
 import { loadPlatformSettings } from '../lib/settings';
+import { aiStatus } from '../ai/openai';
 import { resolveSession } from '../services/auth-service';
 import { getSessionToken } from '../lib/http';
 
@@ -46,9 +47,11 @@ const registerSchema = z.object({
 router.get('/status', async (c) => {
   const adminExists = await hasAnyUserWithRole(c.env, 'ADMIN');
   const settings = await loadPlatformSettings(c.env);
+  const ai = await aiStatus(c.env);
   return c.json({
     adminConfigured: adminExists,
-    aiImportAvailable: Boolean(c.env.OPENAI_API_KEY),
+    aiImportAvailable: ai.available,
+    aiProviderCount: ai.providerCount ?? 0,
     environment: c.env.APP_ENV,
     registrationEnabled: settings.registrationEnabled,
     integrityNotice: settings.integrityNotice,
