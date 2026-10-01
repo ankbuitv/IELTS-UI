@@ -102,9 +102,12 @@ export interface AttemptResultPayload {
 export function ResultSummary({
   result,
   marking,
+  onRefresh,
 }: {
   result: AttemptResultPayload;
   marking?: { apiBase: '/api/admin' | '/api/teacher'; onSaved: () => Promise<void> };
+  /** Re-fetches this result view; called after an AI estimate is stored. */
+  onRefresh?: () => Promise<void>;
 }) {
   const accuracy = formatPercent(
     result.rawScore !== null && result.totalQuestions
@@ -167,12 +170,20 @@ export function ResultSummary({
                     </details>
                   ) : null}
                   {writing.score ? (
-                    <Notice tone="success" title={`Score: band ${formatBand(writing.score.band)} (${writing.score.source.toLowerCase()})`}>
+                    <Notice
+                      tone={writing.score.source === 'AI' ? 'info' : 'success'}
+                      title={`${writing.score.source === 'AI' ? 'AI estimate' : 'Score'}: band ${formatBand(writing.score.band)} (${writing.score.source.toLowerCase()})`}
+                    >
                       {writing.score.feedback || 'No written feedback was added.'}
                     </Notice>
                   ) : (
-                    <p className="tiny muted">Awaiting marking by a teacher or administrator. Writing is never scored automatically.</p>
+                    <p className="tiny muted">
+                      {marking
+                        ? 'Awaiting a band from you. Writing is never auto-scored for a class result.'
+                        : 'Writing is reviewed by a teacher. You can ask the AI for an immediate estimate below — a teacher’s band always replaces it.'}
+                    </p>
                   )}
+                  {!marking ? <AiWritingButton attemptId={result.attemptId} onMarked={onRefresh ?? null} /> : null}
                   {marking ? (
                     <WritingMarkForm
                       apiBase={marking.apiBase}
@@ -336,6 +347,50 @@ function criteriaForTask(taskLabel: string | undefined): typeof WRITING_CRITERIA
 
 function roundHalf(value: number): number {
   return Math.round(value * 2) / 2;
+}
+
+/**
+ * "Mark my writing with AI" for the candidate's own submitted attempt.
+ *
+ * It is deliberately only an estimate: the band is stored as `scoring_source =
+ * 'AI'`, a teacher's score replaces it, and the button disappears once a human
+ * band exists. Nothing is marked while the attempt is still running.
+ */
+function AiWritingButton({ attemptId, onMarked }: { attemptId: string; onMarked: (() => Promise<void>) | null }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+
+  return (
+    <div className="row" style={{ marginTop: 10, gap: 8 }}>
+      <Button
+        size="sm"
+        variant={done ? 'ghost' : 'secondary'}
+        loading={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            const result = await api.post<{ marked: number; failures: Array<{ message: string }> }>(
+              `/api/attempts/${attemptId}/ai-mark-writing`,
+              {},
+            );
+            setDone(true);
+            const firstFailure = result.failures[0];
+            if (firstFailure) toast.push(firstFailure.message, 'warning');
+            else toast.push('AI đã chấm bài Writing của bạn (ước lượng).', 'success');
+            if (onMarked) await onMarked();
+          } catch (error) {
+            toast.push(describeError(error), 'error');
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        ✨ {done ? 'Chấm lại bằng AI' : 'Chấm bằng AI (ước lượng)'}
+      </Button>
+      <span className="tiny muted">Ước lượng để học tập, không phải điểm thi chính thức.</span>
+    </div>
+  );
 }
 
 export function WritingMarkForm({

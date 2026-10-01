@@ -357,7 +357,7 @@ export function AttemptHistoryPage() {
 // ---------------------------------------------------------------------------
 export function AttemptResultPage() {
   const { attemptId = '' } = useParams();
-  const { data, loading, error } = useAsync<AttemptResultPayload>(
+  const { data, loading, error, reload } = useAsync<AttemptResultPayload>(
     () => api.get(`/api/attempts/${attemptId}/result`),
     [attemptId],
   );
@@ -380,7 +380,7 @@ export function AttemptResultPage() {
           Back to history
         </Link>
       </div>
-      <ResultSummary result={data} />
+      <ResultSummary result={data} onRefresh={reload} />
     </div>
   );
 }

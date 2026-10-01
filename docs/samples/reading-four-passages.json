@@ -1,0 +1,751 @@
+{
+  "testTitle": "Four Reading Passages — Practice Set (original)",
+  "testType": "READING",
+  "answerKeyConfidence": "PROVIDED",
+  "warnings": [
+    "Original practice material written for this platform. It is not official IELTS material and is not affiliated with IELTS, the British Council, IDP or Cambridge.",
+    "All 40 answers are provided with marking evidence quoted from the passage and a short explanation."
+  ],
+  "passages": [
+    {
+      "title": "Why Cities Are Rediscovering the Bicycle",
+      "paragraphs": [
+        {
+          "label": "A",
+          "text": "For most of the twentieth century the bicycle was treated as a stage that transport would grow out of. In many cities it had been a genuinely popular way of getting to work until the 1950s, when rising incomes and cheap manufacturing made the private car the default choice. Streets were widened, tram lines were removed and new suburbs were designed around parking rather than around people. Cycling did not disappear, but it retreated to a recreational activity practised at weekends rather than a serious option for the daily journey."
+        },
+        {
+          "label": "B",
+          "text": "The recent return of cycling has been less about persuading individuals than about reallocating space. Studies of cities that have succeeded describe the same pattern: isolated stretches of cycle lane do very little, because a route is only useful if it connects a person's home to the places they actually need to reach. When protected lanes are joined into a network, however, the number of people willing to ride rises sharply, and it rises most among groups who would never describe themselves as enthusiasts."
+        },
+        {
+          "label": "C",
+          "text": "There are economic arguments on both sides. A bicycle occupies a fraction of the road and parking space that a car requires, it costs far less to buy and maintain, and it imposes little damage on the road surface itself. Delivery firms in several dense districts have found that cargo bicycles complete short urban journeys more predictably than vans, partly because they can use routes and waiting areas that vehicles cannot. Yet the benefits depend on context: in low-density areas, or in places where a rider must share a narrow road with fast traffic, the bicycle is a far less practical choice."
+        },
+        {
+          "label": "D",
+          "text": "Health is the argument most often made in public debate, and it is usually presented too simply. Regular riding does provide the kind of moderate activity that public health guidance recommends, and a shift from cars to bicycles reduces both congestion and local air pollution. But riders in heavy traffic may breathe more of certain pollutants than drivers do, because they are closer to exhaust outlets and they are exercising harder. Electric bicycles change the calculation again, since they allow longer journeys and steeper routes without demanding a level of fitness that most beginners do not yet have."
+        },
+        {
+          "label": "E",
+          "text": "Planning decisions are ultimately political. Removing a lane of traffic or a row of parking spaces creates visible losers, and their objections are usually louder than the diffuse benefits enjoyed by people who have not yet started riding. Cities that have made progress tend to act incrementally, trial a scheme, publish the data, and then decide whether to keep it. Some planners describe the bicycle as a diagnostic tool: a street that is pleasant for a child to cycle along is very likely to be pleasant for everyone else as well."
+        }
+      ]
+    },
+    {
+      "title": "What Old Maps Can Tell Us About Flooding",
+      "paragraphs": [
+        {
+          "label": "A",
+          "text": "Flood risk is usually estimated from instrumental records: rainfall gauges, river-level sensors and satellite imagery. These records are precise, but they are also short. In many regions reliable measurement begins only in the middle of the twentieth century, which means that the rarest and most damaging events may fall outside the period that engineers are able to observe. Historians and hydrologists have therefore begun to treat old maps as a form of evidence in their own right, not as decoration but as a partial record of where water used to go."
+        },
+        {
+          "label": "B",
+          "text": "The surviving material is more varied than outsiders expect. Estate maps recorded field boundaries for landlords; tithe maps listed who owned what and for how much; military surveys concentrated on roads, bridges and crossings. Each was made for a different purpose, and each therefore emphasises different features and leaves others unmarked. A stream that mattered to a miller may be carefully drawn, while a seasonal channel that flooded a few fields every decade could be omitted entirely."
+        },
+        {
+          "label": "C",
+          "text": "Because no single source is complete, researchers assemble several and look for agreement between them. A bridge described in a newspaper report, a boundary drawn on a map and a repair bill recorded by a parish can be combined into a single account of where a river ran in a particular year. The method is closer to detective work than to measurement. Where the sources disagree, the disagreement itself is informative, because it usually shows that a channel was moved, widened or culverted during the period in question."
+        },
+        {
+          "label": "D",
+          "text": "The value of this approach is easiest to see in a worked example. In one market town, twentieth-century maps showed no watercourse at all beneath a row of shops built in the 1970s. Earlier maps told a different story: a stream had crossed the site, and a tithe map showed it feeding a mill pond immediately upstream. When the shops flooded, the modern drainage survey was accurate about the pipes that had been installed and silent about the landscape that had been buried beneath them."
+        },
+        {
+          "label": "E",
+          "text": "None of this replaces a modern survey, and the limitations are real. Map makers simplified, copied each other's errors and sometimes drew what they expected to see rather than what was there. Dating is often approximate, and a document that survives may be the exception rather than the rule. Used carefully, however, historical evidence can widen the window through which planners view risk, and it can warn them that a quiet site has a noisy past."
+        }
+      ]
+    },
+    {
+      "title": "Learning a Language After Childhood",
+      "paragraphs": [
+        {
+          "label": "A",
+          "text": "The idea that languages can only be learned young is one of the most durable beliefs about education, and it rests on a genuine observation. Children who move to a new country before adolescence usually end up sounding like native speakers of the local language, while adults who make the same move rarely do. From this, a much broader claim is often drawn: that the adult brain has lost the flexibility required for language learning, and that effort after a certain age is largely wasted."
+        },
+        {
+          "label": "B",
+          "text": "Research tells a more complicated story. In the early months of study, adults generally make faster progress than children, especially in vocabulary and in the explicit rules of grammar, because they can use strategies that children lack. Over many years, however, children who are surrounded by the language tend to surpass them, particularly in pronunciation and in the unconscious fluency that comes from thousands of hours of use. The two groups are not racing over the same distance on the same schedule."
+        },
+        {
+          "label": "C",
+          "text": "What separates successful adult learners from unsuccessful ones is rarely talent. It is the design of their practice. Retrieval, in which a learner tries to recall a word or a structure before checking it, produces stronger memories than reading the same material again. Spacing that retrieval over days and weeks works better than concentrating it into a single evening. Input that is only slightly beyond the learner's current level provides the material from which patterns can be inferred, and speaking from the first week prevents the gap between understanding and producing from widening."
+        },
+        {
+          "label": "D",
+          "text": "Adults also bring advantages that are easy to overlook. They can plan, monitor their own errors and ask for explanations, and they usually have clear reasons for learning, whether those are professional, academic or personal. A learner who needs the language for a specific purpose can concentrate on the vocabulary that purpose requires. Time and money, however, are not distributed equally, and a person working two jobs has less opportunity to practise than a student with a funded year abroad."
+        },
+        {
+          "label": "E",
+          "text": "The practical conclusion is neither defeatist nor sentimental. Adults should expect to work deliberately rather than to absorb a language by accident, and they should judge progress by what they can do rather than by how native-like they sound. Accent is the least important part of communication, and it is also the part least likely to change. Fluency, range and accuracy all respond to sustained practice at any age, and the learners who improve most are simply the ones who keep using the language when it is difficult."
+        }
+      ]
+    },
+    {
+      "title": "The Economics of Repair",
+      "paragraphs": [
+        {
+          "label": "A",
+          "text": "For much of the twentieth century, repairing a possession was ordinary behaviour. Shoes were resoled, radios were taken to a workshop and washing machines were expected to last for decades. Manufacturing then became cheaper, products became more complex and labour became relatively more expensive, so that the cost of a repair could approach the price of a new item. Design accelerated the shift: components were sealed inside casings, adhesives replaced screws and spare parts were sometimes unavailable to anyone outside the manufacturer's own service network."
+        },
+        {
+          "label": "B",
+          "text": "The reaction has been political as well as practical. Campaigners for a right to repair argue that owners should be able to obtain manuals, parts and diagnostic tools on fair terms, and several legislatures have begun to require exactly that for particular categories of goods. Manufacturers raise concerns that are not frivolous: a badly repaired appliance can be dangerous, warranty terms are difficult to police across a border, and designs may contain trade secrets. The argument is therefore rarely about whether repair should exist, but about who controls the information that makes it possible."
+        },
+        {
+          "label": "C",
+          "text": "Alongside the legislation, a quieter movement has grown in community halls and libraries. At a repair café, volunteers with practical skills sit down with people who have brought broken objects, and the two work on the problem together rather than handing it over. The immediate environmental effect of a few dozen repaired toasters is small. The educational effect is not: visitors learn that a device is a set of understandable parts rather than a sealed mystery, and some of them go home and attempt the next repair alone."
+        },
+        {
+          "label": "D",
+          "text": "Businesses have noticed that durability can be sold. Refurbished electronics now carry warranties and are bought by customers who would once have dismissed second-hand goods. Some manufacturers lease equipment instead of selling it, which gives them a direct interest in designing products that survive repeated use. Modular designs, in which a worn component can be replaced without discarding the whole unit, are presented as a premium feature rather than an inconvenience, and independent studies of some product categories suggest that this approach can reduce total costs over the life of the item."
+        },
+        {
+          "label": "E",
+          "text": "Consumers, however, do not behave as a single rational actor. Convenience matters, particularly for people with little spare time, and a fear of voiding a warranty discourages many from opening a product at all. Price signals are distorted when the environmental cost of disposal is not included in what a buyer pays. Standards bodies and public procurement can shift expectations more reliably than exhortation: when a large purchaser demands repairable equipment, suppliers adjust, and the resulting designs eventually reach everyone else."
+        }
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "skill": "READING",
+      "title": "Reading Passage 1",
+      "instructions": "Read Reading Passage 1 and answer questions 1–10.",
+      "passageIndex": 0,
+      "audioProvided": false,
+      "groups": [
+        {
+          "questionType": "TRUE_FALSE_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the information given in Reading Passage 1? Write TRUE if the statement agrees with the information, FALSE if it contradicts it, or NOT GIVEN if there is no information on this.",
+          "questions": [
+            {
+              "number": 1,
+              "prompt": "In many cities the bicycle was a popular way of travelling to work until the 1950s.",
+              "answer": "TRUE",
+              "evidence": "Paragraph A: “In many cities it had been a genuinely popular way of getting to work until the 1950s”",
+              "explanation": "Paragraph A states that the bicycle was a genuinely popular way of getting to work until the 1950s, after which the car became the default choice. The statement therefore agrees with the passage."
+            },
+            {
+              "number": 2,
+              "prompt": "Building a few separate cycle lanes is enough to make most residents cycle regularly.",
+              "answer": "FALSE",
+              "evidence": "Paragraph B: “isolated stretches of cycle lane do very little, because a route is only useful if it connects a person's home to the places they actually need to reach”",
+              "explanation": "The passage says isolated stretches of cycle lane do very little and that numbers rise sharply only when protected lanes are joined into a network. The statement contradicts this."
+            },
+            {
+              "number": 3,
+              "prompt": "Cargo bicycles cost less to buy than delivery vans in every city.",
+              "answer": "NOT GIVEN",
+              "evidence": "Paragraph C: “cargo bicycles complete short urban journeys more predictably than vans”",
+              "explanation": "The passage compares predictability on short journeys, not purchase price, and it makes no claim about every city. The information is therefore absent."
+            },
+            {
+              "number": 4,
+              "prompt": "Cyclists in heavy traffic may breathe in more of certain pollutants than drivers do.",
+              "answer": "TRUE",
+              "evidence": "Paragraph D: “they are closer to exhaust outlets and they are exercising harder”",
+              "explanation": "Paragraph D says riders in heavy traffic may breathe more of certain pollutants because they are closer to exhaust outlets and exercising harder. This agrees with the statement."
+            }
+          ]
+        },
+        {
+          "questionType": "MCQ_SINGLE",
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "questions": [
+            {
+              "number": 5,
+              "prompt": "According to paragraph B, what makes the greatest difference to how many people cycle?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "Holding weekend cycling events in city centres."
+                },
+                {
+                  "id": "B",
+                  "text": "Joining protected lanes into a connected network."
+                },
+                {
+                  "id": "C",
+                  "text": "Reducing the purchase price of bicycles."
+                },
+                {
+                  "id": "D",
+                  "text": "Advertising the health benefits of riding."
+                }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph B: “When protected lanes are joined into a network, however, the number of people willing to ride rises sharply”",
+              "explanation": "Paragraph B contrasts isolated lanes with a joined network and states that willingness to ride rises sharply with the network, including among non-enthusiasts."
+            },
+            {
+              "number": 6,
+              "prompt": "What does the writer say about electric bicycles?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "They remove the health benefits of cycling altogether."
+                },
+                {
+                  "id": "B",
+                  "text": "They make longer and steeper journeys possible for inexperienced riders."
+                },
+                {
+                  "id": "C",
+                  "text": "They are prohibited in several dense districts."
+                },
+                {
+                  "id": "D",
+                  "text": "They damage road surfaces more than ordinary bicycles."
+                }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph D: “they allow longer journeys and steeper routes without demanding a level of fitness that most beginners do not yet have”",
+              "explanation": "The final sentence of paragraph D explains that electric bicycles extend the range and the terrain available to riders who are not yet fit, which is option B."
+            },
+            {
+              "number": 7,
+              "prompt": "Why does the writer describe the bicycle as a diagnostic tool?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "It reveals how well a street works for everybody."
+                },
+                {
+                  "id": "B",
+                  "text": "It measures the level of air pollution on a route."
+                },
+                {
+                  "id": "C",
+                  "text": "It shows planners which roads carry the most cars."
+                },
+                {
+                  "id": "D",
+                  "text": "It predicts how many residents will buy bicycles."
+                }
+              ],
+              "answer": "A",
+              "evidence": "Paragraph E: “a street that is pleasant for a child to cycle along is very likely to be pleasant for everyone else as well”",
+              "explanation": "The image of a child cycling safely is used to argue that a street which works for the least confident user works for the whole population — a diagnostic signal."
+            }
+          ]
+        },
+        {
+          "questionType": "SENTENCE_COMPLETION",
+          "instructions": "Complete the sentences below. Choose ONE WORD ONLY from the passage for each answer.",
+          "wordLimitMax": 1,
+          "questions": [
+            {
+              "number": 8,
+              "prompt": "Rising incomes and cheap manufacturing made the private car the ________ choice in many cities.",
+              "answer": "default",
+              "evidence": "Paragraph A: “made the private car the default choice”",
+              "explanation": "Paragraph A says that rising incomes and cheap manufacturing made the car the default choice, so the missing word is “default”."
+            },
+            {
+              "number": 9,
+              "prompt": "Cities that make progress often trial a scheme and publish the ________ before deciding whether to keep it.",
+              "answer": "data",
+              "evidence": "Paragraph E: “trial a scheme, publish the data, and then decide whether to keep it”",
+              "explanation": "The passage describes an incremental cycle of trial, publication of data and decision, giving “data” as the answer."
+            },
+            {
+              "number": 10,
+              "prompt": "Regular riding supplies the moderate ________ that public health guidance recommends.",
+              "answer": "activity",
+              "evidence": "Paragraph D: “provide the kind of moderate activity that public health guidance recommends”",
+              "explanation": "Public health guidance recommends moderate activity, and paragraph D says regular riding provides it."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "skill": "READING",
+      "title": "Reading Passage 2",
+      "instructions": "Read Reading Passage 2 and answer questions 11–20.",
+      "passageIndex": 1,
+      "audioProvided": false,
+      "groups": [
+        {
+          "questionType": "MATCHING_INFORMATION",
+          "instructions": "Which paragraph contains the following information? Write the correct letter, A–E, in boxes 11–14 on your answer sheet. You may use any letter more than once.",
+          "sharedOptions": [
+            {
+              "id": "A",
+              "text": "Paragraph A"
+            },
+            {
+              "id": "B",
+              "text": "Paragraph B"
+            },
+            {
+              "id": "C",
+              "text": "Paragraph C"
+            },
+            {
+              "id": "D",
+              "text": "Paragraph D"
+            },
+            {
+              "id": "E",
+              "text": "Paragraph E"
+            }
+          ],
+          "questions": [
+            {
+              "number": 11,
+              "prompt": "an explanation of why documents made for different purposes record different features",
+              "answer": "B",
+              "evidence": "Paragraph B: “Each was made for a different purpose, and each therefore emphasises different features and leaves others unmarked”",
+              "explanation": "Paragraph B explains that estate, tithe and military maps each served a different purpose and so emphasised different features, which is exactly this information."
+            },
+            {
+              "number": 12,
+              "prompt": "an example of a modern survey that was accurate but incomplete",
+              "answer": "D",
+              "evidence": "Paragraph D: “the modern drainage survey was accurate about the pipes that had been installed and silent about the landscape that had been buried beneath them”",
+              "explanation": "The worked example in paragraph D contrasts a precise modern drainage survey with the landscape it failed to record."
+            },
+            {
+              "number": 13,
+              "prompt": "a caution that historical sources may reproduce one another's errors",
+              "answer": "E",
+              "evidence": "Paragraph E: “copied each other's errors and sometimes drew what they expected to see rather than what was there”",
+              "explanation": "Paragraph E lists the limitations of old maps, including copying errors and wishful drawing."
+            },
+            {
+              "number": 14,
+              "prompt": "a reason why instrumental measurements may leave out the most serious events",
+              "answer": "A",
+              "evidence": "Paragraph A: “the rarest and most damaging events may fall outside the period that engineers are able to observe”",
+              "explanation": "Paragraph A explains that records are short, so the rarest and most damaging floods may lie outside the observed period."
+            }
+          ]
+        },
+        {
+          "questionType": "MATCHING_HEADINGS",
+          "instructions": "Choose the correct heading for paragraphs A, B, C and E from the list of headings below. Write the correct number, i–vi, in boxes 15–18 on your answer sheet. There are more headings than you need.",
+          "optionNumbering": "roman",
+          "sharedOptions": [
+            {
+              "id": "i",
+              "text": "Building one account out of several sources"
+            },
+            {
+              "id": "ii",
+              "text": "Why written records are not always enough"
+            },
+            {
+              "id": "iii",
+              "text": "The cost of modern surveying equipment"
+            },
+            {
+              "id": "iv",
+              "text": "The limits of the evidence and how to work within them"
+            },
+            {
+              "id": "v",
+              "text": "Documents shaped by the purposes they served"
+            },
+            {
+              "id": "vi",
+              "text": "How towns chose the sites of their mills"
+            }
+          ],
+          "questions": [
+            {
+              "number": 15,
+              "prompt": "Paragraph A",
+              "answer": "ii",
+              "evidence": "Paragraph A: “These records are precise, but they are also short”",
+              "explanation": "Paragraph A is about the insufficiency of instrumental records for rare events, which matches heading ii."
+            },
+            {
+              "number": 16,
+              "prompt": "Paragraph B",
+              "answer": "v",
+              "evidence": "Paragraph B: “Each was made for a different purpose, and each therefore emphasises different features”",
+              "explanation": "Paragraph B surveys the different kinds of map and shows how their purpose shaped what they recorded, matching heading v."
+            },
+            {
+              "number": 17,
+              "prompt": "Paragraph C",
+              "answer": "i",
+              "evidence": "Paragraph C: “Because no single source is complete, researchers assemble several and look for agreement between them”",
+              "explanation": "Paragraph C describes combining maps, newspapers and parish records into a single account, matching heading i."
+            },
+            {
+              "number": 18,
+              "prompt": "Paragraph E",
+              "answer": "iv",
+              "evidence": "Paragraph E: “None of this replaces a modern survey, and the limitations are real”",
+              "explanation": "Paragraph E sets out the limitations of the evidence and the care needed, matching heading iv."
+            }
+          ]
+        },
+        {
+          "questionType": "MCQ_SINGLE",
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "questions": [
+            {
+              "number": 19,
+              "prompt": "According to paragraph C, why can a disagreement between sources be useful?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "It proves that one of the documents is a forgery."
+                },
+                {
+                  "id": "B",
+                  "text": "It shows that a watercourse was altered during the period."
+                },
+                {
+                  "id": "C",
+                  "text": "It identifies which archive holds the oldest map."
+                },
+                {
+                  "id": "D",
+                  "text": "It explains why engineers stopped taking measurements."
+                }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph C: “it usually shows that a channel was moved, widened or culverted during the period in question”",
+              "explanation": "Paragraph C states that where sources disagree about a river, the disagreement usually reveals that the channel itself was changed."
+            },
+            {
+              "number": 20,
+              "prompt": "What is the writer's attitude towards using old maps to assess flood risk?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "They should replace modern surveys where records are short."
+                },
+                {
+                  "id": "B",
+                  "text": "They are valuable when their limitations are respected."
+                },
+                {
+                  "id": "C",
+                  "text": "They are interesting, but of no practical use to planners."
+                },
+                {
+                  "id": "D",
+                  "text": "They are reliable only for the last fifty years."
+                }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph E: “Used carefully, however, historical evidence can widen the window through which planners view risk”",
+              "explanation": "The concession that nothing replaces a modern survey, followed by the value of historical evidence used carefully, supports option B."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "skill": "READING",
+      "title": "Reading Passage 3",
+      "instructions": "Read Reading Passage 3 and answer questions 21–30.",
+      "passageIndex": 2,
+      "audioProvided": false,
+      "groups": [
+        {
+          "questionType": "YES_NO_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the claims of the writer in Reading Passage 3? Write YES if the statement agrees with the claims of the writer, NO if it contradicts them, or NOT GIVEN if it is impossible to say what the writer thinks about this.",
+          "questions": [
+            {
+              "number": 21,
+              "prompt": "The writer considers the belief that languages can only be learned young to be based on a real observation.",
+              "answer": "YES",
+              "evidence": "Paragraph A: “it rests on a genuine observation”",
+              "explanation": "Paragraph A concedes that the belief “rests on a genuine observation” even though the broader claim drawn from it is questioned."
+            },
+            {
+              "number": 22,
+              "prompt": "Adults usually make faster progress than children in the first months of study.",
+              "answer": "YES",
+              "evidence": "Paragraph B: “In the early months of study, adults generally make faster progress than children”",
+              "explanation": "Paragraph B states directly that adults generally progress faster at the beginning, particularly in vocabulary and explicit grammar."
+            },
+            {
+              "number": 23,
+              "prompt": "The writer believes that sounding like a native speaker should be the main aim of adult learners.",
+              "answer": "NO",
+              "evidence": "Paragraph E: “Accent is the least important part of communication”",
+              "explanation": "The writer argues that accent is the least important part of communication and the part least likely to change, so this is not the main aim."
+            },
+            {
+              "number": 24,
+              "prompt": "Learners with more money always improve faster than learners with less.",
+              "answer": "NOT GIVEN",
+              "evidence": "Paragraph D: “Time and money, however, are not distributed equally”",
+              "explanation": "The passage notes that time and money are unequally distributed, but it never claims that money determines progress, still less that it always does."
+            }
+          ]
+        },
+        {
+          "questionType": "SENTENCE_COMPLETION",
+          "instructions": "Complete the sentences below. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+          "wordLimitMax": 2,
+          "questions": [
+            {
+              "number": 25,
+              "prompt": "Trying to recall a word before checking it is an example of ________.",
+              "answer": "retrieval",
+              "evidence": "Paragraph C: “Retrieval, in which a learner tries to recall a word or a structure before checking it, produces stronger memories”",
+              "explanation": "The passage names this technique “retrieval” and explains that it produces stronger memories than re-reading."
+            },
+            {
+              "number": 26,
+              "prompt": "Spacing practice over days and weeks works better than concentrating it into a single ________.",
+              "answer": "evening",
+              "evidence": "Paragraph C: “Spacing that retrieval over days and weeks works better than concentrating it into a single evening”",
+              "explanation": "The contrast is between spaced retrieval and a single concentrated evening of study."
+            },
+            {
+              "number": 27,
+              "prompt": "Useful input should be only slightly beyond the learner's current ________.",
+              "answer": "level",
+              "evidence": "Paragraph C: “Input that is only slightly beyond the learner's current level provides the material from which patterns can be inferred”",
+              "explanation": "The passage describes input slightly beyond the current level as the material from which learners infer patterns."
+            }
+          ]
+        },
+        {
+          "questionType": "MCQ_SINGLE",
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "questions": [
+            {
+              "number": 28,
+              "prompt": "According to paragraph D, what advantage do adult learners have?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "They absorb a language without conscious effort."
+                },
+                {
+                  "id": "B",
+                  "text": "They can plan, monitor their errors and request explanations."
+                },
+                {
+                  "id": "C",
+                  "text": "They hear unfamiliar sounds more accurately than children."
+                },
+                {
+                  "id": "D",
+                  "text": "They have more free time than younger learners."
+                }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph D: “They can plan, monitor their own errors and ask for explanations”",
+              "explanation": "Paragraph D lists planning, self-monitoring and asking for explanations as adult advantages; it explicitly notes that time is not equally available."
+            },
+            {
+              "number": 29,
+              "prompt": "What does the writer say about fluency and accuracy?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "They stop improving after adolescence."
+                },
+                {
+                  "id": "B",
+                  "text": "They improve with sustained practice at any age."
+                },
+                {
+                  "id": "C",
+                  "text": "They matter less than sounding like a native speaker."
+                },
+                {
+                  "id": "D",
+                  "text": "They depend mainly on natural talent."
+                }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph E: “Fluency, range and accuracy all respond to sustained practice at any age”",
+              "explanation": "The penultimate sentence of the passage states that these qualities respond to sustained practice at any age."
+            },
+            {
+              "number": 30,
+              "prompt": "Which statement best summarises the writer's conclusion?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "Adults should wait until they have time to study abroad."
+                },
+                {
+                  "id": "B",
+                  "text": "Adults should work deliberately and judge progress by what they can do."
+                },
+                {
+                  "id": "C",
+                  "text": "Adults should concentrate on pronunciation above all else."
+                },
+                {
+                  "id": "D",
+                  "text": "Adults should avoid comparing themselves with children."
+                }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph E: “judge progress by what they can do rather than by how native-like they sound”",
+              "explanation": "The conclusion advises deliberate work and judging progress by practical ability rather than by accent."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "skill": "READING",
+      "title": "Reading Passage 4",
+      "instructions": "Read Reading Passage 4 and answer questions 31–40.",
+      "passageIndex": 3,
+      "audioProvided": false,
+      "groups": [
+        {
+          "questionType": "TRUE_FALSE_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the information given in Reading Passage 4? Write TRUE if the statement agrees with the information, FALSE if it contradicts it, or NOT GIVEN if there is no information on this.",
+          "questions": [
+            {
+              "number": 31,
+              "prompt": "Repairs became relatively more expensive partly because labour costs increased.",
+              "answer": "TRUE",
+              "evidence": "Paragraph A: “labour became relatively more expensive, so that the cost of a repair could approach the price of a new item”",
+              "explanation": "Paragraph A gives rising relative labour costs as one reason why repairs approached the price of new goods."
+            },
+            {
+              "number": 32,
+              "prompt": "The writer presents manufacturers’ concerns about repair as completely unreasonable.",
+              "answer": "FALSE",
+              "evidence": "Paragraph B: “Manufacturers raise concerns that are not frivolous”",
+              "explanation": "The passage explicitly says the concerns are not frivolous and lists safety, warranty and trade-secret issues, contradicting the statement."
+            },
+            {
+              "number": 33,
+              "prompt": "Repair cafés have reduced national waste by a measurable amount.",
+              "answer": "NOT GIVEN",
+              "evidence": "Paragraph C: “The immediate environmental effect of a few dozen repaired toasters is small”",
+              "explanation": "The passage describes the direct environmental effect as small and highlights the educational effect; no national measurement is mentioned."
+            }
+          ]
+        },
+        {
+          "questionType": "SUMMARY_COMPLETION",
+          "instructions": "Complete the summary below. Choose ONE WORD ONLY from the passage for each answer.",
+          "wordLimitMax": 1,
+          "questions": [
+            {
+              "number": 34,
+              "prompt": "Campaigners argue that owners should be able to obtain manuals, parts and diagnostic tools on fair ________.",
+              "answer": "terms",
+              "evidence": "Paragraph B: “owners should be able to obtain manuals, parts and diagnostic tools on fair terms”",
+              "explanation": "The passage uses the phrase “on fair terms” when describing the right-to-repair demand."
+            },
+            {
+              "number": 35,
+              "prompt": "At a repair café, the volunteer and the owner work on the problem ________.",
+              "answer": "together",
+              "evidence": "Paragraph C: “the two work on the problem together rather than handing it over”",
+              "explanation": "The passage contrasts working together with simply handing the object over."
+            },
+            {
+              "number": 36,
+              "prompt": "Refurbished electronics are now sold with ________.",
+              "answer": "warranties",
+              "evidence": "Paragraph D: “Refurbished electronics now carry warranties”",
+              "explanation": "Paragraph D notes that refurbished goods now carry warranties, which is why customers who once avoided second-hand items buy them."
+            },
+            {
+              "number": 37,
+              "prompt": "Leasing gives a manufacturer an interest in designing products that survive repeated ________.",
+              "answer": "use",
+              "evidence": "Paragraph D: “a direct interest in designing products that survive repeated use”",
+              "explanation": "Because leased equipment remains the manufacturer’s property, it profits from designs that survive repeated use."
+            }
+          ]
+        },
+        {
+          "questionType": "MCQ_SINGLE",
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "questions": [
+            {
+              "number": 38,
+              "prompt": "According to paragraph E, what discourages some consumers from repairing their own products?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "The absence of any spare parts on the market."
+                },
+                {
+                  "id": "B",
+                  "text": "A fear that repairs will void the warranty."
+                },
+                {
+                  "id": "C",
+                  "text": "A belief that repairs damage the environment."
+                },
+                {
+                  "id": "D",
+                  "text": "The refusal of repair cafés to accept electronics."
+                }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph E: “a fear of voiding a warranty discourages many from opening a product at all”",
+              "explanation": "Paragraph E names fear of voiding the warranty alongside lack of time as reasons consumers do not attempt repairs."
+            },
+            {
+              "number": 39,
+              "prompt": "Why does the writer mention large public purchasers?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "Because their spending can change designs that later reach everybody."
+                },
+                {
+                  "id": "B",
+                  "text": "Because they are exempt from repair legislation."
+                },
+                {
+                  "id": "C",
+                  "text": "Because they prefer to lease rather than buy equipment."
+                },
+                {
+                  "id": "D",
+                  "text": "Because they produce more waste than households."
+                }
+              ],
+              "answer": "A",
+              "evidence": "Paragraph E: “when a large purchaser demands repairable equipment, suppliers adjust, and the resulting designs eventually reach everyone else”",
+              "explanation": "Large purchasers are mentioned because their demand shifts supplier behaviour and the improved designs spread to other customers."
+            },
+            {
+              "number": 40,
+              "prompt": "What does the writer suggest about price signals in the repair market?",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "They already reflect the full cost of disposal."
+                },
+                {
+                  "id": "B",
+                  "text": "They are distorted because disposal costs are excluded."
+                },
+                {
+                  "id": "C",
+                  "text": "They are the only reliable way to change behaviour."
+                },
+                {
+                  "id": "D",
+                  "text": "They have no influence on consumer choices."
+                }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph E: “Price signals are distorted when the environmental cost of disposal is not included in what a buyer pays”",
+              "explanation": "The statement that price signals are distorted when disposal costs are excluded supports option B; the writer then argues standards can shift expectations."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
