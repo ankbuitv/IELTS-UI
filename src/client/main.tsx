@@ -4,11 +4,14 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './components/ui';
-// Self-hosted variable fonts (bundled with the app, no external font CDN).
-import '@fontsource-variable/plus-jakarta-sans';
-import '@fontsource-variable/inter';
+// Typography is the system Arial/Helvetica stack, so no font files are shipped.
 import './styles/globals.css';
 import './styles/refresh.css';
+import './styles/shell.css';
+import './styles/public.css';
+import './styles/pages.css';
+import './styles/learn.css';
+import './styles/exam.css';
 import { applyPrefs, loadPrefs } from './lib/display';
 
 // Apply the reader's display preferences before the first paint, so the page

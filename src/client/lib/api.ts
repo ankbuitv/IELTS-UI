@@ -118,10 +118,16 @@ async function request<T>(path: string, options: RequestInit & { json?: unknown 
   return payload as T;
 }
 
+/**
+ * `keepalive` lets a request started while the page is being hidden or closed
+ * (an exam autosave on `pagehide`) outlive the document.
+ */
+export type RequestExtras = Pick<RequestInit, 'keepalive' | 'signal'>;
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, json?: unknown) => request<T>(path, { method: 'POST', json }),
-  patch: <T>(path: string, json?: unknown) => request<T>(path, { method: 'PATCH', json }),
+  post: <T>(path: string, json?: unknown, extras?: RequestExtras) => request<T>(path, { ...extras, method: 'POST', json }),
+  patch: <T>(path: string, json?: unknown, extras?: RequestExtras) => request<T>(path, { ...extras, method: 'PATCH', json }),
   put: <T>(path: string, json?: unknown) => request<T>(path, { method: 'PUT', json }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
   upload: <T>(path: string, form: FormData, method: 'POST' | 'PATCH' = 'POST') =>

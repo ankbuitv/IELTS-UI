@@ -41,6 +41,8 @@ export interface Env {
   OLLAMA_API_KEY?: string;
   OLLAMA_API_KEYS?: string;
   OLLAMA_MODEL?: string;
+  /** Model behind Judge02 (a second opinion through the same Ollama endpoint and keys). */
+  OLLAMA_MODEL_2?: string;
   OLLAMA_BASE_URL?: string;
 }
 

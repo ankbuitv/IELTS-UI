@@ -1,11 +1,17 @@
 /**
  * Exam integrity policy + observable event vocabulary.
  *
+ * TAB LOCK. Every exam mode, practice included, counts each time the candidate
+ * leaves the exam tab. A blocking notice appears when they come back, and at
+ * `TAB_LOCK_STRIKES` counted events the server submits the attempt.
+ *
  * HONEST LIMITATION (surfaced in the UI and in the docs): a web application
- * cannot block operating-system level actions such as Alt+Tab, cannot detect
- * another device, and cannot guarantee that nothing was copied by external
- * means. The platform records *observable browser events* for the teacher and
- * never asserts that an event proves cheating.
+ * cannot physically block operating-system level actions such as Alt+Tab,
+ * cannot detect another device, and cannot guarantee that nothing was copied by
+ * external means. What it can do is notice that the exam page was left, count
+ * it, interrupt the candidate on return and submit at the limit. The platform
+ * records *observable browser events* for the teacher and never asserts that an
+ * event proves cheating.
  */
 import type { ExamMode } from './types';
 
@@ -26,6 +32,9 @@ export const INTEGRITY_EVENT_TYPES = [
   'SUBMIT',
 ] as const;
 export type IntegrityEventType = (typeof INTEGRITY_EVENT_TYPES)[number];
+
+/** Counted tab-away events after which the attempt is submitted automatically. */
+export const TAB_LOCK_STRIKES = 3;
 
 export type IntegritySeverity = 'INFO' | 'WARNING' | 'CRITICAL';
 
@@ -55,28 +64,28 @@ export const INTEGRITY_PRESETS: Record<ExamMode, IntegrityPolicy> = {
   PRACTICE: {
     mode: 'PRACTICE',
     requireFullscreen: false,
-    monitorVisibility: false,
-    maxTabAwayEvents: null,
+    monitorVisibility: true,
+    maxTabAwayEvents: TAB_LOCK_STRIKES,
     maxFullscreenExits: null,
     allowCopy: true,
     allowPaste: true,
     allowContextMenu: true,
-    warnAtEvents: null,
-    autoSubmitAtEvents: null,
+    warnAtEvents: 1,
+    autoSubmitAtEvents: TAB_LOCK_STRIKES,
     allowResume: true,
-    showIndicator: false,
+    showIndicator: true,
   },
   STANDARD_EXAM: {
     mode: 'STANDARD_EXAM',
     requireFullscreen: false,
     monitorVisibility: true,
-    maxTabAwayEvents: 5,
+    maxTabAwayEvents: TAB_LOCK_STRIKES,
     maxFullscreenExits: 5,
     allowCopy: false,
     allowPaste: false,
     allowContextMenu: false,
     warnAtEvents: 1,
-    autoSubmitAtEvents: null,
+    autoSubmitAtEvents: TAB_LOCK_STRIKES,
     allowResume: true,
     showIndicator: true,
   },
@@ -90,7 +99,7 @@ export const INTEGRITY_PRESETS: Record<ExamMode, IntegrityPolicy> = {
     allowPaste: false,
     allowContextMenu: false,
     warnAtEvents: 1,
-    autoSubmitAtEvents: 5,
+    autoSubmitAtEvents: TAB_LOCK_STRIKES,
     allowResume: true,
     showIndicator: true,
   },

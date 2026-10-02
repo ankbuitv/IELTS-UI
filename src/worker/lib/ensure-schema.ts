@@ -17,9 +17,12 @@ import { ensureDefaultScoringProfiles } from '../services/scoring-profile-servic
  * permanent `503 "The platform database is not initialised yet"` on
  * `/api/student/dashboard`.
  *
- * The bootstrap therefore heals TWO kinds of drift, once per isolate:
+ * The bootstrap therefore heals THREE kinds of drift, once per isolate:
  *   1. missing columns on existing tables  -> `ALTER TABLE … ADD COLUMN …`;
  *   2. missing tables                      -> `CREATE TABLE IF NOT EXISTS …`;
+ *   3. stale CHECK constraints (see `CHECK_REBUILDS`) -> the table is rebuilt
+ *      (create new, copy rows, drop old, rename), because SQLite cannot alter a
+ *      CHECK in place;
  * and only then re-runs the (idempotent) index statements — last, because an
  * index on a column that (1)/(2) just created would otherwise abort the batch.
  *
@@ -29,7 +32,9 @@ import { ensureDefaultScoringProfiles } from '../services/scoring-profile-servic
  *   - every statement is additive and idempotent (`IF NOT EXISTS`, or an
  *     `ADD COLUMN` for a column proven absent), so nothing that already
  *     exists is ever altered, renamed or dropped, and existing rows are
- *     never touched;
+ *     never touched — with ONE audited exception: a table listed in
+ *     `CHECK_REBUILDS` is rebuilt inside a single transactional batch that
+ *     copies every row across, so a failure leaves the old table in place;
  *   - column definitions that SQLite cannot `ADD COLUMN` (PRIMARY KEY /
  *     UNIQUE / NOT NULL without DEFAULT / non-constant DEFAULT) are skipped
  *     with a logged warning instead of failing the batch;
@@ -49,6 +54,27 @@ export const CORE_TABLES = [
   'admin_audit_logs',
 ] as const;
 
+/**
+ * Tables whose CHECK constraint was widened by a later migration.
+ *
+ * A database that an older Worker bootstrapped keeps the old, narrower CHECK
+ * forever, because column healing is `ADD COLUMN` only. The visible symptom of
+ * `writing_scores` was "The AI provider could not mark this response.": the AI
+ * grader answered, then `INSERT … scoring_source = 'AI'` was rejected by
+ * `CHECK (scoring_source IN ('TEACHER', 'ADMIN', 'IMPORTED'))`.
+ *
+ * `requires` must match the live `CREATE TABLE` SQL once the table is current.
+ * Only tables that no other table references may be listed here: the rebuild
+ * drops and recreates them.
+ */
+export const CHECK_REBUILDS: ReadonlyArray<{ table: string; requires: RegExp; why: string }> = [
+  {
+    table: 'writing_scores',
+    requires: /scoring_source[^,]*CHECK\s*\([^)]*'AI'/i,
+    why: "scoring_source must allow 'AI' (migration 0007)",
+  },
+];
+
 export interface SchemaReport {
   /** Tables that exist in the bound database. */
   present: string[];
@@ -62,6 +88,10 @@ export interface SchemaReport {
   created?: string[];
   /** Columns added to existing tables during this call. */
   addedColumns?: string[];
+  /** Tables whose outdated CHECK constraint was found (and rebuilt when repairing). */
+  staleConstraints?: string[];
+  /** Tables rebuilt during this call to widen an outdated CHECK constraint. */
+  rebuilt?: string[];
   error?: string;
 }
 
@@ -110,7 +140,7 @@ export function resetSchemaState(): void {
 
 async function checkAndBootstrap(env: Env): Promise<SchemaState> {
   const drift = await schemaDrift(env);
-  if (drift.missingTables.length === 0 && drift.missingColumns.length === 0) {
+  if (isCurrent(drift)) {
     await ensureDefaultScoringProfiles(env);
     return { ok: true };
   }
@@ -121,9 +151,17 @@ async function checkAndBootstrap(env: Env): Promise<SchemaState> {
   if (drift.missingColumns.length > 0) {
     console.warn('schema_bootstrap', `missing columns: ${drift.missingColumns.join(', ')}`);
   }
+  if (drift.staleConstraints.length > 0) {
+    console.warn('schema_bootstrap', `outdated CHECK constraints (rebuilding): ${drift.staleConstraints.join(', ')}`);
+  }
   await healSchema(env, drift);
   await ensureDefaultScoringProfiles(env);
   return { ok: true };
+}
+
+/** Nothing to create, add or rebuild. */
+function isCurrent(drift: SchemaDrift): boolean {
+  return drift.missingTables.length === 0 && drift.missingColumns.length === 0 && drift.staleConstraints.length === 0;
 }
 
 /**
@@ -143,11 +181,48 @@ async function healSchema(env: Env, drift: SchemaDrift): Promise<void> {
     const sql = tableSql.get(table);
     if (sql) statements.push(env.DB.prepare(sql));
   }
+  if (drift.staleConstraints.length > 0) {
+    const live = await existingTableSql(env);
+    for (const table of drift.staleConstraints) {
+      const create = tableSql.get(table);
+      const current = live.get(table);
+      if (create && current) statements.push(...rebuildStatements(env, table, create, current));
+    }
+  }
+  // Last: a rebuild drops the table's indexes, and every index is idempotent.
   for (const index of runtimeIndexStatements()) {
     statements.push(env.DB.prepare(index));
   }
 
   if (statements.length > 0) await env.DB.batch(statements);
+}
+
+/**
+ * Statements that replace `table` with the runtime definition while keeping
+ * every row: create `<table>__rebuild`, copy the columns both versions share,
+ * drop the old table, rename. They run inside the caller's transactional batch,
+ * so a failure at any step leaves the original table untouched.
+ */
+export function rebuildStatements(env: Env, table: string, runtimeCreateSql: string, liveCreateSql: string): D1PreparedStatement[] {
+  const temp = `${table}__rebuild`;
+  const createTemp = runtimeCreateSql.replace(
+    /CREATE TABLE IF NOT EXISTS\s+"?[A-Za-z0-9_]+"?/i,
+    `CREATE TABLE "${temp}"`,
+  );
+  const live = new Set(parseCreateTableColumns(liveCreateSql).map((column) => column.name.toLowerCase()));
+  const shared = parseCreateTableColumns(runtimeCreateSql)
+    .map((column) => column.name)
+    .filter((name) => live.has(name.toLowerCase()));
+  const columns = shared.map((name) => `"${name}"`).join(', ');
+
+  return [
+    env.DB.prepare('PRAGMA defer_foreign_keys = ON'),
+    env.DB.prepare(`DROP TABLE IF EXISTS "${temp}"`),
+    env.DB.prepare(createTemp),
+    env.DB.prepare(`INSERT INTO "${temp}" (${columns}) SELECT ${columns} FROM "${table}"`),
+    env.DB.prepare(`DROP TABLE "${table}"`),
+    env.DB.prepare(`ALTER TABLE "${temp}" RENAME TO "${table}"`),
+  ];
 }
 
 /** What the bound database is missing, compared with the runtime schema. */
@@ -164,6 +239,8 @@ export interface SchemaDrift {
   columnStatements: string[];
   /** Columns detected as missing but not safely addable via ALTER. */
   unhealableColumns: string[];
+  /** Tables whose live CHECK constraint is older than `CHECK_REBUILDS` requires. */
+  staleConstraints: string[];
 }
 
 /** Full drift report against a live database. Never throws. */
@@ -199,7 +276,40 @@ export async function schemaDrift(env: Env): Promise<SchemaDrift> {
     );
   }
 
-  return { missingTables, missingColumns, columnStatements, unhealableColumns };
+  return { missingTables, missingColumns, columnStatements, unhealableColumns, staleConstraints: staleConstraintTables(existing) };
+}
+
+/** Tables from `CHECK_REBUILDS` whose live `CREATE TABLE` lacks the required CHECK. */
+export function staleConstraintTables(existing: Map<string, string>): string[] {
+  return CHECK_REBUILDS.filter((rule) => {
+    const sql = existing.get(rule.table);
+    return sql !== undefined && !rule.requires.test(sql);
+  }).map((rule) => rule.table);
+}
+
+/**
+ * Rebuilds every table in `CHECK_REBUILDS` whose live constraint is outdated.
+ * Returns the tables rebuilt (empty when nothing was stale). Never throws: a
+ * caller that is already handling a failed write must still be able to report
+ * its original error.
+ */
+export async function repairStaleConstraints(env: Env): Promise<string[]> {
+  try {
+    const drift = await schemaDrift(env);
+    if (drift.staleConstraints.length === 0) return [];
+    console.warn('schema_repair', `rebuilding tables with outdated CHECK constraints: ${drift.staleConstraints.join(', ')}`);
+    await healSchema(env, { ...drift, missingTables: [], missingColumns: [], columnStatements: [] });
+    resetSchemaState();
+    return drift.staleConstraints;
+  } catch (error) {
+    console.error('schema_repair_failed', (error as Error)?.message ?? String(error));
+    return [];
+  }
+}
+
+/** Does a database error look like a CHECK constraint rejecting a value? */
+export function isCheckConstraintError(error: unknown): boolean {
+  return /CHECK constraint failed/i.test(`${(error as Error)?.message ?? error ?? ''}`);
 }
 
 /** Application tables from the runtime schema that the database does not have. */
@@ -223,12 +333,13 @@ export async function schemaReport(env: Env): Promise<SchemaReport> {
   try {
     const expected = [...runtimeExpectedColumns().keys()];
     const before = await schemaDrift(env);
-    if (before.missingTables.length === 0 && before.missingColumns.length === 0) {
+    if (isCurrent(before)) {
       await ensureDefaultScoringProfiles(env);
       return {
         present: expected,
         missing: [],
         missingColumns: [],
+        staleConstraints: [],
         complete: true,
       };
     }
@@ -242,9 +353,11 @@ export async function schemaReport(env: Env): Promise<SchemaReport> {
       present: expected.filter((table) => !after.missingTables.includes(table)),
       missing: after.missingTables,
       missingColumns: after.missingColumns,
-      complete: after.missingTables.length === 0 && after.missingColumns.length === 0,
+      staleConstraints: after.staleConstraints,
+      complete: isCurrent(after),
       created: before.missingTables.filter((table) => !after.missingTables.includes(table)),
       addedColumns: before.missingColumns.filter((column) => !after.missingColumns.includes(column)),
+      rebuilt: before.staleConstraints.filter((table) => !after.staleConstraints.includes(table)),
     };
   } catch (error) {
     return {

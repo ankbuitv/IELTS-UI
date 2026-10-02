@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CandidateAudio } from '@shared/question-types';
-import { Button, Notice } from '../ui';
+import { Icon } from '../Icon';
 import { formatClock } from '../../lib/format';
 
 /**
@@ -60,37 +60,13 @@ export function AudioPlayer({
 
   const percent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const policyNotes = [
-    `Play allowance ${plays}/${audio.playback.maxPlays}`,
-    audio.playback.allowPause ? 'pausing allowed' : 'pausing disabled',
-    audio.playback.allowSeekAfterPlay ? 'seeking allowed' : 'seeking disabled',
+    `Plays ${plays}/${audio.playback.maxPlays}`,
+    audio.playback.allowPause ? 'pause allowed' : 'no pause',
+    audio.playback.allowSeekAfterPlay ? 'seek allowed' : 'no seeking',
   ];
 
   return (
-    <section className="audio-panel" style={{ marginBottom: 16 }} aria-label="Listening audio">
-      <div className="audio-panel__head">
-        <div>
-          <div className="audio-panel__title">{sectionTitle || 'Listening audio'}</div>
-          <div className="audio-panel__meta">{policyNotes.join(' · ')}</div>
-        </div>
-        <span className="badge badge--neutral" title="Recording length">
-          {duration ? formatClock(duration) : 'Loading…'}
-        </span>
-      </div>
-
-      {!prepDone ? (
-        <div style={{ marginTop: 14 }}>
-          <Notice tone="info" title="Preparation time">
-            The recording starts in {formatClock(prepRemaining)}. Playback controls unlock when preparation ends.
-          </Notice>
-        </div>
-      ) : null}
-
-      {error ? (
-        <div style={{ marginTop: 14 }}>
-          <Notice tone="warning">{error}</Notice>
-        </div>
-      ) : null}
-
+    <section className="audio-panel" aria-label="Listening audio">
       {/* The element itself stays hidden: the panel below is the visible control. */}
       <audio
         ref={ref}
@@ -123,90 +99,74 @@ export function AudioPlayer({
         }}
       />
 
-      <div className="audio-panel__controls">
+      <div className="audio-panel__row">
         <button
           type="button"
           className="audio-panel__play"
           onClick={playing ? handlePause : handlePlay}
           disabled={maxedOut || !prepDone || (playing && !audio.playback.allowPause)}
           aria-label={playing ? 'Pause recording' : 'Play recording'}
+          title={maxedOut ? 'Play limit reached' : playing ? 'Pause' : 'Play'}
         >
-          {playing ? '❚❚' : '▶'}
+          <Icon name={playing ? 'pause' : 'play'} size={18} />
         </button>
 
-        <div
-          className="audio-panel__track"
-          role="progressbar"
-          aria-valuenow={Math.round(percent)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Recording progress"
-        >
-          <div className="audio-panel__fill" style={{ width: `${percent}%` }} />
+        <div className="audio-panel__main">
+          <div className="audio-panel__head">
+            <span className="audio-panel__title">{sectionTitle || 'Listening audio'}</span>
+            <span className="audio-panel__time">
+              {formatClock(currentTime)} / {duration ? formatClock(duration) : '--:--'}
+            </span>
+          </div>
+          {audio.playback.allowSeekAfterPlay && prepDone ? (
+            <input
+              className="audio-panel__scrub"
+              type="range"
+              min={0}
+              max={Math.max(1, Math.floor(duration))}
+              value={Math.floor(currentTime)}
+              onChange={(event) => {
+                const element = ref.current;
+                if (!element) return;
+                element.currentTime = Number(event.target.value);
+                setCurrentTime(element.currentTime);
+              }}
+              aria-label="Seek within the recording"
+            />
+          ) : (
+            <div
+              className="audio-panel__track"
+              role="progressbar"
+              aria-valuenow={Math.round(percent)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Recording progress"
+            >
+              <div className="audio-panel__fill" style={{ width: `${percent}%` }} />
+            </div>
+          )}
         </div>
-
-        <span className="audio-panel__time">
-          {formatClock(currentTime)} / {duration ? formatClock(duration) : '--:--'}
-        </span>
       </div>
 
-      {audio.playback.allowSeekAfterPlay && prepDone ? (
-        <input
-          className="audio-panel__scrub"
-          type="range"
-          min={0}
-          max={Math.max(1, Math.floor(duration))}
-          value={Math.floor(currentTime)}
-          onChange={(event) => {
-            const element = ref.current;
-            if (!element) return;
-            element.currentTime = Number(event.target.value);
-            setCurrentTime(element.currentTime);
-          }}
-          aria-label="Seek within the recording"
-        />
-      ) : null}
-
-      <div className="row" style={{ marginTop: 12 }}>
-        {!playing ? (
-          <Button variant="primary" size="sm" onClick={handlePlay} disabled={maxedOut || !prepDone}>
-            {maxedOut ? 'Play limit reached' : 'Play recording'}
-          </Button>
+      <div className="audio-panel__meta">
+        {!prepDone ? (
+          <strong>Starts in {formatClock(prepRemaining)} — controls unlock when preparation ends.</strong>
+        ) : maxedOut ? (
+          <strong>Play limit reached.</strong>
         ) : null}
-        {playing && audio.playback.allowPause ? (
-          <Button size="sm" onClick={handlePause}>
-            Pause
-          </Button>
-        ) : null}
-        {audio.url ? (
-          <Button
-            size="sm"
-            onClick={() => {
-              window.open(audio.url, '_blank', 'noopener,noreferrer');
-            }}
-          >
-            Open audio URL
-          </Button>
-        ) : null}
+        <span>{policyNotes.join(' · ')}</span>
       </div>
-      {audio.url && (audio.url.startsWith('http://') || audio.url.startsWith('https://')) ? (
-        <p className="tiny muted" style={{ marginTop: 8, wordBreak: 'break-all' }}>
-          <a href={audio.url} target="_blank" rel="noreferrer">
-            {audio.url}
-          </a>
+
+      {error ? (
+        <p className="audio-panel__error" role="alert">
+          {error}{' '}
+          {audio.url ? (
+            <a href={audio.url} target="_blank" rel="noreferrer">
+              Open the audio file
+            </a>
+          ) : null}
         </p>
       ) : null}
-
-      {maxedOut ? (
-        <p className="audio-panel__policy">
-          The recording has been played the permitted number of times. This mirrors a computer-based listening test where
-          the audio is played once.
-        </p>
-      ) : (
-        <p className="audio-panel__policy">
-          Playback rules come from the test configuration and cannot be changed from the browser.
-        </p>
-      )}
     </section>
   );
 }

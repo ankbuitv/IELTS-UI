@@ -13,6 +13,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
+import { Icon, type IconName } from './Icon';
 
 // ---------------------------------------------------------------------------
 // Buttons
@@ -277,7 +278,7 @@ export function Card({
   return (
     <section className={`card ${flush ? 'card--flush' : ''} ${interactive ? 'card--link' : ''} ${className}`}>
       {(title || actions) && (
-        <header className="card__header" style={flush ? { padding: '16px 18px 0' } : undefined}>
+        <header className="card__header" style={flush ? { padding: '12px 14px 0' } : undefined}>
           <div>
             {title ? <h2 className="card__title">{title}</h2> : null}
             {hint ? <div className="card__hint">{hint}</div> : null}
@@ -326,6 +327,84 @@ export function Stat({
   );
 }
 
+/** The icon that stands for a skill or test type, so lists can be scanned by shape and colour. */
+export function skillIcon(type: string): IconName {
+  switch (type) {
+    case 'READING':
+      return 'book';
+    case 'LISTENING':
+      return 'headphones';
+    case 'WRITING':
+      return 'pen';
+    case 'SPEAKING':
+      return 'mic';
+    case 'FULL_MOCK':
+      return 'layers';
+    default:
+      return 'file';
+  }
+}
+
+/** Colour family for a skill: matches the `.skill-*` classes in globals.css. */
+export function skillClass(type: string): string {
+  switch (type) {
+    case 'READING':
+      return 'skill-reading';
+    case 'LISTENING':
+      return 'skill-listening';
+    case 'WRITING':
+      return 'skill-writing';
+    case 'SPEAKING':
+      return 'skill-speaking';
+    case 'FULL_MOCK':
+      return 'skill-mock';
+    default:
+      return '';
+  }
+}
+
+/** A small round skill glyph (icon on a tinted disc). */
+export function SkillGlyph({ type, size = 16 }: { type: string; size?: number }) {
+  return (
+    <span className={`skill-glyph ${skillClass(type)}`} aria-hidden="true">
+      <Icon name={skillIcon(type)} size={size} />
+    </span>
+  );
+}
+
+/**
+ * Filter chips: one tap to narrow a list, a count on each so an empty filter is
+ * visible before it is chosen. Scrolls sideways on a phone instead of wrapping.
+ */
+export function Chips<T extends string>({
+  options,
+  value,
+  onChange,
+  label,
+}: {
+  options: Array<{ id: T; label: ReactNode; count?: number }>;
+  value: T;
+  onChange: (value: T) => void;
+  label?: string;
+}) {
+  return (
+    <div className="chips" role="group" aria-label={label}>
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          className={`chip${value === option.id ? ' is-on' : ''}`}
+          aria-pressed={value === option.id}
+          onClick={() => onChange(option.id)}
+        >
+          {option.label}
+          {option.count !== undefined ? <span className="chip__count">{option.count}</span> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Badge({
   children,
   tone = 'neutral',
@@ -354,7 +433,7 @@ export function Notice({
   title?: ReactNode;
   children?: ReactNode;
 }) {
-  const icon = tone === 'danger' ? '!' : tone === 'warning' ? '!' : tone === 'success' ? '✓' : 'i';
+  const icon = tone === 'danger' ? '!' : tone === 'warning' ? '!' : tone === 'success' ? <Icon name="check" size={12} strokeWidth={3.4} /> : 'i';
   return (
     <div className={`notice notice--${tone}`} role={tone === 'danger' ? 'alert' : undefined}>
       <span className="notice__icon" aria-hidden="true">

@@ -14,6 +14,9 @@ import {
 } from './pages/student/StudentPages';
 import { StudentDashboardPage } from './pages/student/Dashboard';
 import { VocabularyPage } from './pages/student/VocabularyPage';
+import { LearnPage } from './pages/student/LearnPage';
+import { LessonPage, ReviewPage } from './pages/student/LessonPages';
+import { DictionaryPage } from './pages/student/DictionaryPage';
 import { SpeakingPage } from './pages/student/SpeakingPage';
 import { TakeExamPage } from './pages/exam/TakeExam';
 import { TeacherHomePage, ClassroomPage, AssignmentPage, StudentDetailPage } from './pages/teacher/TeacherPages';
@@ -53,6 +56,24 @@ export function App() {
         element={
           <RequireAuth>
             <TakeExamPage />
+          </RequireAuth>
+        }
+      />
+
+      {/* Lessons are played full screen too, like Duolingo: no navigation to wander off to. */}
+      <Route
+        path="/learn/lesson/:lessonId"
+        element={
+          <RequireAuth>
+            <LessonPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/learn/review"
+        element={
+          <RequireAuth>
+            <ReviewPage />
           </RequireAuth>
         }
       />
@@ -128,10 +149,26 @@ export function App() {
           }
         />
         <Route
+          path="learn"
+          element={
+            <RequireAuth>
+              <LearnPage />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="vocabulary"
           element={
             <RequireAuth>
               <VocabularyPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="dictionary"
+          element={
+            <RequireAuth>
+              <DictionaryPage />
             </RequireAuth>
           }
         />

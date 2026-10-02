@@ -8,5 +8,11 @@
   // The brand, leading-JSON and version-editor-import tests render client React
   // components or read repo files, so they run under vitest (node) only and are
   // intentionally outside the Worker types.
-  "exclude": ["tests/unit/brand.test.ts", "tests/unit/json-leading.test.ts", "tests/unit/version-editor-import.test.ts"]
+  "exclude": [
+    "tests/unit/brand.test.ts",
+    "tests/unit/json-leading.test.ts",
+    "tests/unit/version-editor-import.test.ts",
+    "tests/unit/client-*.test.ts",
+    "tests/unit/exam-sync.test.ts"
+  ]
 }

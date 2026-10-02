@@ -6,6 +6,7 @@ import { gradeAnswer, type AnswerKey, type CandidateResponse } from '../../share
 import { isQuestionType, type QuestionGroupConfig } from '../../shared/question-types';
 import { estimateBand, type ConversionRange, type ScoringProfile } from '../../shared/scoring';
 import { loadPlatformSettings } from '../lib/settings';
+import { isCheckConstraintError, repairStaleConstraints } from '../lib/ensure-schema';
 import type { Skill } from '../../shared/types';
 import { resolveActiveProfileId } from './scoring-profile-service';
 
@@ -140,22 +141,6 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
       .bind(session.test_version_id, ...scopeSectionIds)
       .all<MarkQuestionRow>();
 
-    // The same query without the section filter, used only to project a band
-    // when the candidate practised a subset ("1 of 4 passages").
-    const allSkillQuestions = scoped
-      ? await env.DB.prepare(
-          `SELECT q.id, q.number, q.section_id, q.config_json, g.config_json AS group_config_json,
-                  g.question_type AS question_type, k.answer_json AS key_json
-             FROM questions q
-             JOIN question_groups g ON g.id = q.question_group_id
-             LEFT JOIN answer_keys k ON k.question_id = q.id
-            WHERE q.test_version_id = ?
-              AND q.section_id IN (SELECT id FROM sections WHERE test_version_id = ? AND skill = ?)
-            ORDER BY q.number`,
-        )
-          .bind(session.test_version_id, session.test_version_id, session.skill)
-          .all<MarkQuestionRow>()
-      : null;
 
     const responses = await env.DB.prepare(
       `SELECT question_id, answer_json, is_flagged FROM attempt_answers
@@ -232,27 +217,16 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
       profileRow = fallbackId ? await loadScoringProfile(env, fallbackId) : null;
     }
 
-    // A partial practice ("1 passage", "2 passages") is marked honestly and
-    // additionally *projected* to a full-test band, clearly labelled as a
-    // projection, so a short practice set still gives a usable indication.
-    let projected = false;
-    let fullTotal = totalQuestions;
-    let bandRawScore = rawScore;
-    if (allSkillQuestions && totalQuestions > 0) {
-      fullTotal = countKeyed(allSkillQuestions.results);
-      if (fullTotal > totalQuestions) {
-        projected = true;
-        bandRawScore = Math.round((rawScore / totalQuestions) * fullTotal);
-      }
-    }
-
+    // A short set (one passage, one section) is marked honestly on its own
+    // questions and `estimateBand` scales the score to a full paper, labelling
+    // the result a PROJECTED band so it is never mistaken for a full-test band.
     const bandEstimate = settings.bandEstimationEnabled
       ? estimateBand({
           profile: profileRow,
           skill: session.skill,
-          rawScore: bandRawScore,
-          totalQuestions: fullTotal,
-          isCompleteTest: projected ? true : session.is_complete_test === 1,
+          rawScore,
+          totalQuestions,
+          isCompleteTest: session.is_complete_test === 1,
         })
       : {
           available: false as const,
@@ -260,6 +234,8 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
           message:
             'Band estimation is switched off in platform settings. The raw score is still marked on the server.',
         };
+    const projected = bandEstimate.available && bandEstimate.basis === 'PROJECTED';
+    const fullTotal = bandEstimate.available && bandEstimate.projection ? bandEstimate.projection.fullLength : totalQuestions;
 
     statements.push(
       env.DB.prepare(
@@ -296,7 +272,7 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
       band: bandEstimate.available ? bandEstimate.band : null,
       bandAvailable: bandEstimate.available,
       bandMessage: bandEstimate.available
-        ? `${bandEstimate.note}${projected ? ` Projected from ${totalQuestions} of ${fullTotal} questions in this practice set.` : ''}`
+        ? `${bandEstimate.note}${projected ? ` You scored ${rawScore}/${totalQuestions} here, which scales to about ${bandEstimate.projection?.projectedRaw}/${fullTotal}.` : ''}`
         : bandEstimate.message,
       profileId: profileRow?.id ?? null,
       profileVersion: profileRow?.version ?? null,
@@ -344,18 +320,6 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
   };
 }
 
-/** Counts questions that carry a usable answer key (the same rule as marking). */
-function countKeyed(rows: MarkQuestionRow[]): number {
-  let total = 0;
-  for (const question of rows) {
-    if (!isQuestionType(question.question_type)) continue;
-    if (question.question_type === 'WRITING_TASK_1' || question.question_type === 'WRITING_TASK_2') continue;
-    const key = question.key_json ? parseJson<AnswerKey | null>(question.key_json, null) : null;
-    if (!key || (key.kind === 'CHOICE' && key.values.length === 0) || (key.kind === 'TEXT' && key.accept.length === 0)) continue;
-    total += 1;
-  }
-  return total;
-}
 
 /** Multi-skill attempts report an average of the available skill bands (rounded to 0.5). */
 function averageBand(sessions: SessionMarkResult[]): number | null {
@@ -478,27 +442,41 @@ export async function setWritingScore(
   if (!submission) throw ApiError.notFound('Writing submission not found.');
 
   const timestamp = nowIso();
-  await env.DB.prepare(
-    `INSERT INTO writing_scores (id, writing_submission_id, band, criteria_json, feedback, scoring_source, scored_by, scored_at, created_at, updated_at)
+  // An AI estimate may replace an earlier AI estimate, but never a band a person
+  // gave: the guard makes the upsert a no-op when a teacher/admin score exists.
+  const upsert = `INSERT INTO writing_scores (id, writing_submission_id, band, criteria_json, feedback, scoring_source, scored_by, scored_at, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (writing_submission_id)
      DO UPDATE SET band = excluded.band, criteria_json = excluded.criteria_json, feedback = excluded.feedback,
                    scoring_source = excluded.scoring_source, scored_by = excluded.scored_by,
-                   scored_at = excluded.scored_at, updated_at = excluded.updated_at`,
-  )
-    .bind(
-      newId('ws'),
-      input.writingSubmissionId,
-      input.band,
-      JSON.stringify(input.criteria ?? {}),
-      input.feedback ?? '',
-      input.source,
-      input.scoredBy,
-      timestamp,
-      timestamp,
-      timestamp,
-    )
-    .run();
+                   scored_at = excluded.scored_at, updated_at = excluded.updated_at${
+                     input.source === 'AI' ? "\n     WHERE writing_scores.scoring_source = 'AI'" : ''
+                   }`;
+  const writeScore = () =>
+    env.DB.prepare(upsert)
+      .bind(
+        newId('ws'),
+        input.writingSubmissionId,
+        input.band,
+        JSON.stringify(input.criteria ?? {}),
+        input.feedback ?? '',
+        input.source,
+        input.scoredBy,
+        timestamp,
+        timestamp,
+        timestamp,
+      )
+      .run();
+
+  try {
+    await writeScore();
+  } catch (error) {
+    // A database bootstrapped before migration 0007 still carries
+    // CHECK (scoring_source IN ('TEACHER','ADMIN','IMPORTED')). Rebuild the table
+    // once and retry instead of failing the marking with an opaque error.
+    if (!isCheckConstraintError(error) || (await repairStaleConstraints(env)).length === 0) throw error;
+    await writeScore();
+  }
 
   const overall = await averageWritingBand(env, submission.attempt_id);
   await env.DB.prepare(

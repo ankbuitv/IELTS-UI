@@ -1,305 +1,328 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { BrandLogo } from '../../components/BrandLogo';
 import { Icon, type IconName } from '../../components/Icon';
 import { Button, Field, Notice, PasswordInput, TextInput } from '../../components/ui';
 import { api, describeError } from '../../lib/api';
+
+const SKILLS: Array<{
+  skill: 'listening' | 'reading' | 'writing' | 'speaking';
+  icon: IconName;
+  name: string;
+  meta: string;
+  detail: string;
+  marked: string;
+}> = [
+  {
+    skill: 'listening',
+    icon: 'headphones',
+    name: 'Listening',
+    meta: '4 sections · 40 questions · about 30 min',
+    detail: 'Audio panel with play limits, section information and note, table and sentence completion.',
+    marked: 'Marked instantly against the answer key',
+  },
+  {
+    skill: 'reading',
+    icon: 'book',
+    name: 'Reading',
+    meta: '3 passages · 40 questions · 60 min',
+    detail: 'True / False / Not Given, matching headings and information, completion and short answers.',
+    marked: 'Marked instantly against the answer key',
+  },
+  {
+    skill: 'writing',
+    icon: 'pen',
+    name: 'Writing',
+    meta: 'Task 1 + Task 2 · 60 min',
+    detail: 'Autosaved editor with a live word count. Corrections, criteria and a band in seconds.',
+    marked: 'Marked automatically by two AI judges',
+  },
+  {
+    skill: 'speaking',
+    icon: 'mic',
+    name: 'Speaking',
+    meta: 'Parts 1, 2 and 3 · 11–14 min',
+    detail: 'Record each part, read your transcript and get feedback on fluency, vocabulary and grammar.',
+    marked: 'Marked automatically by two AI judges',
+  },
+];
+
+function SampleReport() {
+  const rows: Array<[string, string, string]> = [
+    ['Listening', '7.0', 'answer key'],
+    ['Reading', '6.5', 'answer key'],
+    ['Writing', '6.5', 'Judge01 6.5 · Judge02 6.5'],
+    ['Speaking', '6.0', 'Judge01 6.0 · Judge02 6.0'],
+  ];
+  return (
+    <figure className="report" aria-label="Sample practice report">
+      <figcaption className="report__head">
+        <span>Practice report</span>
+        <span className="report__tag">Sample</span>
+      </figcaption>
+      <div className="report__body">
+        <div className="report__overall">
+          <span className="report__overall-label">Overall band</span>
+          <span className="report__overall-value">6.5</span>
+        </div>
+        <table className="report__table">
+          <tbody>
+            {rows.map(([skill, band, basis]) => (
+              <tr key={skill}>
+                <th scope="row">{skill}</th>
+                <td className="report__band">{band}</td>
+                <td className="report__basis">{basis}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="report__note">Illustration only. Bands in Ai eo are practice estimates, never an official result.</p>
+    </figure>
+  );
+}
+
+function PathPreview() {
+  const nodes: Array<{ label: string; state: 'done' | 'current' | 'locked'; offset: number }> = [
+    { label: 'Everyday words', state: 'done', offset: 0 },
+    { label: 'Linking ideas', state: 'done', offset: 1 },
+    { label: 'Describing graphs', state: 'current', offset: 2 },
+    { label: 'Opinion phrases', state: 'locked', offset: 1 },
+    { label: 'Academic verbs', state: 'locked', offset: 0 },
+  ];
+  return (
+    <div className="path-preview" aria-hidden="true">
+      <div className="path-preview__chips">
+        <span className="path-chip">
+          <Icon name="zap" size={13} /> 5 day streak
+        </span>
+        <span className="path-chip">120 XP</span>
+      </div>
+      <ol className="path-preview__list">
+        {nodes.map((node) => (
+          <li key={node.label} style={{ marginLeft: node.offset * 34 }} className={`path-preview__node path-preview__node--${node.state}`}>
+            <span className="path-preview__dot">
+              <Icon name={node.state === 'done' ? 'check' : node.state === 'locked' ? 'lock' : 'play'} size={16} />
+            </span>
+            <span className="path-preview__label">{node.label}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function JudgePreview() {
+  return (
+    <div className="judge-preview" aria-hidden="true">
+      <div className="judge-preview__judges">
+        <div className="judge-preview__judge">
+          <span className="judge-preview__name">Judge01</span>
+          <span className="judge-preview__band">6.5</span>
+        </div>
+        <div className="judge-preview__judge">
+          <span className="judge-preview__name">Judge02</span>
+          <span className="judge-preview__band">6.0</span>
+        </div>
+        <div className="judge-preview__judge judge-preview__judge--final">
+          <span className="judge-preview__name">Consensus</span>
+          <span className="judge-preview__band">6.5</span>
+        </div>
+      </div>
+      <ul className="judge-preview__criteria">
+        <li>
+          <span>Task Response</span>
+          <span className="judge-preview__bar"><i style={{ width: '72%' }} /></span>
+          <b>6.5</b>
+        </li>
+        <li>
+          <span>Coherence and Cohesion</span>
+          <span className="judge-preview__bar"><i style={{ width: '66%' }} /></span>
+          <b>6.0</b>
+        </li>
+        <li>
+          <span>Lexical Resource</span>
+          <span className="judge-preview__bar"><i style={{ width: '72%' }} /></span>
+          <b>6.5</b>
+        </li>
+        <li>
+          <span>Grammatical Range</span>
+          <span className="judge-preview__bar"><i style={{ width: '60%' }} /></span>
+          <b>5.5</b>
+        </li>
+      </ul>
+    </div>
+  );
+}
 
 export function LandingPage() {
   const { user } = useAuth();
   if (user) return <Navigate to="/dashboard" replace />;
 
   return (
-    <div className="public-page">
-      <section className="public-hero">
-        <div className="public-hero__inner">
-          <div>
-            <span className="public-hero__eyebrow">Independent practice platform</span>
-            <h1>Computer-based exam practice, classroom management and full mock tests.</h1>
-            <p>
-              Ai eo gives teachers one workflow for original Reading, Listening and Writing practice:
-              server-marked results, assigned deadlines, class analytics and integrity monitoring that is honest about
-              what a browser can and cannot observe.
+    <div className="landing">
+      <section className="hero">
+        <div className="hero__inner">
+          <div className="hero__copy">
+            <p className="hero__kicker">Independent IELTS-style practice</p>
+            <h1>Practise for IELTS the way the test actually feels.</h1>
+            <p className="hero__lede">
+              Timed Reading, Listening, Writing and Speaking on a computer-delivered exam screen. Writing and Speaking are
+              marked automatically by two AI judges, and a daily learning path builds the vocabulary behind your band.
             </p>
-            <div className="public-hero__actions">
+            <div className="hero__actions">
               <Link className="btn btn--primary btn--lg" to="/register">
-                Create a free student account
+                Create a free account
               </Link>
               <Link className="btn btn--lg" to="/login">
                 Sign in
               </Link>
             </div>
-            <p className="public-hero__note">
-              No credit card, no trial timer. Teachers are created by an administrator or by signing up with an
-              institution code.
-            </p>
-          </div>
-
-          <div className="app-window" aria-hidden="true">
-            <div className="app-window__bar">
-              <span className="app-window__dots">
-                <span className="app-window__dot app-window__dot--brand" />
-                <span className="app-window__dot app-window__dot--violet" />
-                <span className="app-window__dot" />
-              </span>
-              <span className="app-window__url">ai-eo / dashboard</span>
-            </div>
-            <div className="app-window__body">
-              <div className="app-window__rail">
-                <span className="app-window__rail-item app-window__rail-item--active">
-                  <Icon name="grid" size={14} /> Dashboard
-                </span>
-                <span className="app-window__rail-item">
-                  <Icon name="book" size={14} /> Practice tests
-                </span>
-                <span className="app-window__rail-item">
-                  <Icon name="clock" size={14} /> My attempts
-                </span>
-                <span className="app-window__rail-item">
-                  <Icon name="users" size={14} /> Classrooms
-                </span>
-                <span className="app-window__rail-item">
-                  <Icon name="chart" size={14} /> My progress
-                </span>
+            <dl className="hero__facts">
+              <div>
+                <dt>4</dt>
+                <dd>skills in the exam screen</dd>
               </div>
-              <div className="app-window__main">
-                <div className="app-window__heading">
-                  <strong>Your practice at a glance</strong>
-                  <span className="skill-chip skill-reading">Reading</span>
-                </div>
-                <div className="app-window__stats">
-                  <span className="app-window__stat">
-                    <span>Attempts</span>
-                    <strong>12</strong>
-                  </span>
-                  <span className="app-window__stat">
-                    <span>Accuracy</span>
-                    <strong>78%</strong>
-                  </span>
-                  <span className="app-window__stat">
-                    <span>Est. band</span>
-                    <strong>7.0</strong>
-                  </span>
-                </div>
-                <div className="hero-preview__row">
-                  <Icon name="book" size={15} />
-                  <span>Reading — The Return of the Night Train</span>
-                  <span className="hero-preview__badge">13 questions</span>
-                </div>
-                <div className="hero-preview__row">
-                  <Icon name="headphones" size={15} />
-                  <span>Listening — Section 1 note completion</span>
-                  <span className="hero-preview__badge">30 min</span>
-                </div>
-                <div className="hero-preview__row">
-                  <Icon name="pen" size={15} />
-                  <span>Writing — Task 1 and Task 2</span>
-                  <span className="hero-preview__badge">Marked by a teacher</span>
-                </div>
-                <div className="hero-preview__row">
-                  <Icon name="layers" size={15} />
-                  <span>Full mock — Listening → Reading → Writing</span>
-                  <span className="hero-preview__badge">Sequence</span>
-                </div>
+              <div>
+                <dt>2</dt>
+                <dd>AI judges, one consensus band</dd>
               </div>
+              <div>
+                <dt>3</dt>
+                <dd>tab-switch strikes, then auto-submit</dd>
+              </div>
+            </dl>
+          </div>
+          <SampleReport />
+        </div>
+      </section>
+
+      <section className="band" id="skills">
+        <div className="band__inner">
+          <header className="band__head">
+            <p className="eyebrow">The four skills</p>
+            <h2>One exam screen for every paper</h2>
+            <p>Passage on the left, questions on the right, a timer you can trust and answers that are saved as you go.</p>
+          </header>
+          <div className="skill-grid">
+            {SKILLS.map((item) => (
+              <article key={item.skill} className={`skill-tile skill-${item.skill}`}>
+                <span className="skill-tile__icon">
+                  <Icon name={item.icon} size={20} />
+                </span>
+                <h3>{item.name}</h3>
+                <p className="skill-tile__meta">{item.meta}</p>
+                <p>{item.detail}</p>
+                <p className="skill-tile__marked">{item.marked}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="band band--muted" id="learn">
+        <div className="band__inner split">
+          <div>
+            <p className="eyebrow">Learn</p>
+            <h2>A daily path, built around your level</h2>
+            <p>
+              Short lessons with choose, fill-in, type, order and match exercises. Earn XP, keep your streak and unlock the
+              next lesson. Each day the AI adds new words pitched at your current band, and a spaced-repetition review
+              brings them back before you forget.
+            </p>
+            <ul className="tick-list">
+              <li>Lessons start at the right level for you</li>
+              <li>New vocabulary every day, saved to your notebook</li>
+              <li>Built-in dictionary with Vietnamese meanings and examples</li>
+            </ul>
+          </div>
+          <PathPreview />
+        </div>
+      </section>
+
+      <section className="band" id="marking">
+        <div className="band__inner split split--reverse">
+          <JudgePreview />
+          <div>
+            <p className="eyebrow">AI marking</p>
+            <h2>Two judges, one consensus band</h2>
+            <p>
+              Submit a Writing or Speaking task and it is marked at once. Judge01 and Judge02 each score the four public
+              criteria independently after being briefed on the same rubric; you see both opinions, the consensus band,
+              corrections and a short summary in Vietnamese.
+            </p>
+            <p className="muted small">
+              AI marking is an estimate for study. It is consistent and fast, but it is not an examiner and it can be
+              wrong, so use it to find what to fix next.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="band band--dark" id="exam">
+        <div className="band__inner">
+          <header className="band__head">
+            <p className="eyebrow">Exam conditions</p>
+            <h2>Practise under pressure, not in a comfort zone</h2>
+          </header>
+          <div className="trio">
+            <article>
+              <Icon name="clock" size={22} />
+              <h3>Server-side timer</h3>
+              <p>Time is kept by the server, so refreshing or changing your clock never buys extra minutes.</p>
+            </article>
+            <article>
+              <Icon name="lock" size={22} />
+              <h3>Tab lock</h3>
+              <p>
+                Leaving the exam tab is counted and you are stopped when you come back. At three strikes the attempt is
+                submitted. A browser cannot block other apps, so Ai eo records it instead.
+              </p>
+            </article>
+            <article>
+              <Icon name="check" size={22} />
+              <h3>Nothing is lost</h3>
+              <p>Answers and essays autosave, and an unsent essay is also kept on your device until it reaches the server.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="band" id="teachers">
+        <div className="band__inner">
+          <header className="band__head">
+            <p className="eyebrow">For teachers</p>
+            <h2>Classrooms without the spreadsheet</h2>
+          </header>
+          <div className="trio trio--light">
+            <article>
+              <Icon name="users" size={22} />
+              <h3>Classrooms and invitations</h3>
+              <p>Create a class, share a code and keep every class isolated. Teachers only ever see their own students.</p>
+            </article>
+            <article>
+              <Icon name="calendar" size={22} />
+              <h3>Assignments with rules</h3>
+              <p>Deadlines, attempt limits, timing and result-release policy per assignment, plus per-class tab-lock settings.</p>
+            </article>
+            <article>
+              <Icon name="trendingUp" size={22} />
+              <h3>Reports that stay honest</h3>
+              <p>Band distributions, task-type accuracy and observable integrity events, never a verdict about a candidate.</p>
+            </article>
+          </div>
+          <div className="cta-strip">
+            <div>
+              <strong>Ready for your first test?</strong>
+              <span>It takes under a minute to create an account.</span>
             </div>
-          </div>
-          <p className="tiny muted" style={{ gridColumn: '1 / -1', marginTop: -24 }}>
-            Estimated bands come from conversion tables your administrator configures. They are a practice signal,
-            never an official IELTS result.
-          </p>
-        </div>
-      </section>
-
-      <section className="public-section" id="skills">
-        <div className="public-section__head">
-          <span className="public-eyebrow">Skills</span>
-          <h2>Four skills, one consistent exam shell</h2>
-          <p>
-            Each skill keeps its own colour across the dashboards and analytics, so a class report can be read at a
-            glance without relying on a single hue.
-          </p>
-        </div>
-        <div className="grid grid--4">
-          <SkillCard
-            skill="reading"
-            icon="book"
-            name="Reading"
-            detail="TRUE/FALSE/NOT GIVEN, matching headings and information, completion and short answer tasks, with a readability-first passage pane."
-            meta="40 questions · 60 min"
-          />
-          <SkillCard
-            skill="listening"
-            icon="headphones"
-            name="Listening"
-            detail="A calm audio panel with policy-driven play limits, section information and note, table and sentence completion."
-            meta="40 questions · 30 min"
-          />
-          <SkillCard
-            skill="writing"
-            icon="pen"
-            name="Writing"
-            detail="Task 1 and Task 2 with autosave, live word counts, prompt cards and human marking by a teacher."
-            meta="2 tasks · 60 min"
-          />
-          <SkillCard
-            skill="mock"
-            icon="layers"
-            name="Full mock"
-            detail="Listening, Reading and Writing in sequence with a clear progression indicator and server-controlled section timing."
-            meta="Complete test"
-          />
-        </div>
-      </section>
-
-      <section className="public-section public-section--muted" id="teachers">
-        <div className="public-section__inner">
-          <div className="public-section__head">
-            <span className="public-eyebrow">For teachers</span>
-            <h2>Built for teachers, not for a leaderboard</h2>
-            <p>
-              Classrooms, assignments and reports designed to be scanned: alignment, whitespace, status badges and
-              filters rather than a wall of numbers.
-            </p>
-          </div>
-          <div className="grid grid--3">
-            <Feature icon="users" title="Classrooms and secure invitations">
-              Create a classroom, share a single-use invitation code, enrol by email and keep every class isolated.
-              Teachers can only ever read their own classes and students.
-            </Feature>
-            <Feature icon="calendar" title="Assignments with real rules">
-              Assign a published version with a deadline, attempt limit, timing policy and result-release policy
-              (immediate, score only, after the deadline or no review).
-            </Feature>
-            <Feature icon="trendingUp" title="Reports that stay honest">
-              Class analytics, band distributions, task-type accuracy and integrity summaries. Observable events are
-              recorded, never declared as proof of cheating.
-            </Feature>
+            <Link className="btn btn--primary btn--lg" to="/register">
+              Create a free account
+            </Link>
           </div>
         </div>
       </section>
-
-      <section className="public-section" id="features">
-        <div className="public-section__head">
-          <span className="public-eyebrow">Platform</span>
-          <h2>What the platform does</h2>
-          <p>Everything is served from one Worker: the API, the candidate app and the teacher and admin consoles.</p>
-        </div>
-        <div className="grid grid--3">
-          <Feature icon="clock" title="Server-authoritative timing">
-            Deadlines are recomputed on the server on every request. Refreshing the page, changing the system clock or
-            reconnecting never grants extra time.
-          </Feature>
-          <Feature icon="lock" title="Answer keys stay server-side">
-            Objective sections are marked in the Worker against protected keys. Correct answers reach the browser only
-            when a result is released.
-          </Feature>
-          <Feature icon="file" title="Versioned, immutable content">
-            Publishing freezes a version. Later edits create a new version, so an attempt never changes after the fact.
-          </Feature>
-          <Feature icon="upload" title="Import with human review">
-            Paste structured reading JSON or upload a document; the platform extracts structure, validates it and stops
-            at review. Nothing is published automatically and no answer key is invented.
-          </Feature>
-          <Feature icon="target" title="Estimated bands, clearly labelled">
-            Reading and Listening estimates use your own versioned conversion profile, and the interface always labels
-            them as estimates. Writing is marked by a person.
-          </Feature>
-          <Feature icon="check" title="Accessible by default">
-            Keyboard navigation, visible focus, semantic labels, colour never carrying meaning alone, and reduced-motion
-            support throughout.
-          </Feature>
-        </div>
-      </section>
-
-      <footer className="public-footer">
-        <div className="public-footer__inner">
-          <div>
-            <div className="footer-brand" aria-label="Ai eo">
-              <span className="brand-logo">
-                <BrandLogo height={30} />
-              </span>
-            </div>
-            <p>Independent English practice for schools and teachers, running on Cloudflare Workers and D1.</p>
-          </div>
-          <div>
-            <h3>Product</h3>
-            <p>
-              <Link to="/register">Create an account</Link>
-            </p>
-            <p>
-              <Link to="/login">Sign in</Link>
-            </p>
-          </div>
-          <div>
-            <h3>Integrity</h3>
-            <p>
-              Integrity monitoring records observable browser events only. It cannot see other applications, and it never
-              reports a conclusion about a candidate.
-            </p>
-          </div>
-        </div>
-        <p className="public-footer__notice">
-          Not affiliated with, endorsed by or connected to IELTS, the British Council, IDP or Cambridge. Ai eo
-          does not reproduce their materials, logos or branding, and no practice band here is an official result.
-          Content remains the responsibility of the institution that imports or writes it.
-        </p>
-      </footer>
     </div>
-  );
-}
-
-function SkillCard({
-  skill,
-  name,
-  detail,
-  meta,
-  icon,
-}: {
-  skill: 'reading' | 'listening' | 'writing' | 'mock';
-  name: string;
-  detail: string;
-  meta: string;
-  icon: IconName;
-}) {
-  return (
-    <article className={`feature skill-card skill-${skill}`}>
-      <div className="skill-card__head">
-        <span className="skill-card__icon">
-          <Icon name={icon} size={18} />
-        </span>
-        <h3 style={{ margin: 0 }}>{name}</h3>
-      </div>
-      <p className="skill-card__meta">{meta}</p>
-      <p className="muted small" style={{ marginBottom: 0 }}>
-        {detail}
-      </p>
-    </article>
-  );
-}
-
-function Feature({
-  title,
-  icon,
-  children,
-}: {
-  title: string;
-  icon?: IconName;
-  children: React.ReactNode;
-}) {
-  return (
-    <article className="feature">
-      {icon ? (
-        <div className="feature__icon" aria-hidden="true">
-          <Icon name={icon} size={19} />
-        </div>
-      ) : null}
-      <h3>{title}</h3>
-      <p className="muted small" style={{ marginBottom: 0 }}>
-        {children}
-      </p>
-    </article>
   );
 }
 
@@ -348,10 +371,6 @@ function AuthScreen({
             </li>
           ))}
         </ul>
-        <p className="auth__fineprint">
-          Ai eo is an independent practice platform. It is not affiliated with, endorsed by or connected to IELTS,
-          the British Council, IDP or Cambridge, and no band shown here is an official result.
-        </p>
       </aside>
       <section className="auth__form">
         <h1>{formTitle}</h1>
@@ -395,11 +414,11 @@ export function LoginPage() {
     <AuthScreen
       eyebrow="Welcome back"
       title="Pick up the practice where you left it."
-      lede="Your attempts, estimated bands and class assignments are all behind this sign in."
+      lede="Your lessons, attempts, estimated bands and class assignments are all behind this sign in."
       points={[
-        { title: 'Server-marked results', detail: 'Objective sections are marked in the Worker against protected answer keys.' },
-        { title: 'Timing you cannot trick', detail: 'Deadlines are recomputed on the server, so refreshing never buys extra minutes.' },
-        { title: 'Progress you can read', detail: 'Band estimates per skill, task-type accuracy and a full attempt history.' },
+        { title: 'Instant marking', detail: 'Reading and Listening against the key; Writing and Speaking by two AI judges.' },
+        { title: 'Timing you cannot trick', detail: 'The server keeps the clock, so refreshing never buys extra minutes.' },
+        { title: 'Progress you can read', detail: 'Band estimates per skill, your daily path and a full attempt history.' },
       ]}
       formTitle="Sign in"
       formIntro="Use the account your institution gave you, or the one you created."
@@ -475,7 +494,7 @@ function PasswordPolicy({ password, email }: { password: string; email: string }
       {results.map((result) => (
         <div key={result.id} className={`policy__row${result.ok && password ? ' policy__row--ok' : ''}`}>
           <span className="policy__dot" aria-hidden="true">
-            {result.ok && password ? '✓' : ''}
+            {result.ok && password ? <Icon name="check" size={10} strokeWidth={3.5} /> : null}
           </span>
           <span>{result.label}</span>
         </div>
@@ -548,12 +567,12 @@ export function RegisterPage() {
   return (
     <AuthScreen
       eyebrow="Free student account"
-      title="Practise Reading, Listening and Writing under real exam conditions."
-      lede="No credit card and no trial timer. Create an account and start a full mock whenever you are ready."
+      title="Practise all four skills under real exam conditions."
+      lede="No credit card and no trial timer. Create an account and start whenever you are ready."
       points={[
-        { title: 'Four skills, one exam shell', detail: 'Passage on the left, questions on the right, a timer the server controls.' },
-        { title: 'Honest integrity monitoring', detail: 'Observable browser events only — never a conclusion about you.' },
-        { title: 'Estimated bands, clearly labelled', detail: 'A practice signal from your institution’s own conversion profile.' },
+        { title: 'Four skills, one exam screen', detail: 'Passage on the left, questions on the right, a timer the server controls.' },
+        { title: 'AI marking in seconds', detail: 'Writing and Speaking get a band, corrections and a Vietnamese summary.' },
+        { title: 'A daily learning path', detail: 'Short lessons, new words for your level and a built-in dictionary.' },
       ]}
       formTitle="Create your account"
       formIntro="Public sign-up creates a student account. Teachers and administrators are added by an administrator."
@@ -716,10 +735,11 @@ export function JoinPage() {
 
 export function NotFoundPage() {
   return (
-    <div className="empty" style={{ padding: 80 }}>
-      <div className="empty__title">Page not found</div>
+    <div className="notfound">
+      <p className="notfound__code">404</p>
+      <h1>Page not found</h1>
       <p className="muted">The page you requested does not exist.</p>
-      <Link className="btn" to="/">
+      <Link className="btn btn--primary" to="/">
         Back to the start
       </Link>
     </div>

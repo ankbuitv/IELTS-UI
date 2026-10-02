@@ -3,6 +3,9 @@ import { ApiError } from '../lib/errors';
 import { newId, nowIso, parseJson } from '../lib/ids';
 import type { AuthUser } from '../lib/auth-types';
 import { markAttempt, type SessionMarkResult } from './marking-service';
+import { loadWritingMarks } from './ai-marking-service';
+import type { AiMarkView } from '../../shared/judges';
+import { PROJECTION_DISCLAIMER } from '../../shared/scoring';
 import { assertPracticeAccess } from './access-code-service';
 import { loadCandidateTest, type CandidateTestPayload } from './content-service';
 import {
@@ -1701,6 +1704,8 @@ export interface AttemptResultView {
   status: AttemptRow['status'];
   startedAt: string;
   submittedAt: string | null;
+  /** Why the attempt was submitted: the candidate, the timer, the tab lock (INTEGRITY_AUTO) or an administrator. */
+  submittedReason: string | null;
   durationSeconds: number | null;
   resultVisibility: ResultVisibility;
   release: {
@@ -1722,6 +1727,8 @@ export interface AttemptResultView {
       status: string;
       /** Per-section (passage/part/task) diagnostic breakdown (36). */
       sectionResults: AttemptSectionResult[];
+      /** FULL = complete paper, PROJECTED = short set scaled to a full paper, null = no band. */
+      bandBasis: 'FULL' | 'PROJECTED' | null;
       review: QuestionReview[] | null;
       writing: Array<{
         submissionId: string;
@@ -1731,6 +1738,8 @@ export interface AttemptResultView {
         wordCount: number;
         prompt: string;
         score: { band: number | null; feedback: string; source: string; scoredAt: string; criteria: Record<string, number> } | null;
+        /** The judging panel's verdict (Judge01 / Judge02); null until the writing has been marked. */
+        ai: AiMarkView | null;
       }>;
     }
   >;
@@ -1838,6 +1847,11 @@ export async function buildResultView(
         criteria_json: string | null;
       }>();
 
+    const aiFeedback = await loadWritingMarks(
+      env,
+      writingRows.results.map((row) => row.id),
+    ).catch(() => new Map<string, AiMarkView>());
+
     let review: QuestionReview[] | null = null;
     if (release.reviewAvailable && options.includeReview) {
       review = await buildQuestionReview(env, attempt.id, session.id, session.skill);
@@ -1849,6 +1863,9 @@ export async function buildResultView(
       includeReviewMaterial: release.reviewAvailable && options.includeReview,
     });
 
+    const fullLength = session.is_complete_test === 1 && (session.total_questions ?? 0) >= 40;
+    const bandBasis: 'FULL' | 'PROJECTED' | null =
+      session.skill === 'WRITING' || session.estimated_band === null ? null : fullLength ? 'FULL' : 'PROJECTED';
     sessionViews.push({
       skillSessionId: session.id,
       componentIndex: session.component_index,
@@ -1861,11 +1878,14 @@ export async function buildResultView(
       totalQuestions: session.total_questions ?? 0,
       band: session.estimated_band,
       bandAvailable: session.estimated_band !== null,
+      bandBasis,
       bandMessage:
         session.skill === 'WRITING'
-          ? 'Writing is assessed by a teacher or administrator.'
+          ? 'Writing is marked automatically by two AI judges; a teacher can replace the band.'
           : session.estimated_band !== null
-            ? 'Estimated band'
+            ? bandBasis === 'PROJECTED'
+              ? PROJECTION_DISCLAIMER
+              : 'Estimated band'
             : session.total_questions && session.total_questions > 0
               ? 'No scoring profile applies to this test, so only the raw score is reported.'
               : 'This section has no automatically marked questions.',
@@ -1889,6 +1909,7 @@ export async function buildResultView(
               criteria: parseJson<Record<string, number>>(row.criteria_json, {}),
             }
           : null,
+        ai: options.includeReview ? (aiFeedback.get(row.id) ?? null) : null,
       })),
     });
   }
@@ -1915,6 +1936,7 @@ export async function buildResultView(
     status: attempt.status,
     startedAt: attempt.started_at,
     submittedAt,
+    submittedReason: attempt.submitted_reason ?? null,
     durationSeconds,
     resultVisibility: attempt.result_visibility,
     release,

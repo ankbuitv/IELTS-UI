@@ -2,11 +2,16 @@
  * Band estimation from versioned scoring profiles.
  *
  * A raw score is a fact; a band is an *estimate* produced by a configured
- * conversion table. The platform never labels an estimate as an official band
- * and never estimates from short practice sets unless a profile explicitly
- * allows it (via `minQuestions`).
+ * conversion table. The platform never labels an estimate as an official band.
+ *
+ * Short practice sets (a single passage, one section) are not left without a
+ * number: their score is scaled up to the length of a full paper and converted,
+ * and the result is labelled a PROJECTED band so nobody mistakes it for the
+ * result of a complete test. A set must still have enough questions to say
+ * something (`MIN_QUESTIONS_FOR_PROJECTION`).
  */
 import type { Skill, TestType } from './types';
+import { MIN_QUESTIONS_FOR_PROJECTION, projectRawScore } from './bands';
 
 export interface ConversionRange {
   rawMin: number;
@@ -33,8 +38,11 @@ export type BandEstimate =
       profileId: string;
       profileName: string;
       profileVersion: number;
-      label: 'Estimated band';
+      label: 'Estimated band' | 'Projected band';
       note: string;
+      /** FULL = a complete paper; PROJECTED = a short set scaled to a full paper. */
+      basis: 'FULL' | 'PROJECTED';
+      projection: { rawScore: number; totalQuestions: number; projectedRaw: number; fullLength: number } | null;
     }
   | { available: false; reason: BandUnavailableReason; message: string };
 
@@ -50,6 +58,9 @@ export type BandUnavailableReason =
 
 export const ESTIMATE_DISCLAIMER =
   'Estimated band — a practice indication from a configured conversion table, not an official IELTS result and not affiliated with IELTS, the British Council, IDP or Cambridge.';
+
+export const PROJECTION_DISCLAIMER =
+  'Projected band — your score on this short set scaled to a full 40-question paper. Short sets are less reliable than a complete test (allow about one band either way). Not an official IELTS result.';
 
 /** Only objective skills are convertible by lookup table. */
 export function skillSupportsBandEstimation(skill: Skill): boolean {
@@ -69,7 +80,7 @@ export function estimateBand(input: {
     return {
       available: false,
       reason: 'WRITING_NOT_AUTO_SCORED',
-      message: 'Writing is marked by a teacher or administrator; no automatic band is produced.',
+      message: 'Writing has no answer key to convert. Its band comes from the AI judges after you submit, and a teacher\'s band replaces it when given.',
     };
   }
   if (rawScore === null || rawScore === undefined || totalQuestions === null || totalQuestions === undefined) {
@@ -99,15 +110,18 @@ export function estimateBand(input: {
   if (!skillSupportsBandEstimation(skill)) {
     return { available: false, reason: 'SKILL_NOT_SUPPORTED', message: 'This skill is not converted automatically.' };
   }
-  if (!isCompleteTest || totalQuestions < profile.minQuestions) {
+  const fullLength = Math.max(1, profile.minQuestions);
+  const isFullPaper = isCompleteTest && totalQuestions >= fullLength;
+  if (!isFullPaper && totalQuestions < MIN_QUESTIONS_FOR_PROJECTION) {
     return {
       available: false,
       reason: 'INCOMPLETE_TEST',
-      message: `Estimated bands require a complete test of at least ${profile.minQuestions} questions. This is a shorter practice set, so the raw score is reported instead.`,
+      message: `A band needs at least ${MIN_QUESTIONS_FOR_PROJECTION} marked questions to be projected from. This set has ${totalQuestions}, so only the raw score is reported.`,
     };
   }
 
-  const range = profile.ranges.find((r) => rawScore >= r.rawMin && rawScore <= r.rawMax);
+  const lookupScore = isFullPaper ? rawScore : projectRawScore(rawScore, totalQuestions, fullLength);
+  const range = profile.ranges.find((r) => lookupScore >= r.rawMin && lookupScore <= r.rawMax);
   if (!range) {
     return {
       available: false,
@@ -122,8 +136,10 @@ export function estimateBand(input: {
     profileId: profile.id,
     profileName: profile.name,
     profileVersion: profile.version,
-    label: 'Estimated band',
-    note: ESTIMATE_DISCLAIMER,
+    label: isFullPaper ? 'Estimated band' : 'Projected band',
+    note: isFullPaper ? ESTIMATE_DISCLAIMER : PROJECTION_DISCLAIMER,
+    basis: isFullPaper ? 'FULL' : 'PROJECTED',
+    projection: isFullPaper ? null : { rawScore, totalQuestions, projectedRaw: lookupScore, fullLength },
   };
 }
 

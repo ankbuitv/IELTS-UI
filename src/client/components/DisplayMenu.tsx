@@ -67,7 +67,7 @@ export function DisplayMenu({ compact = false, label = 'Display' }: { compact?: 
     <div className="display-menu" ref={containerRef}>
       <button
         type="button"
-        className={compact ? 'exam-topbar__icon display-menu__trigger' : 'btn btn--sm display-menu__trigger'}
+        className={compact ? 'icon-btn display-menu__trigger' : 'btn btn--sm display-menu__trigger'}
         aria-haspopup="dialog"
         aria-expanded={open}
         title="Text size, spacing and theme"
@@ -230,61 +230,4 @@ function round(value: number): number {
 
 function chipSize(scale: FontScale): string {
   return scale === 'compact' ? '0.75rem' : scale === 'normal' ? '0.9rem' : scale === 'large' ? '1.05rem' : '1.2rem';
-}
-
-/**
- * Phone-in-portrait hint shown during Reading/Listening.
- *
- * Two columns (passage + questions) are genuinely easier in landscape on a
- * phone, and the candidate controls pane layout themselves — this only advises,
- * never forces, and stays dismissed for the rest of the attempt.
- */
-export function OrientationHint({ skill, storageKey = 'exam.orientationHint' }: { skill: string; storageKey?: string }) {
-  const [dismissed, setDismissed] = useState(() => {
-    try {
-      return window.sessionStorage.getItem(storageKey) === 'dismissed';
-    } catch {
-      return false;
-    }
-  });
-  const [portrait, setPortrait] = useState(() =>
-    typeof window === 'undefined' ? false : window.innerHeight > window.innerWidth && window.innerWidth < 900,
-  );
-
-  useEffect(() => {
-    const update = () => setPortrait(window.innerHeight > window.innerWidth && window.innerWidth < 900);
-    window.addEventListener('resize', update);
-    window.addEventListener('orientationchange', update);
-    return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('orientationchange', update);
-    };
-  }, []);
-
-  if (dismissed || !portrait) return null;
-
-  return (
-    <div className="orientation-hint" role="status">
-      <Icon name="rotate" size={16} />
-      <span>
-        <strong>Xoay ngang màn hình</strong> để đọc {skill === 'LISTENING' ? 'đề nghe' : 'bài đọc'} và câu hỏi cạnh nhau
-        — dễ hơn nhiều trên điện thoại.
-      </span>
-      <button
-        type="button"
-        className="orientation-hint__close"
-        aria-label="Đã hiểu"
-        onClick={() => {
-          setDismissed(true);
-          try {
-            window.sessionStorage.setItem(storageKey, 'dismissed');
-          } catch {
-            // Ignore: hidden for this render only.
-          }
-        }}
-      >
-        <Icon name="close" size={14} />
-      </button>
-    </div>
-  );
 }

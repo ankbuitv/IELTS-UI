@@ -1,9 +1,11 @@
 import type { Env } from '../env';
+import { describeAiFailure } from '../ai/failure';
 import { ApiError } from '../lib/errors';
 import { newId, nowIso } from '../lib/ids';
 import type { AuthUser } from '../lib/auth-types';
 import { findSpeakingTopicSet, partPromptText, SPEAKING_PART_META, SPEAKING_TOPIC_SETS } from '../../shared/speaking';
-import { loadSpeakingScore, scoreSpeakingSessionWithAi, type AiGradeResult } from './ai-marking-service';
+import { loadSpeakingScore, markSpeakingSession } from './ai-marking-service';
+import type { AiMarkView } from '../../shared/judges';
 import { deleteBlob, getBlob, putBlob } from './blob-store';
 
 /**
@@ -42,7 +44,6 @@ export interface SpeakingSessionView {
     overallBand: number | null;
     feedback: string;
     markedAt: string | null;
-    providerModel: string | null;
     /** 'AI' when the marking machine produced the band, 'TEACHER' when a human did. */
     scoreSource: 'AI' | 'TEACHER' | null;
     createdAt: string;
@@ -62,7 +63,7 @@ export interface SpeakingSessionView {
     words: number;
     hasAudio: boolean;
   }>;
-  score: AiGradeResult | null;
+  score: AiMarkView | null;
 }
 
 export async function createSpeakingSession(
@@ -185,15 +186,15 @@ export async function submitSpeakingSession(
   env: Env,
   user: AuthUser,
   sessionId: string,
-  options: { providerId?: string } = {},
+  options: { force?: boolean } = {},
 ): Promise<SpeakingSessionView & { aiError: string | null }> {
   await requireOwnedSession(env, user, sessionId);
 
   let aiError: string | null = null;
   try {
-    await scoreSpeakingSessionWithAi(env, sessionId, options);
+    await markSpeakingSession(env, sessionId, options);
   } catch (error) {
-    aiError = error instanceof ApiError ? error.message : 'The AI provider could not mark this session.';
+    aiError = describeAiFailure(error, { sessionId, userId: user.id }).message;
     const timestamp = nowIso();
     await env.DB.prepare(
       "UPDATE speaking_sessions SET status = 'SUBMITTED', updated_at = ? WHERE id = ? AND status != 'MARKED'",
@@ -209,11 +210,11 @@ export async function submitSpeakingSession(
 export async function markSpeakingSessionAsStaff(
   env: Env,
   sessionId: string,
-  options: { providerId?: string } = {},
-): Promise<AiGradeResult> {
+  options: { force?: boolean } = {},
+): Promise<AiMarkView> {
   const row = await env.DB.prepare('SELECT id FROM speaking_sessions WHERE id = ?').bind(sessionId).first<{ id: string }>();
   if (!row) throw ApiError.notFound('Speaking session not found.');
-  return scoreSpeakingSessionWithAi(env, sessionId, options);
+  return (await markSpeakingSession(env, sessionId, options)).view;
 }
 
 export interface SpeakingQueueItem {
@@ -226,7 +227,8 @@ export interface SpeakingQueueItem {
   status: string;
   overallBand: number | null;
   scoreSource: 'AI' | 'TEACHER' | null;
-  providerModel: string | null;
+  /** The judges that marked it, by label only (for example "Judge01 + Judge02"). */
+  judges: string | null;
   feedback: string;
   parts: number;
   audioParts: number;
@@ -322,7 +324,7 @@ export async function listSpeakingQueue(
       status: row.status,
       overallBand: row.overall_band,
       scoreSource: row.score_source ?? (row.overall_band !== null ? 'AI' : null),
-      providerModel: row.provider_model,
+      judges: publicPanelLabel(row.provider_model),
       feedback: row.feedback,
       parts: row.parts,
       audioParts: row.audio_parts,
@@ -410,7 +412,7 @@ async function requireSession(env: Env, user: AuthUser, sessionId: string): Prom
   const session = await requireOwnedSession(env, user, sessionId);
   const row = await env.DB.prepare(
     `SELECT id, status, mode, topic_set_id, topic_title, part_count, overall_band, feedback, marked_at,
-            provider_model, score_source, created_at
+            score_source, created_at
        FROM speaking_sessions WHERE id = ?`,
   )
     .bind(session.id)
@@ -424,7 +426,6 @@ async function requireSession(env: Env, user: AuthUser, sessionId: string): Prom
       overall_band: number | null;
       feedback: string;
       marked_at: string | null;
-      provider_model: string | null;
       score_source: 'AI' | 'TEACHER' | null;
       created_at: string;
     }>();
@@ -450,7 +451,6 @@ async function requireSession(env: Env, user: AuthUser, sessionId: string): Prom
       overallBand: row.overall_band,
       feedback: row.feedback,
       markedAt: row.marked_at,
-      providerModel: row.provider_model,
       scoreSource: row.score_source ?? (row.overall_band !== null ? 'AI' : null),
       createdAt: row.created_at,
     },
@@ -480,3 +480,14 @@ export function speakingCatalog(): Array<{ id: string; title: string; summary: s
 }
 
 export const SPEAKING_PARTS = SPEAKING_PART_META;
+
+/**
+ * `speaking_sessions.provider_model` holds judge labels for new sessions but a
+ * real model name for sessions marked before the panel existed. Only labels may
+ * leave the Worker, so anything else is reported as the first judge.
+ */
+export function publicPanelLabel(stored: string | null): string | null {
+  if (!stored) return null;
+  const labels = stored.match(/Judge0[12]/g);
+  return labels && labels.length > 0 ? [...new Set(labels)].join(' + ') : 'Judge01';
+}

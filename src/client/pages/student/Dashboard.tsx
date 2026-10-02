@@ -3,12 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../context/AuthContext';
-import { Badge, Button, Card, EmptyState, Loading, Notice, ProgressBar, Stat } from '../../components/ui';
+import { Badge, Button, Card, Chips, EmptyState, Loading, Notice, ProgressBar, SkillGlyph } from '../../components/ui';
 import { AccuracyList, BarChart, LineChart } from '../../components/charts';
+import { AttemptList, newestFirst } from '../../components/AttemptList';
+import { Icon } from '../../components/Icon';
+import { BandEstimatesPanel } from '../../components/BandEstimates';
+import { LearnStrip } from '../../components/learn/LearnStrip';
 import {
   BAND_DISCLAIMER,
   formatBand,
-  formatDateTime,
   formatDuration,
   formatPercent,
   formatScore,
@@ -18,10 +21,11 @@ import {
   STATUS_LABELS,
   TEST_TYPE_LABELS,
 } from '../../lib/format';
-import type { SkillPerformance, StudentDashboard, TrendPoint, AssignmentSummary, AttemptSummary } from './types';
+import type { SkillPerformance, StudentDashboard, TrendPoint, AssignmentSummary } from './types';
 
 export function StudentDashboardPage() {
   const { user } = useAuth();
+  const [trendMode, setTrendMode] = useState<'band' | 'score'>('band');
   const [filters, setFilters] = useState<{ from: string; to: string; skill: string; testType: string }>({
     from: '',
     to: '',
@@ -45,248 +49,245 @@ export function StudentDashboardPage() {
   if (error) return <Notice tone="danger">{error}</Notice>;
   if (!data) return null;
 
-  const reading = data.skillPerformance.find((skill) => skill.skill === 'READING');
-  const listening = data.skillPerformance.find((skill) => skill.skill === 'LISTENING');
-  const writing = data.skillPerformance.find((skill) => skill.skill === 'WRITING');
+  const recent = newestFirst(data.recentAttempts.length > 0 ? data.recentAttempts : data.practiceHistory);
+  const running = recent.find((attempt) => attempt.status === 'IN_PROGRESS') ?? null;
+  const dueSoon = data.upcomingDeadlines.slice(0, 3);
+  const activeAssignments = data.assignments.filter((assignment) => assignment.status !== 'SUBMITTED').slice(0, 3);
+  const upNext = dueSoon.length > 0 ? dueSoon : activeAssignments;
+  const firstName = user?.displayName.split(' ')[0] ?? '';
+
+  const trendPoints = data.trends
+    .slice(0, 12)
+    .reverse()
+    .map((trend) => ({
+      label: new Date(trend.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      value:
+        trendMode === 'band'
+          ? trend.estimatedBand
+          : trend.rawScore !== null && trend.totalQuestions
+            ? Math.round((trend.rawScore / trend.totalQuestions) * 100)
+            : null,
+      sublabel:
+        trendMode === 'band'
+          ? `${TEST_TYPE_LABELS[trend.testType]} · ${formatBand(trend.estimatedBand)}`
+          : `${trend.rawScore ?? 0}/${trend.totalQuestions ?? 0}`,
+    }));
+  const hasTrend = trendPoints.some((point) => point.value !== null);
 
   return (
-    <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Welcome back, {user?.displayName.split(' ')[0]}</h1>
-          <p className="page-head__meta">
-            {data.assignments.length} active assignment{data.assignments.length === 1 ? '' : 's'} ·{' '}
-            {data.totals.inProgress} attempt in progress · {data.totals.fullMocks} full mock
-            {data.totals.fullMocks === 1 ? '' : 's'} completed
+    <div className="stack dash">
+      <section className="dash-hero">
+        <div className="dash-hero__text">
+          <h1>Welcome back{firstName ? `, ${firstName}` : ''}</h1>
+          <p>
+            {data.totals.submitted === 0
+              ? 'Take your first practice test to start tracking your progress.'
+              : `${data.totals.submitted} attempt${data.totals.submitted === 1 ? '' : 's'} finished${
+                  data.totals.inProgress > 0 ? ` · ${data.totals.inProgress} in progress` : ''
+                }${data.totals.fullMocks > 0 ? ` · ${data.totals.fullMocks} full mock${data.totals.fullMocks === 1 ? '' : 's'}` : ''}`}
           </p>
         </div>
-        <div className="row">
-          <Link className="btn btn--primary" to="/practice">
-            Start practice
-          </Link>
-          <Link className="btn" to="/history">
-            Attempt history
+        <div className="dash-hero__actions">
+          {running ? (
+            <Link className="btn btn--primary" to={`/exam/${running.attemptId}`}>
+              <Icon name="play" size={14} />
+              Continue “{truncateTitle(running.testTitle)}”
+            </Link>
+          ) : (
+            <Link className="btn btn--primary" to="/practice">
+              <Icon name="play" size={14} />
+              Start a test
+            </Link>
+          )}
+          <Link className="btn" to="/learn">
+            <Icon name="target" size={14} />
+            Continue learning
           </Link>
         </div>
-      </div>
+      </section>
 
-      <Card title="Filters" hint="Filters apply to attempts, trends and task-type accuracy.">
-        <div className="filter-bar">
-          <label className="field">
-            <span className="field__label">From</span>
-            <input type="date" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
-          </label>
-          <label className="field">
-            <span className="field__label">To</span>
-            <input type="date" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
-          </label>
-          <label className="field">
-            <span className="field__label">Skill</span>
-            <select value={filters.skill} onChange={(event) => setFilters({ ...filters, skill: event.target.value })}>
-              <option value="">All skills</option>
-              <option value="READING">Reading</option>
-              <option value="LISTENING">Listening</option>
-              <option value="WRITING">Writing</option>
-            </select>
-          </label>
-          <label className="field">
-            <span className="field__label">Test type</span>
-            <select value={filters.testType} onChange={(event) => setFilters({ ...filters, testType: event.target.value })}>
-              <option value="">All types</option>
-              <option value="READING">Reading</option>
-              <option value="LISTENING">Listening</option>
-              <option value="WRITING">Writing</option>
-              <option value="FULL_MOCK">Full mock</option>
-            </select>
-          </label>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setFilters({ from: '', to: '', skill: '', testType: '' })}
-          >
-            Reset
-          </Button>
-        </div>
-      </Card>
+      <LearnStrip />
 
-      <div className="grid grid--4">
-        <Stat
-          label="Attempts"
-          value={data.totals.attempts}
-          hint={`${data.totals.submitted} submitted`}
-          icon="🗂"
-          accent="blue"
-        />
-        <Stat
-          label="Reading"
-          value={formatScore(reading?.rawScore ?? null, reading?.totalQuestions ?? null)}
-          hint={reading?.latestBand ? `Latest estimated band ${formatBand(reading.latestBand)}` : 'No marked reading yet'}
-          icon="📖"
-          accent="brand"
-        />
-        <Stat
-          label="Listening"
-          value={formatScore(listening?.rawScore ?? null, listening?.totalQuestions ?? null)}
-          hint={listening?.latestBand ? `Latest estimated band ${formatBand(listening.latestBand)}` : 'No marked listening yet'}
-          icon="🎧"
-          accent="violet"
-        />
-        <Stat
-          label="Writing"
-          value={writing?.writingScores ? `${writing.writingScores} marked` : 'Not yet marked'}
-          hint={writing?.averageWritingBand ? `Average ${formatBand(writing.averageWritingBand)}` : 'Teacher-marked only'}
-          icon="✍️"
-          accent="amber"
-        />
-      </div>
+      <BandEstimatesPanel estimates={data.estimates} />
 
-      <div className="grid grid--2">
-        <Card title="Upcoming deadlines">
-          {data.upcomingDeadlines.length === 0 ? (
-            <EmptyState title="Nothing due">Assignments with a deadline will appear here.</EmptyState>
-          ) : (
-            <div className="stack" style={{ gap: 10 }}>
-              {data.upcomingDeadlines.map((assignment) => (
-                <AssignmentRow key={assignment.assignmentId} assignment={assignment} />
-              ))}
-            </div>
-          )}
-        </Card>
-
-        <Card title="Active assignments">
-          {data.assignments.length === 0 ? (
-            <EmptyState title="No assignments yet">
-              Join a classroom with a code or invitation link to receive assignments.
-            </EmptyState>
-          ) : (
-            <div className="stack" style={{ gap: 10 }}>
-              {data.assignments.slice(0, 6).map((assignment) => (
-                <AssignmentRow key={assignment.assignmentId} assignment={assignment} compact />
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      <div className="grid grid--2">
-        <Card title="Estimated band over time" hint="Reading and Listening only, from configured scoring profiles">
-          <LineChart
-            points={data.trends
-              .slice(0, 12)
-              .reverse()
-              .map((trend) => ({
-                label: new Date(trend.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-                value: trend.estimatedBand,
-                sublabel: `${TEST_TYPE_LABELS[trend.testType]} · ${formatBand(trend.estimatedBand)}`,
-              }))}
-            yMax={9}
-            formatValue={(value) => value.toFixed(1)}
-            yLabel="Estimated band trend"
-          />
-          <p className="tiny muted">{BAND_DISCLAIMER}</p>
-        </Card>
-
-        <Card title="Raw score trend" hint="Percentage of marks per submitted attempt">
-          <LineChart
-            points={data.trends
-              .slice(0, 12)
-              .reverse()
-              .map((trend) => ({
-                label: new Date(trend.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-                value:
-                  trend.rawScore !== null && trend.totalQuestions
-                    ? Math.round((trend.rawScore / trend.totalQuestions) * 100)
-                    : null,
-                sublabel: `${trend.rawScore ?? 0}/${trend.totalQuestions ?? 0}`,
-              }))}
-            yMax={100}
-            formatValue={(value) => `${Math.round(value)}%`}
-            yLabel="Raw score trend"
-          />
-        </Card>
-      </div>
-
-      <div className="grid grid--2">
-        <Card title="Skill breakdown">
-          <div className="stack">
-            {data.skillPerformance.map((skill) => (
-              <div key={skill.skill}>
-                <div className="row row--between">
-                  <span>{SKILL_LABELS[skill.skill] ?? skill.skill}</span>
-                  <span className="small muted">
-                    {formatScore(skill.rawScore, skill.totalQuestions)} · {formatPercent(skill.accuracy)}
-                  </span>
-                </div>
-                <ProgressBar
-                  value={skill.accuracy ?? 0}
-                  max={100}
-                  tone={(skill.accuracy ?? 0) >= 70 ? 'success' : (skill.accuracy ?? 0) >= 45 ? 'warning' : 'danger'}
-                />
-              </div>
+      {upNext.length > 0 ? (
+        <Card title={dueSoon.length > 0 ? 'Due soon' : 'Your assignments'} hint="From your classrooms">
+          <div className="stack" style={{ gap: 8 }}>
+            {upNext.map((assignment) => (
+              <AssignmentRow key={assignment.assignmentId} assignment={assignment} compact />
             ))}
           </div>
         </Card>
+      ) : null}
 
+      <div className="dash-grid">
         <Card
-          title="By passage / part"
-          hint="Diagnostic only — these are not standalone IELTS band scores."
+          title="Recent attempts"
+          actions={
+            <Link className="small" to="/history">
+              View all
+            </Link>
+          }
+          flush
         >
-          {(data.sectionPerformance ?? []).length === 0 ? (
-            <p className="muted small">Submit a multi-part test to see per-passage and per-part performance.</p>
+          {recent.length === 0 ? (
+            <EmptyState title="No attempts yet">
+              <Link className="btn btn--primary btn--sm" to="/practice" style={{ marginTop: 10 }}>
+                Start your first test
+              </Link>
+            </EmptyState>
           ) : (
-            <div className="stack">
-              {(data.sectionPerformance ?? []).slice(0, 8).map((section) => (
-                <div key={section.sectionId}>
-                  <div className="row row--between">
-                    <span>
-                      {section.label} <span className="tiny muted">· {SKILL_LABELS[section.skill] ?? section.skill}</span>
-                    </span>
-                    <span className="small muted">
-                      {section.correct}/{section.answered} correct · {formatPercent(section.accuracy)}
-                    </span>
-                  </div>
-                  <ProgressBar
-                    value={section.accuracy ?? 0}
-                    max={100}
-                    tone={(section.accuracy ?? 0) >= 70 ? 'success' : (section.accuracy ?? 0) >= 45 ? 'warning' : 'danger'}
-                  />
-                </div>
-              ))}
-            </div>
+            <AttemptList attempts={recent} limit={6} />
           )}
         </Card>
 
-        <Card title="Task-type accuracy" hint="From server-marked answers">
-          <AccuracyList
-            items={data.taskTypes.map((taskType) => ({
-              label: taskType.label,
-              correct: taskType.correct,
-              total: taskType.answered,
-              accuracy: taskType.accuracy,
-            }))}
-          />
+        <Card
+          title="Progress"
+          hint={trendMode === 'band' ? 'Estimated band per attempt' : 'Share of marks per attempt'}
+          actions={
+            <Chips
+              label="Chart"
+              value={trendMode}
+              onChange={setTrendMode}
+              options={[
+                { id: 'band', label: 'Band' },
+                { id: 'score', label: 'Score %' },
+              ]}
+            />
+          }
+        >
+          {hasTrend ? (
+            <LineChart
+              points={trendPoints}
+              yMax={trendMode === 'band' ? 9 : 100}
+              formatValue={(value) => (trendMode === 'band' ? value.toFixed(1) : `${Math.round(value)}%`)}
+              yLabel={trendMode === 'band' ? 'Estimated band trend' : 'Raw score trend'}
+            />
+          ) : (
+            <EmptyState title="Nothing to chart yet">Finish a Reading or Listening test and your trend appears here.</EmptyState>
+          )}
+          {trendMode === 'band' ? <p className="tiny muted">{BAND_DISCLAIMER}</p> : null}
         </Card>
       </div>
 
-      <Card title="Full mock history" flush>
-        {data.mockHistory.length === 0 ? (
-          <EmptyState title="No full mocks yet">
-            Full mocks combine Listening, Reading and Writing with separate server-authoritative timers.
-          </EmptyState>
-        ) : (
-          <AttemptTable attempts={data.mockHistory} />
-        )}
-      </Card>
+      <details className="disclosure">
+        <summary>
+          <Icon name="chart" size={15} />
+          <span>More analytics</span>
+          <span className="disclosure__hint">Skills, parts, task types, full mocks and filters</span>
+          <Icon name="chevronDown" size={15} className="disclosure__chev" />
+        </summary>
+        <div className="disclosure__body stack">
+          <div className="filter-bar">
+            <label className="field">
+              <span className="field__label">From</span>
+              <input type="date" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
+            </label>
+            <label className="field">
+              <span className="field__label">To</span>
+              <input type="date" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
+            </label>
+            <label className="field">
+              <span className="field__label">Skill</span>
+              <select value={filters.skill} onChange={(event) => setFilters({ ...filters, skill: event.target.value })}>
+                <option value="">All skills</option>
+                <option value="READING">Reading</option>
+                <option value="LISTENING">Listening</option>
+                <option value="WRITING">Writing</option>
+              </select>
+            </label>
+            <label className="field">
+              <span className="field__label">Test type</span>
+              <select value={filters.testType} onChange={(event) => setFilters({ ...filters, testType: event.target.value })}>
+                <option value="">All types</option>
+                <option value="READING">Reading</option>
+                <option value="LISTENING">Listening</option>
+                <option value="WRITING">Writing</option>
+                <option value="FULL_MOCK">Full mock</option>
+              </select>
+            </label>
+            <Button size="sm" variant="ghost" onClick={() => setFilters({ from: '', to: '', skill: '', testType: '' })}>
+              Reset
+            </Button>
+          </div>
 
-      <Card title="Practice and test history" flush>
-        {data.practiceHistory.length === 0 ? (
-          <EmptyState title="No attempts recorded yet" />
-        ) : (
-          <AttemptTable attempts={data.practiceHistory.slice(0, 15)} />
-        )}
-      </Card>
+          <div className="grid grid--2">
+            <Card title="Skill breakdown">
+              <div className="stack" style={{ gap: 10 }}>
+                {data.skillPerformance.map((skill) => (
+                  <div key={skill.skill}>
+                    <div className="row row--between">
+                      <span>{SKILL_LABELS[skill.skill] ?? skill.skill}</span>
+                      <span className="small muted">
+                        {formatScore(skill.rawScore, skill.totalQuestions)} · {formatPercent(skill.accuracy)}
+                      </span>
+                    </div>
+                    <ProgressBar
+                      value={skill.accuracy ?? 0}
+                      max={100}
+                      tone={(skill.accuracy ?? 0) >= 70 ? 'success' : (skill.accuracy ?? 0) >= 45 ? 'warning' : 'danger'}
+                    />
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card title="By passage / part" hint="Diagnostic only — not standalone band scores.">
+              {(data.sectionPerformance ?? []).length === 0 ? (
+                <p className="muted small">Submit a multi-part test to see per-passage and per-part performance.</p>
+              ) : (
+                <div className="stack" style={{ gap: 10 }}>
+                  {(data.sectionPerformance ?? []).slice(0, 8).map((section) => (
+                    <div key={section.sectionId}>
+                      <div className="row row--between">
+                        <span>
+                          {section.label} <span className="tiny muted">· {SKILL_LABELS[section.skill] ?? section.skill}</span>
+                        </span>
+                        <span className="small muted">
+                          {section.correct}/{section.answered} · {formatPercent(section.accuracy)}
+                        </span>
+                      </div>
+                      <ProgressBar
+                        value={section.accuracy ?? 0}
+                        max={100}
+                        tone={(section.accuracy ?? 0) >= 70 ? 'success' : (section.accuracy ?? 0) >= 45 ? 'warning' : 'danger'}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <Card title="Task-type accuracy" hint="From server-marked answers">
+              <AccuracyList
+                items={data.taskTypes.map((taskType) => ({
+                  label: taskType.label,
+                  correct: taskType.correct,
+                  total: taskType.answered,
+                  accuracy: taskType.accuracy,
+                }))}
+              />
+            </Card>
+
+            <Card title="Full mock history" flush>
+              {data.mockHistory.length === 0 ? (
+                <EmptyState title="No full mocks yet">
+                  Full mocks combine Listening, Reading and Writing with separate server-authoritative timers.
+                </EmptyState>
+              ) : (
+                <AttemptList attempts={data.mockHistory} limit={6} />
+              )}
+            </Card>
+          </div>
+        </div>
+      </details>
     </div>
   );
+}
+
+/** Keeps a button label on one line. */
+function truncateTitle(title: string, max = 28): string {
+  return title.length > max ? `${title.slice(0, max - 1).trimEnd()}…` : title;
 }
 
 export function AssignmentRow({ assignment, compact }: { assignment: AssignmentSummary; compact?: boolean }) {
@@ -304,39 +305,35 @@ export function AssignmentRow({ assignment, compact }: { assignment: AssignmentS
     }
   };
 
+  const used = `${assignment.attemptsUsed}/${assignment.maxAttempts} attempts`;
   return (
-    <div className="card" style={{ padding: 14, background: 'var(--paper-muted)' }}>
-      <div className="row row--between">
-        <div>
+    <div className={`assign-row${overdue ? ' assign-row--overdue' : ''}`}>
+      <SkillGlyph type={assignment.testType} />
+      <div className="assign-row__main">
+        <div className="assign-row__title">
           <strong>{assignment.title}</strong>
-          <div className="tiny muted">
-            {assignment.testTitle} · {TEST_TYPE_LABELS[assignment.testType] ?? assignment.testType} · v
-            {assignment.versionNumber} · {assignment.classroomName}
-          </div>
+          <Badge tone={statusTone(assignment.status)} plain>
+            {STATUS_LABELS[assignment.status]}
+          </Badge>
         </div>
-        <Badge tone={statusTone(assignment.status)}>{STATUS_LABELS[assignment.status]}</Badge>
+        <div className="assign-row__meta">
+          {assignment.testTitle} · {assignment.classroomName}
+          {assignment.deadlineAt ? ` · due ${relativeTime(assignment.deadlineAt)}` : ''}
+          {!compact ? ` · ${used}` : ''}
+          {!compact && assignment.bestRawScore !== null
+            ? ` · best ${assignment.bestRawScore}/${assignment.bestTotalQuestions}${assignment.bestBand !== null ? ` (band ${formatBand(assignment.bestBand)})` : ''}`
+            : ''}
+        </div>
       </div>
-
-      {!compact ? (
-        <div className="row row--between" style={{ marginTop: 8 }}>
-          <span className="small muted">
-            Attempts {assignment.attemptsUsed}/{assignment.maxAttempts}
-            {assignment.deadlineAt ? ` · due ${relativeTime(assignment.deadlineAt)}` : ''}
-          </span>
-          <span className="small muted">
-            {assignment.bestRawScore !== null ? `Best ${assignment.bestRawScore}/${assignment.bestTotalQuestions}` : ''}
-            {assignment.bestBand !== null ? ` · estimated ${formatBand(assignment.bestBand)}` : ''}
-          </span>
-        </div>
-      ) : null}
-
-      <div className="row" style={{ marginTop: 10 }}>
+      <div className="assign-row__action">
         {assignment.inProgressAttemptId ? (
           <Button size="sm" variant="primary" onClick={() => navigate(`/exam/${assignment.inProgressAttemptId}`)}>
-            Continue attempt
+            Continue
           </Button>
         ) : overdue ? (
-          <span className="small muted">The deadline has passed. Ask your teacher if you may still take it.</span>
+          <span className="tiny muted" title="Ask your teacher if you may still take it.">
+            Closed
+          </span>
         ) : (
           <Button
             size="sm"
@@ -345,65 +342,10 @@ export function AssignmentRow({ assignment, compact }: { assignment: AssignmentS
             onClick={() => void start()}
             disabled={assignment.attemptsUsed >= assignment.maxAttempts}
           >
-            {assignment.attemptsUsed > 0 ? 'Start another attempt' : 'Start test'}
+            {assignment.attemptsUsed > 0 ? 'Again' : 'Start'}
           </Button>
         )}
-        <span className="tiny muted">
-          {assignment.mode === 'PRACTICE' ? 'Practice mode' : `${assignment.mode.replace('_', ' ').toLowerCase()}`} ·{' '}
-          results {assignment.resultVisibility.toLowerCase().replace(/_/g, ' ')}
-        </span>
       </div>
-    </div>
-  );
-}
-
-export function AttemptTable({ attempts }: { attempts: AttemptSummary[] }) {
-  return (
-    <div className="table-wrap">
-      <table className="data">
-        <thead>
-          <tr>
-            <th>Test</th>
-            <th>Type</th>
-            <th className="num">Raw</th>
-            <th className="num">Est. band</th>
-            <th>Started</th>
-            <th>Status</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {attempts.map((attempt) => (
-            <tr key={attempt.attemptId}>
-              <td>
-                {attempt.testTitle}
-                <div className="tiny muted">
-                  v{attempt.versionNumber}
-                  {attempt.assignmentTitle ? ` · ${attempt.assignmentTitle}` : ''}
-                </div>
-              </td>
-              <td>{TEST_TYPE_LABELS[attempt.testType] ?? attempt.testType}</td>
-              <td className="num">{attempt.rawScore !== null ? formatScore(attempt.rawScore, attempt.totalQuestions) : '—'}</td>
-              <td className="num">{formatBand(attempt.estimatedBand)}</td>
-              <td className="nowrap">{formatDateTime(attempt.startedAt)}</td>
-              <td>
-                <Badge tone={statusTone(attempt.status)}>{attempt.status.replace('_', ' ').toLowerCase()}</Badge>
-              </td>
-              <td className="right">
-                {attempt.status === 'IN_PROGRESS' ? (
-                  <Link className="btn btn--sm" to={`/exam/${attempt.attemptId}`}>
-                    Resume
-                  </Link>
-                ) : (
-                  <Link className="btn btn--sm" to={`/attempts/${attempt.attemptId}`}>
-                    View result
-                  </Link>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }

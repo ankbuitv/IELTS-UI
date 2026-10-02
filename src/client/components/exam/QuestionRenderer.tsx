@@ -168,9 +168,10 @@ export function QuestionRenderer({
               className={`question__flag ${flagged ? 'question__flag--on' : ''}`}
               onClick={() => onToggleFlag(question.id)}
               aria-pressed={flagged}
+              title={flagged ? 'Remove the flag' : 'Flag for review'}
             >
               <Icon name="flag" size={14} />
-              {flagged ? 'Flagged for review' : 'Flag for review'}
+              <span className="question__flag-label">{flagged ? 'Flagged for review' : 'Flag for review'}</span>
             </button>
           ) : null}
 

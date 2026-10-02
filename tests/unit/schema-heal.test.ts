@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CHECK_REBUILDS,
   isAddableColumnDefinition,
+  isCheckConstraintError,
   parseCreateTableColumns,
+  rebuildStatements,
   runtimeExpectedColumns,
   runtimeIndexStatements,
   runtimeTableStatements,
   schemaTableNames,
   splitSqlStatements,
+  staleConstraintTables,
 } from '@worker/lib/ensure-schema';
 import schemaSql from '@worker/lib/runtime-schema.sql';
 
@@ -209,5 +213,124 @@ describe('column healing plan', () => {
     expect(tables.get('sections')!.has('label')).toBe(true);
     expect(tables.has('attempt_sections')).toBe(true);
     expect(tables.has('vocabulary_entries')).toBe(true);
+  });
+});
+
+/**
+ * The second schema-drift failure: "The AI provider could not mark this
+ * response." A database bootstrapped before migration 0007 keeps
+ * `CHECK (scoring_source IN ('TEACHER', 'ADMIN', 'IMPORTED'))` because column
+ * healing is ADD COLUMN only, so the AI grader's `INSERT … 'AI'` was rejected
+ * even though the provider had answered. The table is now rebuilt in place.
+ */
+const STALE_WRITING_SCORES_SQL = `CREATE TABLE writing_scores (
+  id                    TEXT PRIMARY KEY,
+  writing_submission_id TEXT NOT NULL UNIQUE REFERENCES writing_submissions (id) ON DELETE CASCADE,
+  band                  REAL,
+  criteria_json         TEXT NOT NULL DEFAULT '{}',
+  feedback              TEXT NOT NULL DEFAULT '',
+  scoring_source        TEXT NOT NULL CHECK (scoring_source IN ('TEACHER', 'ADMIN', 'IMPORTED')),
+  scored_by             TEXT REFERENCES users (id) ON DELETE SET NULL,
+  scored_at             TEXT NOT NULL,
+  created_at            TEXT NOT NULL,
+  updated_at            TEXT NOT NULL
+)`;
+
+/** The slice of `node:sqlite`'s DatabaseSync this test uses. */
+interface SqliteDb {
+  exec(sql: string): void;
+  prepare(sql: string): { get(): unknown };
+  close(): void;
+}
+
+describe('stale CHECK constraints', () => {
+  const runtimeSql = new Map(runtimeTableStatements()).get('writing_scores')!;
+
+  it('flags a writing_scores table that predates the AI source, and only that', () => {
+    expect(staleConstraintTables(new Map([['writing_scores', STALE_WRITING_SCORES_SQL]]))).toEqual(['writing_scores']);
+    expect(staleConstraintTables(new Map([['writing_scores', runtimeSql]]))).toEqual([]);
+    // A table that does not exist is the missing-table path's business.
+    expect(staleConstraintTables(new Map())).toEqual([]);
+  });
+
+  it('is satisfied by the table definition the Worker ships', () => {
+    for (const rule of CHECK_REBUILDS) {
+      const sql = new Map(runtimeTableStatements()).get(rule.table);
+      expect(sql, rule.table).toBeDefined();
+      expect(rule.requires.test(sql!), `${rule.table}: ${rule.why}`).toBe(true);
+    }
+  });
+
+  it('recognises a CHECK failure but not other database errors', () => {
+    expect(isCheckConstraintError(new Error('D1_ERROR: CHECK constraint failed: scoring_source IN (...): SQLITE_CONSTRAINT'))).toBe(true);
+    expect(isCheckConstraintError(new Error('D1_ERROR: no such table: writing_scores'))).toBe(false);
+    expect(isCheckConstraintError(undefined)).toBe(false);
+  });
+
+  it('builds a copy-then-swap rebuild that names only shared columns', () => {
+    const sql: string[] = [];
+    const env = { DB: { prepare: (statement: string) => (sql.push(statement), { statement }) } } as never;
+    rebuildStatements(env, 'writing_scores', runtimeSql, STALE_WRITING_SCORES_SQL);
+
+    expect(sql[0]).toBe('PRAGMA defer_foreign_keys = ON');
+    expect(sql.some((statement) => /^CREATE TABLE "writing_scores__rebuild"/.test(statement))).toBe(true);
+    expect(sql.find((statement) => statement.startsWith('INSERT INTO'))).toBe(
+      'INSERT INTO "writing_scores__rebuild" ("id", "writing_submission_id", "band", "criteria_json", "feedback", "scoring_source", "scored_by", "scored_at", "created_at", "updated_at") SELECT "id", "writing_submission_id", "band", "criteria_json", "feedback", "scoring_source", "scored_by", "scored_at", "created_at", "updated_at" FROM "writing_scores"',
+    );
+    // Copy happens before the old table is dropped, and the rename comes last.
+    const index = (pattern: RegExp) => sql.findIndex((statement) => pattern.test(statement));
+    expect(index(/^INSERT INTO/)).toBeLessThan(index(/^DROP TABLE "writing_scores"$/));
+    expect(index(/^DROP TABLE "writing_scores"$/)).toBeLessThan(index(/RENAME TO "writing_scores"$/));
+    expect(sql.at(-1)).toBe('ALTER TABLE "writing_scores__rebuild" RENAME TO "writing_scores"');
+  });
+
+  // Runs the generated statements against a real SQLite engine (Node 22+ ships
+  // one); older Node versions skip it rather than fail.
+  it('rebuilds a stale table on a real SQLite engine without losing a row', async () => {
+    // A computed specifier keeps TypeScript (older @types/node) from resolving it.
+    const specifier = 'node:sqlite';
+    const sqlite = (await import(/* @vite-ignore */ specifier).catch(() => null)) as {
+      DatabaseSync: new (path: string) => SqliteDb;
+    } | null;
+    if (!sqlite) return;
+    const db = new sqlite.DatabaseSync(':memory:');
+    db.exec('PRAGMA foreign_keys = ON');
+    db.exec('CREATE TABLE users (id TEXT PRIMARY KEY)');
+    db.exec('CREATE TABLE writing_submissions (id TEXT PRIMARY KEY)');
+    db.exec(STALE_WRITING_SCORES_SQL);
+    db.exec('CREATE INDEX idx_writing_scores_source ON writing_scores (scoring_source)');
+    db.exec("INSERT INTO users VALUES ('u1')");
+    db.exec("INSERT INTO writing_submissions VALUES ('s1'), ('s2')");
+    db.exec(
+      "INSERT INTO writing_scores VALUES ('a', 's1', 6.5, '{\"TASK_ACHIEVEMENT\":6}', 'Teacher note', 'TEACHER', 'u1', 't', 't', 't')",
+    );
+
+    // 1. The bug: the AI source is refused.
+    const insertAi = "INSERT INTO writing_scores VALUES ('b', 's2', 7, '{}', 'AI note', 'AI', NULL, 't', 't', 't')";
+    expect(() => db.exec(insertAi)).toThrow(/CHECK constraint failed/);
+
+    // 2. The heal, exactly as `healSchema` batches it (a batch is one transaction).
+    const sql: string[] = [];
+    const env = { DB: { prepare: (statement: string) => (sql.push(statement), { statement }) } } as never;
+    rebuildStatements(env, 'writing_scores', runtimeSql, STALE_WRITING_SCORES_SQL);
+    db.exec('BEGIN');
+    for (const statement of sql) db.exec(statement);
+    db.exec('COMMIT');
+
+    // 3. The old row survived untouched and the AI row is now accepted.
+    expect(db.prepare("SELECT band, feedback, scoring_source, scored_by FROM writing_scores WHERE id = 'a'").get()).toMatchObject({
+      band: 6.5,
+      feedback: 'Teacher note',
+      scoring_source: 'TEACHER',
+      scored_by: 'u1',
+    });
+    expect(() => db.exec(insertAi)).not.toThrow();
+    expect(db.prepare('SELECT COUNT(*) AS n FROM writing_scores').get()).toEqual({ n: 2 });
+    // The table is recognised as current afterwards.
+    const live = db.prepare("SELECT sql FROM sqlite_master WHERE name = 'writing_scores'").get() as { sql: string };
+    expect(staleConstraintTables(new Map([['writing_scores', live.sql]]))).toEqual([]);
+    // The foreign key to the submission still works.
+    expect(() => db.exec("INSERT INTO writing_scores VALUES ('c', 'nope', 1, '{}', '', 'AI', NULL, 't', 't', 't')")).toThrow(/FOREIGN KEY/);
+    db.close();
   });
 });

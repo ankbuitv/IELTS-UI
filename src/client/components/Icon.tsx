@@ -56,7 +56,8 @@ export type IconName =
   | 'rotate'
   | 'trash'
   | 'download'
-  | 'wand';
+  | 'wand'
+  | 'heart';
 
 const PATHS: Record<IconName, ReactElement> = {
   grid: (
@@ -312,6 +313,7 @@ const PATHS: Record<IconName, ReactElement> = {
       <path d="m15.2 4.2 4.6 4.6" />
     </>
   ),
+  heart: <path d="M12 20.4s-7.6-4.5-7.6-10.1A4.3 4.3 0 0 1 12 7.5a4.3 4.3 0 0 1 7.6 2.8c0 5.6-7.6 10.1-7.6 10.1z" />,
   list: (
     <>
       <path d="M8.5 6.5h11" />

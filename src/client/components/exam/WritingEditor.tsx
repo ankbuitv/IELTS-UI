@@ -1,67 +1,94 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { CandidateSection } from '@shared/question-types';
-import { Tabs } from '../ui';
+import { useMemo, useState } from 'react';
+import type { CandidateQuestion, CandidateSection } from '@shared/question-types';
 import { countWords } from '../../lib/format';
 import { SectionImage } from './SectionImage';
 
-export function WritingEditor({
-  sections,
+/** A Writing task together with the section (part) it belongs to. */
+export interface WritingTaskRef {
+  task: CandidateQuestion;
+  section: CandidateSection;
+}
+
+export function writingTasksOf(sections: CandidateSection[]): WritingTaskRef[] {
+  return sections.flatMap((section) => section.writingTasks.map((task) => ({ task, section })));
+}
+
+export function writingTaskLabel(item: WritingTaskRef): string {
+  return String(item.task.config.note ?? (item.task.number ? `Task ${item.task.number}` : 'Task'));
+}
+
+/**
+ * The left half of a Writing part: what the candidate is asked to do (and the
+ * chart, map or diagram it refers to), kept in view while they write.
+ */
+export function WritingPrompt({ item }: { item: WritingTaskRef }) {
+  const { task, section } = item;
+  const minimum = minimumWords(section);
+  return (
+    <div className="writing-prompt">
+      <div className="writing-prompt__head">
+        <span className="writing-prompt__task">{section.title || writingTaskLabel(item)}</span>
+        {minimum ? <span className="badge badge--neutral">min {minimum} words</span> : null}
+      </div>
+      {section.instructions || task.prompt ? (
+        <p className="writing-prompt__text">{section.instructions || task.prompt}</p>
+      ) : null}
+      {section.instructions && task.prompt ? <p className="writing-prompt__text writing-prompt__text--strong">{task.prompt}</p> : null}
+      {section.image ? (
+        <div className="writing-prompt__figure">
+          <SectionImage image={section.image} label={section.label || section.title || 'Writing task'} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The right half: one tab per task when a part has several, a word counter with
+ * a progress bar towards the minimum, and a text box that fills the pane.
+ */
+export function WritingAnswer({
+  tasks,
+  activeTaskId,
+  onPickTask,
   answers,
   onSave,
   readOnly,
 }: {
-  sections: CandidateSection[];
+  tasks: WritingTaskRef[];
+  activeTaskId: string | null;
+  onPickTask: (taskId: string) => void;
   answers: Array<{ questionId: string; text: string; wordCount: number }>;
   onSave: (questionId: string, text: string) => void;
   readOnly?: boolean;
 }) {
-  const tasks = useMemo(
-    () => sections.flatMap((section) => section.writingTasks.map((task) => ({ task, section }))),
-    [sections],
+  const active = useMemo(
+    () => tasks.find((item) => item.task.id === activeTaskId) ?? tasks[0] ?? null,
+    [tasks, activeTaskId],
   );
-  const [selectedTaskId, setActiveTaskId] = useState<string | null>(null);
-  const activeTaskId = selectedTaskId ?? tasks[0]?.task.id ?? null;
+  if (!active) return <p className="muted">This part has no Writing tasks.</p>;
 
-  if (tasks.length === 0) {
-    return <p className="muted">This section has no Writing tasks.</p>;
-  }
-
-  const active = tasks.find((item) => item.task.id === activeTaskId) ?? tasks[0]!;
   const stored = answers.find((item) => item.questionId === active.task.id)?.text ?? '';
-
   return (
-    <div className="writing-editor">
+    <div className="writing-answer">
       {tasks.length > 1 ? (
-        <Tabs
-          tabs={tasks.map((item) => ({
-            id: item.task.id,
-            label: `${item.task.config.note ?? (item.task.number ? `Task ${item.task.number}` : 'Task')} · min ${
-              minimumWords(item.section) ?? '—'
-            } words`,
-          }))}
-          value={active.task.id}
-          onChange={(id) => setActiveTaskId(id)}
-        />
+        <div className="writing-answer__tabs" role="tablist" aria-label="Writing tasks">
+          {tasks.map((item) => (
+            <button
+              key={item.task.id}
+              type="button"
+              role="tab"
+              aria-selected={item.task.id === active.task.id}
+              className={`writing-answer__tab ${item.task.id === active.task.id ? 'is-active' : ''}`}
+              onClick={() => onPickTask(item.task.id)}
+            >
+              {writingTaskLabel(item)}
+            </button>
+          ))}
+        </div>
       ) : null}
-
-      <div className="writing-prompt">
-        <div className="writing-prompt__task">{active.section.title || 'Writing task'}</div>
-        <p style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>{active.section.instructions || active.task.prompt}</p>
-        {active.task.prompt ? (
-          <p style={{ fontWeight: 600, whiteSpace: 'pre-wrap' }}>{active.task.prompt}</p>
-        ) : null}
-        {active.section.image ? (
-          // Task 1 charts, maps and diagrams: the passage pane is hidden for
-          // Writing, so the picture belongs with the prompt it describes.
-          <div style={{ marginTop: 12 }}>
-            <SectionImage image={active.section.image} label={active.section.label || active.section.title || 'Writing task'} />
-          </div>
-        ) : null}
-      </div>
-
       <WritingTask
         key={active.task.id}
-        taskId={active.task.id}
         initialText={stored}
         minimumWords={minimumWords(active.section)}
         onChange={(text) => onSave(active.task.id, text)}
@@ -71,14 +98,18 @@ export function WritingEditor({
   );
 }
 
+/**
+ * The text box owns what the candidate types. It adopts the stored text only
+ * when it mounts (the task is part of its key): re-adopting it on every change
+ * of the stored value is what used to throw typed text back to an older save
+ * whenever a poll answered during typing.
+ */
 function WritingTask({
-  taskId,
   initialText,
   minimumWords,
   onChange,
   readOnly,
 }: {
-  taskId: string;
   initialText: string;
   minimumWords: number | null;
   onChange: (text: string) => void;
@@ -86,40 +117,42 @@ function WritingTask({
 }) {
   const [text, setText] = useState(initialText);
   const words = countWords(text);
+  const ratio = minimumWords ? Math.min(1, words / minimumWords) : 1;
   const meetsMinimum = minimumWords === null || words >= minimumWords;
-
-  useEffect(() => {
-    setText(initialText);
-  }, [taskId, initialText]);
 
   return (
     <>
-      <div className="writing-editor__meta">
-        <span>
+      <div className="writing-answer__meta">
+        <span className="writing-answer__count">
           <strong>{words}</strong> word{words === 1 ? '' : 's'}
-          {minimumWords ? ` · minimum ${minimumWords}` : ''}
+          {minimumWords ? <span className="muted"> / {minimumWords}</span> : null}
         </span>
-        {meetsMinimum ? (
-          <span className="badge badge--success">Length requirement met</span>
-        ) : (
-          <span className="badge badge--warning">Below the minimum length</span>
-        )}
+        {minimumWords ? (
+          <span
+            className={`writing-answer__meter ${meetsMinimum ? 'is-met' : ''}`}
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={minimumWords}
+            aria-valuenow={Math.min(words, minimumWords)}
+            aria-label="Progress towards the minimum length"
+          >
+            <span style={{ width: `${Math.round(ratio * 100)}%` }} />
+          </span>
+        ) : null}
       </div>
       <textarea
+        className="writing-answer__box"
         aria-label="Your written response"
         value={text}
         readOnly={readOnly}
         disabled={readOnly}
-        placeholder="Type your answer here. Your work is saved automatically."
+        spellCheck
+        placeholder="Type your answer here. It is saved automatically."
         onChange={(event) => {
           setText(event.target.value);
           onChange(event.target.value);
         }}
       />
-      <p className="tiny muted" style={{ marginTop: 8 }}>
-        Do not close this page. Losing connection is recoverable: your responses are stored on the server and the timer
-        continues from the server deadline.
-      </p>
     </>
   );
 }

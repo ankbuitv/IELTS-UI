@@ -1,10 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, ApiRequestError, describeError } from '../../lib/api';
+import { api, describeError } from '../../lib/api';
 import type { CandidateResponse } from '@shared/answer-key';
 import type { IntegrityEventType } from '@shared/integrity';
 import type { CandidateTestPayload } from '@shared/candidate';
 import type { AttemptSectionState } from '@shared/candidate';
 import type { SectionPolicy } from '@shared/sections';
+import { countWords } from '../../lib/format';
+import {
+  applyDraft,
+  backoffMs,
+  buildDraft,
+  classifySaveError,
+  draftStorageKey,
+  emptyTouched,
+  mergeServerState,
+  parseDraft,
+  type PendingUpdate,
+} from './exam-sync';
 
 export interface AttemptComponentState {
   componentIndex: number;
@@ -66,10 +78,17 @@ export interface AttemptState {
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'offline';
 
-interface PendingUpdate {
-  response: CandidateResponse | null;
-  flagged: boolean;
+interface FlushOptions {
+  /** Ignore the retry back-off and the typing pause (submit, leaving the page). */
+  force?: boolean;
+  /** Let the request outlive the page (pagehide). */
+  keepalive?: boolean;
 }
+
+const extrasFor = (options: FlushOptions) => (options.keepalive ? { keepalive: true } : undefined);
+
+/** An essay is sent once the candidate has stopped typing for this long. */
+const TYPING_PAUSE_MS = 900;
 
 export interface ExamSessionApi {
   state: AttemptState | null;
@@ -85,6 +104,8 @@ export interface ExamSessionApi {
   setAnswer: (questionId: string, response: CandidateResponse | null) => void;
   toggleFlag: (questionId: string) => void;
   saveWriting: (questionId: string, text: string) => void;
+  /** Sends every unsaved answer and essay now. Resolves true when nothing is left unsent. */
+  flushAll: () => Promise<boolean>;
   submit: (options?: { confirmUnanswered?: boolean }) => Promise<void>;
   advanceComponent: () => Promise<void>;
   completeSection: (sectionId?: string) => Promise<void>;
@@ -93,7 +114,24 @@ export interface ExamSessionApi {
   logIntegrity: (type: IntegrityEventType, metadata?: Record<string, unknown>) => void;
   requestFullscreen: () => Promise<void>;
   isFullscreen: boolean;
+  /** Set when the candidate has just come back to the exam tab after leaving it. */
+  tabLock: TabLockState | null;
+  /** Times the candidate has left the exam tab in this attempt (server count or this tab's count, whichever is higher). */
+  tabStrikes: number;
+  acknowledgeTabLock: () => void;
+  /** True once the server submitted the attempt because the tab-lock limit was reached. */
+  lockedOut: boolean;
 }
+
+/** The blocking "you left the exam" notice. `limit` is null when the policy has no auto-submit. */
+export interface TabLockState {
+  strikes: number;
+  limit: number | null;
+  final: boolean;
+}
+
+/** After this long without focus (but with the tab still visible) the candidate counts as having left. */
+const PROLONGED_BLUR_MS = 2_500;
 
 /**
  * Client-side exam session.
@@ -104,42 +142,129 @@ export interface ExamSessionApi {
  * reloading the page or changing the system clock grants no extra time.
  */
 export function useExamSession(attemptId: string): ExamSessionApi {
-  const [state, setState] = useState<AttemptState | null>(null);
+  // The ref is the source of truth for state that handlers read synchronously
+  // (current flags, merge on poll); the mirrored React state drives rendering.
+  const stateRef = useRef<AttemptState | null>(null);
+  const [state, setStateMirror] = useState<AttemptState | null>(null);
+  const commit = useCallback((update: (current: AttemptState | null) => AttemptState | null) => {
+    const next = update(stateRef.current);
+    stateRef.current = next;
+    setStateMirror(next);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [tabLock, setTabLock] = useState<TabLockState | null>(null);
+  const [lockedOut, setLockedOut] = useState(false);
+  const [tabStrikes, setTabStrikes] = useState(0);
+  /** Counted "left the tab" events, so the notice can say "2 of 3" before the server answers. */
+  const strikes = useRef(0);
   const [connection, setConnection] = useState<'online' | 'offline'>(navigator.onLine ? 'online' : 'offline');
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
 
+  /** Answers not yet sent. */
   const pending = useRef<Map<string, PendingUpdate>>(new Map());
-  const writingTimers = useRef<Map<string, number>>(new Map());
+  /** Answers sent or waiting to be sent but not yet acknowledged (what a draft keeps). */
+  const unacked = useRef<Map<string, PendingUpdate>>(new Map());
+  /** Essays whose latest text the server has not acknowledged. */
+  const dirtyWriting = useRef<Map<string, { text: string; editedAt: number }>>(new Map());
+  /** Everything changed in this tab: a poll never reverts these. */
+  const touched = useRef(emptyTouched());
+  const answersChain = useRef<Promise<boolean>>(Promise.resolve(true));
+  const writingChains = useRef<Map<string, Promise<boolean>>>(new Map());
+  const retry = useRef<{ failures: number; notBefore: number; kind: 'rejected' | 'transient' | null }>({
+    failures: 0,
+    notBefore: 0,
+    kind: null,
+  });
+  const hasLoaded = useRef(false);
   const integrityQueue = useRef<Array<{ type: IntegrityEventType; metadata?: Record<string, unknown> }>>([]);
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
   const [nowMs, setNowMs] = useState<number | null>(null);
 
+  // ----------------------------------------------------------------- drafts
+  // Unsent work is mirrored to localStorage, so a browser that kills the tab
+  // (a phone under memory pressure, a crash, a dead battery) cannot lose it.
+  const persistDraft = useCallback(() => {
+    try {
+      const draft = buildDraft(unacked.current, dirtyWriting.current);
+      if (draft) window.localStorage.setItem(draftStorageKey(attemptId), JSON.stringify(draft));
+      else window.localStorage.removeItem(draftStorageKey(attemptId));
+    } catch {
+      // Storage can be full or blocked; the in-memory queue still protects the work.
+    }
+  }, [attemptId]);
+
+  const clearDraft = useCallback(() => {
+    try {
+      window.localStorage.removeItem(draftStorageKey(attemptId));
+    } catch {
+      // Nothing to clean up.
+    }
+  }, [attemptId]);
+
+  /** First snapshot only: put back anything a previous session never got to send. */
+  const restoreDraft = useCallback(
+    (fetched: AttemptState): AttemptState => {
+      let raw: string | null;
+      try {
+        raw = window.localStorage.getItem(draftStorageKey(attemptId));
+      } catch {
+        return fetched;
+      }
+      const draft = parseDraft(raw);
+      if (!draft) return fetched;
+      if (fetched.submitted || fetched.status !== 'IN_PROGRESS') {
+        clearDraft();
+        return fetched;
+      }
+      const applied = applyDraft(fetched, draft);
+      for (const [questionId, update] of applied.answers) {
+        pending.current.set(questionId, update);
+        unacked.current.set(questionId, update);
+        touched.current.answers.add(questionId);
+        touched.current.flags.add(questionId);
+      }
+      for (const [questionId, text] of applied.writing) {
+        dirtyWriting.current.set(questionId, { text, editedAt: 0 });
+        touched.current.writing.add(questionId);
+      }
+      if (applied.answers.size > 0 || applied.writing.size > 0) setSaveStatus('saving');
+      else clearDraft();
+      return applied.state;
+    },
+    [attemptId, clearDraft],
+  );
+
   // ------------------------------------------------------------------ load
   const load = useCallback(async () => {
     try {
-      const next = await api.get<AttemptState>(`/api/attempts/${attemptId}`);
-      setClockOffsetMs(Date.parse(next.serverNow) - Date.now());
+      const fetched = await api.get<AttemptState>(`/api/attempts/${attemptId}`);
+      setClockOffsetMs(Date.parse(fetched.serverNow) - Date.now());
       setNowMs(Date.now());
-      setState(next);
+      if (!hasLoaded.current) {
+        hasLoaded.current = true;
+        const restored = restoreDraft(fetched);
+        commit(() => restored);
+      } else {
+        commit((current) => mergeServerState(current, fetched, touched.current));
+      }
       setError(null);
     } catch (loadError) {
       setError(describeError(loadError));
     } finally {
       setLoading(false);
     }
-  }, [attemptId]);
+  }, [attemptId, commit, restoreDraft]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   // Periodic resync with the server (keeps the displayed clock honest and
-  // picks up policy-driven auto-submission).
+  // picks up policy-driven auto-submission). It never reverts local edits.
   useEffect(() => {
     const interval = window.setInterval(() => void load(), 30_000);
     return () => window.clearInterval(interval);
@@ -162,9 +287,13 @@ export function useExamSession(attemptId: string): ExamSessionApi {
         { events: batch.map((event) => ({ type: event.type, occurredAt: new Date().toISOString(), metadata: event.metadata ?? {} })) },
       );
       if (result.warningLevel === 'CRITICAL') {
-        setWarning('Integrity policy threshold reached. This attempt is being submitted automatically.');
+        setWarning('You have left the exam tab too many times. This attempt is being submitted automatically.');
       }
-      if (result.autoSubmitted) void load();
+      if (result.autoSubmitted) {
+        setLockedOut(true);
+        setTabLock((previous) => ({ strikes: previous?.strikes ?? strikes.current, limit: previous?.limit ?? null, final: true }));
+        void load();
+      }
     } catch {
       // Re-queue on failure so nothing is silently dropped.
       integrityQueue.current.unshift(...batch);
@@ -186,13 +315,21 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     return () => window.clearInterval(interval);
   }, [flushIntegrity]);
 
+  const integrityPolicy = state?.integrity.policy ?? null;
+  const isSubmitted = state?.submitted ?? true;
+  const serverCounted = state?.integrity.counted ?? 0;
   useEffect(() => {
-    if (!state || state.submitted) return;
-    const policy = state.integrity.policy;
-    const cleanup: Array<() => void> = [];
+    strikes.current = Math.max(strikes.current, serverCounted);
+  }, [serverCounted]);
 
-    // Reload detection: a marker in sessionStorage means this page was visited
-    // before within the same tab session.
+  // Reload detection, once per page load: a marker in sessionStorage means this
+  // page was visited before within the same tab session. (This used to sit in
+  // the listener effect below, which re-runs on every poll, so every answer and
+  // every keystroke of an essay logged "Page reload" + "Session resumed".)
+  const reloadChecked = useRef(false);
+  useEffect(() => {
+    if (!integrityPolicy || isSubmitted || reloadChecked.current) return;
+    reloadChecked.current = true;
     const marker = `exam-visited:${attemptId}`;
     if (window.sessionStorage.getItem(marker)) {
       logIntegrity('RELOAD');
@@ -200,25 +337,77 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     } else {
       window.sessionStorage.setItem(marker, String(Date.now()));
     }
+  }, [integrityPolicy, isSubmitted, attemptId, logIntegrity]);
+
+  useEffect(() => {
+    if (!integrityPolicy || isSubmitted) return;
+    const policy = integrityPolicy;
+    const cleanup: Array<() => void> = [];
 
     if (policy.monitorVisibility) {
+      // TAB LOCK. Leaving the exam tab is a counted strike; at the policy limit the
+      // server submits the attempt. A page cannot stop Alt+Tab, so what it does is
+      // notice it, block the exam behind a notice on return, and count it.
+      const limit = policy.autoSubmitAtEvents;
+      let blurTimer: number | null = null;
+      let blurCounted = false;
+      let pendingReturn = false;
+      // Touch devices fire blur for notification shades and keyboards: only a hidden tab counts there.
+      const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+
+      const countAway = (via: 'visibility' | 'blur') => {
+        strikes.current += 1;
+        setTabStrikes(strikes.current);
+        pendingReturn = true;
+        logIntegrity('TAB_HIDDEN', { via, visibilityState: document.visibilityState });
+      };
+      const showNotice = () => {
+        pendingReturn = false;
+        setTabLock({ strikes: strikes.current, limit, final: limit !== null && strikes.current >= limit });
+      };
       const onVisibility = () => {
         if (document.hidden) {
-          logIntegrity('TAB_HIDDEN', { visibilityState: document.visibilityState });
-          if (policy.warnAtEvents !== null) {
-            setWarning(
-              'The exam page is no longer visible. This has been recorded. A web page cannot block Alt+Tab or other application switching.',
-            );
+          if (blurTimer !== null) {
+            window.clearTimeout(blurTimer);
+            blurTimer = null;
           }
+          if (!blurCounted) countAway('visibility');
         } else {
           logIntegrity('SESSION_RESUME');
+          blurCounted = false;
+          if (pendingReturn) showNotice();
         }
       };
-      const onBlur = () => logIntegrity('WINDOW_BLUR');
+      const onBlur = () => {
+        logIntegrity('WINDOW_BLUR');
+        if (coarsePointer || blurTimer !== null) return;
+        blurTimer = window.setTimeout(() => {
+          blurTimer = null;
+          if (!document.hidden && !document.hasFocus() && !blurCounted) {
+            blurCounted = true;
+            countAway('blur');
+          }
+        }, PROLONGED_BLUR_MS);
+      };
+      const onFocus = () => {
+        if (blurTimer !== null) {
+          window.clearTimeout(blurTimer);
+          blurTimer = null;
+        }
+        if (blurCounted) {
+          blurCounted = false;
+          if (pendingReturn) showNotice();
+        }
+      };
       document.addEventListener('visibilitychange', onVisibility);
       window.addEventListener('blur', onBlur);
+      window.addEventListener('focus', onFocus);
       cleanup.push(() => document.removeEventListener('visibilitychange', onVisibility));
       cleanup.push(() => window.removeEventListener('blur', onBlur));
+      cleanup.push(() => window.removeEventListener('focus', onFocus));
+      cleanup.push(() => {
+        if (blurTimer !== null) window.clearTimeout(blurTimer);
+      });
     }
 
     const onFullscreenChange = () => {
@@ -269,7 +458,7 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     }
 
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (pending.current.size > 0) {
+      if (unacked.current.size > 0 || dirtyWriting.current.size > 0) {
         event.preventDefault();
         event.returnValue = '';
       }
@@ -285,7 +474,170 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     cleanup.push(() => window.removeEventListener('popstate', onPopState));
 
     return () => cleanup.forEach((fn) => fn());
-  }, [state, attemptId, logIntegrity]);
+  }, [integrityPolicy, isSubmitted, logIntegrity]);
+
+  // --------------------------------------------------------------- autosave
+  /** Success bookkeeping shared by answer and essay saves. */
+  const markSaved = useCallback(() => {
+    retry.current = { failures: 0, notBefore: 0, kind: null };
+    setLastSavedAt(new Date().toISOString());
+    const nothingLeft =
+      pending.current.size === 0 && unacked.current.size === 0 && dirtyWriting.current.size === 0;
+    setSaveStatus(nothingLeft ? 'saved' : 'saving');
+    persistDraft();
+  }, [persistDraft]);
+
+  const markFailed = useCallback(
+    (saveError: unknown) => {
+      const kind = classifySaveError(saveError);
+      retry.current.failures += 1;
+      retry.current.kind = kind;
+      retry.current.notBefore = Date.now() + backoffMs(retry.current.failures);
+      if (kind === 'rejected') {
+        setSaveStatus('error');
+        setWarning(describeError(saveError));
+      } else {
+        setSaveStatus(navigator.onLine ? 'error' : 'offline');
+        if (retry.current.failures === 1) logIntegrity('CONNECTION_INTERRUPTION', { reason: 'autosave-failed' });
+      }
+      persistDraft();
+    },
+    [logIntegrity, persistDraft],
+  );
+
+  const flushAnswers = useCallback(
+    (options: FlushOptions = {}): Promise<boolean> => {
+      // Saves are chained so two requests can never reach the server out of
+      // order and leave an older answer standing.
+      const run = async (): Promise<boolean> => {
+        if (pending.current.size === 0) return true;
+        if (!options.force && Date.now() < retry.current.notBefore) return false;
+        if (!navigator.onLine) {
+          setSaveStatus('offline');
+          return false;
+        }
+        const batch = [...pending.current.entries()];
+        pending.current.clear();
+        setSaveStatus('saving');
+        try {
+          await api.patch(
+            `/api/attempts/${attemptId}/answers`,
+            { updates: batch.map(([questionId, value]) => ({ questionId, response: value.response, flagged: value.flagged })) },
+            extrasFor(options),
+          );
+          for (const [questionId, update] of batch) {
+            if (unacked.current.get(questionId) === update) unacked.current.delete(questionId);
+          }
+          markSaved();
+          return true;
+        } catch (saveError) {
+          // Put the work back and retry on the next flush; never lose a response.
+          for (const [questionId, update] of batch) {
+            if (!pending.current.has(questionId)) pending.current.set(questionId, update);
+          }
+          markFailed(saveError);
+          return false;
+        }
+      };
+      const next = answersChain.current.then(run, run);
+      answersChain.current = next;
+      return next;
+    },
+    [attemptId, markSaved, markFailed],
+  );
+
+  const sendWriting = useCallback(
+    (questionId: string, options: FlushOptions): Promise<boolean> => {
+      const run = async (): Promise<boolean> => {
+        const entry = dirtyWriting.current.get(questionId);
+        if (!entry) return true;
+        const sent = entry.text;
+        try {
+          await api.post(`/api/attempts/${attemptId}/writing`, { questionId, text: sent }, extrasFor(options));
+          // Typing may have continued while the request was in flight: only a
+          // text the server now holds in full is considered saved.
+          if (dirtyWriting.current.get(questionId)?.text === sent) dirtyWriting.current.delete(questionId);
+          markSaved();
+          return true;
+        } catch (saveError) {
+          markFailed(saveError);
+          return false;
+        }
+      };
+      const previous = writingChains.current.get(questionId) ?? Promise.resolve(true);
+      const next = previous.then(run, run);
+      writingChains.current.set(questionId, next);
+      return next;
+    },
+    [attemptId, markSaved, markFailed],
+  );
+
+  /** Essays are sent once the candidate pauses typing (or at once when forced). */
+  const flushWriting = useCallback(
+    async (options: FlushOptions = {}): Promise<boolean> => {
+      const due = [...dirtyWriting.current.entries()]
+        .filter(([, entry]) => options.force || Date.now() - entry.editedAt >= TYPING_PAUSE_MS)
+        .map(([questionId]) => questionId);
+      if (due.length === 0) return dirtyWriting.current.size === 0;
+      if (!options.force && Date.now() < retry.current.notBefore) return false;
+      if (!navigator.onLine) {
+        setSaveStatus('offline');
+        return false;
+      }
+      setSaveStatus('saving');
+      const results = await Promise.all(due.map((questionId) => sendWriting(questionId, options)));
+      return results.every(Boolean);
+    },
+    [sendWriting],
+  );
+
+  const flushAll = useCallback(async (): Promise<boolean> => {
+    const [answersSaved, writingSaved] = await Promise.all([
+      flushAnswers({ force: true }),
+      flushWriting({ force: true }),
+    ]);
+    return answersSaved && writingSaved;
+  }, [flushAnswers, flushWriting]);
+
+  /**
+   * Before submitting or moving on the server must hold everything. A network
+   * failure aborts the action (nothing is lost, nothing is submitted half
+   * saved); a server refusal does not, because the next call will report why.
+   */
+  const saveBeforeLeaving = useCallback(async (): Promise<void> => {
+    if (await flushAll()) return;
+    if (retry.current.kind === 'rejected') return;
+    throw new Error(
+      'Some of your work has not reached the server yet. Check your connection and try again — nothing has been submitted.',
+    );
+  }, [flushAll]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void flushAnswers();
+      void flushWriting();
+    }, 1200);
+    return () => window.clearInterval(interval);
+  }, [flushAnswers, flushWriting]);
+
+  // Leaving or hiding the page: send everything now, with keepalive so the
+  // request survives the page, and refresh the local draft.
+  useEffect(() => {
+    const flushNow = () => {
+      void flushAnswers({ force: true, keepalive: true });
+      void flushWriting({ force: true, keepalive: true });
+      persistDraft();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flushNow();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flushNow);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flushNow);
+    };
+  }, [flushAnswers, flushWriting, persistDraft]);
 
   // Connectivity monitoring.
   useEffect(() => {
@@ -297,6 +649,8 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     const onOnline = () => {
       setConnection('online');
       logIntegrity('RESUME');
+      retry.current = { failures: 0, notBefore: 0, kind: null };
+      void flushAll();
       void load();
       void flushIntegrity();
     };
@@ -306,110 +660,82 @@ export function useExamSession(attemptId: string): ExamSessionApi {
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('online', onOnline);
     };
-  }, [logIntegrity, load, flushIntegrity]);
+  }, [logIntegrity, load, flushIntegrity, flushAll]);
 
-  // --------------------------------------------------------------- autosave
-  const flushAnswers = useCallback(async () => {
-    if (pending.current.size === 0) return;
-    if (!navigator.onLine) {
-      setSaveStatus('offline');
-      return;
-    }
+  const queueUpdate = useCallback(
+    (questionId: string, update: PendingUpdate) => {
+      pending.current.set(questionId, update);
+      unacked.current.set(questionId, update);
+      touched.current.answers.add(questionId);
+      touched.current.flags.add(questionId);
+      persistDraft();
+      setSaveStatus('saving');
+    },
+    [persistDraft],
+  );
 
-    const updates = [...pending.current.entries()].map(([questionId, value]) => ({
-      questionId,
-      response: value.response,
-      flagged: value.flagged,
-    }));
-    pending.current.clear();
-    setSaveStatus('saving');
-
-    try {
-      await api.patch(`/api/attempts/${attemptId}/answers`, { updates });
-      setSaveStatus('saved');
-      setLastSavedAt(new Date().toISOString());
-    } catch (saveError) {
-      // Put the work back and retry on the next flush; never lose a response.
-      for (const update of updates) {
-        if (!pending.current.has(update.questionId)) {
-          pending.current.set(update.questionId, { response: update.response, flagged: Boolean(update.flagged) });
-        }
-      }
-      if (saveError instanceof ApiRequestError && saveError.status >= 400 && saveError.status < 500) {
-        setSaveStatus('error');
-        setWarning(saveError.message);
-      } else {
-        setSaveStatus('offline');
-        logIntegrity('CONNECTION_INTERRUPTION', { reason: 'autosave-failed' });
-      }
-    }
-  }, [attemptId, logIntegrity]);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => void flushAnswers(), 1400);
-    return () => window.clearInterval(interval);
-  }, [flushAnswers]);
-
-  useEffect(() => {
-    const onHidden = () => void flushAnswers();
-    document.addEventListener('visibilitychange', onHidden);
-    return () => document.removeEventListener('visibilitychange', onHidden);
-  }, [flushAnswers]);
-
-  const setAnswer = useCallback((questionId: string, response: CandidateResponse | null) => {
-    setState((current) => {
-      if (!current) return current;
-      const answers = { ...current.answers };
-      if (response === null) delete answers[questionId];
-      else answers[questionId] = response;
-      return { ...current, answers };
-    });
-    const existing = pending.current.get(questionId);
-    pending.current.set(questionId, { response, flagged: existing?.flagged ?? false });
-    setSaveStatus('saving');
-  }, []);
-
-  const toggleFlag = useCallback((questionId: string) => {
-    setState((current) => {
-      if (!current) return current;
-      const flagged = current.flagged.includes(questionId)
-        ? current.flagged.filter((id) => id !== questionId)
-        : [...current.flagged, questionId];
-      const existing = pending.current.get(questionId);
-      pending.current.set(questionId, {
-        response: existing?.response ?? current.answers[questionId] ?? null,
-        flagged: flagged.includes(questionId),
+  const setAnswer = useCallback(
+    (questionId: string, response: CandidateResponse | null) => {
+      const current = stateRef.current;
+      if (!current) return;
+      // Answering must not clear a flag the candidate set earlier: the update
+      // carries the flag too, so it is read from the live state.
+      const flagged = pending.current.get(questionId)?.flagged ?? current.flagged.includes(questionId);
+      commit((snapshot) => {
+        if (!snapshot) return snapshot;
+        const answers = { ...snapshot.answers };
+        if (response === null) delete answers[questionId];
+        else answers[questionId] = response;
+        return { ...snapshot, answers };
       });
-      return { ...current, flagged };
-    });
-    setSaveStatus('saving');
-  }, []);
+      queueUpdate(questionId, { response, flagged });
+    },
+    [commit, queueUpdate],
+  );
+
+  const toggleFlag = useCallback(
+    (questionId: string) => {
+      const current = stateRef.current;
+      if (!current) return;
+      const nowFlagged = !current.flagged.includes(questionId);
+      commit((snapshot) =>
+        snapshot
+          ? {
+              ...snapshot,
+              flagged: nowFlagged
+                ? [...snapshot.flagged, questionId]
+                : snapshot.flagged.filter((id) => id !== questionId),
+            }
+          : snapshot,
+      );
+      const existing = pending.current.get(questionId);
+      queueUpdate(questionId, {
+        response: existing ? existing.response : (current.answers[questionId] ?? null),
+        flagged: nowFlagged,
+      });
+    },
+    [commit, queueUpdate],
+  );
 
   const saveWriting = useCallback(
     (questionId: string, text: string) => {
-      setState((current) => {
-        if (!current) return current;
-        const others = current.writing.filter((item) => item.questionId !== questionId);
-        const wordCount = text.trim() ? text.trim().split(/\s+/).filter((token) => /[\p{L}\p{N}]/u.test(token)).length : 0;
-        return { ...current, writing: [...others, { questionId, text, wordCount }] };
+      commit((snapshot) => {
+        if (!snapshot) return snapshot;
+        const entry = { questionId, text, wordCount: countWords(text) };
+        const exists = snapshot.writing.some((item) => item.questionId === questionId);
+        return {
+          ...snapshot,
+          writing: exists
+            ? snapshot.writing.map((item) => (item.questionId === questionId ? entry : item))
+            : [...snapshot.writing, entry],
+        };
       });
+      touched.current.writing.add(questionId);
+      dirtyWriting.current.set(questionId, { text, editedAt: Date.now() });
+      persistDraft();
       setSaveStatus('saving');
-
-      const existing = writingTimers.current.get(questionId);
-      if (existing) window.clearTimeout(existing);
-      const timer = window.setTimeout(async () => {
-        try {
-          await api.post(`/api/attempts/${attemptId}/writing`, { questionId, text });
-          setSaveStatus('saved');
-          setLastSavedAt(new Date().toISOString());
-        } catch (saveError) {
-          setSaveStatus('error');
-          setWarning(describeError(saveError));
-        }
-      }, 1500);
-      writingTimers.current.set(questionId, timer);
     },
-    [attemptId],
+    [commit, persistDraft],
   );
 
   return {
@@ -434,24 +760,31 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     warning,
     dismissWarning: () => setWarning(null),
     setWarning,
+    tabLock,
+    tabStrikes,
+    acknowledgeTabLock: () => setTabLock(null),
+    lockedOut,
     setAnswer,
     toggleFlag,
     saveWriting,
+    flushAll,
     submit: async (options) => {
-      await flushAnswers();
+      await saveBeforeLeaving();
       await flushIntegrity();
       await api.post<{ status: string }>(`/api/attempts/${attemptId}/submit`, {
         confirmUnanswered: options?.confirmUnanswered ?? false,
       });
+      clearDraft();
+      unacked.current.clear();
       await load();
     },
     advanceComponent: async () => {
-      await flushAnswers();
+      await saveBeforeLeaving();
       await api.post(`/api/attempts/${attemptId}/advance`, {});
       await load();
     },
     completeSection: async (sectionId?: string) => {
-      await flushAnswers();
+      await saveBeforeLeaving();
       await api.post(`/api/attempts/${attemptId}/complete-section`, sectionId ? { sectionId } : {});
       await load();
     },

@@ -48,9 +48,11 @@ describe('Ai eo brand assets', () => {
       expect(svg).toContain('<svg');
       expect(svg).toContain('</svg>');
       expect(svg).toContain('Ai eo');
-      // Original palette only: cyan family + violet/lime accents, never red.
-      expect(svg).toMatch(/#(22d3ee|06b6d4|0891b2|67e8f9|0e7490)/);
-      expect(svg).not.toMatch(/#(e11d48|be123c|ef4444|dc2626)/i);
+      // Original crimson identity; the retired cyan palette must not return.
+      expect(svg).toMatch(/#(C8102E|E0243F|A50D26|FF6B7D)/i);
+      expect(svg).not.toMatch(/#(22d3ee|06b6d4|0891b2|67e8f9|0e7490)/i);
+      // The artwork never prints an exam name; the only mention is the disclaimer.
+      expect(svg.replace('No affiliation with IELTS, British Council, IDP or Cambridge.', '')).not.toMatch(/IELTS/);
       // Every asset carries the non-affiliation note.
       expect(svg).toContain('No affiliation with IELTS');
     }

@@ -160,7 +160,7 @@ npm install
 # 1. Local secrets (git-ignored)
 #   SESSION_SECRET=<random string>   # required
 #   OLLAMA_API_KEYS=<key>,<key>      # AI marking: Ollama Cloud keys, comma-separated
-#   OLLAMA_MODEL=gpt-oss:120b-cloud  # or gemma4:31b-cloud (also a wrangler.jsonc var)
+#   OLLAMA_MODEL=gpt-oss:120b        # bare name for ollama.com (no -cloud suffix); also a wrangler.jsonc var
 
 # 2. Build the SPA and start the Worker (serves API + SPA on :8787)
 npm run dev

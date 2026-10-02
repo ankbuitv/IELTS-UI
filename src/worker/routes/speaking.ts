@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
+import { describeAiFailure } from '../ai/failure';
 import { ApiError } from '../lib/errors';
 import { assertCsrf, assertSameOrigin } from '../lib/http';
 import { parseBody } from '../lib/validate';
+import { enforceRateLimit } from '../lib/rate-limit';
 import { currentUser, requireAuth, requireRole } from '../middleware/auth';
 import { base64ToBytes, parseRange } from '../services/blob-store';
 import {
@@ -106,16 +108,42 @@ router.put('/sessions/:id/parts/:part', async (c) => {
 router.post('/sessions/:id/submit', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
-  const body = await parseBody(c, z.object({ providerId: z.string().max(64).optional() }).optional());
-  const result = await submitSpeakingSession(c.env, user, c.req.param('id'), body ?? {});
+  await enforceRateLimit(
+    c.env,
+    { bucket: `ai-mark:${user.id}`, windowSeconds: 3600, limit: Number(c.env.AI_RATE_LIMIT_PER_HOUR || 30) },
+    'You have asked the judges to mark a lot of work this hour. Please try again a little later.',
+  );
+  const result = await submitSpeakingSession(c.env, user, c.req.param('id'));
   return c.json(result);
 });
 
-/** Re-mark with AI (staff only) — used after enabling a provider. */
-router.post('/sessions/:id/ai-mark', requireRole('TEACHER', 'ADMIN'), async (c) => {
-  const body = await parseBody(c, z.object({ providerId: z.string().max(64).optional() }).optional());
-  const grade = await markSpeakingSessionAsStaff(c.env, c.req.param('id'), body ?? {});
-  return c.json({ score: grade });
+/**
+ * Re-mark with AI. Teachers and admins can re-mark any session (for example
+ * after enabling a provider); a candidate can retry their own, which is how a
+ * session whose first AI attempt failed gets its feedback without waiting for a
+ * teacher. A human band is never replaced (see `scoreSpeakingSessionWithAi`).
+ */
+router.post('/sessions/:id/ai-mark', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const sessionId = c.req.param('id');
+  const body = await parseBody(c, z.object({ force: z.boolean().optional() }).optional());
+  if (user.role === 'STUDENT') {
+    // Ownership check: throws unless the session is the candidate's own.
+    await loadSpeakingSession(c.env, user, sessionId);
+  }
+  await enforceRateLimit(
+    c.env,
+    { bucket: `ai-mark:${user.id}`, windowSeconds: 3600, limit: Number(c.env.AI_RATE_LIMIT_PER_HOUR || 30) },
+    'You have asked the judges to mark a lot of work this hour. Please try again a little later.',
+  );
+  try {
+    const grade = await markSpeakingSessionAsStaff(c.env, sessionId, { force: body?.force ?? false });
+    return c.json({ score: grade });
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError('AI_UNAVAILABLE', describeAiFailure(error, { sessionId, userId: user.id }).message);
+  }
 });
 
 router.delete('/sessions/:id', async (c) => {

@@ -2,6 +2,8 @@ import type { Env } from '../env';
 import type { Skill, TestType } from '../../shared/types';
 import { QUESTION_TYPE_META, isQuestionType } from '../../shared/question-types';
 import { sectionDisplayLabel } from '../../shared/sections';
+import type { BandEstimates } from '../../shared/bands';
+import { getBandEstimates } from './estimates-service';
 
 export interface AnalyticsFilters {
   from?: string | null;
@@ -688,6 +690,8 @@ export interface StudentDashboard {
   mockHistory: AttemptSummary[];
   practiceHistory: AttemptSummary[];
   totals: { attempts: number; submitted: number; inProgress: number; fullMocks: number };
+  /** Band estimate per skill and overall, built from every kind of marking (see `estimates-service`). */
+  estimates: BandEstimates;
 }
 
 export async function getStudentDashboard(
@@ -695,6 +699,8 @@ export async function getStudentDashboard(
   userId: string,
   filters: AnalyticsFilters,
 ): Promise<StudentDashboard> {
+  // Back-fills bands for older short sets first, so every list below already carries them.
+  const estimates = await getBandEstimates(env, userId);
   const [assignments, attempts, skillPerformance, taskTypes, trends, sectionPerformance] = await Promise.all([
     listStudentAssignments(env, userId),
     listAttempts(env, userId, { ...filters, limit: filters.limit ?? 60 }),
@@ -739,6 +745,7 @@ export async function getStudentDashboard(
       inProgress: counts?.in_progress ?? 0,
       fullMocks: counts?.full_mocks ?? 0,
     },
+    estimates,
   };
 }
 

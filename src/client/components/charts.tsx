@@ -47,10 +47,18 @@ export function LineChart({
   const x = (index: number) => padding.left + index * step;
   const y = (value: number) => padding.top + innerHeight - ((value - min) / (max - min || 1)) * innerHeight;
 
+  // A gap (no score for that attempt) ends the line; the next point starts a new
+  // segment with "M". Starting every later point with "L" after a leading gap
+  // produced an invalid path ("Expected moveto") and a console error.
   const path = points
-    .map((point, index) => (point.value === null ? null : `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(point.value)}`))
-    .filter(Boolean)
-    .join(' ');
+    .reduce<{ parts: string[]; open: boolean }>(
+      (acc, point, index) =>
+        point.value === null
+          ? { parts: acc.parts, open: false }
+          : { parts: [...acc.parts, `${acc.open ? 'L' : 'M'} ${x(index)} ${y(point.value)}`], open: true },
+      { parts: [], open: false },
+    )
+    .parts.join(' ');
 
   const ticks = 4;
   const tickValues = Array.from({ length: ticks + 1 }, (_, index) => min + ((max - min) / ticks) * index);
