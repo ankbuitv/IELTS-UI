@@ -5,11 +5,12 @@
     "types": ["@cloudflare/workers-types"]
   },
   "include": ["src/worker/**/*.ts", "src/shared/**/*.ts", "tests/**/*.ts"],
-  // The brand, leading-JSON and version-editor-import tests render client React
-  // components or read repo files, so they run under vitest (node) only and are
+  // The brand, judge-anonymity, leading-JSON and version-editor-import tests render
+  // client React components or read repo files, so they run under vitest (node) only and are
   // intentionally outside the Worker types.
   "exclude": [
     "tests/unit/brand.test.ts",
+    "tests/unit/judge-anonymity.test.ts",
     "tests/unit/json-leading.test.ts",
     "tests/unit/version-editor-import.test.ts",
     "tests/unit/client-*.test.ts",

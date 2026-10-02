@@ -47,18 +47,37 @@ describe('estimateBand', () => {
     }
   });
 
-  it('refuses to estimate from a short practice set', () => {
+  it('projects a short practice set to a full paper and labels it PROJECTED', () => {
+    // 9 of 13 scales to round(9 / 13 * 40) = 28 on the 40-question table, which is band 6.5.
     const result = estimateBand({ profile: profile(), skill: 'READING', rawScore: 9, totalQuestions: 13, isCompleteTest: false });
-    expect(result.available).toBe(false);
-    if (!result.available) {
-      expect(result.reason).toBe('INCOMPLETE_TEST');
-      expect(result.message).toContain('at least 40 questions');
+    expect(result.available).toBe(true);
+    if (result.available) {
+      expect(result.band).toBe(6.5);
+      expect(result.basis).toBe('PROJECTED');
+      expect(result.label).toBe('Projected band');
+      expect(result.projection).toEqual({ rawScore: 9, totalQuestions: 13, projectedRaw: 28, fullLength: 40 });
+      expect(result.note).toContain('Projected band');
     }
   });
 
-  it('refuses when the test is flagged incomplete even with enough questions', () => {
-    const result = estimateBand({ profile: profile(), skill: 'READING', rawScore: 30, totalQuestions: 40, isCompleteTest: false });
+  it('refuses to project from fewer questions than are meaningful', () => {
+    const result = estimateBand({ profile: profile(), skill: 'READING', rawScore: 4, totalQuestions: 5, isCompleteTest: false });
     expect(result.available).toBe(false);
+    if (!result.available) {
+      expect(result.reason).toBe('INCOMPLETE_TEST');
+      expect(result.message).toContain('at least 8');
+    }
+  });
+
+  it('does not call a 40-question set FULL unless the test is flagged complete', () => {
+    const result = estimateBand({ profile: profile(), skill: 'READING', rawScore: 30, totalQuestions: 40, isCompleteTest: false });
+    expect(result.available).toBe(true);
+    if (result.available) {
+      expect(result.basis).toBe('PROJECTED');
+      expect(result.band).toBe(7);
+    }
+    const full = estimateBand({ profile: profile(), skill: 'READING', rawScore: 30, totalQuestions: 40, isCompleteTest: true });
+    if (full.available) expect(full.basis).toBe('FULL');
   });
 
   it('never estimates a band for Writing', () => {

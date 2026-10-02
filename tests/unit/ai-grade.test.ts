@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { describeAiFailure } from '../../src/worker/ai/failure';
 import { ApiError } from '../../src/worker/lib/errors';
-import { canonicalCriterionKey, normaliseGrade, roundHalf } from '../../src/worker/services/ai-marking-service';
+import { canonicalCriterionKey, combineOpinions, normaliseGrade, roundHalf } from '../../src/worker/services/ai-marking-service';
+import { AI_NOT_CONFIGURED_MESSAGE } from '../../src/worker/ai/judges';
+import type { JudgeOpinion } from '../../src/shared/judges';
 
 const WRITING = ['TASK_ACHIEVEMENT', 'COHERENCE_COHESION', 'LEXICAL_RESOURCE', 'GRAMMATICAL_RANGE'];
 const SPEAKING = ['FLUENCY_COHERENCE', 'LEXICAL_RESOURCE', 'GRAMMATICAL_RANGE', 'PRONUNCIATION'];
@@ -153,9 +155,25 @@ describe('describeAiFailure', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('passes an ApiError message through untouched', () => {
-    const failure = describeAiFailure(new ApiError('AI_UNAVAILABLE', 'The AI provider “X” rejected the API key (status 401).'));
-    expect(failure.message).toBe('The AI provider “X” rejected the API key (status 401).');
+  it('never lets a provider, a model or a URL reach the candidate', () => {
+    const rejected = describeAiFailure(
+      new ApiError('AI_UNAVAILABLE', 'The AI provider “Ollama Cloud (gpt-oss:120b)” at https://ollama.com rejected the API key (status 401).'),
+    );
+    expect(rejected.message).toBe(AI_NOT_CONFIGURED_MESSAGE);
+    for (const text of [
+      rejected.message,
+      describeAiFailure(new ApiError('AI_UNAVAILABLE', 'Provider “X” timed out talking to gemma4:31b')).message,
+      describeAiFailure(new ApiError('VALIDATION_FAILED', 'gemma4:31b returned http://127.0.0.1:9911/v1 nonsense')).message,
+      describeAiFailure(new ApiError('RATE_LIMITED', 'ollama is busy')).message,
+    ]) {
+      expect(text).not.toMatch(/gpt-oss|gemma|ollama|https?:|127\.0\.0\.1|provider “/i);
+    }
+  });
+
+  it('says the judges are busy for a rate limit and keeps the work-is-saved promise', () => {
+    const failure = describeAiFailure(new ApiError('RATE_LIMITED', 'too many'));
+    expect(failure.message).toMatch(/busy/);
+    expect(failure.message).toMatch(/saved/);
   });
 
   it('explains a stale-schema CHECK failure instead of blaming the provider', () => {
@@ -167,12 +185,66 @@ describe('describeAiFailure', () => {
 
   it('explains a missing table and an unreadable reply', () => {
     expect(describeAiFailure(new Error('D1_ERROR: no such table: ai_scores')).message).toMatch(/missing a table/);
-    expect(describeAiFailure(new SyntaxError('Unexpected token')).message).toMatch(/format the platform could not read/);
+    expect(describeAiFailure(new SyntaxError('Unexpected token')).message).toMatch(/could not finish marking/);
   });
 
   it('logs the real error and names its type for anything else', () => {
     const failure = describeAiFailure(new TypeError('x is not a function'), { attemptId: 'a1' });
     expect(failure.message).toMatch(/failed unexpectedly \(TypeError\)/);
     expect(console.error).toHaveBeenCalled();
+  });
+});
+
+
+function opinion(judge: 'Judge01' | 'Judge02', band: number | null, overrides: Partial<JudgeOpinion> = {}): JudgeOpinion {
+  return {
+    judge,
+    band,
+    criteria: WRITING.map((key, index) => ({ key, label: key, band: band === null ? null : band + (index === 0 ? 0.5 : 0), comment: `${judge} on ${key}` })),
+    feedback: `${judge} feedback`,
+    feedbackVi: `${judge} tiếng Việt`,
+    strengths: ['Clear position'],
+    improvements: ['Develop the second paragraph'],
+    corrections: [{ original: 'peoples is', suggestion: 'people are', reason: 'agreement' }],
+    notes: [],
+    ...overrides,
+  };
+}
+
+describe('combineOpinions (the two-judge panel)', () => {
+  const at = '2026-10-02T00:00:00.000Z';
+
+  it('averages the judges and rounds to a half band', () => {
+    const view = combineOpinions([opinion('Judge02', 6), opinion('Judge01', 6.5)], WRITING, [], at);
+    expect(view.status).toBe('DONE');
+    expect(view.band).toBe(6.5); // mean 6.25 rounds up to 6.5
+    expect(view.spread).toBe(0.5);
+    expect(view.judges.map((judge) => judge.judge)).toEqual(['Judge01', 'Judge02']);
+    expect(view.criteria.map((criterion) => criterion.key)).toEqual(WRITING);
+    // 7 and 6 -> mean 6.5; 6.5 and 5.5 -> 6.0
+    const wide = combineOpinions([opinion('Judge01', 7), opinion('Judge02', 5.5)], WRITING, [], at);
+    expect(wide.band).toBe(6.5);
+    expect(wide.spread).toBe(1.5);
+  });
+
+  it('leads with Judge01\'s summary and merges the lists without repeating anything', () => {
+    const view = combineOpinions([opinion('Judge02', 6), opinion('Judge01', 6.5)], WRITING, [], at);
+    expect(view.feedback).toBe('Judge01 feedback');
+    expect(view.feedbackVi).toBe('Judge01 tiếng Việt');
+    expect(view.strengths).toEqual(['Clear position']);
+    expect(view.corrections).toHaveLength(1);
+  });
+
+  it('is PARTIAL when a judge was unavailable and then uses the one band it has', () => {
+    const view = combineOpinions([opinion('Judge01', 7)], WRITING, ['Judge02'], at);
+    expect(view.status).toBe('PARTIAL');
+    expect(view.unavailable).toEqual(['Judge02']);
+    expect(view.band).toBe(7);
+    expect(view.spread).toBeNull();
+  });
+
+  it('only ever names judges by their anonymous labels', () => {
+    const view = combineOpinions([opinion('Judge01', 6.5), opinion('Judge02', 6)], WRITING, [], at);
+    expect(JSON.stringify(view)).not.toMatch(/gpt-oss|gemma|ollama|openai|provider/i);
   });
 });

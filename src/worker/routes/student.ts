@@ -13,6 +13,7 @@ import {
   listStudentAssignments,
 } from '../services/analytics-service';
 import { SKILLS, TEST_TYPES } from '../../shared/types';
+import { backfillProjectedBands } from '../services/estimates-service';
 import {
   VOCABULARY_MEANING_MAX,
   VOCABULARY_NOTE_MAX,
@@ -54,6 +55,8 @@ router.get('/dashboard', async (c) => {
 router.get('/attempts', async (c) => {
   const user = currentUser(c);
   const filters = parseQuery(c, filterSchema);
+  // Sets marked before short-set projection existed get their band here (idempotent, best effort).
+  await backfillProjectedBands(c.env, user.id).catch(() => 0);
   const attempts = await listAttempts(c.env, user.id, {
     from: filters.from ?? null,
     to: filters.to ?? null,
