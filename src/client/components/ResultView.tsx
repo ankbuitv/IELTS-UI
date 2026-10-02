@@ -190,6 +190,16 @@ export function ResultSummary({
     };
   });
   const bands = tiles.map((tile) => tile.band);
+  // The note under the header says where each band came from: answer-key bands use a
+  // practice conversion table, Writing and Speaking bands are the judges' estimate.
+  const usesTable = result.sessions.some((session) => session.skill !== 'WRITING' && session.band !== null);
+  const usesJudges = result.sessions.some((session) => session.skill === 'WRITING' && combinedWritingBand(session.writing).band !== null);
+  const disclaimer =
+    usesTable && usesJudges
+      ? 'Reading and Listening bands come from a practice conversion table; Writing and Speaking bands are estimates from the AI judges, or a teacher’s band when one was given. None of them is an official IELTS result, and Ai eo is not affiliated with IELTS, the British Council, IDP or Cambridge.'
+      : usesJudges
+        ? 'Writing and Speaking bands are estimates from the AI judges, or a teacher’s band when one was given. They are not an official IELTS result, and Ai eo is not affiliated with IELTS, the British Council, IDP or Cambridge.'
+        : BAND_DISCLAIMER;
   const overall = tiles.length > 1 ? meanBand(bands) : (tiles[0]?.band ?? null);
   const covered = tiles.filter((tile) => tile.band !== null).length;
   const accuracy = formatPercent(
@@ -208,7 +218,7 @@ export function ResultSummary({
           <h1>{result.testTitle}</h1>
           <p className="report-head__sub">
             Submitted {formatDateTime(result.submittedAt)} · {formatDuration(result.durationSeconds)} · version {result.versionNumber}
-            {result.rawScore !== null ? ` · raw score ${formatScore(result.rawScore, result.totalQuestions)}${accuracy !== '—' ? ` (${accuracy})` : ''}` : ''}
+            {result.rawScore !== null && (result.totalQuestions ?? 0) > 0 ? ` · raw score ${formatScore(result.rawScore, result.totalQuestions)}${accuracy !== '—' ? ` (${accuracy})` : ''}` : ''}
           </p>
         </div>
         <div className="report-head__bands">
@@ -241,7 +251,7 @@ export function ResultSummary({
       ) : result.submittedReason === 'TIMEOUT' ? (
         <Notice tone="info">The time limit ended, so this attempt was submitted automatically with everything you had answered.</Notice>
       ) : null}
-      {overall !== null ? <p className="tiny muted result__disclaimer">{BAND_DISCLAIMER}</p> : null}
+      {overall !== null ? <p className="tiny muted result__disclaimer">{disclaimer}</p> : null}
       {!result.release.reviewAvailable ? <Notice tone="warning">{result.release.reason}</Notice> : null}
 
       {result.sessions.map((session) => (
@@ -338,7 +348,7 @@ export function ResultSummary({
             </div>
           ) : null}
 
-          {session.sectionResults.length > 0 ? (
+          {session.skill !== 'WRITING' && session.sectionResults.length > 0 ? (
             <div style={{ marginTop: 10 }}>
               <h4 style={{ margin: '0 0 6px' }} className="small">
                 By {session.skill === 'LISTENING' ? 'part' : session.skill === 'READING' ? 'passage' : 'task'}

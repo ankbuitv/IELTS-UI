@@ -1972,7 +1972,7 @@ function evaluateRelease(
     return {
       reviewAvailable: true,
       scoreAvailable: true,
-      reason: 'Writing responses are available; scores appear once a teacher or administrator marks them.',
+      reason: 'Writing is marked automatically by the AI judges; the band appears as soon as they finish. A teacher’s band replaces it when one is given.',
       releasesAt: null,
     };
   }

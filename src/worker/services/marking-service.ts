@@ -108,7 +108,7 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
 
   for (const session of sessions.results) {
     if (session.skill === 'WRITING') {
-      // Writing is teacher/admin scored; no automatic marks exist to write.
+      // Writing has no answer key. The AI judges mark it separately (ai-marking-service) and a teacher’s band wins.
       sessionResults.push({
         skillSessionId: session.id,
         skill: session.skill,
@@ -116,7 +116,7 @@ export async function markAttempt(env: Env, attemptId: string): Promise<AttemptM
         totalQuestions: 0,
         band: null,
         bandAvailable: false,
-        bandMessage: 'Writing is reviewed by a teacher; an AI estimate can be requested alongside it.',
+        bandMessage: 'Writing is marked by the AI judges; a teacher’s band replaces their estimate.',
         profileId: null,
         profileVersion: null,
       });

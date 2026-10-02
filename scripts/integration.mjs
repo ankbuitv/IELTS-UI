@@ -749,7 +749,7 @@ async function fullMockFlow(admin, student, { versionId, writingVersionId }) {
   assert(result.body.sessions.length === 2, 'result covers both skill sessions');
   const writingSession = result.body.sessions.find((session) => session.skill === 'WRITING');
   assert(writingSession.writing.length === 1, 'writing submission is attached to the result');
-  assert(writingSession.writing[0].score === null, 'writing is left unmarked for a human, never auto-scored');
+  assert(writingSession.writing[0].score === null, 'writing carries no teacher band until a teacher gives one (the AI judges mark it separately)');
   assert(writingSession.writing[0].submissionId, 'writing submission id is exposed for teacher marking');
 
   return { attemptId, writingVersionId };

@@ -23,7 +23,7 @@
   background: var(--paper); color: var(--ink-700); border: 1px solid var(--ink-300); border-radius: var(--radius); cursor: pointer;
 }
 .chip:hover { border-color: var(--ink-900); color: var(--ink-950); }
-.chip.is-on { background: var(--ink-900); border-color: var(--ink-900); color: #fff; }
+.chip.is-on { background: var(--solid); border-color: var(--solid); color: var(--on-solid); }
 .chip__count { font-size: 0.72rem; font-weight: 700; opacity: 0.7; font-variant-numeric: tabular-nums; }
 .search {
   display: inline-flex; align-items: center; gap: 7px; padding: 0 10px; min-height: 32px; min-width: 180px;
@@ -67,7 +67,7 @@
 
 .estimates { display: grid; grid-template-columns: 220px minmax(0, 1fr); border: 1px solid var(--ink-900); background: var(--paper); }
 .estimates__overall {
-  display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 16px 18px; background: var(--ink-900); color: #fff;
+  display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 16px 18px; background: var(--solid); color: var(--on-solid);
   border-left: 6px solid var(--brand-600);
 }
 .estimates__label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #aeb4be; }
@@ -139,7 +139,7 @@
 .report-head__kicker { margin: 0; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #ff8d9b; }
 .report-head__sub { margin: 0; color: #b9bfc8; font-size: 0.82rem; }
 .report-head__bands { display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap; }
-.report-overall { background: #fff; color: var(--ink-950); padding: 10px 20px; min-width: 150px; text-align: center; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.report-overall { background: var(--paper); color: var(--ink-950); border: 1px solid transparent; padding: 10px 20px; min-width: 150px; text-align: center; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
 .report-overall__label { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-500); }
 .report-overall__value { font-size: 3rem; font-weight: 700; color: var(--brand-700); line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
 .report-overall.is-empty .report-overall__value { color: var(--ink-300); }
@@ -162,7 +162,7 @@
 
 .aimark { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; background: var(--paper); border: 1px solid var(--ink-300); border-top: 4px solid var(--brand-600); }
 .aimark__head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.aimark__band { flex: none; min-width: 84px; padding: 8px 12px; text-align: center; background: var(--ink-900); color: #fff; display: flex; flex-direction: column; }
+.aimark__band { flex: none; min-width: 84px; padding: 8px 12px; text-align: center; background: var(--solid); color: var(--on-solid); display: flex; flex-direction: column; }
 .aimark__band-value { font-size: 2.1rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
 .aimark__band-label { font-size: 0.64rem; letter-spacing: 0.1em; text-transform: uppercase; color: #aeb4be; margin-top: 3px; }
 .aimark__who { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; flex: 1; }

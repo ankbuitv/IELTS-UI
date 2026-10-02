@@ -39,7 +39,7 @@ const MORE_NAV: NavItem[] = [
   { to: '/profile', label: 'Profile', icon: 'user' },
 ];
 
-/** The four phone tabs; the fifth opens the More sheet. */
+/** The four phone tabs for a candidate; the fifth opens the More sheet. */
 const TAB_NAV: NavItem[] = [
   { to: '/dashboard', label: 'Home', icon: 'grid' },
   { to: '/learn', label: 'Learn', icon: 'target' },
@@ -53,6 +53,29 @@ const PUBLIC_NAV = [
   { href: '#marking', label: 'AI marking' },
   { href: '#teachers', label: 'For teachers' },
 ];
+
+const STAFF_ADMIN: NavItem = { to: '/admin', label: 'Admin', icon: 'shield' };
+const STAFF_TEACHING: NavItem = { to: '/teacher', label: 'Teaching', icon: 'presentation' };
+const STAFF_MARKING: NavItem = { to: '/teacher/marking', label: 'Marking', icon: 'pen' };
+
+/**
+ * What each role sees in the bar. Candidates get the six places they use; teachers and
+ * administrators get their own console first (it is what they came for) with Practice and
+ * Learn beside it, and everything else sits behind "More" so no bar ever overflows.
+ */
+function navFor(role: string | undefined): { top: NavItem[]; tabs: NavItem[]; home: string } {
+  const practice = MAIN_NAV[2]!;
+  const learn = MAIN_NAV[1]!;
+  if (role === 'ADMIN') {
+    return { top: [STAFF_ADMIN, STAFF_TEACHING, STAFF_MARKING, practice, learn], tabs: [STAFF_ADMIN, STAFF_TEACHING, STAFF_MARKING, practice], home: '/admin' };
+  }
+  if (role === 'TEACHER') {
+    return { top: [STAFF_TEACHING, STAFF_MARKING, practice, learn], tabs: [STAFF_TEACHING, STAFF_MARKING, practice, learn], home: '/teacher' };
+  }
+  return { top: MAIN_NAV, tabs: TAB_NAV, home: '/dashboard' };
+}
+
+const samePlace = (pathname: string, item: NavItem) => pathname === item.to || pathname.startsWith(`${item.to}/`);
 
 export function AppShell() {
   const { user, loading, logout } = useAuth();
@@ -80,12 +103,11 @@ export function AppShell() {
     );
   }
 
-  const staff: NavItem[] = [];
-  if (user?.role === 'TEACHER' || user?.role === 'ADMIN') {
-    staff.push({ to: '/teacher', label: 'Teaching', icon: 'presentation' });
-    staff.push({ to: '/teacher/marking', label: 'Mark writing', icon: 'pen' });
-  }
-  if (user?.role === 'ADMIN') staff.push({ to: '/admin', label: 'Administration', icon: 'shield' });
+  const nav = navFor(user?.role);
+  // Behind "More": every candidate place that is not already in the top bar. The phone sheet
+  // also lists what the top bar has but the four phone tabs do not.
+  const overflowNav = [...MAIN_NAV, ...MORE_NAV].filter((item) => !nav.top.some((top) => top.to === item.to));
+  const phoneOnlyNav = nav.top.filter((item) => !nav.tabs.some((tab) => tab.to === item.to));
 
   const signOut = async () => {
     await logout();
@@ -94,29 +116,28 @@ export function AppShell() {
   };
 
   const bleed = !user && location.pathname === '/';
-  const moreActive = [...MORE_NAV, ...staff].some(
-    (item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`),
-  );
-  const inMainNav = MAIN_NAV.some((item) => location.pathname.startsWith(item.to));
+  const moreActive = overflowNav.some((item) => samePlace(location.pathname, item));
+  const inTopNav = nav.top.some((item) => samePlace(location.pathname, item));
+  const inTabs = nav.tabs.some((item) => samePlace(location.pathname, item));
 
   return (
     <div className="site">
       <header className="site-header">
         <div className="site-header__inner">
-          <NavLink to={user ? '/dashboard' : '/'} className="site-brand" aria-label="Ai eo home">
+          <NavLink to={user ? nav.home : '/'} className="site-brand" aria-label="Ai eo home">
             <BrandLogo theme="dark" height={28} />
           </NavLink>
 
           {user ? (
             <nav className="site-nav" aria-label="Main">
-              {MAIN_NAV.map((item) => (
-                <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? 'active' : undefined)}>
+              {nav.top.map((item) => (
+                <NavLink key={item.to} to={item.to} end={item.to === '/teacher'} className={({ isActive }) => (isActive ? 'active' : undefined)}>
                   {item.label}
                 </NavLink>
               ))}
               <button
                 type="button"
-                className={`site-nav__more${moreActive && !inMainNav ? ' active' : ''}`}
+                className={`site-nav__more${moreActive && !inTopNav ? ' active' : ''}`}
                 aria-expanded={panelOpen}
                 aria-haspopup="menu"
                 onClick={() => setPanelOpen((open) => !open)}
@@ -186,15 +207,15 @@ export function AppShell() {
 
       {user ? (
         <nav className="site-tabbar" aria-label="Main">
-          {TAB_NAV.map((item) => (
-            <NavLink key={item.to} to={item.to} className={({ isActive }) => `site-tabbar__item${isActive ? ' active' : ''}`}>
+          {nav.tabs.map((item) => (
+            <NavLink key={item.to} to={item.to} end={item.to === '/teacher'} className={({ isActive }) => `site-tabbar__item${isActive ? ' active' : ''}`}>
               <Icon name={item.icon} size={20} />
               <span>{item.label}</span>
             </NavLink>
           ))}
           <button
             type="button"
-            className={`site-tabbar__item${panelOpen || (moreActive && !TAB_NAV.some((i) => location.pathname.startsWith(i.to))) ? ' active' : ''}`}
+            className={`site-tabbar__item${panelOpen || ((moreActive || inTopNav) && !inTabs) ? ' active' : ''}`}
             onClick={() => setPanelOpen((open) => !open)}
             aria-expanded={panelOpen}
           >
@@ -218,33 +239,24 @@ export function AppShell() {
               </span>
             </div>
 
-            <div className="more-panel__group more-panel__group--phone">
-              {MAIN_NAV.filter((item) => !TAB_NAV.some((tab) => tab.to === item.to)).map((item) => (
-                <NavLink key={item.to} to={item.to} className="more-item" role="menuitem">
-                  <Icon name={item.icon} size={17} />
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-            <div className="more-panel__group">
-              {MORE_NAV.map((item) => (
-                <NavLink key={item.to} to={item.to} className="more-item" role="menuitem">
-                  <Icon name={item.icon} size={17} />
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-            {staff.length > 0 ? (
-              <div className="more-panel__group">
-                <div className="more-panel__label">Workspace</div>
-                {staff.map((item) => (
-                  <NavLink key={item.to} to={item.to} className="more-item" role="menuitem">
+            {phoneOnlyNav.length > 0 ? (
+              <div className="more-panel__group more-panel__group--phone">
+                {phoneOnlyNav.map((item) => (
+                  <NavLink key={item.to} to={item.to} end={item.to === '/teacher'} className="more-item" role="menuitem">
                     <Icon name={item.icon} size={17} />
                     {item.label}
                   </NavLink>
                 ))}
               </div>
             ) : null}
+            <div className="more-panel__group">
+              {overflowNav.map((item) => (
+                <NavLink key={item.to} to={item.to} className="more-item" role="menuitem">
+                  <Icon name={item.icon} size={17} />
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
             <div className="more-panel__group">
               <button type="button" className="more-item more-item--button" onClick={signOut} role="menuitem">
                 <Icon name="logout" size={17} />

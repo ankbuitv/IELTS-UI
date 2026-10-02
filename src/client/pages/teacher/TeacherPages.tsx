@@ -1199,11 +1199,11 @@ export function StudentDetailPage() {
                   <td>{row.taskLabel}</td>
                   <td className="num">{row.wordCount}</td>
                   <td className="num">{formatBand(row.scoreBand)}</td>
-                  <td>{row.scoringSource ? row.scoringSource.toLowerCase() : 'Awaiting marking'}</td>
+                  <td>{row.scoringSource ? row.scoringSource.toLowerCase() : 'AI judges only'}</td>
                   <td className="nowrap">{formatDateTime(row.submittedAt)}</td>
                   <td className="right">
                     <Button size="sm" variant="primary" onClick={() => setMarking(row)}>
-                      {row.scoreBand != null ? 'Edit mark' : 'Mark'}
+                      {row.scoreBand != null ? 'Edit band' : 'Add band'}
                     </Button>
                   </td>
                 </tr>

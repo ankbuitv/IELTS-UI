@@ -55,6 +55,10 @@
   --canvas: #f1f2f4;
   /* The top bar and footer: a near-black, like an exam centre's signage. */
   --bar: #14171b;
+  /* A strong, always-dark surface (selected chips, score panels). Re-pointed in dark mode, where the ink scale inverts. */
+  --solid: var(--ink-900);
+  --solid-edge: var(--ink-950);
+  --on-solid: #ffffff;
   --bar-ink: #ffffff;
   --bar-muted: #aeb4be;
 
@@ -151,6 +155,7 @@ html { scroll-behavior: smooth; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .row--between { justify-content: space-between; }
 .grid { display: grid; gap: 12px; }
+.grid > * { min-width: 0; }
 .grid--2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 .grid--3 { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
 .grid--4 { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
@@ -451,11 +456,12 @@ table.data--zebra tbody tr:nth-child(even) { background: var(--paper-muted); }
   h1 { font-size: 1.25rem; }
   .card { padding: 12px; }
   .card--flush { padding: 0; }
-  .grid--2, .grid--3 { grid-template-columns: 1fr; }
+  .grid--2, .grid--3 { grid-template-columns: minmax(0, 1fr); }
   .grid--4 { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
   .toolbar-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .table-wrap { -webkit-overflow-scrolling: touch; }
-  table.data { min-width: 480px; }
+  /* Wide tables scroll sideways inside .table-wrap; short key/value lists simply fit. */
+  table.data:has(thead th:nth-child(4)) { min-width: 480px; }
   .kv { gap: 4px; }
   .page-head { margin-bottom: 10px; }
   /* Bottom sheet instead of a centred dialog. */
@@ -557,3 +563,14 @@ table.data--zebra tbody tr:nth-child(even) { background: var(--paper-muted); }
 .review-q__answers { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 2px 36px; font-size: 0.88rem; color: var(--ink-600); }
 .review-q__answer--key { color: var(--success); }
 .review-q .explain { margin: 8px 0 2px 36px; background: var(--paper); }
+
+/* Password field with an inline reveal toggle (ui.tsx PasswordField). */
+.field--password { position: relative; }
+.field--password input { padding-right: 68px; }
+.password-toggle {
+  position: absolute; right: 4px; bottom: 4px; height: 30px; padding: 0 10px;
+  border-radius: var(--radius-sm); border: 0; background: transparent;
+  color: var(--ink-500); font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+}
+.password-toggle:hover { background: var(--ink-100); color: var(--ink-900); }
+.password-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }

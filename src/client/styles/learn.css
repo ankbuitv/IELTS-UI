@@ -53,7 +53,7 @@
 .node-wrap { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; flex: none; width: 64px; }
 .node {
   width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; font-family: inherit;
-  border: 0; color: #fff; background: var(--ink-900); box-shadow: 0 5px 0 var(--ink-950); transition: transform 90ms var(--ease), box-shadow 90ms var(--ease);
+  border: 0; color: var(--on-solid); background: var(--solid); box-shadow: 0 5px 0 var(--solid-edge); transition: transform 90ms var(--ease), box-shadow 90ms var(--ease);
 }
 .node:hover { transform: translateY(-1px); }
 .node:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink-950); }
@@ -127,7 +127,7 @@
 .lesson__option.is-wrong .lesson__key { border-color: var(--danger); color: var(--danger); }
 .lesson__listen { display: flex; gap: 10px; margin: 6px 0 18px; }
 .lesson__speaker { width: 68px; height: 68px; display: grid; place-items: center; border: 0; background: var(--brand-600); color: #fff; border-radius: 50%; cursor: pointer; box-shadow: 0 4px 0 var(--brand-800); }
-.lesson__speaker--slow { width: 46px; height: 46px; align-self: center; background: var(--ink-900); box-shadow: 0 4px 0 var(--ink-950); }
+.lesson__speaker--slow { width: 46px; height: 46px; align-self: center; background: var(--solid); box-shadow: 0 4px 0 var(--solid-edge); }
 .lesson__input { width: 100%; padding: 14px 14px; font-size: 1.15rem; border: 2px solid var(--ink-300); border-bottom-width: 4px; border-radius: var(--radius-lg); background: var(--paper); }
 .lesson__input.is-right { border-color: var(--success); background: var(--success-soft); }
 .lesson__input.is-wrong { border-color: var(--danger); background: var(--danger-soft); }

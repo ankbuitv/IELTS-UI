@@ -9,10 +9,11 @@ single-page client served from the same Worker. **V1 needs no object storage:**
 imports are processed in the request and kept in D1 as text, and listening audio
 or diagram images are registered as external HTTPS URLs rather than uploaded.
 
-> **Not affiliated with IELTS, the British Council, IDP or Cambridge.** All band
-> figures produced by this platform are labelled **Estimated band** and come from
-> conversion tables an administrator configures. The repository ships only
-> original sample content.
+> **Not affiliated with IELTS, the British Council, IDP or Cambridge.** Every band
+> this platform shows is a practice estimate and is labelled as one: Reading and
+> Listening bands come from conversion tables an administrator configures,
+> Writing and Speaking bands from two AI judges (a teacher's band replaces
+> theirs). The repository ships only original sample content.
 
 ---
 
@@ -38,10 +39,12 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
   sequencing, autosave, resume after disconnect, and attempt recovery.
 - Full mock exams built from configurable component sequences (skill order,
   per-component duration, breaks) — nothing is hard-coded to one test.
-- Integrity monitor that records *observable* browser events (tab hidden,
-  fullscreen exit, copy/paste, blur) with an explicit on-screen notice that
-  these events are not proof of misconduct and cannot block OS-level actions
-  such as Alt+Tab.
+- **Tab lock in every mode.** Leaving the exam tab is a strike: on return a
+  blocking overlay says which strike it was, and the third strike submits the
+  attempt automatically with everything answered kept and marked. A web page
+  cannot stop OS-level switching (Alt+Tab, another device), so the lock counts,
+  blocks on return and says so on screen. Copy/paste, blur and fullscreen exits
+  are recorded as observable events and are not proof of misconduct.
 
 **Question engine**
 
@@ -78,11 +81,39 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
 - Deterministic server-side marking with acceptable answer variants, word
   limits, partial credit for multiple-answer questions, and normalisation
   (case, whitespace, articles, numbers).
-- Writing is **never** auto-scored: submissions are stored for a human reviewer
-  to band and comment.
-- Band estimation for reading/listening only, through versioned scoring
-  profiles, refused for incomplete tests and always labelled as an estimate.
+- **Writing and Speaking are marked automatically by two AI judges**, shown to
+  candidates only as **Judge01** and **Judge02** (model names, vendors and
+  endpoints never reach the browser). Every request carries the same marking
+  brief (`MARKING_PROMPT_VERSION` in `src/worker/ai/marking-prompts.ts`: band
+  descriptors with anchors, length and off-topic caps, a strict JSON contract).
+  The panel returns a consensus band (the judges' mean, to the nearest half
+  band), per-criterion bands with each judge's own score, corrections, a
+  Vietnamese summary and new words for the notebook. Writing is marked when the
+  results page opens, Speaking when the recording is submitted; if one judge is
+  unavailable the other's mark is shown and the missing one is filled in later.
+  Pronunciation is reported as *not assessed* because judges read a transcript.
+  Reading and Listening are never sent to AI (they use the protected answer
+  key). A teacher's band always replaces the AI estimate.
+- **More than one kind of band estimate**, always labelled: *Estimated band*
+  (a full paper through a versioned scoring profile), *Projected band* (a short
+  set of 8+ questions scaled to a full paper), *AI judges* and *Teacher*. The
+  dashboard averages the last three attempts per skill and shows an overall
+  band that stays *provisional* until all four skills contribute.
 - Result visibility modes: immediate, after deadline, score only, or no review.
+
+**Learning**
+
+- A Duolingo-style **Learn path** (`/learn`): units of short lessons mixing
+  choose, match, fill-in, listen, type and word-order exercises, with hearts,
+  XP, stars, a daily goal and a streak. The path opens at the learner's level
+  (from recent bands, or chosen between band 4 and 7).
+- **AI daily vocabulary**: new words pitched about half a band above the
+  learner, plus the words the judges suggest from their own writing and
+  speaking, saved to the notebook and revised with Leitner spaced review.
+- A **dictionary** (`/dictionary`) with English definitions, Vietnamese
+  meanings, IPA and examples, also available as a popover inside practice
+  exams. Lookups go word bank → cache → AI → a public dictionary API.
+- Design, rules and API: [`docs/UI-REFRESH.md`](docs/UI-REFRESH.md).
 
 **Classes & analytics**
 
@@ -140,7 +171,7 @@ src/
   shared/     types, question registry, validation, marking, scoring, integrity
   worker/     app, routes, services, middleware, extractors, AI client, lib
   client/     React SPA (pages, exam components, hooks, ui kit, styles)
-migrations/   D1 schema (0001_init, 0002_imports_and_settings)
+migrations/   D1 schema (0001_init … 0009_learn_and_vocabulary)
 seed/         original sample content + wipe script
 scripts/      database reset + end-to-end acceptance run
 tests/unit/   vitest unit suite
@@ -272,6 +303,18 @@ Add `CLOUDFLARE_API_TOKEN` (Workers Scripts:Edit, D1:Edit) and
 outside `.github/` because the GitHub App used by this workspace is not allowed
 to push workflow files.)
 
+**Apply migrations before the new Worker serves traffic.** The Worker repairs
+a stale schema on first use (`ensure-schema`), and if it creates the columns of
+migration `0009` before the migration runs, applying it later stops with
+`duplicate column name`. The bundled pipeline migrates first; when deploying by
+hand run `npm run db:migrate:remote` and then `npm run deploy`.
+
+**AI marking secrets.** `OLLAMA_API_KEYS` (secret), `OLLAMA_MODEL` (Judge01) and
+`OLLAMA_MODEL_2` (Judge02) as in `wrangler.jsonc`. Use the names the direct API
+lists at `https://ollama.com/api/tags` (for example `gpt-oss:120b`, not the
+`-cloud` names used by the local CLI); models are retired from time to time, so
+change the variable rather than the code.
+
 The client **must be built before** `wrangler deploy` runs (the Worker serves
 the SPA from `dist/client`). In the Cloudflare dashboard set:
 
@@ -328,13 +371,14 @@ for the same-origin check, absolute links and cookie attributes.
 ```bash
 npm run typecheck        # worker + client + node tsconfigs
 npm run lint
-npm test                 # 6 files / 84 unit tests
+npm test                 # unit tests (see the count in the run output)
 npm run build            # typecheck + production client build
 npm run dev:api &        # then:
-npm run test:integration # 71 end-to-end checks across 5 flows
+npm run test:integration # 85 end-to-end checks across 5 flows (demo admin: ADMIN_EMAIL / ADMIN_PASSWORD)
 ```
 
-Unit tests cover the marking engine, band conversion, deterministic validation,
+Unit tests cover the marking engine, band conversion and projection, the
+two-judge panel and its anonymity, the Learn engine, deterministic validation,
 integrity policy, the AI payload converter and the security helpers. The
 acceptance run drives real HTTP sessions for the admin, teacher, student and
 full-mock flows. The recorded output of a green run is in
@@ -344,9 +388,10 @@ full-mock flows. The recorded output of a green run is in
 
 ## Documentation
 
-- [`docs/UI-REFRESH.md`](docs/UI-REFRESH.md) — the light workspace pass: one
-  visual language (white shell, icon set, product-first landing page), what it
-  replaced, and how it was verified without a browser.
+- [`docs/UI-REFRESH.md`](docs/UI-REFRESH.md) — the exam-style redesign that
+  replaced the earlier light workspace: design language, shell, Learn path and
+  dictionary, AI judges, tab lock, band estimates, and what was and was not
+  verified.
 - [`docs/QUESTION-AUTHORING.md`](docs/QUESTION-AUTHORING.md) — how to create
   questions: the full structured-JSON import format, every supported question
   type, how answers/evidence/explanations are graded and shown, plus a

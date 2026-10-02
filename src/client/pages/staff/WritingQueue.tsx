@@ -41,18 +41,18 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
         <div>
           <h1>Writing to mark</h1>
           <p className="page-head__meta">
-            Essays are never scored automatically. A teacher or administrator awards a practice band and feedback.
+            Essays are marked automatically by the AI judges. Award a practice band and feedback here and your band replaces their estimate.
           </p>
         </div>
         <Button onClick={() => setUnmarkedOnly((value) => !value)}>
-          {unmarkedOnly ? 'Show marked as well' : 'Awaiting marking only'}
+          {unmarkedOnly ? 'Show teacher-marked as well' : 'No teacher band only'}
         </Button>
       </div>
 
       <div className="grid grid--3">
         <Stat label="In this list" value={data?.submissions.length ?? 0} />
-        <Stat label="Awaiting a band" value={data?.unmarkedCount ?? 0} hint="Submitted writing with no human score yet" />
-        <Stat label="Filter" value={unmarkedOnly ? 'Unmarked' : 'All submitted'} />
+        <Stat label="No teacher band" value={data?.unmarkedCount ?? 0} hint="Marked by the AI judges only so far" />
+        <Stat label="Filter" value={unmarkedOnly ? 'No teacher band' : 'All submitted'} />
       </div>
 
       {loading ? <Loading label="Loading writing submissions…" /> : null}
@@ -60,7 +60,7 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
 
       <Card
         title="Submissions"
-        hint="Practice writing only — bands here are human judgments, not official IELTS results."
+        hint="Practice writing only. The AI judges mark every essay automatically; a teacher’s band replaces their estimate. None of it is an official IELTS result."
         flush
       >
         <div className="table-wrap">
@@ -93,7 +93,7 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
                     {row.scoreBand != null ? (
                       <Badge tone="success">{formatBand(row.scoreBand)}</Badge>
                     ) : (
-                      <Badge tone="warning">Awaiting marking</Badge>
+                      <Badge tone="neutral">AI only</Badge>
                     )}
                   </td>
                   <td className="nowrap">{formatDateTime(row.submittedAt)}</td>
@@ -105,7 +105,7 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
                         </Link>
                       ) : null}
                       <Button size="sm" variant="primary" onClick={() => setSelected(row)}>
-                        {row.scoreBand != null ? 'Edit mark' : 'Mark'}
+                        {row.scoreBand != null ? 'Edit band' : 'Add band'}
                       </Button>
                     </div>
                   </td>
@@ -115,8 +115,8 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
           </table>
         </div>
         {data && data.submissions.length === 0 ? (
-          <EmptyState title={unmarkedOnly ? 'Nothing waiting to be marked' : 'No writing submissions yet'}>
-            When a student submits Task 1 or Task 2, the essay appears here for a teacher or administrator.
+          <EmptyState title={unmarkedOnly ? 'No essays are waiting for a teacher band' : 'No writing submissions yet'}>
+            When a student submits Task 1 or Task 2, the essay appears here. The AI judges mark it automatically; you can add a teacher’s band.
           </EmptyState>
         ) : null}
       </Card>

@@ -233,7 +233,7 @@ INSERT INTO tests (id, slug, title, type, status, summary, current_version_id, c
                    content_origin, source_title, source_url, attribution, license_notes)
 VALUES (
   'tst_seed_writing', 'writing-practice-two-tasks', 'Writing Practice — Two Tasks', 'WRITING', 'DRAFT',
-  'A short Task 1 and Task 2 writing practice set. Submissions are reviewed and marked by a teacher or administrator; the platform does not score writing automatically.',
+  'A short Task 1 and Task 2 writing practice set. It is marked automatically by two AI judges as soon as you submit, and a teacher can award an official practice band that replaces their estimate.',
   NULL, NULL, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z',
   'ORIGINAL', 'Written for this platform', NULL, 'Original content, no third-party rights involved.', 'Free to use within this platform.'
 );
@@ -251,7 +251,7 @@ INSERT INTO sections (id, test_version_id, skill, order_index, title, subtitle, 
                       duration_seconds, config_json, created_at, updated_at)
 VALUES (
   'sec_seed_writing', 'ver_seed_writing_v1', 'WRITING', 0, 'Writing Tasks', NULL,
-  'Complete both tasks. You should spend about 20 minutes on Task 1 and about 40 minutes on Task 2. Your answers are saved automatically and marked by a teacher.',
+  'Complete both tasks. You should spend about 20 minutes on Task 1 and about 40 minutes on Task 2. Your answers are saved automatically and marked by the AI judges when you finish.',
   NULL, NULL, 3600, '{}', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'
 );
 

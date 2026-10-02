@@ -516,7 +516,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
                   <span className="exam-part__count">
                     {section.skill === 'WRITING' || section.writingTasks.length > 0
                       ? answeredInSection === sectionQuestions.length && sectionQuestions.length > 0
-                        ? '✓'
+                        ? <Icon name="check" size={13} strokeWidth={2.8} />
                         : `${answeredInSection}/${Math.max(sectionQuestions.length, section.writingTasks.length)}`
                       : `${answeredInSection}/${totalInSection}`}
                   </span>

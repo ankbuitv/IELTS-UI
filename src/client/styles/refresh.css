@@ -39,6 +39,8 @@ html[data-theme='dark'] {
   --paper-muted: #1c2026;
   --canvas: #0e1013;
   --bar: #0a0b0d;
+  --solid: #272d36;
+  --solid-edge: #0a0b0d;
 
   --ink-950: #f5f6f8;
   --ink-900: #eceef1;
@@ -98,6 +100,7 @@ html[data-theme='dark'] .exam-bottombar,
 html[data-theme='dark'] .modal,
 html[data-theme='dark'] .card { background: var(--paper); border-color: var(--ink-200); }
 html[data-theme='dark'] .exam-pane--work { background: var(--canvas); }
+html[data-theme='dark'] .report-overall { border-color: var(--ink-200); }
 html[data-theme='dark'] .passage { color: var(--ink-800); }
 html[data-theme='dark'] .nav-strip__item { background: var(--paper-muted); color: var(--ink-700); border-color: var(--ink-200); }
 html[data-theme='dark'] .btn { background: var(--paper-muted); border-color: var(--ink-300); color: var(--ink-800); }
@@ -193,7 +196,7 @@ html[data-theme='dark'] ::selection { background: rgba(217, 44, 69, 0.45); color
 .recorder__mic:hover { background: var(--brand-700); }
 .recorder__mic:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--brand-800); }
 .recorder__mic--recording { background: var(--danger); box-shadow: 0 4px 0 #8f1d14; animation: pulse-rec 1.6s ease-in-out infinite; }
-.recorder__mic--stop { background: var(--ink-800); }
+.recorder__mic--stop { background: var(--solid); }
 @keyframes pulse-rec { 0%, 100% { box-shadow: 0 4px 0 #8f1d14, 0 0 0 0 rgba(217, 45, 32, 0.45); } 50% { box-shadow: 0 4px 0 #8f1d14, 0 0 0 12px rgba(217, 45, 32, 0); } }
 .recorder__status { font-size: 0.82rem; color: var(--ink-500); }
 .recorder__live {

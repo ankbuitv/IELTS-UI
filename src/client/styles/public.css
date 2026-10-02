@@ -24,7 +24,7 @@
 .report { margin: 0; border: 1px solid var(--ink-900); background: var(--paper); }
 .report__head {
   display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
-  background: var(--ink-900); color: #fff; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  background: var(--solid); color: var(--on-solid); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
 }
 .report__tag { background: var(--brand-600); color: #fff; padding: 1px 8px; font-size: 0.66rem; letter-spacing: 0.08em; }
 .report__body { display: grid; grid-template-columns: 132px minmax(0, 1fr); }
@@ -79,7 +79,7 @@
 .path-preview__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
 .path-preview__node { display: flex; align-items: center; gap: 12px; }
 .path-preview__dot { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; flex: none; border: 3px solid var(--ink-300); background: var(--paper-muted); color: var(--ink-400); }
-.path-preview__node--done .path-preview__dot { background: var(--ink-900); border-color: var(--ink-900); color: #fff; }
+.path-preview__node--done .path-preview__dot { background: var(--solid); border-color: var(--solid); color: var(--on-solid); }
 .path-preview__node--current .path-preview__dot { background: var(--brand-600); border-color: var(--brand-700); color: #fff; box-shadow: 0 0 0 4px var(--brand-100); }
 .path-preview__label { font-weight: 700; font-size: 0.9rem; color: var(--ink-900); }
 .path-preview__node--locked .path-preview__label { color: var(--ink-400); }
@@ -89,7 +89,7 @@
 .judge-preview__judges { display: grid; grid-template-columns: repeat(3, 1fr); }
 .judge-preview__judge { padding: 14px 10px; text-align: center; border-right: 1px solid var(--ink-200); border-bottom: 1px solid var(--ink-200); }
 .judge-preview__judge:last-child { border-right: 0; }
-.judge-preview__judge--final { background: var(--ink-900); color: #fff; }
+.judge-preview__judge--final { background: var(--solid); color: var(--on-solid); }
 .judge-preview__name { display: block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-500); }
 .judge-preview__judge--final .judge-preview__name { color: #aeb4be; }
 .judge-preview__band { display: block; font-size: 2rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--ink-950); }
@@ -112,13 +112,13 @@
 .trio--light h3 { color: var(--ink-950); }
 .trio--light p { color: var(--ink-600); }
 
-.cta-strip { margin-top: 32px; display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 18px 22px; background: var(--ink-900); color: #fff; border-left: 6px solid var(--brand-600); }
+.cta-strip { margin-top: 32px; display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 18px 22px; background: var(--solid); color: var(--on-solid); border-left: 6px solid var(--brand-600); }
 .cta-strip strong { display: block; font-size: 1.1rem; }
 .cta-strip span { color: #b9bfc8; font-size: 0.88rem; }
 
 /* ------------------------------------------------------------ auth screens */
 .auth { max-width: 980px; margin: 14px auto 0; display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr); border: 1px solid var(--ink-300); background: var(--paper); }
-.auth__panel { background: var(--ink-900); color: #d6dae0; padding: 30px 28px; display: flex; flex-direction: column; gap: 22px; border-top: 4px solid var(--brand-600); }
+.auth__panel { background: var(--solid); color: #d6dae0; padding: 30px 28px; display: flex; flex-direction: column; gap: 22px; border-top: 4px solid var(--brand-600); }
 .auth__eyebrow { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #ff8d9b; }
 .auth__title { color: #fff; font-size: 1.45rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.015em; }
 .auth__lede { margin: 0; font-size: 0.9rem; line-height: 1.6; color: #b9bfc8; }
