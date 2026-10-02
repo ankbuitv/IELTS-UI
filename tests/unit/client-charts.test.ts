@@ -25,6 +25,14 @@ describe('niceScale (axis ticks people can read)', () => {
     expect(bands.ticks).toEqual([0, 2, 4, 6, 8]);
   });
 
+  it('keeps counts on whole numbers even when the data would suggest a 2.5 step', () => {
+    const scale = niceScale(0, 11.55, 4, false, true);
+    expect(scale.ticks).toEqual([0, 3, 6, 9, 12]);
+    expect(scale.max).toBe(12);
+    // Without the flag the same range lands on 2.5 steps, which is right for bands but not for counts.
+    expect(niceScale(0, 11.55, 4, false, false).ticks).toContain(2.5);
+  });
+
   it('never produces fractional counts for small data and survives an empty range', () => {
     expect(niceScale(0, 3, 4, false).ticks.every(Number.isInteger)).toBe(true);
     const flat = niceScale(0, 0, 4, false);

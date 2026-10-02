@@ -171,7 +171,7 @@ src/
   shared/     types, question registry, validation, marking, scoring, integrity
   worker/     app, routes, services, middleware, extractors, AI client, lib
   client/     React SPA (pages, exam components, hooks, ui kit, styles)
-migrations/   D1 schema (0001_init … 0009_learn_and_vocabulary)
+migrations/   D1 schema (0001_init … 0010_sample_writing_copy)
 seed/         original sample content + wipe script
 scripts/      database reset + end-to-end acceptance run
 tests/unit/   vitest unit suite

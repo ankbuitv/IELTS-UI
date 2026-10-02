@@ -15,16 +15,19 @@ export type ChartTone = 'brand' | 'violet' | 'emerald' | 'amber' | 'blue';
 /**
  * Axis values people can read: whole steps such as 0, 3, 6, 9 for a band axis or 0, 25, 50, 75, 100
  * for a percentage, instead of 0, 2.25, 4.5, 6.75, 9. Without a fixed top the axis is rounded up to
- * the next tick so the highest gridline is never above the data it describes.
+ * the next tick so the highest gridline is never above the data it describes. `integersOnly`
+ * keeps every tick a whole number, for counts.
  */
-export function niceScale(min: number, max: number, target = 4, fixedTop = false): { max: number; ticks: number[] } {
+export function niceScale(min: number, max: number, target = 4, fixedTop = false, integersOnly = false): { max: number; ticks: number[] } {
   const span = max - min;
   if (!Number.isFinite(span) || span <= 0) return { max: min + 1, ticks: [min, min + 1] };
   const raw = span / target;
   const exponent = Math.floor(Math.log10(raw));
   const candidates: number[] = [];
   for (let k = exponent - 1; k <= exponent + 1; k += 1) for (const base of [1, 2, 2.5, 3, 5, 10]) candidates.push(base * 10 ** k);
-  const feasible = candidates.filter((candidate) => candidate >= raw * 0.8 - 1e-9).sort((a, b) => a - b);
+  const feasible = candidates
+    .filter((candidate) => candidate >= raw * 0.8 - 1e-9 && (!integersOnly || (Number.isInteger(candidate) && candidate >= 1)))
+    .sort((a, b) => a - b);
   const even = (candidate: number) => Math.abs(span / candidate - Math.round(span / candidate)) < 1e-9;
   const step = (fixedTop ? feasible.find(even) : undefined) ?? feasible[0] ?? raw;
   const top = fixedTop ? max : Math.ceil((max - min) / step - 1e-9) * step + min;
@@ -138,7 +141,9 @@ export function BarChart({
   const padding = { top: 14, right: 12, bottom: 34, left: 38 };
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
-  const scale = niceScale(0, Math.max(...bars.map((bar) => bar.value ?? 0)) * 1.05 || 1, 4, false);
+  // Counts (attempts per day, students) never get a 2.5 gridline.
+  const wholeNumbers = bars.every((bar) => Number.isInteger(bar.value ?? 0));
+  const scale = niceScale(0, Math.max(...bars.map((bar) => bar.value ?? 0)) * 1.05 || 1, 4, false, wholeNumbers);
   const max = scale.max;
   const slot = innerWidth / bars.length;
   const barWidth = Math.min(38, slot * 0.6);

@@ -227,7 +227,7 @@ VALUES
    'Paragraph F: "Recognising how a text moves between cause and consequence, or between a claim and its qualification, matters far more than memorising any single word from it."',
    NULL, NULL, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
 
--- A Writing practice test (two tasks, no AI scoring; teachers mark submissions).
+-- A Writing practice test (two tasks; the AI judges mark it, a teacher's band replaces theirs).
 DELETE FROM tests WHERE id = 'tst_seed_writing';
 INSERT INTO tests (id, slug, title, type, status, summary, current_version_id, created_by, created_at, updated_at,
                    content_origin, source_title, source_url, attribution, license_notes)
