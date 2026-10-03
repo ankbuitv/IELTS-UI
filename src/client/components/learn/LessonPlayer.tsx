@@ -53,6 +53,7 @@ export function LessonPlayer({
   onFinish,
   onRestart,
   videoUrl,
+  legendary,
 }: {
   title: string;
   exercises: Exercise[];
@@ -60,6 +61,7 @@ export function LessonPlayer({
   onFinish: (score: LessonScore) => Promise<LessonFinish>;
   onRestart: () => void;
   videoUrl?: string;
+  legendary?: boolean;
 }) {
   const [queue, setQueue] = useState<Exercise[]>(exercises);
   const [index, setIndex] = useState(0);
@@ -258,6 +260,9 @@ export function LessonPlayer({
       </header>
 
       <main className="lesson__main">
+        {legendary ? (
+          <p className="lesson__retry" style={{ color: '#b8860b', fontWeight: 700 }}>★ Legendary — harder set. Look-ups are off; answer from memory.</p>
+        ) : null}
         {videoUrl && embeddableVideo(videoUrl) ? (
           <div className="lesson__video" style={{ margin: '0 0 14px' }}>
             <iframe

@@ -318,6 +318,8 @@ export interface CatalogueLessonRef {
   /** Where the lesson came from. Never names an AI model, only whether it was built in or generated. */
   origin: 'BUILT_IN' | 'ADMIN_AI' | 'PERSONAL_AI';
   status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  /** A harder, upgraded variant unlocked by reaching this band in practice. */
+  legendary: boolean;
   /** Optional teaching video (YouTube or any embeddable URL) set by an admin. */
   videoUrl?: string;
 }
@@ -355,6 +357,8 @@ export interface LessonPlayPayload {
   payload: LessonPayload;
   /** Other words at the same band, used as the wrong options in a vocabulary lesson. */
   pool: LessonWord[];
+  /** A harder, upgraded variant: the in-lesson dictionary lookup is off here. */
+  legendary: boolean;
   /** Optional teaching video shown above the exercises. */
   videoUrl?: string;
 }

@@ -59,6 +59,7 @@ interface LessonRow {
   kind: string;
   payload_json: string;
   video_url: string;
+  legendary: number;
   origin: string;
   status: string;
   owner_id: string | null;
@@ -68,7 +69,7 @@ interface LessonRow {
 }
 
 const LESSON_COLUMNS =
-  'id, band, unit_key, unit_title, unit_blurb, position, title, blurb, kind, payload_json, video_url, origin, status, owner_id, created_by, created_at, updated_at';
+  'id, band, unit_key, unit_title, unit_blurb, position, title, blurb, kind, payload_json, video_url, legendary, origin, status, owner_id, created_by, created_at, updated_at';
 
 function originOf(row: LessonRow): LessonOrigin {
   return row.origin === 'ADMIN_AI' || row.origin === 'PERSONAL_AI' ? row.origin : 'BUILT_IN';
@@ -150,6 +151,7 @@ function toRef(row: LessonRow): CatalogueLessonRef | null {
     preview: lessonPreview(body.payload),
     origin: originOf(row),
     status: statusOf(row),
+    legendary: row.legendary === 1,
     ...(row.video_url ? { videoUrl: row.video_url } : {}),
   };
 }
@@ -276,6 +278,7 @@ export async function getLessonPlay(
     blurb: row.blurb,
     payload: body.payload,
     pool: body.kind === 'VOCAB' ? await wordPool(env, row.band, row.id) : [],
+    legendary: row.legendary === 1,
     ...(row.video_url ? { videoUrl: row.video_url } : {}),
   };
 }
@@ -344,6 +347,7 @@ export interface LessonDraft {
   payload: LessonPayload;
   status?: LessonStatus;
   origin?: LessonOrigin;
+  legendary?: boolean;
   ownerId?: string | null;
   createdBy?: string | null;
 }
@@ -364,8 +368,8 @@ export async function insertLesson(env: Env, draft: LessonDraft): Promise<string
   const now = nowIso();
   await env.DB.prepare(
     `INSERT INTO learn_lessons
-       (id, band, unit_key, unit_title, unit_blurb, position, title, blurb, kind, payload_json, origin, status, owner_id, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, band, unit_key, unit_title, unit_blurb, position, title, blurb, kind, payload_json, legendary, origin, status, owner_id, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -378,6 +382,7 @@ export async function insertLesson(env: Env, draft: LessonDraft): Promise<string
       (draft.blurb ?? '').trim().slice(0, 240),
       draft.kind,
       JSON.stringify(payload),
+      draft.legendary ? 1 : 0,
       draft.origin ?? 'ADMIN_AI',
       draft.status ?? 'PUBLISHED',
       draft.ownerId ?? null,

@@ -1641,6 +1641,7 @@ router.post('/learn/generate', async (c) => {
       unitTitle: z.string().min(1).max(80),
       unitBlurb: z.string().max(160).optional(),
       publish: z.boolean().default(false),
+      legendary: z.boolean().default(false),
     }),
   );
   if (!isLearnBand(body.band)) throw ApiError.validation('Choose a band from 4.0 to 8.0 in half bands.');
@@ -1659,6 +1660,7 @@ router.post('/learn/generate', async (c) => {
     unitTitle: body.unitTitle,
     unitBlurb: body.unitBlurb,
     publish: body.publish,
+    legendary: body.legendary,
     actorUserId: actor.id,
   });
   return c.json(result);

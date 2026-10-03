@@ -82,6 +82,7 @@ export function LessonPage() {
       title={`${lesson.unitTitle} · ${lesson.title}`}
       exercises={exercises}
       videoUrl={lesson.videoUrl}
+      legendary={lesson.legendary}
       onExit={() => navigate('/learn')}
       onFinish={finish}
       onRestart={restart}

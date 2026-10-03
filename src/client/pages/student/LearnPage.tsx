@@ -126,6 +126,8 @@ export function LearnPage() {
 
   const stateOf = (lesson: PathLesson, index: number): NodeState => {
     if (!isOpen || path.length === 0) return 'locked';
+    // A legendary lesson unlocks only once the learner reaches its band in practice.
+    if (lesson.legendary && (profile?.band ?? 0) < (selectedBand ?? 0)) return 'locked';
     if (index > currentIndex) return 'locked';
     if ((progress[lesson.id]?.completions ?? 0) > 0 && index !== currentIndex) return 'done';
     if (index === currentIndex) return 'current';
@@ -443,6 +445,9 @@ export function LearnPage() {
                             <b>{lesson.title}</b>
                             <span>{lesson.blurb}</span>
                             <em className="node-kind">{LESSON_KIND_LABELS[lesson.kind]}</em>
+                            {lesson.legendary ? (
+                              <em className="node-kind" style={{ color: '#b8860b', fontWeight: 700 }}>★ Legendary</em>
+                            ) : null}
                           </div>
                           {open ? (
                             <div className="node-pop" role="dialog" aria-label={lesson.title}>

@@ -67,6 +67,8 @@ const ITEMS_PER_LESSON: Record<LessonKind, number> = {
 };
 
 export interface GenerateLessonsInput {
+  /** Tag the batch as legendary: a harder set unlocked by reaching the band in practice. */
+  legendary?: boolean;
   band: LearnBand;
   kind: LessonKind;
   count: number;
@@ -181,6 +183,7 @@ export async function generateLessons(env: Env, input: GenerateLessonsInput): Pr
       payload,
       status: input.publish ? 'PUBLISHED' : 'DRAFT',
       origin: 'ADMIN_AI',
+      legendary: input.legendary,
       createdBy: input.actorUserId,
     });
     created.push(title);

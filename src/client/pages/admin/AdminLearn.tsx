@@ -40,6 +40,7 @@ export function AdminLearnPage() {
   const [unitTitle, setUnitTitle] = useState('');
   const [unitBlurb, setUnitBlurb] = useState('');
   const [publish, setPublish] = useState(false);
+  const [legendary, setLegendary] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<GenerationResult | null>(null);
 
@@ -74,6 +75,7 @@ export function AdminLearnPage() {
         unitTitle: unitTitle.trim(),
         unitBlurb: unitBlurb.trim() || undefined,
         publish,
+        legendary,
       });
       setResult(response);
       toast.push(`${response.created} lesson${response.created === 1 ? '' : 's'} generated.`, 'success');
@@ -164,6 +166,14 @@ export function AdminLearnPage() {
           <Field label="Unit blurb" hint="Optional.">
             {(id) => (
               <TextInput id={id} value={unitBlurb} onChange={(event) => setUnitBlurb(event.target.value)} placeholder="What the unit covers" />
+            )}
+          </Field>
+          <Field label="Legendary" hint="A harder set, unlocked only when a learner reaches this band in practice.">
+            {(id) => (
+              <label className="check">
+                <input id={id} type="checkbox" checked={legendary} onChange={(event) => setLegendary(event.target.checked)} />
+                <span>Mark this batch as legendary</span>
+              </label>
             )}
           </Field>
           <Field label="Publish immediately" hint="Not recommended: read a draft first.">
