@@ -81,6 +81,7 @@ export function LessonPage() {
       key={seed}
       title={`${lesson.unitTitle} · ${lesson.title}`}
       exercises={exercises}
+      videoUrl={lesson.videoUrl}
       onExit={() => navigate('/learn')}
       onFinish={finish}
       onRestart={restart}

@@ -10,7 +10,7 @@ import { requireAuth, requireRole } from '../middleware/auth';
 import { currentUser } from '../middleware/auth';
 import { enforceRateLimit } from '../lib/rate-limit';
 import { recordAudit } from '../lib/audit';
-import { deleteLesson, listLessonsForAdmin, setLessonStatus } from '../services/learn-catalogue-service';
+import { deleteLesson, listLessonsForAdmin, setLessonStatus, setLessonVideo } from '../services/learn-catalogue-service';
 import { generateLessons } from '../services/learn-generation-service';
 import { isLearnBand, type LearnBand } from '../../shared/learn';
 import { newId, nowIso } from '../lib/ids';
@@ -1676,6 +1676,23 @@ router.put('/learn/lessons/:id/status', async (c) => {
     entityType: 'learn_lesson',
     entityId: id,
     metadata: { status: body.status },
+    ip: clientIp(c),
+  });
+  return c.json({ ok: true });
+});
+
+router.put('/learn/lessons/:id/video', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ videoUrl: z.string().max(500) }));
+  const id = c.req.param('id');
+  await setLessonVideo(c.env, id, body.videoUrl);
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'LEARN_LESSON_VIDEO',
+    entityType: 'learn_lesson',
+    entityId: id,
+    metadata: { videoUrl: body.videoUrl.slice(0, 200) },
     ip: clientIp(c),
   });
   return c.json({ ok: true });

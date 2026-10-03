@@ -58,6 +58,7 @@ interface LessonRow {
   blurb: string;
   kind: string;
   payload_json: string;
+  video_url: string;
   origin: string;
   status: string;
   owner_id: string | null;
@@ -67,7 +68,7 @@ interface LessonRow {
 }
 
 const LESSON_COLUMNS =
-  'id, band, unit_key, unit_title, unit_blurb, position, title, blurb, kind, payload_json, origin, status, owner_id, created_by, created_at, updated_at';
+  'id, band, unit_key, unit_title, unit_blurb, position, title, blurb, kind, payload_json, video_url, origin, status, owner_id, created_by, created_at, updated_at';
 
 function originOf(row: LessonRow): LessonOrigin {
   return row.origin === 'ADMIN_AI' || row.origin === 'PERSONAL_AI' ? row.origin : 'BUILT_IN';
@@ -149,6 +150,7 @@ function toRef(row: LessonRow): CatalogueLessonRef | null {
     preview: lessonPreview(body.payload),
     origin: originOf(row),
     status: statusOf(row),
+    ...(row.video_url ? { videoUrl: row.video_url } : {}),
   };
 }
 
@@ -274,6 +276,7 @@ export async function getLessonPlay(
     blurb: row.blurb,
     payload: body.payload,
     pool: body.kind === 'VOCAB' ? await wordPool(env, row.band, row.id) : [],
+    ...(row.video_url ? { videoUrl: row.video_url } : {}),
   };
 }
 
@@ -384,6 +387,15 @@ export async function insertLesson(env: Env, draft: LessonDraft): Promise<string
     )
     .run();
   return id;
+}
+
+/** Sets or clears a lesson's teaching video link (YouTube or any embeddable URL). */
+export async function setLessonVideo(env: Env, lessonId: string, videoUrl: string): Promise<void> {
+  const clean = videoUrl.trim().slice(0, 500);
+  const result = await env.DB.prepare('UPDATE learn_lessons SET video_url = ?, updated_at = ? WHERE id = ?')
+    .bind(clean, nowIso(), lessonId)
+    .run();
+  if (!result.meta.changes) throw ApiError.notFound('That lesson does not exist.');
 }
 
 /** Publishes, drafts or archives a lesson. Learners only ever see published ones. */

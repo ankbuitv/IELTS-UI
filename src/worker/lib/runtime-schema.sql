@@ -3,7 +3,7 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
@@ -708,7 +708,7 @@ CREATE TABLE IF NOT EXISTS "learn_lessons" (
   created_by   TEXT,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
-);
+, video_url TEXT NOT NULL DEFAULT '');
 
 -- table: learn_plans
 CREATE TABLE IF NOT EXISTS learn_plans (

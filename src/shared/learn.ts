@@ -318,6 +318,8 @@ export interface CatalogueLessonRef {
   /** Where the lesson came from. Never names an AI model, only whether it was built in or generated. */
   origin: 'BUILT_IN' | 'ADMIN_AI' | 'PERSONAL_AI';
   status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  /** Optional teaching video (YouTube or any embeddable URL) set by an admin. */
+  videoUrl?: string;
 }
 
 /** What the band selector needs: one row per rung. */
@@ -353,6 +355,8 @@ export interface LessonPlayPayload {
   payload: LessonPayload;
   /** Other words at the same band, used as the wrong options in a vocabulary lesson. */
   pool: LessonWord[];
+  /** Optional teaching video shown above the exercises. */
+  videoUrl?: string;
 }
 
 

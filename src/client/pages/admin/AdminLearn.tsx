@@ -98,6 +98,18 @@ export function AdminLearnPage() {
     }
   };
 
+  const setVideoFor = async (id: string, current: string) => {
+    const input = window.prompt('Teaching video link (YouTube or any embeddable URL). Leave empty to remove.', current);
+    if (input === null) return;
+    try {
+      await api.put(`/api/admin/learn/lessons/${id}/video`, { videoUrl: input.trim() });
+      toast.push(input.trim() ? 'Video link saved.' : 'Video link removed.', 'success');
+      await reload();
+    } catch (cause) {
+      toast.push(describeError(cause), 'error');
+    }
+  };
+
   return (
     <div className="stack">
       <section className="grid grid--3">
@@ -279,6 +291,9 @@ export function AdminLearnPage() {
                             Archive
                           </Button>
                         ) : null}
+                        <Button size="sm" variant="ghost" onClick={() => void setVideoFor(lesson.id, lesson.videoUrl ?? '')}>
+                          {lesson.videoUrl ? 'Video ✓' : 'Video'}
+                        </Button>
                       </div>
                     </td>
                   </tr>

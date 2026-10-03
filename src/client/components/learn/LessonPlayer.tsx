@@ -37,18 +37,29 @@ interface Outcome {
   firstTryCorrect: boolean;
 }
 
+/** Turns a YouTube watch / youtu.be / embed link into an embeddable URL; other URLs pass through. */
+function embeddableVideo(url: string): string | null {
+  const value = url.trim();
+  if (!value) return null;
+  const yt = value.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{6,})/);
+  if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}`;
+  return /^https:\/\//.test(value) ? value : null;
+}
+
 export function LessonPlayer({
   title,
   exercises,
   onExit,
   onFinish,
   onRestart,
+  videoUrl,
 }: {
   title: string;
   exercises: Exercise[];
   onExit: () => void;
   onFinish: (score: LessonScore) => Promise<LessonFinish>;
   onRestart: () => void;
+  videoUrl?: string;
 }) {
   const [queue, setQueue] = useState<Exercise[]>(exercises);
   const [index, setIndex] = useState(0);
@@ -247,6 +258,18 @@ export function LessonPlayer({
       </header>
 
       <main className="lesson__main">
+        {videoUrl && embeddableVideo(videoUrl) ? (
+          <div className="lesson__video" style={{ margin: '0 0 14px' }}>
+            <iframe
+              src={embeddableVideo(videoUrl)!}
+              title="Lesson video"
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: 12, background: '#000' }}
+            />
+          </div>
+        ) : null}
         {current ? (
           <div className="lesson__stage" key={current.id}>
             {isRetry ? <p className="lesson__retry">Try this one again</p> : null}
