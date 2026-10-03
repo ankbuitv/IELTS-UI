@@ -152,12 +152,14 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
   // ---- section structure (33) ---------------------------------------------
   issues.push(...validateSectionStructure(input));
 
-  const skillBefore: Record<string, number> = {};
+  const skillsSeen = new Set<Skill>();
   let previousSkill: Skill | null = null;
 
   for (const section of input.sections) {
-    const skillsBefore = skillBefore[section.skill] ?? 0;
-    if (skillsBefore > 0) {
+    // Only a skill that comes back *after* another skill in between breaks
+    // contiguity: consecutive sections of the same skill are the normal shape of
+    // a multi-passage Reading test (1–13, 14–26, 27–40).
+    if (previousSkill !== null && previousSkill !== section.skill && skillsSeen.has(section.skill)) {
       issues.push({
         level: 'WARNING',
         code: 'SKILL_SECTIONS_NOT_CONTIGUOUS',
@@ -165,7 +167,7 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
         sectionId: section.id,
       });
     }
-    skillBefore[section.skill] = skillsBefore + 1;
+    skillsSeen.add(section.skill);
     previousSkill = section.skill;
 
     if (section.skill === 'READING') {
@@ -417,7 +419,6 @@ export function validateTestVersion(input: ValidationInput): ValidationIssue[] {
   // ---- section order vs question order (33) --------------------------------
   issues.push(...validateSectionQuestionOrder(input.sections));
 
-  void previousSkill;
   return issues;
 }
 

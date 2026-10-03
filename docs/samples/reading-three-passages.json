@@ -1,0 +1,557 @@
+{
+  "testTitle": "Three Reading Passages — Full Academic Practice (original)",
+  "testType": "READING",
+  "durationSeconds": 3600,
+  "sections": [
+    {
+      "sectionNumber": 1,
+      "type": "reading_passage",
+      "label": "Reading Passage 1",
+      "title": "The Return of the Night Train",
+      "instructions": "You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.",
+      "passage": {
+        "title": "The Return of the Night Train",
+        "paragraphs": [
+          {
+            "label": "A",
+            "text": "For much of the twentieth century the sleeper train was an ordinary way to cross a continent. A passenger could board in the evening, eat in the dining car, sleep while the train covered several hundred kilometres and arrive in another country in time for a morning meeting. In the 1970s and 1980s, however, the economics of the service began to change. Air travel became cheaper, and on many routes a high-speed daytime train completed the same journey in a few hours. Sleeping cars were withdrawn from one timetable after another, and by the early 2000s a number of countries had stopped running them altogether. For the railways the decision was rarely difficult: a sleeper occupied a valuable path on the tracks and earned less from it than an ordinary express."
+          },
+          {
+            "label": "B",
+            "text": "The difficulty is not the trains themselves so much as the way they earn money. A sleeping car carries far fewer passengers than an ordinary carriage of the same length, and every berth needs a mattress, clean linen and a member of staff to look after it. A seat, by contrast, can be sold several times a day as the train works through its route. On a busy corridor, a railway therefore earns more from a single daytime service than from a sleeper that stands idle on a platform all night and must be cleaned and restocked in the morning. Ageing fleets made matters worse: carriages built in the 1970s and 1980s were expensive to maintain and increasingly hard to replace, because very few manufacturers still produced them."
+          },
+          {
+            "label": "C",
+            "text": "Support for night trains has since returned, and the reasons are only partly commercial. Concern about the climate has made the sleeper an attractive alternative to short-haul flights, particularly for travellers crossing Europe without wanting to fly. Several new operators have entered the market, some of them privately owned, and a handful of routes that had been closed have reopened. Campaigners often present the trend as a decisive shift. A more careful reading of the evidence suggests something smaller: the number of passengers remains modest, some new services have been suspended after a single season, and success depends heavily on public money."
+          },
+          {
+            "label": "D",
+            "text": "Running a sleeper service today is unusually difficult, even where demand exists. Because so few carriages are built, an operator that wants a new fleet must order it years in advance and pay for the design of a product that no factory currently produces in large numbers. Once the trains are running, the costs continue: a berth must be cleaned, a bed must be made, and the night shift requires staff who are awake at three in the morning. Operators have responded by selling privacy rather than simple transport. A private cabin, with a door and a washbasin, can be priced like a hotel room, while a place in a shared couchette is sold at a fraction of that price. The two products serve different passengers and rarely earn the same margin."
+          },
+          {
+            "label": "E",
+            "text": "International services run into further complications. A train that crosses three countries must satisfy three sets of safety rules, and its crew must be qualified for each network it uses. Signalling systems differ, so a locomotive that works in one country may have to be changed at the border. Timetables must be arranged so that a service arrives at a sensible hour rather than at four in the morning, which means negotiating with every railway whose tracks are used. Politicians who support night trains in principle may still be unwilling to pay for them in practice, because a subsidy given to a sleeper is a subsidy that is not given to a commuter route."
+          },
+          {
+            "label": "F",
+            "text": "Where does that leave the night train? Probably as a complement to high-speed rail rather than a competitor. Over very long distances a fast daytime train is the better answer, and for short journeys the sleeper is simply too slow. In the middle, however, where a daytime trip consumes an entire working day, an overnight service can be the more sensible choice. The most promising routes connect cities whose airports are congested and whose passengers already have a reason to travel at night. That is a modest future, but it is not a small one: the services that survive tend to be those that a large number of people are willing to use repeatedly."
+          }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "TRUE_FALSE_NOT_GIVEN",
+          "fromQuestion": 1,
+          "toQuestion": 5,
+          "instructions": "Do the following statements agree with the information given in Reading Passage 1? Write TRUE if the statement agrees with the information, FALSE if the statement contradicts the information, or NOT GIVEN if there is no information on this.",
+          "questions": [
+            {
+              "number": 1,
+              "prompt": "By the early 2000s some countries had stopped operating sleeper trains completely.",
+              "answer": "TRUE",
+              "evidence": "Paragraph A: “by the early 2000s a number of countries had stopped running them altogether”",
+              "explanation": "Paragraph A states that a number of countries had stopped running sleeper services altogether, which agrees with the statement. The statement does not say that every country did so, so it is not contradicted."
+            },
+            {
+              "number": 2,
+              "prompt": "A sleeping car of a given length carries more passengers than an ordinary carriage.",
+              "answer": "FALSE",
+              "evidence": "Paragraph B: “A sleeping car carries far fewer passengers than an ordinary carriage of the same length”",
+              "explanation": "The passage says the opposite: a sleeping car carries far fewer passengers than an ordinary carriage of the same length. The statement therefore contradicts the information."
+            },
+            {
+              "number": 3,
+              "prompt": "A seat on a busy route can be sold more than once in the same day.",
+              "answer": "TRUE",
+              "evidence": "Paragraph B: “A seat, by contrast, can be sold several times a day as the train works through its route”",
+              "explanation": "Paragraph B explains that a seat can be sold several times a day as the train works through its route, so selling the same seat more than once in a day agrees with the passage."
+            },
+            {
+              "number": 4,
+              "prompt": "The recent revival of night trains has paid for itself without government support.",
+              "answer": "FALSE",
+              "evidence": "Paragraph C: “success depends heavily on public money”",
+              "explanation": "Paragraph C warns that the revival is smaller than campaigners claim and that success depends heavily on public money, which contradicts the idea that no government support is needed."
+            },
+            {
+              "number": 5,
+              "prompt": "Night trains are used by a larger share of travellers in some countries than in others.",
+              "answer": "NOT GIVEN",
+              "evidence": "Paragraph C discusses the return of sleeper services and notes that “the number of passengers remains modest”, but the passage never compares how popular night trains are in different countries.",
+              "explanation": "The passage describes the revival in general and mentions several countries without comparing the share of travellers who use sleepers. No information is given about a difference between countries."
+            }
+          ]
+        },
+        {
+          "questionType": "SENTENCE_COMPLETION",
+          "fromQuestion": 6,
+          "toQuestion": 9,
+          "configuration": { "wordLimitMax": 1 },
+          "instructions": "Complete the sentences below. Write ONE WORD AND/OR A NUMBER for each answer.",
+          "questions": [
+            {
+              "number": 6,
+              "prompt": "Cheaper air travel and high-speed daytime services meant the same journey could be completed in a few ________.",
+              "answer": "hours",
+              "evidence": "Paragraph A: “a high-speed daytime train completed the same journey in a few hours”",
+              "explanation": "Paragraph A gives the reason for the decline: on many routes a high-speed daytime train completed the same journey in a few hours. The missing word is hours."
+            },
+            {
+              "number": 7,
+              "prompt": "A sleeper is less profitable than a daytime train partly because its carriages carry far fewer ________.",
+              "answer": "passengers",
+              "evidence": "Paragraph B: “A sleeping car carries far fewer passengers than an ordinary carriage of the same length”",
+              "explanation": "The paragraph contrasts the number of passengers carried with the number of times a seat can be sold. The missing word is passengers."
+            },
+            {
+              "number": 8,
+              "prompt": "Because very few manufacturers still produced them, older carriages became increasingly hard to ________.",
+              "answer": "replace",
+              "evidence": "Paragraph B: “were expensive to maintain and increasingly hard to replace”",
+              "explanation": "Paragraph B explains that carriages built in the 1970s and 1980s were expensive to maintain and increasingly hard to replace because very few manufacturers still produced them. The missing word is replace."
+            },
+            {
+              "number": 9,
+              "prompt": "A few of the newly introduced sleeper services were suspended after a single ________.",
+              "answer": "season",
+              "evidence": "Paragraph C: “some new services have been suspended after a single season”",
+              "explanation": "Paragraph C lists the limits of the revival, including services that were suspended after a single season. The missing word is season."
+            }
+          ]
+        },
+        {
+          "questionType": "MCQ_SINGLE",
+          "fromQuestion": 10,
+          "toQuestion": 13,
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "questions": [
+            {
+              "number": 10,
+              "prompt": "According to paragraph B, why does a daytime service earn more than a sleeper on a busy route?",
+              "options": [
+                { "id": "A", "text": "A berth can be sold only once, while a seat can be sold several times." },
+                { "id": "B", "text": "Sleeping cars are more expensive to build than ordinary carriages." },
+                { "id": "C", "text": "Sleeper services employ fewer staff than daytime services." },
+                { "id": "D", "text": "Sleeping cars take longer to clean than ordinary carriages." }
+              ],
+              "answer": "A",
+              "evidence": "Paragraph B: “A seat, by contrast, can be sold several times a day as the train works through its route”",
+              "explanation": "Paragraph B contrasts a berth, which is occupied for the whole journey, with a seat that can be sold repeatedly during the day. Option B is not the reason given, option C is false because sleeper services need extra staff, and option D is not mentioned."
+            },
+            {
+              "number": 11,
+              "prompt": "What does the writer suggest about the recent revival of night trains?",
+              "options": [
+                { "id": "A", "text": "It is larger than campaigners claim." },
+                { "id": "B", "text": "It has been exaggerated by its supporters." },
+                { "id": "C", "text": "It has been financed entirely by private operators." },
+                { "id": "D", "text": "It has ended competition with airlines." }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph C: “A more careful reading of the evidence suggests something smaller”",
+              "explanation": "The writer says campaigners present the trend as a decisive shift, but that a careful reading of the evidence suggests something smaller. Options C and D are contradicted by the paragraph, and option A is the opposite of the writer's view."
+            },
+            {
+              "number": 12,
+              "prompt": "What makes it hard for an operator to obtain a new fleet of sleeping cars?",
+              "options": [
+                { "id": "A", "text": "Manufacturers refuse to sell carriages to private companies." },
+                { "id": "B", "text": "Existing designs are protected by copyright." },
+                { "id": "C", "text": "No factory currently produces them in large numbers." },
+                { "id": "D", "text": "Governments limit the number of carriages that may enter service." }
+              ],
+              "answer": "C",
+              "evidence": "Paragraph D: “pay for the design of a product that no factory currently produces in large numbers”",
+              "explanation": "Paragraph D explains that an operator must order years in advance and pay for the design of a product that no factory currently produces in large numbers. Options A, B and D describe obstacles that the passage does not mention."
+            },
+            {
+              "number": 13,
+              "prompt": "Which journeys does the writer consider best suited to an overnight train?",
+              "options": [
+                { "id": "A", "text": "Journeys so long that they cross several borders." },
+                { "id": "B", "text": "Journeys of medium length that would otherwise use up a whole day." },
+                { "id": "C", "text": "Short journeys between cities with busy airports." },
+                { "id": "D", "text": "Very long journeys where speed matters most." }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph F: “where a daytime trip consumes an entire working day, an overnight service can be the more sensible choice”",
+              "explanation": "Paragraph F places the sleeper between short journeys, where it is too slow, and very long ones, where a daytime train wins. Option C borrows the detail about congested airports but attaches it to short journeys, and option D contradicts the paragraph."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sectionNumber": 2,
+      "type": "reading_passage",
+      "label": "Reading Passage 2",
+      "title": "Concrete That Repairs Itself",
+      "instructions": "You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.",
+      "passage": {
+        "title": "Concrete That Repairs Itself",
+        "paragraphs": [
+          {
+            "label": "A",
+            "text": "Concrete is the most widely used building material in the world, and it is also one of the most fragile. It resists being pushed together but breaks easily when it is pulled apart, so it is normally reinforced with steel. When the concrete around that steel cracks, water and salt reach the metal, which rusts and expands, widening the crack. Surveys of bridges and car parks in humid climates routinely find repairs that have to be repeated every few years. Set against this, the structures left by Roman engineers are an embarrassment. Harbours and breakwaters built two thousand years ago are still standing, and in some cases the concrete has become stronger in the sea than it was on land."
+          },
+          {
+            "label": "B",
+            "text": "Part of the explanation lies in the ingredients. Roman builders mixed lime with volcanic ash, and where the mixture met seawater a chemical reaction produced minerals, including aluminium tobermorite and phillipsite, that grew inside the pores of the material. Instead of being washed away, the sea supplied the raw material for new crystals, which filled the empty spaces and bound the mass together. Modern concrete, made from Portland cement, has no equivalent mechanism: it is designed to keep water out rather than to make use of it."
+          },
+          {
+            "label": "C",
+            "text": "A second line of research concerns how the Roman mixture was prepared. Analysis of samples suggests that lime was not always slaked into a smooth paste before mixing, as modern practice requires. Instead, quicklime was combined with ash and aggregate while still reactive, a process now called hot mixing. The result is concrete peppered with small, brittle lumps of lime. These clasts are the key to the behaviour of the material. When a crack reaches one, water dissolves part of the calcium, and the resulting solution moves into the crack, where it reacts with carbon dioxide and recrystallises. The crack is filled by the same chemistry that formed the concrete in the first place."
+          },
+          {
+            "label": "D",
+            "text": "The evidence for self-healing comes largely from the laboratory, where the method has real advantages: cracks can be measured, healing can be timed and the conditions can be controlled. Researchers crack small blocks, run water through them and record how quickly strength returns. Curing time, temperature and the quantity of lime can all be varied. The difficulty is that a laboratory test compresses decades into weeks. Samples are small, loads are simplified, and the chemistry of a real structure, which may be half submerged, half in sun and exposed to de-icing salt, is far messier. A mixture that performs well in a cylinder of water may behave quite differently in a pier."
+          },
+          {
+            "label": "E",
+            "text": "An entirely different approach borrows the machinery of biology. In bacterial self-healing concrete, capsules containing dormant bacteria and a supply of nutrients are mixed into the material. As long as the concrete is intact, the bacteria are dry and inactive. When a crack lets water in, the capsules break open, the bacteria revive, and their metabolism produces calcium carbonate, which seals the gap. Trials have produced promising results, and the sealed cracks are often stronger than the surrounding material. The obstacles are practical rather than scientific: capsules must survive the mixing process, bacteria must remain viable for years, and the additives raise the cost of a material that is chosen partly because it is cheap."
+          },
+          {
+            "label": "F",
+            "text": "If the chemistry works, why is self-healing concrete not yet standard? The main obstacle is the way building materials are approved. Codes are written around predictable, testable properties: a specified strength at a specified age, measured by a standard test. A material whose advantage appears only when it cracks and is wetted does not fit that framework, and demonstrating a benefit that may take years to appear is slow and expensive. Contractors are also cautious, because responsibility for a repair normally rests with the party that chose the material. Add the cost of monitoring, and the result is a technology that is easy to demonstrate and hard to certify."
+          },
+          {
+            "label": "G",
+            "text": "None of this suggests that self-healing concrete will replace the ordinary kind. The material is most valuable where cracks are expensive to reach, such as tunnel linings, offshore platforms, foundations beneath occupied buildings and the structures used to store hazardous waste. Elsewhere, better design, adequate cover over the steel and routine maintenance remain the cheapest options. The realistic promise of the new mixtures is narrower, and more useful, than the headline suggests: a structure that heals small cracks will not last for ever, but it may stay serviceable for longer and need fewer disruptive repairs."
+          }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "MATCHING_HEADINGS",
+          "fromQuestion": 14,
+          "toQuestion": 18,
+          "configuration": { "optionNumbering": "roman" },
+          "instructions": "Reading Passage 2 has seven paragraphs, A–G. Choose the correct heading for paragraphs B–F from the list of headings below. Write the correct number, i–viii, for each answer.",
+          "options": [
+            { "id": "i", "text": "Turning a weakness of the material into a repair mechanism" },
+            { "id": "ii", "text": "Why laboratory successes may not be repeated in practice" },
+            { "id": "iii", "text": "The ingredients that gave a Roman material its durability" },
+            { "id": "iv", "text": "Barriers to the official approval of a new material" },
+            { "id": "v", "text": "A repair method that uses living organisms" },
+            { "id": "vi", "text": "How cement is produced on an industrial scale" },
+            { "id": "vii", "text": "Rivalry between competing research teams" },
+            { "id": "viii", "text": "The expense of protecting steel reinforcements" }
+          ],
+          "questions": [
+            {
+              "number": 14,
+              "prompt": "Paragraph B",
+              "answer": "iii",
+              "evidence": "Paragraph B: “Part of the explanation lies in the ingredients”",
+              "explanation": "Paragraph B explains the chemical ingredients of Roman concrete and the minerals that filled its pores, which is heading iii. Heading viii is tempting but the paragraph is about how the Roman material was made, not about the cost of protecting steel."
+            },
+            {
+              "number": 15,
+              "prompt": "Paragraph C",
+              "answer": "i",
+              "evidence": "Paragraph C: “These clasts are the key to the behaviour of the material”",
+              "explanation": "Paragraph C describes how lumps of lime allow a crack to be filled by the same chemistry that formed the concrete, turning the material's tendency to crack into an opportunity for repair. That matches heading i."
+            },
+            {
+              "number": 16,
+              "prompt": "Paragraph D",
+              "answer": "ii",
+              "evidence": "Paragraph D: “A mixture that performs well in a cylinder of water may behave quite differently in a pier”",
+              "explanation": "Paragraph D sets out the advantages of laboratory work and then explains why a test that compresses decades into weeks may not predict the behaviour of a real structure. That is heading ii."
+            },
+            {
+              "number": 17,
+              "prompt": "Paragraph E",
+              "answer": "v",
+              "evidence": "Paragraph E: “capsules containing dormant bacteria and a supply of nutrients are mixed into the material”",
+              "explanation": "Paragraph E describes bacterial self-healing concrete, in which living organisms produce calcium carbonate that seals a crack. That is heading v."
+            },
+            {
+              "number": 18,
+              "prompt": "Paragraph F",
+              "answer": "iv",
+              "evidence": "Paragraph F: “The main obstacle is the way building materials are approved”",
+              "explanation": "Paragraph F explains that codes are built around predictable properties and that certifying a benefit which appears only over time is difficult, which is heading iv."
+            }
+          ]
+        },
+        {
+          "questionType": "MATCHING_INFORMATION",
+          "fromQuestion": 19,
+          "toQuestion": 22,
+          "instructions": "Which paragraph contains the following information? Write the correct letter, A–G, for each answer. You may use any letter more than once.",
+          "options": [
+            { "id": "A", "text": "Paragraph A" },
+            { "id": "B", "text": "Paragraph B" },
+            { "id": "C", "text": "Paragraph C" },
+            { "id": "D", "text": "Paragraph D" },
+            { "id": "E", "text": "Paragraph E" },
+            { "id": "F", "text": "Paragraph F" },
+            { "id": "G", "text": "Paragraph G" }
+          ],
+          "questions": [
+            {
+              "number": 19,
+              "prompt": "an explanation of how water reaching steel causes further damage",
+              "answer": "A",
+              "evidence": "Paragraph A: “water and salt reach the metal, which rusts and expands, widening the crack”",
+              "explanation": "Paragraph A describes the sequence: water and salt reach the steel, the steel rusts and expands, and the crack widens. No other paragraph explains this process."
+            },
+            {
+              "number": 20,
+              "prompt": "a comparison between the timescale of laboratory work and the age of real structures",
+              "answer": "D",
+              "evidence": "Paragraph D: “a laboratory test compresses decades into weeks”",
+              "explanation": "Paragraph D contrasts a test that compresses decades into weeks with the messy chemistry of a real structure. Paragraph C describes a chemical process but makes no comparison of timescales."
+            },
+            {
+              "number": 21,
+              "prompt": "a description of what happens when a crack reaches a particular ingredient",
+              "answer": "C",
+              "evidence": "Paragraph C: “When a crack reaches one, water dissolves part of the calcium”",
+              "explanation": "Paragraph C explains that when a crack reaches a lump of lime, water dissolves part of the calcium and the solution later recrystallises. Paragraph B mentions minerals but not a crack reaching an ingredient."
+            },
+            {
+              "number": 22,
+              "prompt": "examples of places where the new material would be worth its cost",
+              "answer": "G",
+              "evidence": "Paragraph G: “tunnel linings, offshore platforms, foundations beneath occupied buildings”",
+              "explanation": "Paragraph G lists places where cracks are expensive to reach, such as tunnel linings, offshore platforms and foundations beneath occupied buildings. Paragraph F discusses approval rather than where the material pays off."
+            }
+          ]
+        },
+        {
+          "questionType": "SUMMARY_COMPLETION",
+          "fromQuestion": 23,
+          "toQuestion": 26,
+          "configuration": { "wordLimitMax": 2 },
+          "instructions": "Complete the summary below. Write NO MORE THAN TWO WORDS for each answer.",
+          "questions": [
+            {
+              "number": 23,
+              "prompt": "In hot mixing, quicklime is combined with ash and aggregate while it is still reactive, so the finished concrete contains small lumps of ________.",
+              "answer": "lime",
+              "evidence": "Paragraph C: “The result is concrete peppered with small, brittle lumps of lime”",
+              "explanation": "Paragraph C explains that hot mixing leaves the concrete peppered with small, brittle lumps of lime. The missing word is lime."
+            },
+            {
+              "number": 24,
+              "prompt": "Water dissolves part of the calcium, and the solution then reacts with ________ and recrystallises inside the crack.",
+              "answer": "carbon dioxide",
+              "evidence": "Paragraph C: “it reacts with carbon dioxide and recrystallises”",
+              "explanation": "The solution moves into the crack, reacts with carbon dioxide and recrystallises, filling the crack. The two-word answer is carbon dioxide."
+            },
+            {
+              "number": 25,
+              "prompt": "In bacterial concrete, the bacteria stay inactive until a crack allows ________ to enter.",
+              "answer": "water",
+              "evidence": "Paragraph E: “When a crack lets water in, the capsules break open, the bacteria revive”",
+              "explanation": "Paragraph E describes dry, inactive bacteria that revive once a crack lets water in. The missing word is water."
+            },
+            {
+              "number": 26,
+              "prompt": "One obstacle is that building codes are built around properties that are predictable and ________.",
+              "answer": "testable",
+              "evidence": "Paragraph F: “Codes are written around predictable, testable properties”",
+              "explanation": "Paragraph F explains that codes are written around predictable, testable properties such as a specified strength at a specified age. The missing word is testable."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sectionNumber": 3,
+      "type": "reading_passage",
+      "label": "Reading Passage 3",
+      "title": "In Defence of Boredom",
+      "instructions": "You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.",
+      "passage": {
+        "title": "In Defence of Boredom",
+        "paragraphs": [
+          {
+            "label": "A",
+            "text": "Boredom has a poor reputation. It is usually described as a failure of the environment, a dull lesson or a delayed train, or as a failure of the person who experiences it, a sign of insufficient imagination. A great deal of modern life is organised as an attempt to remove it. Screens fill the space between one task and the next, waiting rooms are equipped with televisions, and advertisements promise that no moment need ever be empty. The assumption behind all of this is that boredom is simply an absence: of stimulation, of interest, of value."
+          },
+          {
+            "label": "B",
+            "text": "Psychologists who study the state describe something more specific. Boredom arises, they suggest, when attention cannot find a satisfying object, and it carries information: it tells us that the activity we are engaged in is not worth the effort we are giving it. Understood in this way, boredom is not empty at all. It is a signal, and like other unpleasant signals it motivates a change of behaviour. Laboratory studies give the idea some support. Participants asked to complete a dull task, such as copying numbers from a telephone directory, often perform better on a later creative task than participants who were entertained instead."
+          },
+          {
+            "label": "C",
+            "text": "The signal, however, does not always lead somewhere useful. A person who is bored may respond by seeking novelty, and not every kind of novelty is beneficial. Research on chronic boredom finds an association with risk-taking, gambling and careless driving, although the direction of cause and effect is difficult to establish: a tendency to take risks may produce both the boredom and the behaviour. It is also worth distinguishing between a passing boredom, which ends when the situation changes, and a persistent boredom that follows a person from one activity to another. Only the second is generally treated as a cause for concern."
+          },
+          {
+            "label": "D",
+            "text": "Historians and philosophers have argued that the opposite of boredom, constant occupation, has costs of its own. Writers of the nineteenth century described idleness as the condition in which thought becomes possible, precisely because nothing is demanding attention. The claim is difficult to test, but it appears in many traditions: the walk without a destination, the long conversation that goes nowhere, the habit of sitting with a problem rather than searching for a solution to it immediately. Contemporary commentators have revived the idea under a different name, warning that a culture of permanent busyness may leave no room for the reflection on which good judgement depends."
+          },
+          {
+            "label": "E",
+            "text": "Schools have had to decide what to do about all this. Some have reduced break times in order to fit more instruction into the day; others have deliberately protected unstructured periods, arguing that children need practice in deciding for themselves what to do. The evidence does not settle the argument. Free time can be valuable for some students and isolating for others, particularly where there is nowhere safe to spend it. What the research does suggest is that the amount of time matters less than what students are able to do with it: a break in which a child has no options is not the same experience as a break in which a child has a choice."
+          },
+          {
+            "label": "F",
+            "text": "It would be easy to turn this into a defence of boredom for its own sake, and that would be a mistake. There is nothing admirable about a dull task, and no one should have to endure one unnecessarily. But the attempt to eliminate every unoccupied moment is both impossible and unwise, because it teaches a habit that is hard to unlearn: that any experience which does not immediately reward attention should be escaped. A more useful aim is to give people something to do rather than something to watch, and to accept that a certain amount of dullness is the price of being able to choose where to direct attention."
+          }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "YES_NO_NOT_GIVEN",
+          "fromQuestion": 27,
+          "toQuestion": 31,
+          "instructions": "Do the following statements agree with the claims of the writer in Reading Passage 3? Write YES if the statement agrees with the claims of the writer, NO if the statement contradicts the claims of the writer, or NOT GIVEN if it is impossible to say what the writer thinks about this.",
+          "questions": [
+            {
+              "number": 27,
+              "prompt": "Boredom is chiefly a sign that a person lacks imagination.",
+              "answer": "NO",
+              "evidence": "Paragraph A calls this a common description, while Paragraph B concludes that “boredom is not empty at all. It is a signal”",
+              "explanation": "The writer reports the view that boredom is a failure of the person, then replaces it with the idea that boredom is a signal carrying information about an activity. The writer therefore disagrees with the statement."
+            },
+            {
+              "number": 28,
+              "prompt": "Advertisements are mainly responsible for the way people judge boredom.",
+              "answer": "NOT GIVEN",
+              "evidence": "Paragraph A groups advertisements with screens and televisions as attempts to remove boredom: “advertisements promise that no moment need ever be empty”",
+              "explanation": "The writer mentions advertisements as one example of modern life removing empty moments, but never claims that they shape how people judge boredom, still less that they are mainly responsible."
+            },
+            {
+              "number": 29,
+              "prompt": "Findings from laboratory studies fit the idea that boredom works as a signal.",
+              "answer": "YES",
+              "evidence": "Paragraph B: “Laboratory studies give the idea some support”",
+              "explanation": "Paragraph B reports that participants who completed a dull task later performed better on a creative task, and states that laboratory studies give the signal idea some support. The writer therefore agrees."
+            },
+            {
+              "number": 30,
+              "prompt": "It is established that chronic boredom causes people to take risks.",
+              "answer": "NO",
+              "evidence": "Paragraph C: “although the direction of cause and effect is difficult to establish”",
+              "explanation": "The writer accepts an association between chronic boredom and risk-taking but points out that the direction of cause and effect is hard to establish, and even suggests that a tendency to take risks may produce both. The writer does not accept that boredom is established as the cause."
+            },
+            {
+              "number": 31,
+              "prompt": "What students are able to choose to do matters more than how long a break lasts.",
+              "answer": "YES",
+              "evidence": "Paragraph E: “the amount of time matters less than what students are able to do with it”",
+              "explanation": "Paragraph E states that the amount of time matters less than what students are able to do with it, and contrasts a break with no options with a break in which a child has a choice. That agrees with the statement."
+            }
+          ]
+        },
+        {
+          "questionType": "MATCHING_FEATURES",
+          "fromQuestion": 32,
+          "toQuestion": 35,
+          "configuration": { "optionNumbering": "alpha" },
+          "instructions": "Look at the following statements and the list of views below. Match each statement with the view it represents. Write the correct letter, A–D, for each answer.",
+          "options": [
+            { "id": "A", "text": "Boredom is a failure of the situation or of the person experiencing it." },
+            { "id": "B", "text": "Boredom is information about whether an activity deserves the effort it requires." },
+            { "id": "C", "text": "A life that is always occupied leaves too little room for reflection." },
+            { "id": "D", "text": "Unstructured time is valuable because it requires people to make choices." }
+          ],
+          "questions": [
+            {
+              "number": 32,
+              "prompt": "It holds that a dull lesson or a delayed train is evidence that something has gone wrong with the situation.",
+              "answer": "A",
+              "evidence": "Paragraph A: “It is usually described as a failure of the environment, a dull lesson or a delayed train”",
+              "explanation": "The view in option A is the one the writer attributes to common opinion in Paragraph A: boredom is described as a failure of the environment, with a dull lesson or a delayed train as examples. That matches the statement."
+            },
+            {
+              "number": 33,
+              "prompt": "It explains why people may perform better on a creative task after a dull one.",
+              "answer": "B",
+              "evidence": "Paragraph B: “often perform better on a later creative task than participants who were entertained instead”",
+              "explanation": "Paragraph B presents the laboratory finding as support for the signal view, under which boredom tells us that an activity is not worth the effort we are giving it. Option D describes the school debate and is not a view of boredom as information."
+            },
+            {
+              "number": 34,
+              "prompt": "It warns that constant activity may weaken the judgement on which good decisions depend.",
+              "answer": "C",
+              "evidence": "Paragraph D: “may leave no room for the reflection on which good judgement depends”",
+              "explanation": "Paragraph D reports the warning that a culture of permanent busyness may leave no room for reflection, on which good judgement depends. That is the view in option C."
+            },
+            {
+              "number": 35,
+              "prompt": "It argues that children benefit from deciding for themselves how to use their free time.",
+              "answer": "D",
+              "evidence": "Paragraph E: “children need practice in deciding for themselves what to do”",
+              "explanation": "Paragraph E describes schools that protect unstructured periods because children need practice in deciding for themselves what to do. That matches the view in option D."
+            }
+          ]
+        },
+        {
+          "questionType": "MCQ_SINGLE",
+          "fromQuestion": 36,
+          "toQuestion": 38,
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "questions": [
+            {
+              "number": 36,
+              "prompt": "What point does the writer make about research into chronic boredom?",
+              "options": [
+                { "id": "A", "text": "It proves that boredom leads to dangerous behaviour." },
+                { "id": "B", "text": "The relationship it describes may work in either direction." },
+                { "id": "C", "text": "It relies on too few participants to be useful." },
+                { "id": "D", "text": "It contradicts the findings of laboratory studies." }
+              ],
+              "answer": "B",
+              "evidence": "Paragraph C: “a tendency to take risks may produce both the boredom and the behaviour”",
+              "explanation": "Paragraph C accepts an association but says the direction of cause and effect is difficult to establish, and offers the possibility that risk-taking produces both. Option A states the opposite of the writer's point, while options C and D are not mentioned."
+            },
+            {
+              "number": 37,
+              "prompt": "Why does the writer mention nineteenth-century writers on idleness?",
+              "options": [
+                { "id": "A", "text": "To show that the value of reflection is not a new idea." },
+                { "id": "B", "text": "To argue that they were mistaken about the value of reflection." },
+                { "id": "C", "text": "To compare their working habits with those of modern employees." },
+                { "id": "D", "text": "To explain why their books are rarely read today." }
+              ],
+              "answer": "A",
+              "evidence": "Paragraph D: “Contemporary commentators have revived the idea under a different name”",
+              "explanation": "The writer says the claim appears in many traditions and that contemporary commentators have revived the idea, which shows that the thought is old rather than new. Options B, C and D are not supported by the paragraph."
+            },
+            {
+              "number": 38,
+              "prompt": "What is the writer's view of attempts to remove every unoccupied moment?",
+              "options": [
+                { "id": "A", "text": "They are too expensive to maintain." },
+                { "id": "B", "text": "They should be replaced by more entertaining activities." },
+                { "id": "C", "text": "They are neither achievable nor advisable." },
+                { "id": "D", "text": "They are supported by most research on boredom." }
+              ],
+              "answer": "C",
+              "evidence": "Paragraph F: “the attempt to eliminate every unoccupied moment is both impossible and unwise”",
+              "explanation": "Paragraph F describes the attempt to eliminate every unoccupied moment as both impossible and unwise, because it teaches a habit of escaping anything that does not immediately reward attention. Option D contradicts the paragraph, and options A and B are not the writer's views."
+            }
+          ]
+        },
+        {
+          "questionType": "SHORT_ANSWER",
+          "fromQuestion": 39,
+          "toQuestion": 40,
+          "configuration": { "wordLimitMax": 3 },
+          "instructions": "Answer the questions below. Write NO MORE THAN THREE WORDS from the passage for each answer.",
+          "questions": [
+            {
+              "number": 39,
+              "prompt": "What may a bored person respond by seeking, according to research on chronic boredom?",
+              "answer": "novelty",
+              "evidence": "Paragraph C: “A person who is bored may respond by seeking novelty”",
+              "explanation": "Paragraph C begins its discussion of chronic boredom by noting that a bored person may respond by seeking novelty, and adds that not every kind is beneficial."
+            },
+            {
+              "number": 40,
+              "prompt": "What have some schools reduced in order to fit more instruction into the day?",
+              "answer": "break times",
+              "evidence": "Paragraph E: “Some have reduced break times in order to fit more instruction into the day”",
+              "explanation": "Paragraph E contrasts schools that have reduced break times with others that protect unstructured periods. The answer is break times."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

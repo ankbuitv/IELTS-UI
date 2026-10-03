@@ -9,6 +9,7 @@ IELTS, British Council, IDP or Cambridge material.
 | `cities-knowledge-and-adaptation.source.json` | Authoring format (`schemaVersion` + `questionGroups` + `answerKey`) |
 | `full-test.json` | One-file `FULL_MOCK` (`testType: FULL_MOCK` + every section inline, no mock components) |
 | `reading-four-passages.json` | Four separate Reading passages in one file (40 questions, Q1–40) |
+| `reading-three-passages.json` | One complete 40-question Academic Reading test (`questionGroups` + `configuration`, Q1–40, 60 minutes) |
 
 The first two files describe the same 40-question Academic-style Reading set,
 **Cities, Knowledge and Adaptation**. Paste either into Admin → Imports. Extra
@@ -26,7 +27,20 @@ publishable 40-question READING test with no manual key entry.
 validator the importer uses, so the file cannot drift out of the platform's
 evidence rules unnoticed.
 
-All four files also work in the **version editor's JSON tab**
+`reading-three-passages.json` is a complete 60-minute Academic Reading test in
+the sectioned import format: three passages (Q1–13, Q14–26, Q27–40) with nine
+question formats — TRUE/FALSE/NOT GIVEN, YES/NO/NOT GIVEN, single-answer
+multiple choice, matching headings, matching information, matching features,
+sentence completion, summary completion and short-answer questions. Word limits
+and roman/alpha option numbering are declared per group under `configuration`,
+so the candidate paper shows the right instruction banner without manual key
+entry. Every question carries a verbatim passage quote as evidence and an
+explanation for the post-submission review panel.
+`tests/unit/reading-full-sample.test.ts` runs the file through the shared
+conversion, the platform validator and the evidence/word-limit rules the
+importer enforces.
+
+All files also work in the **version editor's JSON tab**
 (Admin → Tests → version → Edit content → JSON): *Parse into outline* and
 *Save content* run them through the same shared conversion as the import
 pipeline (`src/shared/import-convert.ts`), so an import-format paste is turned

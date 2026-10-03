@@ -170,6 +170,49 @@ describe('validateTestVersion — publish gate', () => {
     expect(issueCodes).toContain('DUPLICATE_MCQ_OPTION');
     expect(issueCodes).toContain('MCQ_MULTI_WITHOUT_SELECT_COUNT');
   });
+
+  it('treats consecutive sections of one skill as contiguous', () => {
+    // A three-passage Reading test is one skill in a row: sections 1–13, 14–26
+    // and 27–40 must not read as a skill switch.
+    const sections = [1, 2, 3].map((passage, index) =>
+      readingSection({
+        id: `sec_${passage}`,
+        orderIndex: index,
+        title: `Passage ${passage}`,
+        groups: [
+          {
+            ...readingSection().groups[0]!,
+            rangeFrom: index * 2 + 1,
+            rangeTo: index * 2 + 2,
+            questions: readingSection().groups[0]!.questions.map((question) => ({
+              ...question,
+              number: question.number + index * 2,
+            })),
+          },
+        ],
+      }),
+    );
+    const issueCodes = codes(validateTestVersion(input({ sections })));
+    expect(issueCodes).not.toContain('SKILL_SECTIONS_NOT_CONTIGUOUS');
+    expect(issueCodes).toContain('SECTION_NOT_STARTING_AT_ONE');
+  });
+
+  it('warns when a skill comes back after another skill in between', () => {
+    const reading = readingSection({ id: 'sec_read_1', orderIndex: 0 });
+    const listening: ValidationSection = {
+      ...readingSection(),
+      id: 'sec_listen',
+      skill: 'LISTENING',
+      orderIndex: 1,
+      title: 'Part 1',
+      hasPassage: false,
+      passageParagraphCount: 0,
+      hasAudio: true,
+    };
+    const readingAgain = readingSection({ id: 'sec_read_2', orderIndex: 2, title: 'Passage 2' });
+    const issueCodes = codes(validateTestVersion(input({ sections: [reading, listening, readingAgain] })));
+    expect(issueCodes).toContain('SKILL_SECTIONS_NOT_CONTIGUOUS');
+  });
 });
 
 describe('summariseIssues', () => {
