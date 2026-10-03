@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
 import { ApiError } from '../lib/errors';
-import { normaliseExternalUrl } from '../services/media-service';
+import { ingestExternalAudio, normaliseExternalUrl } from '../services/media-service';
 import { putBlob } from '../services/blob-store';
 import { assertCsrf, assertSameOrigin, clientIp } from '../lib/http';
 import { parseBody, parseQuery } from '../lib/validate';
@@ -1694,6 +1694,32 @@ router.delete('/learn/lessons/:id', async (c) => {
     ip: clientIp(c),
   });
   return c.json({ ok: true });
+});
+
+/**
+ * Copies an externally hosted audio asset's bytes into D1, so playback no longer
+ * depends on the source host. Returns why it could not, when it could not — a
+ * flaky or dead source is reported, not turned into an error banner.
+ */
+router.post('/assets/:id/reingest', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const id = c.req.param('id');
+  const asset = await c.env.DB.prepare('SELECT id, kind, storage_kind FROM assets WHERE id = ?')
+    .bind(id)
+    .first<{ id: string; kind: string; storage_kind: string }>();
+  if (!asset) throw ApiError.notFound('Asset not found.');
+  if (asset.kind !== 'AUDIO') throw ApiError.validation('Only audio assets can be re-ingested.');
+  const result = await ingestExternalAudio(c.env, id);
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'ASSET_REINGEST',
+    entityType: 'asset',
+    entityId: id,
+    metadata: { stored: result.stored, reason: result.reason ?? null },
+    ip: clientIp(c),
+  });
+  return c.json({ stored: result.stored, reason: result.reason ?? null });
 });
 
 async function uniqueSlug(env: AppBindings['Bindings'], title: string): Promise<string> {

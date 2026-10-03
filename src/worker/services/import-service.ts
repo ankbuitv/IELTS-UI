@@ -9,6 +9,7 @@ import { validateTestVersion, summariseIssues, type ValidationIssue } from '../.
 import { replaceVersionContent, type EditableContent } from './content-write-service';
 import { loadAdminVersion, toValidationInput } from './content-service';
 import { recordAudit } from '../lib/audit';
+import { buildTestSummary } from './test-summary';
 import { loadPlatformSettings } from '../lib/settings';
 import type { ContentOrigin } from '../../shared/types';
 import { parseLeadingJson } from '../../shared/json';
@@ -644,6 +645,8 @@ export async function applyImportDraft(
     versionId = newId('ver');
     const title = (options.title ?? importRow.title ?? importRow.filename).slice(0, 200);
     const slug = await uniqueSlug(env, title);
+    const testType = inferTestType(content);
+    const summary = await buildTestSummary(env, title, testType, content);
 
     await env.DB.batch([
       env.DB.prepare(
@@ -654,8 +657,8 @@ export async function applyImportDraft(
         testId,
         slug,
         title,
-        inferTestType(content),
-        `Imported from ${importRow.filename}. Review the content and provenance before publishing.`,
+        testType,
+        summary,
         user.id,
         timestamp,
         timestamp,
