@@ -46,7 +46,9 @@ export function BandEstimatesPanel({ estimates }: { estimates: Estimates }) {
           return (
             <article key={entry.skill} className={`estimate ${meta.cls}${entry.band === null ? ' is-empty' : ''}`}>
               <header className="estimate__head">
-                <Icon name={meta.icon} size={15} />
+                <span className="estimate__icon">
+                  <Icon name={meta.icon} size={17} strokeWidth={2} />
+                </span>
                 <span>{meta.label}</span>
               </header>
               {entry.band !== null ? (
@@ -69,7 +71,7 @@ export function BandEstimatesPanel({ estimates }: { estimates: Estimates }) {
                 <>
                   <p className="estimate__band estimate__band--none">—</p>
                   <Link className="estimate__cta" to={meta.to}>
-                    {meta.cta} <Icon name="arrowRight" size={12} />
+                    {meta.cta} <Icon name="arrowRight" size={12} strokeWidth={2.4} />
                   </Link>
                 </>
               )}

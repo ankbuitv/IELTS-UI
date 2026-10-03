@@ -183,7 +183,7 @@ export function AppShell() {
                   Sign in
                 </Button>
                 <Button size="sm" variant="primary" onClick={() => navigate('/register')}>
-                  Create free account
+                  Create account
                 </Button>
               </>
             )}

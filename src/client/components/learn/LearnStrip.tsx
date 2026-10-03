@@ -5,38 +5,75 @@ import { learnApi, localDay } from '../../lib/learn-api';
 import { Icon } from '../Icon';
 
 /**
- * One slim line on the dashboard: streak, today's XP against the goal and the
- * words due. It stays out of the way while loading and when it fails: it is a
- * convenience, never a reason for the dashboard to show an error.
+ * Three small cards on the dashboard: the streak, today's XP against the goal and the words
+ * due for review. Each one opens the learning path. They stay out of the way when the request
+ * fails: this is a convenience, never a reason for the dashboard to show an error.
  */
 export function LearnStrip() {
-  const { data } = useAsync(() => learnApi.overview(), []);
-  if (!data) return null;
+  const { data, loading } = useAsync(() => learnApi.overview(), []);
+
+  if (!data) {
+    // Reserve the space while loading so the page below does not jump.
+    return loading ? (
+      <section className="learn-strip" aria-hidden="true">
+        {[0, 1, 2].map((index) => (
+          <div key={index} className="ls-card ls-card--skeleton" />
+        ))}
+      </section>
+    ) : null;
+  }
+
   const { profile } = data;
   const today = localDay();
   const alive = streakAlive(profile.lastActiveDay, today) && profile.streak > 0;
+  const activeToday = profile.lastActiveDay === today;
   const percent = Math.min(100, Math.round((profile.todayXp / Math.max(1, profile.dailyGoalXp)) * 100));
+  const goalMet = percent >= 100;
+
   return (
-    <Link to="/learn" className="learn-strip" aria-label="Open your learning path">
-      <span className={`learn-strip__item${alive ? ' is-hot' : ''}`}>
-        <Icon name="zap" size={15} />
-        <b>{alive ? profile.streak : 0}</b> day streak
-      </span>
-      <span className="learn-strip__goal">
-        <span className="learn-strip__bar" aria-hidden="true">
-          <i style={{ width: `${percent}%` }} />
+    <section className="learn-strip" aria-label="Your learning today">
+      <Link to="/learn" className={`ls-card ls-card--streak${alive ? ' is-hot' : ''}`}>
+        <span className="ls-card__icon">
+          <Icon name="flame" size={24} filled />
         </span>
-        <span>
-          {profile.todayXp}/{profile.dailyGoalXp} XP today
+        <span className="ls-card__body">
+          <span className="ls-card__value">
+            {alive ? profile.streak : 0} <small>day streak</small>
+          </span>
+          <span className="ls-card__hint">
+            {alive ? (activeToday ? 'Done for today' : 'Practise today to keep it') : 'Practise today to start one'}
+          </span>
         </span>
-      </span>
-      <span className="learn-strip__item">
-        <Icon name="layers" size={15} />
-        <b>{data.dueWords}</b> word{data.dueWords === 1 ? '' : 's'} to review
-      </span>
-      <span className="learn-strip__go">
-        Learn <Icon name="arrowRight" size={13} />
-      </span>
-    </Link>
+      </Link>
+
+      <Link to="/learn" className={`ls-card ls-card--xp${goalMet ? ' is-met' : ''}`}>
+        <span className="ls-card__icon">
+          <Icon name={goalMet ? 'check' : 'bolt'} size={24} filled={!goalMet} strokeWidth={goalMet ? 3 : 1.7} />
+        </span>
+        <span className="ls-card__body">
+          <span className="ls-card__value">
+            {profile.todayXp}/{profile.dailyGoalXp} <small>XP today</small>
+          </span>
+          <span className="ls-card__bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label="Daily goal">
+            <i style={{ width: `${percent}%` }} />
+          </span>
+        </span>
+      </Link>
+
+      <Link to={data.dueWords > 0 ? '/learn/review' : '/learn'} className="ls-card ls-card--review">
+        <span className="ls-card__icon">
+          <Icon name="layers" size={24} />
+        </span>
+        <span className="ls-card__body">
+          <span className="ls-card__value">
+            {data.dueWords} <small>word{data.dueWords === 1 ? '' : 's'} to review</small>
+          </span>
+          <span className="ls-card__hint ls-card__hint--link">
+            {data.dueWords > 0 ? 'Review now' : 'All caught up'}
+            {data.dueWords > 0 ? <Icon name="arrowRight" size={13} strokeWidth={2.4} /> : null}
+          </span>
+        </span>
+      </Link>
+    </section>
   );
 }

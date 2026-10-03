@@ -158,7 +158,7 @@ function SpeakingLobby({ onStarted }: { onStarted: (sessionId: string) => void }
       <Card title="Lịch sử luyện nói" hint="Mỗi lần luyện được lưu lại cùng bản chép lời và nhận xét.">
         {history.loading ? <Loading label="Đang tải…" /> : null}
         {history.data && history.data.sessions.length === 0 ? (
-          <EmptyState title="Chưa có buổi luyện nói nào">Chọn một chủ đề ở trên để bắt đầu.</EmptyState>
+          <EmptyState title="Chưa có buổi luyện nói nào" icon="mic">Chọn một chủ đề ở trên để bắt đầu.</EmptyState>
         ) : (
           <div className="stack" style={{ gap: 8 }}>
             {(history.data?.sessions ?? []).map((session) => (

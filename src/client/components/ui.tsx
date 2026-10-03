@@ -278,7 +278,7 @@ export function Card({
   return (
     <section className={`card ${flush ? 'card--flush' : ''} ${interactive ? 'card--link' : ''} ${className}`}>
       {(title || actions) && (
-        <header className="card__header" style={flush ? { padding: '12px 14px 0' } : undefined}>
+        <header className="card__header">
           <div>
             {title ? <h2 className="card__title">{title}</h2> : null}
             {hint ? <div className="card__hint">{hint}</div> : null}
@@ -448,9 +448,21 @@ export function Notice({
   );
 }
 
-export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
+export function EmptyState({
+  title,
+  children,
+  icon = 'layers',
+}: {
+  title: string;
+  children?: ReactNode;
+  /** The picture in the soft disc above the title. */
+  icon?: IconName;
+}) {
   return (
     <div className="empty">
+      <span className="empty__icon" aria-hidden="true">
+        <Icon name={icon} size={22} />
+      </span>
       <div className="empty__title">{title}</div>
       {children}
     </div>

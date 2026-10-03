@@ -111,15 +111,19 @@ export function LearnPage() {
   return (
     <div className="learn">
       <section className="learn__stats" aria-label="Your progress">
-        <div className={`learn-stat${alive && profile.streak > 0 ? ' is-hot' : ''}`}>
-          <Icon name="zap" size={18} />
+        <div className={`learn-stat learn-stat--fire${alive && profile.streak > 0 ? ' is-hot' : ''}`}>
+          <span className="learn-stat__icon">
+            <Icon name="flame" size={26} filled />
+          </span>
           <div>
             <b>{alive ? profile.streak : 0}</b>
             <span>{alive && profile.streak > 0 ? (activeToday ? 'day streak' : 'day streak · practise today') : 'Start a streak today'}</span>
           </div>
         </div>
-        <div className="learn-stat">
-          <Icon name="award" size={18} />
+        <div className="learn-stat learn-stat--xp">
+          <span className="learn-stat__icon">
+            <Icon name="bolt" size={26} filled />
+          </span>
           <div>
             <b>{profile.xp}</b>
             <span>total XP</span>
@@ -222,11 +226,13 @@ export function LearnPage() {
         </aside>
 
         <section className="learn__path" aria-label="Lesson path">
-          {UNITS.map((unit) => {
+          {UNITS.map((unit, unitIndex) => {
             const lessons = LESSONS.filter((lesson) => lesson.unitId === unit.id);
             const unitDone = lessons.every((lesson) => (progress[lesson.id]?.completions ?? 0) > 0);
+            const finished = lessons.filter((lesson) => (progress[lesson.id]?.completions ?? 0) > 0).length;
+            const unitLocked = lessons.every((lesson) => stateOf(lesson) === 'locked');
             return (
-              <div key={unit.id} className="unit">
+              <div key={unit.id} className={`unit unit--c${unitIndex % 4}${unitLocked ? ' unit--locked' : ''}`}>
                 <header className="unit__head">
                   <div>
                     <p className="unit__kicker">
@@ -239,7 +245,12 @@ export function LearnPage() {
                     <span className="unit__done">
                       <Icon name="check" size={14} strokeWidth={3} /> Complete
                     </span>
-                  ) : null}
+                  ) : (
+                    <span className="unit__count">
+                      {unitLocked ? <Icon name="lock" size={13} strokeWidth={2.4} /> : null}
+                      {finished}/{lessons.length}
+                    </span>
+                  )}
                 </header>
                 <ol className="unit__nodes">
                   {lessons.map((lesson) => {
@@ -249,7 +260,7 @@ export function LearnPage() {
                     const open = openLesson === lesson.id;
                     const icon: IconName = state === 'done' ? 'check' : state === 'locked' ? 'lock' : 'play';
                     return (
-                      <li key={lesson.id} className="node-row" style={{ '--offset': `${offset}px` } as React.CSSProperties}>
+                      <li key={lesson.id} className={`node-row${state === 'locked' ? ' node-row--locked' : ''}`} style={{ '--offset': `${offset}px` } as React.CSSProperties}>
                         <div className="node-wrap">
                           {state === 'current' ? <span className="node-start">Start</span> : null}
                           <button
@@ -259,7 +270,7 @@ export function LearnPage() {
                             aria-label={`${lesson.title}, ${state === 'locked' ? 'locked' : state === 'done' ? 'finished' : 'available'}`}
                             onClick={() => setOpenLesson(open ? null : lesson.id)}
                           >
-                            <Icon name={icon} size={24} strokeWidth={state === 'done' ? 3 : 2} />
+                            <Icon name={icon} size={28} strokeWidth={state === 'done' ? 3.2 : 2.2} filled={state === 'current'} />
                           </button>
                           {item && item.completions > 0 ? <Stars value={item.stars} size={13} /> : null}
                         </div>

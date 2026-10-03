@@ -77,7 +77,13 @@ export function StudentDashboardPage() {
   return (
     <div className="stack dash">
       <section className="dash-hero">
+        <span className="dash-hero__bars" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
         <div className="dash-hero__text">
+          <p className="dash-hero__kicker">{greeting()}</p>
           <h1>Welcome back{firstName ? `, ${firstName}` : ''}</h1>
           <p>
             {data.totals.submitted === 0
@@ -131,8 +137,9 @@ export function StudentDashboardPage() {
           flush
         >
           {recent.length === 0 ? (
-            <EmptyState title="No attempts yet">
-              <Link className="btn btn--primary btn--sm" to="/practice" style={{ marginTop: 10 }}>
+            <EmptyState title="No attempts yet" icon="book">
+              <p>Your finished tests and their bands will be listed here, newest first.</p>
+              <Link className="btn btn--primary" to="/practice">
                 Start your first test
               </Link>
             </EmptyState>
@@ -164,7 +171,9 @@ export function StudentDashboardPage() {
               yLabel={trendMode === 'band' ? 'Estimated band trend' : 'Raw score trend'}
             />
           ) : (
-            <EmptyState title="Nothing to chart yet">Finish a Reading or Listening test and your trend appears here.</EmptyState>
+            <EmptyState title="Nothing to chart yet" icon="trendingUp">
+              <p>Finish a Reading or Listening test and your trend appears here.</p>
+            </EmptyState>
           )}
           {trendMode === 'band' ? <p className="tiny muted">{BAND_DISCLAIMER}</p> : null}
         </Card>
@@ -271,8 +280,8 @@ export function StudentDashboardPage() {
 
             <Card title="Full mock history" flush>
               {data.mockHistory.length === 0 ? (
-                <EmptyState title="No full mocks yet">
-                  Full mocks combine Listening, Reading and Writing with separate server-authoritative timers.
+                <EmptyState title="No full mocks yet" icon="clock">
+                  <p>Full mocks combine Listening, Reading and Writing with separate server-authoritative timers.</p>
                 </EmptyState>
               ) : (
                 <AttemptList attempts={data.mockHistory} limit={6} />
@@ -283,6 +292,15 @@ export function StudentDashboardPage() {
       </details>
     </div>
   );
+}
+
+/** A short greeting line above the name, from the learner's own clock. */
+function greeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 5) return 'Burning the midnight oil';
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
 }
 
 /** Keeps a button label on one line. */

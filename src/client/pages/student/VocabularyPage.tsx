@@ -256,7 +256,7 @@ export function VocabularyPage() {
           {error}
         </Notice>
       ) : visible.length === 0 ? (
-        <EmptyState title={entries.length === 0 ? 'No words yet' : 'No words in this view'}>
+        <EmptyState title={entries.length === 0 ? 'No words yet' : 'No words in this view'} icon="layers">
           {entries.length === 0
             ? 'Words appear here as you study: from lessons, from the dictionary, from your marked Writing and Speaking, and a few new ones every day.'
             : 'Try another filter.'}

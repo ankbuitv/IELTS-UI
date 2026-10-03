@@ -20,7 +20,7 @@ import {
   TextInput,
   useToast,
 } from '../../components/ui';
-import { Icon } from '../../components/Icon';
+import { Icon, type IconName } from '../../components/Icon';
 import { ResultSummary, type AttemptResultPayload } from '../../components/ResultView';
 import { AccuracyList } from '../../components/charts';
 import { SkillPerformanceTable, TrendBars } from './Dashboard';
@@ -95,6 +95,12 @@ function bandHint(test: CatalogTest): string {
   }
   return '';
 }
+
+const SKILL_TILES: Array<{ type: string; skill: 'listening' | 'reading' | 'writing'; icon: IconName; label: string }> = [
+  { type: 'LISTENING', skill: 'listening', icon: 'headphones', label: 'Listening' },
+  { type: 'READING', skill: 'reading', icon: 'book', label: 'Reading' },
+  { type: 'WRITING', skill: 'writing', icon: 'pen', label: 'Writing' },
+];
 
 export function PracticePage() {
   const navigate = useNavigate();
@@ -184,6 +190,41 @@ export function PracticePage() {
         </div>
       </div>
 
+      <div className="skill-tiles" role="group" aria-label="Practise by skill">
+        {SKILL_TILES.map((tile) => {
+          const count = counts[tile.type] ?? 0;
+          const active = testType === tile.type;
+          return (
+            <button
+              key={tile.type}
+              type="button"
+              className={`skill-tile skill-${tile.skill}${active ? ' is-on' : ''}`}
+              aria-pressed={active}
+              disabled={count === 0 && !active}
+              onClick={() => setTestType(active ? '' : tile.type)}
+            >
+              <span className="skill-tile__icon">
+                <Icon name={tile.icon} size={20} strokeWidth={2} />
+              </span>
+              <span className="skill-tile__text">
+                <b>{tile.label}</b>
+                <small>{count === 0 ? 'None published yet' : `${count} test${count === 1 ? '' : 's'}`}</small>
+              </span>
+            </button>
+          );
+        })}
+        <Link className="skill-tile skill-speaking" to="/speaking">
+          <span className="skill-tile__icon">
+            <Icon name="mic" size={20} strokeWidth={2} />
+          </span>
+          <span className="skill-tile__text">
+            <b>Speaking</b>
+            <small>Record and get feedback</small>
+          </span>
+          <Icon name="arrowRight" size={16} strokeWidth={2.2} className="skill-tile__go" />
+        </Link>
+      </div>
+
       <div className="toolbar">
         <Chips label="Test type" value={testType} onChange={setTestType} options={typeOptions} />
         <div className="toolbar__end">
@@ -212,7 +253,7 @@ export function PracticePage() {
 
       {tests.length === 0 ? (
         <Card>
-          <EmptyState title={all.length === 0 ? 'No published tests yet' : 'No tests match'}>
+          <EmptyState title={all.length === 0 ? 'No published tests yet' : 'No tests match'} icon="search">
             {all.length === 0
               ? 'Ask your teacher or administrator to publish a test, or join a classroom to receive an assignment.'
               : 'Try another type or clear the search box.'}
@@ -473,7 +514,7 @@ export function AttemptHistoryPage() {
         {shown.length > 0 ? (
           <AttemptList attempts={shown} />
         ) : (
-          <EmptyState title={attempts.length === 0 ? 'No attempts yet' : 'No attempts match these filters'}>
+          <EmptyState title={attempts.length === 0 ? 'No attempts yet' : 'No attempts match these filters'} icon="clock">
             {attempts.length === 0 ? (
               <Link className="btn btn--primary btn--sm" to="/practice" style={{ marginTop: 10 }}>
                 Start a practice test
@@ -569,7 +610,7 @@ export function StudentClassroomsPage() {
       </Card>
       {data && data.classrooms.length === 0 ? (
         <Card>
-          <EmptyState title="You are not enrolled yet">Use an invitation link or class code to join.</EmptyState>
+          <EmptyState title="You are not enrolled yet" icon="users">Use an invitation link or class code to join.</EmptyState>
         </Card>
       ) : (
         <div className="grid grid--3">

@@ -1,25 +1,31 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { BrandLogo, BrandMark } from '../../components/BrandLogo';
 import { Icon, type IconName } from '../../components/Icon';
 import { Button, Field, Notice, PasswordInput, TextInput } from '../../components/ui';
 import { api, describeError } from '../../lib/api';
 
+/* ------------------------------------------------------------------ landing */
+type SkillKey = 'listening' | 'reading' | 'writing' | 'speaking';
+
 const SKILLS: Array<{
-  skill: 'listening' | 'reading' | 'writing' | 'speaking';
+  skill: SkillKey;
   icon: IconName;
   name: string;
   meta: string;
   detail: string;
   marked: string;
+  judged: boolean;
 }> = [
   {
     skill: 'listening',
     icon: 'headphones',
     name: 'Listening',
     meta: '4 sections · 40 questions · about 30 min',
-    detail: 'Audio panel with play limits, section information and note, table and sentence completion.',
-    marked: 'Marked instantly against the answer key',
+    detail: 'An audio panel with play limits, section information, and note, table and sentence completion.',
+    marked: 'Marked instantly against the key',
+    judged: false,
   },
   {
     skill: 'reading',
@@ -27,84 +33,223 @@ const SKILLS: Array<{
     name: 'Reading',
     meta: '3 passages · 40 questions · 60 min',
     detail: 'True / False / Not Given, matching headings and information, completion and short answers.',
-    marked: 'Marked instantly against the answer key',
+    marked: 'Marked instantly against the key',
+    judged: false,
   },
   {
     skill: 'writing',
     icon: 'pen',
     name: 'Writing',
     meta: 'Task 1 + Task 2 · 60 min',
-    detail: 'Autosaved editor with a live word count. Corrections, criteria and a band in seconds.',
-    marked: 'Marked automatically by two AI judges',
+    detail: 'An autosaved editor with a live word count. Corrections, four criteria and a band in seconds.',
+    marked: 'Marked by two AI judges',
+    judged: true,
   },
   {
     skill: 'speaking',
     icon: 'mic',
     name: 'Speaking',
     meta: 'Parts 1, 2 and 3 · 11–14 min',
-    detail: 'Record each part, read your transcript and get feedback on fluency, vocabulary and grammar.',
-    marked: 'Marked automatically by two AI judges',
+    detail: 'Record each part, read your transcript, and get feedback on fluency, vocabulary and grammar.',
+    marked: 'Marked by two AI judges',
+    judged: true,
   },
 ];
 
-function SampleReport() {
-  const rows: Array<[string, string, string]> = [
-    ['Listening', '7.0', 'answer key'],
-    ['Reading', '6.5', 'answer key'],
-    ['Writing', '6.5', 'Judge01 6.5 · Judge02 6.5'],
-    ['Speaking', '6.0', 'Judge01 6.0 · Judge02 6.0'],
+const STEPS: Array<{ icon: IconName; title: string; text: string }> = [
+  {
+    icon: 'book',
+    title: 'Choose a paper',
+    text: 'Pick a full test or a single skill. Reading and Listening have 40 questions; Writing has Task 1 and Task 2.',
+  },
+  {
+    icon: 'clock',
+    title: 'Sit it under exam conditions',
+    text: 'A server clock, a tab lock and autosave keep it honest, on an exam screen that looks like the real one.',
+  },
+  {
+    icon: 'trendingUp',
+    title: 'See your band and what to fix',
+    text: 'Instant marks for Reading and Listening, two AI judges for Writing and Speaking, then a short plan in Learn.',
+  },
+];
+
+const FAQ: Array<{ q: string; a: string }> = [
+  {
+    q: 'Is this the real IELTS test?',
+    a: 'No. Ai eo is an independent practice platform in the style of the computer-delivered test. It is not affiliated with IELTS, IDP, the British Council or Cambridge, and every band you see is a practice estimate, never an official result.',
+  },
+  {
+    q: 'How are Writing and Speaking marked?',
+    a: 'Automatically, as soon as you submit. Two AI judges, Judge01 and Judge02, are briefed on the four public band criteria, score independently, and you see both opinions with a consensus band. If a teacher marks the same work, the teacher’s band always wins.',
+  },
+  {
+    q: 'What happens if I switch tabs during a test?',
+    a: 'It counts as a strike and you are stopped when you come back. At three strikes the attempt is submitted with the answers you had already given. A browser cannot block other apps, so Ai eo records the leave rather than pretending to prevent it.',
+  },
+  {
+    q: 'Will I lose my work if my connection drops?',
+    a: 'No. Answers autosave to the server as you go, and an essay that has not reached the server yet is also kept on your device until it does.',
+  },
+  {
+    q: 'Does it work on a phone?',
+    a: 'Yes. Every page is built for phones, tablets and computers. For a full paper a larger screen is more comfortable, and Speaking asks for microphone permission the first time.',
+  },
+];
+
+/** The exam screen, as a picture: top bar with the timer, passage on the left, questions on the right. */
+function MockExam() {
+  const options = ['True', 'False', 'Not given'];
+  return (
+    <div className="mock mock--exam">
+      <div className="mock__bar">
+        <span className="mock__bar-title">
+          <i className="mock__dot" /> Reading · Passage 2
+        </span>
+        <span className="mock__timer">54:12</span>
+      </div>
+      <div className="mock__split">
+        <div className="mock__passage">
+          <b>The return of the night train</b>
+          <p>
+            After 1990 the network shrank as budget airlines cut fares, yet the last decade has seen a quiet reversal.
+            Several operators now run sleeper services between cities that had no direct link.
+          </p>
+          <p>
+            Passengers cite two reasons: the cost of a hotel room saved, and a journey that does not feel like lost time.
+          </p>
+        </div>
+        <div className="mock__questions">
+          <b>Questions 14 to 16</b>
+          <span className="mock__prompt">Do the statements agree with the passage?</span>
+          {[
+            ['14', 'Airlines caused the decline.', 0],
+            ['15', 'Sleepers now reach new cities.', 0],
+            ['16', 'Fares fell after 2010.', 2],
+          ].map(([n, text, pick]) => (
+            <div key={n as string} className="mock__q">
+              <span className="mock__q-text">
+                <em>{n}</em> {text}
+              </span>
+              <span className="mock__opts">
+                {options.map((option, index) => (
+                  <span key={option} className={index === pick ? 'is-picked' : undefined}>
+                    {option}
+                  </span>
+                ))}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MockBand() {
+  const rows: Array<[string, string, number, SkillKey]> = [
+    ['L', '7.5', 83, 'listening'],
+    ['R', '7.0', 78, 'reading'],
+    ['W', '6.5', 72, 'writing'],
+    ['S', '6.5', 72, 'speaking'],
   ];
   return (
-    <figure className="report" aria-label="Sample practice report">
-      <figcaption className="report__head">
-        <span>Practice report</span>
-        <span className="report__tag">Sample</span>
-      </figcaption>
-      <div className="report__body">
-        <div className="report__overall">
-          <span className="report__overall-label">Overall band</span>
-          <span className="report__overall-value">6.5</span>
-        </div>
-        <table className="report__table">
-          <tbody>
-            {rows.map(([skill, band, basis]) => (
-              <tr key={skill}>
-                <th scope="row">{skill}</th>
-                <td className="report__band">{band}</td>
-                <td className="report__basis">{basis}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="mock mock--band">
+      <span className="mock__label">Estimated band</span>
+      <span className="mock__big">7.0</span>
+      <ul className="mock__skills">
+        {rows.map(([letter, value, width, skill]) => (
+          <li key={letter} className={`skill-${skill}`}>
+            <span>{letter}</span>
+            <span className="mock__meter">
+              <i style={{ width: `${width}%` }} />
+            </span>
+            <b>{value}</b>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function MockJudges() {
+  return (
+    <div className="mock mock--judges">
+      <span className="mock__label">Writing Task 2 · AI marking</span>
+      <div className="mock__judge-row">
+        <span>
+          <small>Judge01</small>
+          <b>6.5</b>
+        </span>
+        <span>
+          <small>Judge02</small>
+          <b>7.0</b>
+        </span>
+        <span className="is-final">
+          <small>Consensus</small>
+          <b>7.0</b>
+        </span>
       </div>
-      <p className="report__note">Illustration only. Bands in Ai eo are practice estimates, never an official result.</p>
-    </figure>
+      <span className="mock__judge-note">
+        <Icon name="check" size={12} strokeWidth={3} /> Corrections and a Vietnamese summary included
+      </span>
+    </div>
+  );
+}
+
+function HeroStage() {
+  return (
+    <div className="stage" aria-hidden="true">
+      <span className="stage__bars">
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className="stage__dot" />
+      <span className="stage__chip">
+        <Icon name="flame" size={15} filled />
+        12 day streak
+      </span>
+      <MockExam />
+      <MockJudges />
+      <MockBand />
+    </div>
   );
 }
 
 function PathPreview() {
-  const nodes: Array<{ label: string; state: 'done' | 'current' | 'locked'; offset: number }> = [
-    { label: 'Everyday words', state: 'done', offset: 0 },
-    { label: 'Linking ideas', state: 'done', offset: 1 },
-    { label: 'Describing graphs', state: 'current', offset: 2 },
-    { label: 'Opinion phrases', state: 'locked', offset: 1 },
-    { label: 'Academic verbs', state: 'locked', offset: 0 },
+  const nodes: Array<{ label: string; state: 'done' | 'current' | 'locked'; offset: number; icon: IconName }> = [
+    { label: 'Everyday words', state: 'done', offset: 0, icon: 'check' },
+    { label: 'Linking ideas', state: 'done', offset: 1, icon: 'check' },
+    { label: 'Describing graphs', state: 'current', offset: 2, icon: 'play' },
+    { label: 'Opinion phrases', state: 'locked', offset: 1, icon: 'lock' },
+    { label: 'Academic verbs', state: 'locked', offset: 0, icon: 'lock' },
   ];
   return (
-    <div className="path-preview" aria-hidden="true">
-      <div className="path-preview__chips">
-        <span className="path-chip">
-          <Icon name="zap" size={13} /> 5 day streak
+    <div className="phone" aria-hidden="true">
+      <div className="phone__stats">
+        <span className="phone__stat phone__stat--fire">
+          <Icon name="flame" size={16} filled /> 5
         </span>
-        <span className="path-chip">120 XP</span>
+        <span className="phone__stat phone__stat--xp">
+          <Icon name="bolt" size={16} filled /> 120 XP
+        </span>
+        <span className="phone__stat phone__stat--heart">
+          <Icon name="heart" size={16} filled /> 5
+        </span>
       </div>
-      <ol className="path-preview__list">
+      <div className="phone__unit">
+        <span>Unit 2 · Lesson 3 of 4</span>
+        <strong>Describing data</strong>
+      </div>
+      <ol className="phone__path">
         {nodes.map((node) => (
-          <li key={node.label} style={{ marginLeft: node.offset * 34 }} className={`path-preview__node path-preview__node--${node.state}`}>
-            <span className="path-preview__dot">
-              <Icon name={node.state === 'done' ? 'check' : node.state === 'locked' ? 'lock' : 'play'} size={16} />
+          <li key={node.label} className={`phone__node phone__node--${node.state}`} style={{ '--shift': node.offset } as React.CSSProperties}>
+            {node.state === 'current' ? <span className="phone__start">Start</span> : null}
+            <span className="phone__disc">
+              <Icon name={node.icon} size={node.state === 'current' ? 24 : 22} strokeWidth={node.state === 'done' ? 3 : 2.2} filled={node.state === 'current'} />
             </span>
-            <span className="path-preview__label">{node.label}</span>
+            <span className="phone__label">{node.label}</span>
           </li>
         ))}
       </ol>
@@ -112,175 +257,259 @@ function PathPreview() {
   );
 }
 
-function JudgePreview() {
+function JudgeReport() {
+  const criteria: Array<[string, number, string, string]> = [
+    ['Task Response', 72, '7.0', '6.5'],
+    ['Coherence and Cohesion', 66, '6.5', '6.5'],
+    ['Lexical Resource', 72, '7.0', '7.0'],
+    ['Grammatical Range', 60, '6.0', '6.5'],
+  ];
   return (
-    <div className="judge-preview" aria-hidden="true">
-      <div className="judge-preview__judges">
-        <div className="judge-preview__judge">
-          <span className="judge-preview__name">Judge01</span>
-          <span className="judge-preview__band">6.5</span>
+    <div className="verdict" aria-hidden="true">
+      <div className="verdict__head">
+        <span>
+          <Icon name="pen" size={15} /> Writing Task 2
+        </span>
+        <span className="verdict__done">
+          <Icon name="check" size={12} strokeWidth={3} /> Marked in 14 s
+        </span>
+      </div>
+      <div className="verdict__judges">
+        <div>
+          <small>Judge01</small>
+          <b>6.5</b>
         </div>
-        <div className="judge-preview__judge">
-          <span className="judge-preview__name">Judge02</span>
-          <span className="judge-preview__band">6.0</span>
+        <div>
+          <small>Judge02</small>
+          <b>7.0</b>
         </div>
-        <div className="judge-preview__judge judge-preview__judge--final">
-          <span className="judge-preview__name">Consensus</span>
-          <span className="judge-preview__band">6.5</span>
+        <div className="is-final">
+          <small>Consensus</small>
+          <b>7.0</b>
         </div>
       </div>
-      <ul className="judge-preview__criteria">
-        <li>
-          <span>Task Response</span>
-          <span className="judge-preview__bar"><i style={{ width: '72%' }} /></span>
-          <b>6.5</b>
+      <ul className="verdict__criteria">
+        <li className="verdict__legend" aria-hidden="true">
+          <span>Criterion</span>
+          <span />
+          <b>Judge01 · Judge02</b>
         </li>
-        <li>
-          <span>Coherence and Cohesion</span>
-          <span className="judge-preview__bar"><i style={{ width: '66%' }} /></span>
-          <b>6.0</b>
-        </li>
-        <li>
-          <span>Lexical Resource</span>
-          <span className="judge-preview__bar"><i style={{ width: '72%' }} /></span>
-          <b>6.5</b>
-        </li>
-        <li>
-          <span>Grammatical Range</span>
-          <span className="judge-preview__bar"><i style={{ width: '60%' }} /></span>
-          <b>5.5</b>
-        </li>
+        {criteria.map(([name, width, a, b]) => (
+          <li key={name}>
+            <span>{name}</span>
+            <span className="verdict__meter">
+              <i style={{ width: `${width}%` }} />
+            </span>
+            <b>
+              {a} · {b}
+            </b>
+          </li>
+        ))}
       </ul>
+      <div className="verdict__fix">
+        <small>Correction</small>
+        <p>
+          The number of visitors <del>have been increase</del> <ins>has increased</ins> sharply since 2015.
+        </p>
+      </div>
+      <p className="verdict__vi">
+        <b>Tóm tắt:</b> Bố cục rõ ràng, lập luận mạch lạc. Cần luyện thêm câu phức và chia thì cho chính xác.
+      </p>
     </div>
   );
 }
 
+const TRUST: Array<{ icon: IconName; text: string }> = [
+  { icon: 'check', text: 'Reading and Listening marked instantly' },
+  { icon: 'sparkle', text: 'Writing and Speaking marked by two AI judges' },
+  { icon: 'lock', text: 'Server clock and tab lock' },
+];
+
+const FACTS: Array<{ value: string; label: string; detail: string }> = [
+  { value: '4', label: 'papers', detail: 'Listening, Reading, Writing and Speaking' },
+  { value: '2', label: 'AI judges', detail: 'Independent scores, one consensus band' },
+  { value: '40', label: 'questions', detail: 'Full-length Reading and Listening papers' },
+  { value: '3', label: 'strikes', detail: 'Tab lock, then the attempt is submitted' },
+];
+
 export function LandingPage() {
   const { user } = useAuth();
+  const { hash } = useLocation();
+
+  // Footer and header links point at sections ("/#faq"); scroll there once the page is on screen.
+  useEffect(() => {
+    if (!hash) return;
+    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+    if (target) requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
+  }, [hash]);
+
   if (user) return <Navigate to="/dashboard" replace />;
 
   return (
-    <div className="landing">
-      <section className="hero">
-        <div className="hero__inner">
-          <div className="hero__copy">
-            <p className="hero__kicker">Independent IELTS-style practice</p>
-            <h1>Practise for IELTS the way the test actually feels.</h1>
-            <p className="hero__lede">
-              Timed Reading, Listening, Writing and Speaking on a computer-delivered exam screen. Writing and Speaking are
-              marked automatically by two AI judges, and a daily learning path builds the vocabulary behind your band.
+    <div className="lp">
+      <section className="lp-hero">
+        <div className="lp-wrap lp-hero__grid">
+          <div className="lp-hero__copy">
+            <p className="lp-pill">
+              <i /> Luyện IELTS như thi thật
             </p>
-            <div className="hero__actions">
+            <h1>
+              Practise IELTS the way the test <span>actually feels.</span>
+            </h1>
+            <p className="lp-hero__lede">
+              Timed Reading, Listening, Writing and Speaking on a computer-delivered exam screen. Writing and Speaking
+              are marked automatically by two AI judges, and a daily learning path builds the vocabulary behind your band.
+            </p>
+            <div className="lp-hero__actions">
               <Link className="btn btn--primary btn--lg" to="/register">
-                Create a free account
+                Create an account
+                <Icon name="arrowRight" size={18} strokeWidth={2.4} />
               </Link>
               <Link className="btn btn--lg" to="/login">
                 Sign in
               </Link>
             </div>
-            <dl className="hero__facts">
-              <div>
-                <dt>4</dt>
-                <dd>skills in the exam screen</dd>
-              </div>
-              <div>
-                <dt>2</dt>
-                <dd>AI judges, one consensus band</dd>
-              </div>
-              <div>
-                <dt>3</dt>
-                <dd>tab-switch strikes, then auto-submit</dd>
-              </div>
-            </dl>
+            <ul className="lp-trust">
+              {TRUST.map((item) => (
+                <li key={item.text}>
+                  <span>
+                    <Icon name={item.icon} size={13} strokeWidth={2.6} />
+                  </span>
+                  {item.text}
+                </li>
+              ))}
+            </ul>
           </div>
-          <SampleReport />
+          <HeroStage />
         </div>
       </section>
 
-      <section className="band" id="skills">
-        <div className="band__inner">
-          <header className="band__head">
-            <p className="eyebrow">The four skills</p>
+      <div className="lp-wrap">
+        <dl className="lp-facts">
+          {FACTS.map((fact) => (
+            <div key={fact.label}>
+              <dt>
+                <b>{fact.value}</b> {fact.label}
+              </dt>
+              <dd>{fact.detail}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      <section className="lp-section" id="skills">
+        <div className="lp-wrap">
+          <header className="lp-head">
+            <p className="lp-eyebrow">The four papers</p>
             <h2>One exam screen for every paper</h2>
-            <p>Passage on the left, questions on the right, a timer you can trust and answers that are saved as you go.</p>
+            <p>Passage on the left, questions on the right, a timer you can trust, and answers saved as you go.</p>
           </header>
-          <div className="skill-grid">
+          <div className="lp-skills">
             {SKILLS.map((item) => (
-              <article key={item.skill} className={`skill-tile skill-${item.skill}`}>
-                <span className="skill-tile__icon">
-                  <Icon name={item.icon} size={20} />
+              <article key={item.skill} className={`lp-skill skill-${item.skill}`}>
+                <span className="lp-skill__icon">
+                  <Icon name={item.icon} size={24} strokeWidth={2} />
                 </span>
                 <h3>{item.name}</h3>
-                <p className="skill-tile__meta">{item.meta}</p>
-                <p>{item.detail}</p>
-                <p className="skill-tile__marked">{item.marked}</p>
+                <p className="lp-skill__meta">{item.meta}</p>
+                <p className="lp-skill__text">{item.detail}</p>
+                <p className="lp-skill__marked">
+                  <Icon name={item.judged ? 'sparkle' : 'check'} size={14} strokeWidth={2.4} />
+                  {item.marked}
+                </p>
               </article>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="band band--muted" id="learn">
-        <div className="band__inner split">
-          <div>
-            <p className="eyebrow">Learn</p>
+      <section className="lp-section lp-section--white" id="how">
+        <div className="lp-wrap">
+          <header className="lp-head lp-head--center">
+            <p className="lp-eyebrow">How it works</p>
+            <h2>From first question to a plan, in three steps</h2>
+          </header>
+          <ol className="lp-steps">
+            {STEPS.map((step, index) => (
+              <li key={step.title}>
+                <span className="lp-steps__no">{index + 1}</span>
+                <span className="lp-steps__icon">
+                  <Icon name={step.icon} size={22} />
+                </span>
+                <h3>{step.title}</h3>
+                <p>{step.text}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section className="lp-section" id="learn">
+        <div className="lp-wrap lp-split">
+          <div className="lp-split__copy">
+            <p className="lp-eyebrow">Learn</p>
             <h2>A daily path, built around your level</h2>
             <p>
-              Short lessons with choose, fill-in, type, order and match exercises. Earn XP, keep your streak and unlock the
-              next lesson. Each day the AI adds new words pitched at your current band, and a spaced-repetition review
-              brings them back before you forget.
+              Short lessons with choose, fill-in, type, order and match exercises. Earn XP, keep your streak and unlock
+              the next lesson. Each day the AI adds words pitched at your current band, and a spaced review brings them
+              back before you forget.
             </p>
-            <ul className="tick-list">
+            <ul className="lp-ticks">
               <li>Lessons start at the right level for you</li>
               <li>New vocabulary every day, saved to your notebook</li>
-              <li>Built-in dictionary with Vietnamese meanings and examples</li>
+              <li>A built-in dictionary with Vietnamese meanings and examples</li>
             </ul>
           </div>
           <PathPreview />
         </div>
       </section>
 
-      <section className="band" id="marking">
-        <div className="band__inner split split--reverse">
-          <JudgePreview />
-          <div>
-            <p className="eyebrow">AI marking</p>
+      <section className="lp-section lp-section--white" id="marking">
+        <div className="lp-wrap lp-split lp-split--reverse">
+          <JudgeReport />
+          <div className="lp-split__copy">
+            <p className="lp-eyebrow">AI marking</p>
             <h2>Two judges, one consensus band</h2>
             <p>
               Submit a Writing or Speaking task and it is marked at once. Judge01 and Judge02 each score the four public
-              criteria independently after being briefed on the same rubric; you see both opinions, the consensus band,
-              corrections and a short summary in Vietnamese.
+              criteria independently after the same rubric briefing. You see both opinions, the consensus, corrections and
+              a short summary in Vietnamese.
             </p>
-            <p className="muted small">
+            <ul className="lp-ticks">
+              <li>The rubric brief is attached to every single request</li>
+              <li>If the judges disagree by a band or more, it is flagged</li>
+              <li>A teacher’s band always overrides the AI</li>
+            </ul>
+            <p className="lp-note">
               AI marking is an estimate for study. It is consistent and fast, but it is not an examiner and it can be
-              wrong, so use it to find what to fix next.
+              wrong. Use it to find what to fix next.
             </p>
           </div>
         </div>
       </section>
 
-      <section className="band band--dark" id="exam">
-        <div className="band__inner">
-          <header className="band__head">
-            <p className="eyebrow">Exam conditions</p>
+      <section className="lp-exam" id="exam">
+        <div className="lp-wrap">
+          <header className="lp-head lp-head--center">
+            <p className="lp-eyebrow">Exam conditions</p>
             <h2>Practise under pressure, not in a comfort zone</h2>
           </header>
-          <div className="trio">
+          <div className="lp-trio">
             <article>
-              <Icon name="clock" size={22} />
+              <span><Icon name="clock" size={22} /></span>
               <h3>Server-side timer</h3>
-              <p>Time is kept by the server, so refreshing or changing your clock never buys extra minutes.</p>
+              <p>Time is kept by the server, so refreshing the page or changing your clock never buys extra minutes.</p>
             </article>
             <article>
-              <Icon name="lock" size={22} />
+              <span><Icon name="lock" size={22} /></span>
               <h3>Tab lock</h3>
               <p>
-                Leaving the exam tab is counted and you are stopped when you come back. At three strikes the attempt is
+                Leaving the exam tab is counted and you are stopped when you return. At three strikes the attempt is
                 submitted. A browser cannot block other apps, so Ai eo records it instead.
               </p>
             </article>
             <article>
-              <Icon name="check" size={22} />
+              <span><Icon name="checkCircle" size={22} /></span>
               <h3>Nothing is lost</h3>
               <p>Answers and essays autosave, and an unsent essay is also kept on your device until it reaches the server.</p>
             </article>
@@ -288,38 +517,71 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="band" id="teachers">
-        <div className="band__inner">
-          <header className="band__head">
-            <p className="eyebrow">For teachers</p>
+      <section className="lp-section" id="teachers">
+        <div className="lp-wrap">
+          <header className="lp-head lp-head--center">
+            <p className="lp-eyebrow">For teachers</p>
             <h2>Classrooms without the spreadsheet</h2>
           </header>
-          <div className="trio trio--light">
+          <div className="lp-trio lp-trio--light">
             <article>
-              <Icon name="users" size={22} />
+              <span><Icon name="users" size={22} /></span>
               <h3>Classrooms and invitations</h3>
               <p>Create a class, share a code and keep every class isolated. Teachers only ever see their own students.</p>
             </article>
             <article>
-              <Icon name="calendar" size={22} />
+              <span><Icon name="calendar" size={22} /></span>
               <h3>Assignments with rules</h3>
               <p>Deadlines, attempt limits, timing and result-release policy per assignment, plus per-class tab-lock settings.</p>
             </article>
             <article>
-              <Icon name="trendingUp" size={22} />
+              <span><Icon name="trendingUp" size={22} /></span>
               <h3>Reports that stay honest</h3>
               <p>Band distributions, task-type accuracy and observable integrity events, never a verdict about a candidate.</p>
             </article>
           </div>
-          <div className="cta-strip">
-            <div>
-              <strong>Ready for your first test?</strong>
-              <span>It takes under a minute to create an account.</span>
-            </div>
-            <Link className="btn btn--primary btn--lg" to="/register">
-              Create a free account
-            </Link>
+        </div>
+      </section>
+
+      <section className="lp-section lp-section--white" id="faq">
+        <div className="lp-wrap lp-faq">
+          <header className="lp-head">
+            <p className="lp-eyebrow">Questions</p>
+            <h2>Before you start</h2>
+            <p>The honest answers, including what Ai eo cannot do.</p>
+          </header>
+          <div className="lp-faq__list">
+            {FAQ.map((item, index) => (
+              <details key={item.q} open={index === 0}>
+                <summary>
+                  {item.q}
+                  <Icon name="chevronDown" size={18} strokeWidth={2.2} />
+                </summary>
+                <p>{item.a}</p>
+              </details>
+            ))}
           </div>
+        </div>
+      </section>
+
+      <section className="lp-cta">
+        <div className="lp-wrap lp-cta__inner">
+          <div>
+            <h2>Ready for your first paper?</h2>
+            <p>Creating an account takes under a minute. Your first test is one tap away.</p>
+            <div className="lp-cta__actions">
+              <Link className="btn btn--lg lp-cta__primary" to="/register">
+                Create an account
+                <Icon name="arrowRight" size={18} strokeWidth={2.4} />
+              </Link>
+              <Link className="btn btn--lg lp-cta__ghost" to="/login">
+                Sign in
+              </Link>
+            </div>
+          </div>
+          <span className="lp-cta__mark" aria-hidden="true">
+            <BrandMark theme="brand" size={168} />
+          </span>
         </div>
       </section>
     </div>
@@ -353,8 +615,16 @@ function AuthScreen({
   return (
     <div className="auth">
       <aside className="auth__panel">
-        <span className="auth__eyebrow">{eyebrow}</span>
-        <div>
+        <span className="auth__bars" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
+        <Link to="/" className="auth__brand" aria-label="Ai eo home">
+          <BrandLogo theme="brand" height={34} />
+        </Link>
+        <div className="auth__pitch">
+          <span className="auth__eyebrow">{eyebrow}</span>
           <h2 className="auth__title">{title}</h2>
           <p className="auth__lede">{lede}</p>
         </div>
@@ -362,7 +632,7 @@ function AuthScreen({
           {points.map((point) => (
             <li key={point.title}>
               <span className="auth__tick" aria-hidden="true">
-                <Icon name="check" size={12} strokeWidth={3} />
+                <Icon name="check" size={12} strokeWidth={3.2} />
               </span>
               <span>
                 <strong>{point.title}</strong>
@@ -736,10 +1006,13 @@ export function JoinPage() {
 export function NotFoundPage() {
   return (
     <div className="notfound">
+      <span className="notfound__mark">
+        <BrandMark size={56} />
+      </span>
       <p className="notfound__code">404</p>
       <h1>Page not found</h1>
-      <p className="muted">The page you requested does not exist.</p>
-      <Link className="btn btn--primary" to="/">
+      <p className="muted">The page you requested does not exist or has moved.</p>
+      <Link className="btn btn--primary btn--lg" to="/">
         Back to the start
       </Link>
     </div>
