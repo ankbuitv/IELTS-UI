@@ -57,6 +57,28 @@ export function LearnPage() {
   const [dailyBusy, setDailyBusy] = useState(false);
   const [planBusy, setPlanBusy] = useState(false);
   const [openLesson, setOpenLesson] = useState<string | null>(null);
+  // Words the learner has marked as already known: skipped from the daily list, kept for redo.
+  const [knownWords, setKnownWords] = useState<Set<string>>(() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem('aieo.word-known') ?? '[]'));
+    } catch {
+      return new Set<string>();
+    }
+  });
+  const [hideKnown, setHideKnown] = useState(false);
+  const toggleKnown = (term: string) => {
+    setKnownWords((prev) => {
+      const next = new Set(prev);
+      if (next.has(term)) next.delete(term);
+      else next.add(term);
+      try {
+        localStorage.setItem('aieo.word-known', JSON.stringify([...next]));
+      } catch {
+        // Private mode: the mark just won't persist.
+      }
+      return next;
+    });
+  };
   const [bandOpenModal, setBandOpenModal] = useState(false);
   const askedForWords = useRef(false);
 
@@ -222,28 +244,49 @@ export function LearnPage() {
           <section className="card learn-card">
             <header className="learn-card__head">
               <h2>Today’s words</h2>
-              <Button size="sm" variant="ghost" onClick={() => void moreWords()} loading={dailyBusy}>
-                <Icon name="plus" size={13} />5 more
-              </Button>
+              <div className="row">
+                <Button size="sm" variant="ghost" onClick={() => setHideKnown((value) => !value)}>
+                  <Icon name="eye" size={13} />
+                  {hideKnown ? 'Showing all' : 'Hide known'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => void moreWords()} loading={dailyBusy}>
+                  <Icon name="plus" size={13} />5 more
+                </Button>
+              </div>
             </header>
             {dailyBusy && !daily ? (
               <p className="muted small">Choosing words for your band…</p>
             ) : daily && daily.words.length > 0 ? (
               <ul className="daily-words">
-                {daily.words.slice(0, 6).map((word) => (
-                  <li key={word.id}>
-                    <div className="daily-words__top">
-                      <b>{word.term}</b>
-                      {word.pos ? <span className="muted tiny">{word.pos}</span> : null}
-                      {canSpeak() ? (
-                        <button type="button" className="vocab-item__speak" onClick={() => speak(word.term)} aria-label={`Hear “${word.term}”`}>
-                          <Icon name="play" size={10} />
-                        </button>
-                      ) : null}
-                    </div>
-                    <span className="daily-words__vi">{word.meaningVi || word.meaning}</span>
-                  </li>
-                ))}
+                {daily.words
+                  .filter((word) => !hideKnown || !knownWords.has(word.term))
+                  .slice(0, 6)
+                  .map((word) => {
+                    const isKnown = knownWords.has(word.term);
+                    return (
+                      <li key={word.id} style={isKnown ? { opacity: 0.5 } : undefined}>
+                        <div className="daily-words__top">
+                          <b>{word.term}</b>
+                          {word.pos ? <span className="muted tiny">{word.pos}</span> : null}
+                          {canSpeak() ? (
+                            <button type="button" className="vocab-item__speak" onClick={() => speak(word.term)} aria-label={`Hear “${word.term}”`}>
+                              <Icon name="play" size={10} />
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="vocab-item__speak"
+                            onClick={() => toggleKnown(word.term)}
+                            aria-label={isKnown ? `Mark “${word.term}” as still learning` : `Mark “${word.term}” as known`}
+                            title={isKnown ? 'Still learning' : 'I know this'}
+                          >
+                            <Icon name={isKnown ? 'rotate' : 'check'} size={10} />
+                          </button>
+                        </div>
+                        <span className="daily-words__vi">{word.meaningVi || word.meaning}</span>
+                      </li>
+                    );
+                  })}
               </ul>
             ) : (
               <p className="muted small">New words are added here each day. They are saved to your notebook automatically.</p>
