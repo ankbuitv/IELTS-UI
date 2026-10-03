@@ -121,20 +121,42 @@ export function AiMarkPanel({ mark, heading }: { mark: AiMarkView; heading?: str
         </div>
       ) : null}
 
-      {corrections.length > 0 ? (
+      {corrections.some((correction) => correction.isActualError !== false) ? (
         <div className="aimark__corrections">
           <h4>Corrections</h4>
-          {corrections.map((correction, index) => (
-            <div key={`${correction.original}-${index}`} className="correction-row">
-              <span>
-                <del>{correction.original}</del>
-              </span>
-              <span>
-                <ins>{correction.suggestion}</ins>
-              </span>
-              {correction.reason ? <span className="correction-row__reason">{correction.reason}</span> : null}
-            </div>
-          ))}
+          {corrections
+            .filter((correction) => correction.isActualError !== false)
+            .map((correction, index) => (
+              <div key={`${correction.original}-${index}`} className="correction-row">
+                <span>
+                  <del>{correction.original}</del>
+                </span>
+                <span>
+                  <ins>{correction.suggestion}</ins>
+                </span>
+                {correction.reason ? <span className="correction-row__reason">{correction.reason}</span> : null}
+              </div>
+            ))}
+        </div>
+      ) : null}
+
+      {corrections.some((correction) => correction.isActualError === false) ? (
+        <div className="aimark__corrections">
+          <h4>Suggestions</h4>
+          <p className="tiny muted" style={{ margin: '0 0 6px' }}>
+            These are optional — your original wording is already correct.
+          </p>
+          {corrections
+            .filter((correction) => correction.isActualError === false)
+            .map((correction, index) => (
+              <div key={`s-${correction.original}-${index}`} className="correction-row">
+                <span>{correction.original}</span>
+                <span>
+                  <ins>{correction.suggestion}</ins>
+                </span>
+                {correction.reason ? <span className="correction-row__reason">{correction.reason}</span> : null}
+              </div>
+            ))}
         </div>
       ) : null}
 

@@ -372,11 +372,20 @@ export function normaliseGrade(
       ? correctionsRaw
           .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
           .slice(0, 12)
-          .map((item) => ({
-            original: String(pick(item, 'original', 'from', 'text', 'error', 'incorrect', 'before') ?? '').slice(0, 500),
-            suggestion: String(pick(item, 'suggestion', 'corrected', 'correction', 'better', 'improved', 'fix', 'after') ?? '').slice(0, 500),
-            reason: String(pick(item, 'reason', 'explanation', 'why', 'note') ?? '').slice(0, 500),
-          }))
+          .map((item) => {
+            const isActualErrorRaw = pick(item, 'isActualError', 'is_actual_error', 'actualError', 'isError');
+            const confidenceRaw = pick(item, 'confidence', 'score');
+            const confidence = typeof confidenceRaw === 'number' ? confidenceRaw : Number.parseFloat(String(confidenceRaw ?? ''));
+            return {
+              original: String(pick(item, 'original', 'from', 'text', 'error', 'incorrect', 'before') ?? '').slice(0, 500),
+              suggestion: String(pick(item, 'suggestion', 'corrected', 'correction', 'better', 'improved', 'fix', 'after') ?? '').slice(0, 500),
+              reason: String(pick(item, 'reason', 'explanation', 'why', 'note') ?? '').slice(0, 500),
+              // Absent (older scores or a model that ignored the field) counts as a genuine error.
+              isActualError: typeof isActualErrorRaw === 'boolean' ? isActualErrorRaw : true,
+              category: String(pick(item, 'category', 'type', 'kind') ?? '').slice(0, 40) || undefined,
+              confidence: Number.isFinite(confidence) ? confidence : undefined,
+            };
+          })
           .filter((item) => item.original && item.suggestion)
       : [],
     vocabulary: readVocabulary(pick(raw, 'vocabulary', 'vocab', 'words', 'suggestedVocabulary')),

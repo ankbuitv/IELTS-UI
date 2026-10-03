@@ -98,11 +98,12 @@ const WRITING_OUTPUT = `OUTPUT FORMAT (valid JSON, exactly these keys)
  "feedbackVi": "1 to 2 sentences in Vietnamese giving the main message",
  "strengths": ["2 to 4 specific strengths"],
  "improvements": ["2 to 4 concrete, actionable improvements"],
- "corrections": [{"original": "words copied EXACTLY from the response", "suggestion": "improved version", "reason": "short reason"}],
+ "corrections": [{"original": "words copied EXACTLY from the response", "suggestion": "improved version", "reason": "short reason", "isActualError": true, "category": "GRAMMAR|VOCABULARY|STYLE|PUNCTUATION|SPELLING", "confidence": 0.0}],
  "vocabulary": [{"term": "word or collocation", "pos": "noun|verb|adjective|adverb|phrase", "meaning": "short English definition", "meaningVi": "nghia tieng Viet ngan gon", "example": "one example sentence"}],
  "notes": ["anything the candidate must know, or an empty list"]
 }
 Rules for the lists:
+- Set "isActualError" to false for any item that is only a stylistic alternative (the original is grammatically acceptable); those are shown to the candidate as suggestions, not errors. Set "confidence" to how sure you are (0 to 1).
 - "corrections" holds GENUINE language errors only, up to 6 items, and each "original" must be a verbatim excerpt. It MAY be an empty list. Do not invent an error merely to have something to say. If the original wording is grammatically acceptable, do NOT list it as a correction — put an optional rephrasing in "improvements" instead. Never call a stylistic alternative a grammar error, and use precise terminology (a restrictive relative clause needs no comma; a relative clause is not a "dangling modifier").
 - "vocabulary" has 3 to 5 items pitched about half a band above the level THIS response demonstrates and useful for THIS topic; never repeat words the candidate already used well.`;
 
@@ -201,7 +202,7 @@ const SPEAKING_OUTPUT = `OUTPUT FORMAT (valid JSON, exactly these keys)
  "feedbackVi": "1 to 2 sentences in Vietnamese giving the main message",
  "strengths": ["2 to 4 specific strengths"],
  "improvements": ["2 to 4 concrete, actionable improvements"],
- "corrections": [{"original": "words copied EXACTLY from the transcript", "suggestion": "improved version", "reason": "short reason"}],
+ "corrections": [{"original": "words copied EXACTLY from the transcript", "suggestion": "improved version", "reason": "short reason", "isActualError": true, "category": "GRAMMAR|VOCABULARY|STYLE|PUNCTUATION|SPELLING", "confidence": 0.0}],
  "vocabulary": [{"term": "word or collocation", "pos": "noun|verb|adjective|adverb|phrase", "meaning": "short English definition", "meaningVi": "nghia tieng Viet ngan gon", "example": "one example sentence"}],
  "notes": ["pronunciation was not assessed from the transcript", "..."]
 }
