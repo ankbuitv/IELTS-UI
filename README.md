@@ -105,8 +105,12 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
 
 - A Duolingo-style **Learn path** (`/learn`): units of short lessons mixing
   choose, match, fill-in, listen, type and word-order exercises, with hearts,
-  XP, stars, a daily goal and a streak. The path opens at the learner's level
-  (from recent bands, or chosen between band 4 and 7).
+  XP, stars, a daily goal and a streak. Every lesson is tagged with a half band
+  on a **4.0–8.0 ladder** and lives in the `learn_lessons` table — seeded from
+  the built-in content the first time the catalogue is read — so lessons can be
+  published at any band without a deploy and no lesson text ships in the browser
+  bundle. The path opens at the learner's band (estimated from their recent test
+  bands, or chosen by them) and each band unlocks one lesson at a time.
 - **AI daily vocabulary**: new words pitched about half a band above the
   learner, plus the words the judges suggest from their own writing and
   speaking, saved to the notebook and revised with Leitner spaced review.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { lessonById } from '@shared/learn-content';
-import { buildLesson, buildReviewLesson } from '@shared/learn-engine';
+import type { LessonPlayPayload, LessonWord } from '@shared/learn';
+import { buildLessonFromPayload, buildReviewLesson } from '@shared/learn-engine';
 import { LessonPlayer, useLessonSeed, type LessonFinish } from '../../components/learn/LessonPlayer';
 import { Icon } from '../../components/Icon';
 import { Loading, Notice } from '../../components/ui';
@@ -12,9 +12,41 @@ import { describeError } from '../../lib/api';
 export function LessonPage() {
   const { lessonId = '' } = useParams();
   const navigate = useNavigate();
-  const lesson = lessonById(lessonId);
   const [seed, restart] = useLessonSeed(lessonId);
-  const exercises = useMemo(() => (lesson ? buildLesson(lesson.words, seed) : []), [lesson, seed]);
+  const [lesson, setLesson] = useState<LessonPlayPayload | null>(null);
+  const [missing, setMissing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Lessons live in the catalogue now, so the body is fetched rather than read
+  // from the bundle. The seed stays local, so restarting a lesson still gives a
+  // fresh but reproducible set of exercises without another request. State is
+  // only written from the async callbacks; while a new lesson is in flight the
+  // previous one is ignored by the `lesson.id === lessonId` guard below, so no
+  // synchronous reset is needed here.
+  useEffect(() => {
+    let cancelled = false;
+    learnApi
+      .lesson(lessonId)
+      .then((result) => {
+        if (cancelled) return;
+        setLesson(result.lesson);
+        setMissing(false);
+        setError(null);
+      })
+      .catch((cause) => {
+        if (cancelled) return;
+        if (describeError(cause).toLowerCase().includes('does not exist')) setMissing(true);
+        else setError(describeError(cause));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lessonId]);
+
+  const exercises = useMemo(
+    () => (lesson && lesson.id === lessonId ? buildLessonFromPayload(lesson.payload, seed, { pool: lesson.pool }) : []),
+    [lesson, seed, lessonId],
+  );
 
   const finish = useCallback(
     async (score: { correct: number; total: number; mistakes: string[] }): Promise<LessonFinish> => {
@@ -29,7 +61,21 @@ export function LessonPage() {
     [lessonId],
   );
 
-  if (!lesson) return <Navigate to="/learn" replace />;
+  if (missing) return <Navigate to="/learn" replace />;
+  if (error) {
+    return (
+      <div className="lesson">
+        <div className="lesson__end">
+          <Notice tone="danger">{error}</Notice>
+          <Link className="btn" to="/learn">
+            Back to Learn
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  // A lesson that belongs to the previous id is treated as still loading.
+  if (!lesson || lesson.id !== lessonId) return <Loading label="Opening the lesson…" />;
   return (
     <LessonPlayer
       key={seed}
@@ -46,6 +92,7 @@ export function LessonPage() {
 export function ReviewPage() {
   const navigate = useNavigate();
   const [words, setWords] = useState<ReviewWord[] | null>(null);
+  const [pool, setPool] = useState<LessonWord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [seed, restart] = useLessonSeed('review');
 
@@ -53,7 +100,10 @@ export function ReviewPage() {
     setWords(null);
     learnApi
       .reviewWords()
-      .then((result) => setWords(result.words))
+      .then((result) => {
+        setWords(result.words);
+        setPool(result.pool ?? []);
+      })
       .catch((loadError) => setError(describeError(loadError)));
   }, []);
   useEffect(() => load(), [load]);
@@ -70,9 +120,10 @@ export function ReviewPage() {
               example: word.example || `${word.term}.`,
             })),
             seed,
+            pool,
           )
         : [],
-    [words, seed],
+    [words, seed, pool],
   );
 
   const finish = useCallback(

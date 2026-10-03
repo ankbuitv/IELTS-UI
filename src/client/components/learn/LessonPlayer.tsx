@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   MAX_HEARTS,
   checkOrder,
+  checkSentence,
   checkTyped,
   correctAnswerText,
   scoreLesson,
@@ -9,7 +10,11 @@ import {
   type LessonScore,
   type MatchExercise,
   type OrderExercise,
+  type ParaphraseExercise,
+  type ReadExercise,
+  type SpeakExercise,
   type TypeExercise,
+  type WriteExercise,
 } from '@shared/learn-engine';
 import { canSpeak, speak } from '../../lib/speech';
 import { Icon } from '../Icon';
@@ -300,8 +305,14 @@ function ExerciseView(props: ViewProps) {
       return <OrderExerciseView {...props} exercise={exercise} />;
     case 'match':
       return <MatchExerciseView {...props} exercise={exercise} />;
-    default:
-      return null;
+    case 'paraphrase':
+      return <ParaphraseExerciseView {...props} exercise={exercise} />;
+    case 'read':
+      return <ReadExerciseView {...props} exercise={exercise} />;
+    case 'write':
+      return <WriteExerciseView {...props} exercise={exercise} />;
+    case 'speak':
+      return <SpeakExerciseView {...props} exercise={exercise} />;
   }
 }
 
@@ -531,6 +542,192 @@ function MatchExerciseView({ exercise, disabled, registerSubmit, onAnswered }: V
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Pick the restatement that keeps the meaning. */
+function ParaphraseExerciseView({ exercise, disabled, verdict, registerSubmit, onAnswered }: ViewProps & { exercise: ParaphraseExercise }) {
+  const [picked, setPicked] = useState<number | null>(null);
+  useEffect(() => {
+    registerSubmit(() => (picked === null ? null : { correct: picked === exercise.answer }));
+  }, [picked, exercise.answer, registerSubmit]);
+  useEffect(() => onAnswered(picked !== null), [picked, onAnswered]);
+
+  return (
+    <div>
+      <p className="lesson__kicker">Choose the sentence that means the same</p>
+      <h1 className="lesson__prompt lesson__prompt--sentence">{exercise.prompt}</h1>
+      <div className="lesson__options" role="radiogroup">
+        {exercise.options.map((option, index) => {
+          const state =
+            disabled && verdict
+              ? index === exercise.answer
+                ? ' is-right'
+                : index === picked
+                  ? ' is-wrong'
+                  : ''
+              : picked === index
+                ? ' is-picked'
+                : '';
+          return (
+            <button
+              key={option}
+              type="button"
+              role="radio"
+              aria-checked={picked === index}
+              className={`lesson__option${state}`}
+              disabled={disabled}
+              onClick={() => setPicked(index)}
+            >
+              <span className="lesson__key">{index + 1}</span>
+              <span>{option}</span>
+            </button>
+          );
+        })}
+      </div>
+      {verdict && !verdict.correct ? <p className="lesson__note">{exercise.note}</p> : null}
+    </div>
+  );
+}
+
+/** A short passage with four-option questions; the passage stays on screen. */
+function ReadExerciseView({ exercise, disabled, verdict, registerSubmit, onAnswered }: ViewProps & { exercise: ReadExercise }) {
+  const [picked, setPicked] = useState<number | null>(null);
+  useEffect(() => {
+    registerSubmit(() => (picked === null ? null : { correct: picked === exercise.answer }));
+  }, [picked, exercise.answer, registerSubmit]);
+  useEffect(() => onAnswered(picked !== null), [picked, onAnswered]);
+
+  return (
+    <div>
+      <p className="lesson__kicker">Read and answer</p>
+      <div className="lesson__passage">{exercise.passage}</div>
+      <h1 className="lesson__prompt lesson__prompt--sentence">{exercise.stem}</h1>
+      <div className="lesson__options" role="radiogroup">
+        {exercise.options.map((option, index) => {
+          const state =
+            disabled && verdict
+              ? index === exercise.answer
+                ? ' is-right'
+                : index === picked
+                  ? ' is-wrong'
+                  : ''
+              : picked === index
+                ? ' is-picked'
+                : '';
+          return (
+            <button
+              key={option}
+              type="button"
+              role="radio"
+              aria-checked={picked === index}
+              className={`lesson__option${state}`}
+              disabled={disabled}
+              onClick={() => setPicked(index)}
+            >
+              <span className="lesson__key">{index + 1}</span>
+              <span>{option}</span>
+            </button>
+          );
+        })}
+      </div>
+      {verdict ? <p className="lesson__note">In the passage: “{exercise.evidence}”</p> : null}
+    </div>
+  );
+}
+
+/** Turn a Vietnamese instruction into an English sentence. */
+function WriteExerciseView({ exercise, disabled, verdict, registerSubmit, onAnswered }: ViewProps & { exercise: WriteExercise }) {
+  const [value, setValue] = useState('');
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => inputRef.current?.focus(), []);
+  useEffect(() => {
+    registerSubmit(() => (value.trim() ? checkSentence(value, exercise.answer) : null));
+  }, [value, exercise.answer, registerSubmit]);
+  useEffect(() => onAnswered(value.trim().length > 0), [value, onAnswered]);
+
+  return (
+    <div>
+      <p className="lesson__kicker">Write the sentence</p>
+      <h1 className="lesson__prompt lesson__prompt--sentence">{exercise.instruction}</h1>
+      {exercise.hint ? <p className="lesson__hint muted">{exercise.hint}</p> : null}
+      <textarea
+        ref={inputRef}
+        className="lesson__textarea"
+        rows={3}
+        value={value}
+        disabled={disabled}
+        placeholder="Type the English sentence…"
+        onChange={(event) => setValue(event.target.value)}
+      />
+      {verdict && !verdict.correct ? <p className="lesson__note">Model answer: {exercise.answer}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * Answer a question aloud, then compare with a model.
+ *
+ * Nothing here grades speech — the learner judges their own answer against the
+ * model, and that judgement is what is scored. Pretending otherwise would put a
+ * number on the screen that means nothing.
+ */
+function SpeakExerciseView({ exercise, disabled, verdict, registerSubmit, onAnswered }: ViewProps & { exercise: SpeakExercise }) {
+  const [revealed, setRevealed] = useState(false);
+  const [said, setSaid] = useState<boolean | null>(null);
+  useEffect(() => {
+    registerSubmit(() => (said === null ? null : { correct: said }));
+  }, [said, registerSubmit]);
+  useEffect(() => onAnswered(said !== null), [said, onAnswered]);
+
+  return (
+    <div>
+      <p className="lesson__kicker">Answer out loud</p>
+      <h1 className="lesson__prompt lesson__prompt--sentence">{exercise.question}</h1>
+      <div className="row">
+        {canSpeak() ? (
+          <Button size="sm" onClick={() => speak(exercise.question, 0.85)}>
+            <Icon name="play" size={13} /> Hear it
+          </Button>
+        ) : null}
+        {!revealed ? (
+          <Button size="sm" onClick={() => setRevealed(true)}>
+            Show model answer
+          </Button>
+        ) : null}
+      </div>
+      {exercise.cue ? <p className="lesson__hint muted">A good answer covers: {exercise.cue}</p> : null}
+      {revealed ? (
+        <>
+          <div className="lesson__sample">{exercise.sample}</div>
+          <p className="lesson__retry">Did you say something like this?</p>
+          <div className="lesson__options" role="radiogroup">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={said === true}
+              className={`lesson__option${said === true ? ' is-picked' : ''}${disabled && verdict ? (said === true ? ' is-right' : '') : ''}`}
+              disabled={disabled}
+              onClick={() => setSaid(true)}
+            >
+              <span className="lesson__key">1</span>
+              <span>Yes, roughly</span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={said === false}
+              className={`lesson__option${said === false ? ' is-picked' : ''}${disabled && verdict ? (said === false ? ' is-wrong' : ' is-right') : ''}`}
+              disabled={disabled}
+              onClick={() => setSaid(false)}
+            >
+              <span className="lesson__key">2</span>
+              <span>Not yet</span>
+            </button>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

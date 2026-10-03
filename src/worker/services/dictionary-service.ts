@@ -6,7 +6,7 @@ import { describeAiFailure } from '../ai/failure';
 import { AI_NOT_CONFIGURED_MESSAGE } from '../ai/judges';
 import { DICTIONARY_WORD_PATTERN, buildDictionaryMessages } from '../ai/coach-prompts';
 import { findBankWord } from '../../shared/learn-content';
-import type { DictionaryEntry, DictionaryMeaning } from '../../shared/learn';
+import type { DictionaryEntry, DictionaryMeaning, LearnBand } from '../../shared/learn';
 
 /**
  * Dictionary look-up.
@@ -17,7 +17,22 @@ import type { DictionaryEntry, DictionaryMeaning } from '../../shared/learn';
  * resort when the AI is unavailable. Whatever answers is cached, because a word
  * means the same thing for everybody. The AI is never named in the result.
  */
-const CEFR_FOR_LEVEL = { 4: 'B1', 5: 'B1', 6: 'B2', 7: 'C1' } as const;
+/**
+ * Rough CEFR equivalent of a rung on the 4.0–8.0 ladder, for the label shown on
+ * a dictionary entry. The whole-number mappings are unchanged from the old
+ * four-tier table; each half band sits on the rung above it.
+ */
+const CEFR_FOR_BAND: Record<LearnBand, string> = {
+  4: 'B1',
+  4.5: 'B1',
+  5: 'B1',
+  5.5: 'B2',
+  6: 'B2',
+  6.5: 'B2',
+  7: 'C1',
+  7.5: 'C1',
+  8: 'C2',
+};
 
 export function normaliseLookupTerm(raw: string): string {
   return raw.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -76,7 +91,7 @@ function fromBank(term: string): DictionaryEntry | null {
   return {
     term: word.term,
     phonetic: '',
-    level: CEFR_FOR_LEVEL[word.level],
+    level: CEFR_FOR_BAND[word.band],
     meanings: [
       {
         pos: word.pos,

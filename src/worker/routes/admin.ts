@@ -8,7 +8,11 @@ import { assertCsrf, assertSameOrigin, clientIp } from '../lib/http';
 import { parseBody, parseQuery } from '../lib/validate';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { currentUser } from '../middleware/auth';
+import { enforceRateLimit } from '../lib/rate-limit';
 import { recordAudit } from '../lib/audit';
+import { deleteLesson, listLessonsForAdmin, setLessonStatus } from '../services/learn-catalogue-service';
+import { generateLessons } from '../services/learn-generation-service';
+import { isLearnBand, type LearnBand } from '../../shared/learn';
 import { newId, nowIso } from '../lib/ids';
 import { hashPassword } from '../lib/crypto';
 import {
@@ -1595,6 +1599,100 @@ router.delete('/assets/:id', async (c) => {
     ip: clientIp(c),
   });
 
+  return c.json({ ok: true });
+});
+
+// ---------------------------------------------------------------- learn lessons
+/**
+ * Managing the learning catalogue.
+ *
+ * Generated lessons land as DRAFT: this is teaching material, and a wrong answer
+ * key is worse than a missing lesson, so a person reads a batch before any
+ * learner sees it. Nothing here names the provider that produced a lesson.
+ */
+router.get('/learn/lessons', async (c) => {
+  const { band, status, kind } = parseQuery(
+    c,
+    z.object({
+      band: z.coerce.number().optional(),
+      status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
+      kind: z.enum(['VOCAB', 'PARAPHRASE', 'READING', 'WRITING', 'SPEAKING']).optional(),
+    }),
+  );
+  if (band !== undefined && !isLearnBand(band)) throw ApiError.validation('Choose a band between 4.0 and 8.0.');
+  return c.json({
+    lessons: await listLessonsForAdmin(c.env, {
+      band: (band ?? null) as LearnBand | null,
+      status: status ?? null,
+      kind: kind ?? null,
+    }),
+  });
+});
+
+router.post('/learn/generate', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      band: z.number().min(4).max(8),
+      kind: z.enum(['VOCAB', 'PARAPHRASE', 'READING', 'WRITING', 'SPEAKING']),
+      count: z.number().int().min(1).max(4).default(1),
+      unitTitle: z.string().min(1).max(80),
+      unitBlurb: z.string().max(160).optional(),
+      publish: z.boolean().default(false),
+    }),
+  );
+  if (!isLearnBand(body.band)) throw ApiError.validation('Choose a band from 4.0 to 8.0 in half bands.');
+  // One AI call per request; a burst here is a mis-click, not a workflow.
+  await enforceRateLimit(
+    c.env,
+    { bucket: `learn-generate:${actor.id}`, windowSeconds: 3600, limit: 30 },
+    'That is a lot of generated lessons in a short time. Try again in a little while.',
+  );
+  const unitKey = `gen-${body.band.toFixed(1)}-${body.kind.toLowerCase()}`.replace(/\./g, '_');
+  const result = await generateLessons(c.env, {
+    band: body.band,
+    kind: body.kind,
+    count: body.count,
+    unitKey,
+    unitTitle: body.unitTitle,
+    unitBlurb: body.unitBlurb,
+    publish: body.publish,
+    actorUserId: actor.id,
+  });
+  return c.json(result);
+});
+
+router.put('/learn/lessons/:id/status', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']) }));
+  const id = c.req.param('id');
+  await setLessonStatus(c.env, id, body.status);
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'LEARN_LESSON_STATUS',
+    entityType: 'learn_lesson',
+    entityId: id,
+    metadata: { status: body.status },
+    ip: clientIp(c),
+  });
+  return c.json({ ok: true });
+});
+
+router.delete('/learn/lessons/:id', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const id = c.req.param('id');
+  await deleteLesson(c.env, id);
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'LEARN_LESSON_ARCHIVE',
+    entityType: 'learn_lesson',
+    entityId: id,
+    ip: clientIp(c),
+  });
   return c.json({ ok: true });
 });
 
