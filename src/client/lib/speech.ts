@@ -139,3 +139,46 @@ export async function speak(text: string, rate = 0.9, preferredVoiceURI?: string
 export function speakNow(text: string, rate = 0.9) {
   void speak(text, rate);
 }
+
+/** Server voices are stored with a `srv:` prefix so a choice can name either kind. */
+export const isServerVoice = (choice: string | null): boolean => Boolean(choice && choice.startsWith('srv:'));
+export const serverVoiceOf = (choice: string): string => choice.slice(4);
+
+/** The provider voices the server can actually speak with; [] when none is configured. */
+export async function listServerVoices(): Promise<string[]> {
+  try {
+    const response = await fetch('/api/learn/speech/voices', { credentials: 'include' });
+    if (!response.ok) return [];
+    const data = (await response.json()) as { voices?: string[] };
+    return Array.isArray(data.voices) ? data.voices : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Plays text with a provider voice by streaming the generated audio.
+ * Resolves false when there is no provider or the download fails, so the caller
+ * can fall back to the browser's own engine.
+ */
+export async function speakWithServer(text: string, voice: string): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/learn/speech?${new URLSearchParams({ text, voice })}`, { credentials: 'include' });
+    if (!response.ok) return false;
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    return await new Promise<boolean>((resolve) => {
+      const element = new Audio(url);
+      const done = (ok: boolean) => {
+        URL.revokeObjectURL(url);
+        resolve(ok);
+      };
+      element.onended = () => done(true);
+      element.onerror = () => done(false);
+      void element.play().catch(() => done(false));
+    });
+  } catch {
+    return false;
+  }
+}
+

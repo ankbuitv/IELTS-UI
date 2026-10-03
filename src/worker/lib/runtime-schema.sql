@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 46   Indexes: 62
+-- Tables: 47   Indexes: 63
 -- =============================================================================
 
 -- table: users
@@ -740,6 +740,17 @@ CREATE TABLE IF NOT EXISTS learn_plan_items (
   created_at   TEXT NOT NULL
 );
 
+-- table: speech_cache
+CREATE TABLE IF NOT EXISTS speech_cache (
+  cache_key  TEXT PRIMARY KEY,
+  voice      TEXT NOT NULL,
+  text_hash  TEXT NOT NULL,
+  mime       TEXT NOT NULL,
+  data_b64   TEXT NOT NULL,
+  bytes      INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
 -- index: idx_users_role
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 
@@ -925,3 +936,6 @@ CREATE INDEX IF NOT EXISTS idx_learn_plans_user ON learn_plans (user_id, status)
 
 -- index: idx_learn_plan_items_day
 CREATE INDEX IF NOT EXISTS idx_learn_plan_items_day ON learn_plan_items (plan_id, day, slot);
+
+-- index: idx_speech_cache_created
+CREATE INDEX IF NOT EXISTS idx_speech_cache_created ON speech_cache (created_at);

@@ -16,7 +16,7 @@ import {
   type TypeExercise,
   type WriteExercise,
 } from '@shared/learn-engine';
-import { canSpeak, getPreferredVoiceURI, listEnglishVoices, setPreferredVoiceURI, speak } from '../../lib/speech';
+import { canSpeak, getPreferredVoiceURI, isServerVoice, listEnglishVoices, listServerVoices, serverVoiceOf, setPreferredVoiceURI, speak, speakWithServer } from '../../lib/speech';
 import { Icon } from '../Icon';
 import { Button } from '../ui';
 import { Stars } from './Stars';
@@ -320,14 +320,18 @@ function OptionExercise({ exercise, disabled, verdict, registerSubmit, onAnswere
   const [picked, setPicked] = useState<number | null>(null);
   const spoken = useRef(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [serverVoices, setServerVoices] = useState<string[]>([]);
   const [voiceURI, setVoiceURI] = useState<string | null>(getPreferredVoiceURI());
   const [audioFailed, setAudioFailed] = useState(false);
   const options = exercise.kind === 'choose' || exercise.kind === 'fill' || exercise.kind === 'listen' ? exercise.options : [];
   const answer = exercise.kind === 'choose' || exercise.kind === 'fill' || exercise.kind === 'listen' ? exercise.answer : -1;
 
+  const speakWith = (text: string, rate: number, choice: string | null) =>
+    isServerVoice(choice) ? speakWithServer(text, serverVoiceOf(choice as string)) : speak(text, rate, choice);
+
   const play = (rate = 0.9) => {
     setAudioFailed(false);
-    void speak(exercise.kind === 'listen' ? exercise.speak : '', rate, voiceURI).then((ok) => setAudioFailed(!ok));
+    void speakWith(exercise.kind === 'listen' ? exercise.speak : '', rate, voiceURI).then((ok) => setAudioFailed(!ok));
   };
 
   useEffect(() => {
@@ -338,9 +342,10 @@ function OptionExercise({ exercise, disabled, verdict, registerSubmit, onAnswere
   useEffect(() => {
     if (exercise.kind !== 'listen') return;
     void listEnglishVoices().then(setVoices);
+    void listServerVoices().then(setServerVoices);
     if (!spoken.current) {
       spoken.current = true;
-      void speak(exercise.speak, 0.9, voiceURI).then((ok) => setAudioFailed(!ok));
+      void speakWith(exercise.speak, 0.9, voiceURI).then((ok) => setAudioFailed(!ok));
     }
   }, [exercise, voiceURI]);
 
@@ -378,7 +383,7 @@ function OptionExercise({ exercise, disabled, verdict, registerSubmit, onAnswere
             <button type="button" className="lesson__speaker lesson__speaker--slow" onClick={() => play(0.55)} aria-label="Play slowly">
               <Icon name="rotate" size={20} />
             </button>
-            {voices.length > 1 ? (
+            {serverVoices.length > 0 || voices.length > 1 ? (
               <select
                 className="lesson__voice"
                 value={voiceURI ?? ''}
@@ -388,15 +393,29 @@ function OptionExercise({ exercise, disabled, verdict, registerSubmit, onAnswere
                   setVoiceURI(next);
                   setPreferredVoiceURI(next);
                   setAudioFailed(false);
-                  void speak(exercise.speak, 0.9, next).then((ok) => setAudioFailed(!ok));
+                  void speakWith(exercise.speak, 0.9, next).then((ok) => setAudioFailed(!ok));
                 }}
               >
                 {voiceURI === null ? <option value="">Default voice</option> : null}
-                {voices.map((voice) => (
-                  <option key={voice.voiceURI} value={voice.voiceURI}>
-                    {voice.name} ({voice.lang})
-                  </option>
-                ))}
+                {serverVoices.length > 0 ? (
+                  <optgroup label="AI voices">
+                    {serverVoices.map((voice) => (
+                      <option key={`srv:${voice}`} value={`srv:${voice}`}>
+                        {voice[0]?.toUpperCase()}
+                        {voice.slice(1)} (AI)
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {voices.length > 0 ? (
+                  <optgroup label="This device">
+                    {voices.map((voice) => (
+                      <option key={voice.voiceURI} value={voice.voiceURI}>
+                        {voice.name} ({voice.lang})
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
               </select>
             ) : null}
           </div>

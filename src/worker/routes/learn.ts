@@ -2,6 +2,9 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
 import { ApiError } from '../lib/errors';
+import { sha256Hex } from '../lib/crypto';
+import { nowIso } from '../lib/ids';
+import { SERVER_SPEECH_VOICES, synthesizeSpeechWithProvider } from '../ai/providers';
 import { assertCsrf, assertSameOrigin } from '../lib/http';
 import { enforceRateLimit } from '../lib/rate-limit';
 import { parseBody, parseQuery } from '../lib/validate';
@@ -206,6 +209,66 @@ learnRouter.post('/personal-lesson', async (c) => {
   const band = await getLearnBand(c.env, user.id);
   const lesson = await buildPersonalLesson(c.env, user.id, band);
   return c.json({ ...lesson, day });
+});
+
+// ----------------------------------------------------- generated practice audio
+/**
+ * The voices a configured provider can actually speak with. Empty when there is
+ * no provider, so the client then offers only the device's own voices.
+ */
+learnRouter.get('/speech/voices', async (c) => {
+  try {
+    await synthesizeSpeechWithProvider(c.env, 'ping', 'nova');
+    return c.json({ voices: [...SERVER_SPEECH_VOICES] });
+  } catch {
+    return c.json({ voices: [] });
+  }
+});
+
+/**
+ * Speaks a word or short sentence with a provider voice, cached.
+ *
+ * The first request for a (voice, text) pair pays the provider and the latency;
+ * the result is stored and every later request streams the identical bytes, so
+ * a word sounds the same on every device. Without a provider this is
+ * AI_UNAVAILABLE and the client falls back to its own speech engine.
+ */
+learnRouter.get('/speech', async (c) => {
+  const user = currentUser(c);
+  const { text, voice } = parseQuery(
+    c,
+    z.object({ text: z.string().trim().min(1).max(200), voice: z.string().min(1).max(24).default('nova') }),
+  );
+  const hash = await sha256Hex(text.toLowerCase());
+  const key = `${voice}:${hash}`;
+
+  const hit = await c.env.DB.prepare('SELECT data_b64, mime FROM speech_cache WHERE cache_key = ?')
+    .bind(key)
+    .first<{ data_b64: string; mime: string }>();
+  if (hit) {
+    return c.body(Buffer.from(hit.data_b64, 'base64'), 200, {
+      'content-type': hit.mime,
+      'cache-control': 'public, max-age=31536000',
+    });
+  }
+
+  await enforceRateLimit(
+    c.env,
+    { bucket: `learn-speech:${user.id}`, windowSeconds: 3600, limit: 200 },
+    'That is a lot of audio in a short time. Try again in a little while.',
+  );
+  const { bytes, mime } = await synthesizeSpeechWithProvider(c.env, text, voice);
+  const base64 = Buffer.from(new Uint8Array(bytes)).toString('base64');
+  await c.env.DB.prepare(
+    'INSERT OR REPLACE INTO speech_cache (cache_key, voice, text_hash, mime, data_b64, bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  )
+    .bind(key, voice, hash, mime, base64, bytes.byteLength, nowIso())
+    .run();
+
+  return c.body(new Uint8Array(bytes), 200, {
+    'content-type': mime,
+    'cache-control': 'public, max-age=31536000',
+  });
 });
 
 export const dictionaryRouter = new Hono<AppBindings>();
