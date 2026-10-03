@@ -96,10 +96,12 @@ function bandHint(test: CatalogTest): string {
   return '';
 }
 
-const SKILL_TILES: Array<{ type: string; skill: 'listening' | 'reading' | 'writing'; icon: IconName; label: string }> = [
+const SKILL_TILES: Array<{ type: string; skill: 'mock' | 'listening' | 'reading' | 'writing'; icon: IconName; label: string }> = [
+  { type: '', skill: 'mock', icon: 'layers', label: 'All tests' },
   { type: 'LISTENING', skill: 'listening', icon: 'headphones', label: 'Listening' },
   { type: 'READING', skill: 'reading', icon: 'book', label: 'Reading' },
   { type: 'WRITING', skill: 'writing', icon: 'pen', label: 'Writing' },
+  { type: 'FULL_MOCK', skill: 'mock', icon: 'award', label: 'Full mocks' },
 ];
 
 export function PracticePage() {
@@ -174,13 +176,6 @@ export function PracticePage() {
   if (loading) return <Loading label="Loading the published catalogue…" />;
   if (error) return <Notice tone="danger">{error}</Notice>;
 
-  const typeOptions = [
-    { id: '', label: 'All', count: counts[''] ?? 0 },
-    ...(['READING', 'LISTENING', 'WRITING', 'FULL_MOCK'] as const)
-      .filter((type) => (counts[type] ?? 0) > 0)
-      .map((type) => ({ id: type as string, label: TEST_TYPE_LABELS[type] ?? type, count: counts[type] ?? 0 })),
-  ];
-
   return (
     <div className="stack">
       <div className="page-head">
@@ -190,13 +185,13 @@ export function PracticePage() {
         </div>
       </div>
 
-      <div className="skill-tiles" role="group" aria-label="Practise by skill">
-        {SKILL_TILES.map((tile) => {
+      <div className="skill-tiles" role="group" aria-label="Filter by paper">
+        {SKILL_TILES.filter((tile) => tile.type !== 'FULL_MOCK' || (counts.FULL_MOCK ?? 0) > 0).map((tile) => {
           const count = counts[tile.type] ?? 0;
           const active = testType === tile.type;
           return (
             <button
-              key={tile.type}
+              key={tile.type || 'all'}
               type="button"
               className={`skill-tile skill-${tile.skill}${active ? ' is-on' : ''}`}
               aria-pressed={active}
@@ -225,8 +220,7 @@ export function PracticePage() {
         </Link>
       </div>
 
-      <div className="toolbar">
-        <Chips label="Test type" value={testType} onChange={setTestType} options={typeOptions} />
+      <div className="toolbar toolbar--end">
         <div className="toolbar__end">
           <label className="search">
             <Icon name="search" size={15} />

@@ -139,21 +139,32 @@ function SpeakingLobby({ onStarted }: { onStarted: (sessionId: string) => void }
             onClick={() => void start(topic.id)}
             disabled={starting !== null}
           >
+            <span className="topic-card__icon">
+              <Icon name="mic" size={20} strokeWidth={2} />
+            </span>
             <span className="topic-card__title">{topic.title}</span>
             <span className="topic-card__summary">{topic.summary}</span>
             <span className="topic-card__meta">
               <Badge tone="neutral">Part 1 · 2 · 3</Badge>
-              {starting === topic.id ? <Badge tone="accent">Đang tạo…</Badge> : null}
+              {starting === topic.id ? (
+                <Badge tone="accent">Đang tạo…</Badge>
+              ) : (
+                <Icon name="arrowRight" size={16} strokeWidth={2.2} className="topic-card__go" />
+              )}
             </span>
           </button>
         ))}
+        <button type="button" className="topic-card topic-card--random" onClick={() => void start()} disabled={starting !== null}>
+          <span className="topic-card__icon">
+            <Icon name="wand" size={20} strokeWidth={2} />
+          </span>
+          <span className="topic-card__text">
+            <span className="topic-card__title">Chủ đề ngẫu nhiên</span>
+            <span className="topic-card__summary">Không chọn gì cả: hệ thống lấy một bộ đề bất kỳ cho bạn.</span>
+          </span>
+          {starting === 'custom' ? <Badge tone="accent">Đang tạo…</Badge> : <Icon name="arrowRight" size={18} strokeWidth={2.2} className="topic-card__go" />}
+        </button>
       </div>
-
-      <Card title="Chủ đề ngẫu nhiên" hint="Không chọn gì cả — hệ thống sẽ lấy một bộ đề bất kỳ.">
-        <Button variant="secondary" loading={starting === 'custom'} onClick={() => void start()}>
-          <Icon name="wand" size={15} /> Bắt đầu với đề ngẫu nhiên
-        </Button>
-      </Card>
 
       <Card title="Lịch sử luyện nói" hint="Mỗi lần luyện được lưu lại cùng bản chép lời và nhận xét.">
         {history.loading ? <Loading label="Đang tải…" /> : null}

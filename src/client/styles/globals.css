@@ -183,10 +183,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 html { scroll-behavior: smooth; }
 
 /* ---------------------------------------------------------------- layout */
-.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px 16px; margin-bottom: 18px; flex-wrap: wrap; }
-.page-head h1 { margin-bottom: 3px; }
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.page-head h1 { margin-bottom: 4px; font-size: 1.85rem; letter-spacing: -0.03em; }
 .page-head__meta { color: var(--ink-500); font-size: 0.9rem; margin: 0; max-width: 78ch; }
-.stack { display: flex; flex-direction: column; gap: 16px; }
+.stack { display: flex; flex-direction: column; gap: 18px; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .row--between { justify-content: space-between; }
 .grid { display: grid; gap: 14px; }
@@ -296,7 +296,7 @@ html { scroll-behavior: smooth; }
 .field__hint { font-size: 0.78rem; color: var(--ink-500); line-height: 1.45; }
 .field--inline { flex-direction: row; align-items: center; gap: 10px; }
 
-input[type='text'], input[type='email'], input[type='password'], input[type='number'], input[type='url'],
+input:not([type]), input[type='text'], input[type='email'], input[type='password'], input[type='number'], input[type='url'], input[type='tel'],
 input[type='datetime-local'], input[type='date'], input[type='search'], input[type='time'], select, textarea {
   width: 100%; min-height: 40px; padding: 7px 12px; border: 1.5px solid var(--ink-300); border-radius: var(--radius);
   font-family: inherit; font-size: 0.94rem; color: var(--ink-950); background: var(--paper);

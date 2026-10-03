@@ -172,23 +172,34 @@ export function DictionaryPanel({
           ))}
         </article>
       ) : !loading && !message ? (
-        <div className="dict__empty">
-          <p>Look up any word. Save it to your notebook and it will come back in your daily review.</p>
-          {recent.length > 0 ? (
+        compact ? (
+          <div className="dict__empty dict__empty--compact">
+            <p>Look up any word. Save it to your notebook and it will come back in your daily review.</p>
+          </div>
+        ) : (
+          <div className="dict__empty">
+            <span className="empty__icon" aria-hidden="true">
+              <Icon name="book" size={22} />
+            </span>
+            <h2 className="empty__title">Look up any word</h2>
+            <p>Definitions in English and Vietnamese, how it sounds and an example. Save it and it comes back in your daily review.</p>
             <p className="dict__syn">
-              <span>Recent</span>
-              {recent.map((item) => (
+              <span>{recent.length > 0 ? 'Recent' : 'Try'}</span>
+              {(recent.length > 0 ? recent : SUGGESTIONS).map((item) => (
                 <button key={item} type="button" className="chip" onClick={() => void search(item)}>
                   {item}
                 </button>
               ))}
             </p>
-          ) : null}
-        </div>
+          </div>
+        )
       ) : null}
     </div>
   );
 }
+
+/** Words worth trying first, for someone who has not looked anything up yet. */
+const SUGGESTIONS = ['sustainable', 'mitigate', 'scrutiny', 'inevitable', 'coherent', 'trend'];
 
 const RECENT_KEY = 'aieo.dictionary.recent';
 function readRecent(): string[] {

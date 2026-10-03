@@ -162,17 +162,6 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
 
 /* ------------------------------------------------- 7. Speaking practice */
 .speaking-shell { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
-.speaking-topic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
-.topic-card {
-  text-align: left; display: flex; flex-direction: column; gap: 6px;
-  background: var(--paper); border: 1px solid var(--ink-200); border-radius: var(--radius-lg);
-  padding: 16px; cursor: pointer; font-family: inherit;
-  transition: border-color var(--speed, 180ms) var(--ease, ease);
-}
-.topic-card:hover { border-color: var(--ink-900); }
-.topic-card__title { font-weight: 680; color: var(--ink-950); font-size: 1rem; }
-.topic-card__summary { font-size: 0.85rem; color: var(--ink-500); }
-.topic-card__meta { display: flex; gap: 6px; margin-top: 4px; }
 
 .recorder {
   display: flex; flex-direction: column; gap: 14px;

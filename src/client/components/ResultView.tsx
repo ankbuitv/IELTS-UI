@@ -257,7 +257,7 @@ export function ResultSummary({
       {result.sessions.map((session) => (
         <Card
           key={session.skillSessionId}
-          title={`${SKILL_LABELS[session.skill] ?? session.skill} · ${session.label}`}
+          title={sessionTitle(session.skill, session.label)}
           hint={`${session.status} · started ${formatDateTime(session.startedAt)}`}
           actions={
             session.skill === 'WRITING' ? null : (
@@ -630,6 +630,12 @@ function renderAnswer(answer: { value?: string; values?: string[] } | null): str
   if (!answer) return '—';
   if (answer.values) return answer.values.length > 0 ? answer.values.join(', ') : '—';
   return answer.value && answer.value.trim() ? answer.value : '—';
+}
+
+/** "Reading", or "Listening · Part 1" when the section carries a name of its own. */
+function sessionTitle(skill: string, label: string | null | undefined): string {
+  const base = SKILL_LABELS[skill] ?? skill;
+  return label && label.trim().toUpperCase() !== skill.toUpperCase() ? `${base} · ${label}` : base;
 }
 
 type SectionResultRow = AttemptResultPayload['sessions'][number]['sectionResults'][number];
