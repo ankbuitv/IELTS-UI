@@ -330,3 +330,12 @@
 .lesson__textarea { width: 100%; padding: 12px 14px; font: inherit; font-size: 1rem; line-height: 1.5; resize: vertical; border: 2px solid var(--ink-300); border-bottom-width: 4px; border-radius: var(--radius-lg); background: var(--paper); color: var(--ink-950); }
 .lesson__textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 1px; border-color: var(--ink-400); }
 .lesson__sample { padding: 14px 16px; margin: 10px 0 4px; border: 2px dashed var(--ink-300); border-radius: var(--radius-lg); background: var(--paper-muted); color: var(--ink-900); line-height: 1.6; }
+
+/* Lesson feedback: a small pop so right/wrong answers feel immediate. */
+@keyframes lesson-pop {
+  0% { transform: translateY(6px) scale(0.98); opacity: 0; }
+  60% { transform: translateY(0) scale(1.01); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.lesson__feedback { animation: lesson-pop 220ms ease-out; }
+.lesson__foot--good { animation: lesson-pop 220ms ease-out; }

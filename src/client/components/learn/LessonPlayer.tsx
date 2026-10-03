@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { sfx } from '../../lib/sfx';
 import {
   MAX_HEARTS,
   checkOrder,
@@ -52,6 +53,7 @@ export function LessonPlayer({
   const [queue, setQueue] = useState<Exercise[]>(exercises);
   const [index, setIndex] = useState(0);
   const [hearts, setHearts] = useState(MAX_HEARTS);
+  const [soundOn, setSoundOn] = useState(() => sfx.isEnabled());
   const [phase, setPhase] = useState<Phase>('answering');
   const [verdict, setVerdict] = useState<{ correct: boolean; almost?: boolean } | null>(null);
   const [answered, setAnswered] = useState(false);
@@ -91,6 +93,8 @@ export function LessonPlayer({
     const outcome = submit.current?.();
     if (!outcome) return;
     const id = baseId(current);
+    if (outcome.correct) sfx.correct();
+    else sfx.incorrect();
     if (!(id in outcomes)) setOutcomes((previous) => ({ ...previous, [id]: { terms: current.terms, firstTryCorrect: outcome.correct } }));
     if (!outcome.correct) {
       const left = hearts - 1;
@@ -109,6 +113,7 @@ export function LessonPlayer({
 
   const next = () => {
     if (index + 1 >= queue.length) {
+      sfx.complete();
       void finish(scoreLesson(Object.values(outcomes)));
       return;
     }
@@ -224,6 +229,21 @@ export function LessonPlayer({
           <Icon name="heart" size={17} />
           {hearts}
         </span>
+        <button
+          type="button"
+          className="lesson__close"
+          aria-pressed={soundOn}
+          aria-label={soundOn ? 'Mute sounds' : 'Unmute sounds'}
+          title={soundOn ? 'Mute sounds' : 'Unmute sounds'}
+          onClick={() => {
+            const next = !soundOn;
+            setSoundOn(next);
+            sfx.setEnabled(next);
+            if (next) sfx.correct();
+          }}
+        >
+          <Icon name="volume" size={18} style={{ opacity: soundOn ? 1 : 0.45 }} />
+        </button>
       </header>
 
       <main className="lesson__main">
