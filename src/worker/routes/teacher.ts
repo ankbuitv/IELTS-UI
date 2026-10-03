@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
+import { describeAiFailure } from '../ai/failure';
 import { ApiError } from '../lib/errors';
 import { assertCsrf, assertSameOrigin, clientIp } from '../lib/http';
 import { parseBody } from '../lib/validate';
@@ -489,18 +490,28 @@ router.post('/writing-submissions/:submissionId/ai-score', async (c) => {
   if (!submission) throw ApiError.notFound('Writing submission not found.');
   await requireStudentAccess(c.env, user, submission.user_id);
 
-  const body = await parseBody(c, z.object({ providerId: z.string().max(64).optional() }).optional());
-  const grade = await scoreWritingSubmissionWithAi(c.env, submission.id, {
-    actorUserId: user.id,
-    ...(body?.providerId ? { providerId: body.providerId } : {}),
-  });
+  const body = await parseBody(c, z.object({ force: z.boolean().optional() }).optional());
+  let grade: Awaited<ReturnType<typeof scoreWritingSubmissionWithAi>>;
+  try {
+    grade = await scoreWritingSubmissionWithAi(c.env, submission.id, {
+      actorUserId: user.id,
+      force: body?.force ?? true,
+    });
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError('AI_UNAVAILABLE', describeAiFailure(error, { submissionId: submission.id, userId: user.id }).message);
+  }
 
   await recordAudit(c.env, {
     actorUserId: user.id,
     action: 'WRITING_AI_SCORE',
     entityType: 'writing_submission',
     entityId: submission.id,
-    metadata: { band: grade.band, provider: grade.providerModel },
+    metadata: {
+      band: grade.band,
+      judges: grade.judges.map((judge) => ({ judge: judge.judge, band: judge.band })),
+      spread: grade.spread,
+    },
     ip: clientIp(c),
   });
   return c.json({ ok: true, score: grade });

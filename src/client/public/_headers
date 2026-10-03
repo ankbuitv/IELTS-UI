@@ -18,7 +18,7 @@
 /*
   x-content-type-options: nosniff
   referrer-policy: strict-origin-when-cross-origin
-  permissions-policy: geolocation=(), microphone=(), camera=()
+  permissions-policy: geolocation=(), microphone=(self), camera=()
 
 /index.html
   cache-control: no-cache

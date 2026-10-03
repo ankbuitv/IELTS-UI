@@ -111,6 +111,7 @@ export function securityHeaders(): Record<string, string> {
     'x-content-type-options': 'nosniff',
     'referrer-policy': 'strict-origin-when-cross-origin',
     'x-frame-options': 'SAMEORIGIN',
-    'permissions-policy': 'geolocation=(), microphone=(), camera=()',
+    // The Speaking practice records from the microphone, so this origin (and only this origin) may ask for it.
+    'permissions-policy': 'geolocation=(), microphone=(self), camera=()',
   };
 }

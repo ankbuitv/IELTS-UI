@@ -127,7 +127,7 @@ export function AiProvidersPanel() {
         // Send the typed key when there is one; the server falls back to the stored key.
         ...(draft.keyTouched || draft.apiKey ? { apiKey: draft.apiKey } : {}),
       });
-      toast.push(`${result.ok ? '✓' : '✕'} ${result.message} (${result.latencyMs} ms)`, result.ok ? 'success' : 'error');
+      toast.push(`${result.ok ? 'OK' : 'Failed'}: ${result.message} (${result.latencyMs} ms)`, result.ok ? 'success' : 'error');
     } catch (testError) {
       const message = testError instanceof ApiRequestError ? testError.message : describeError(testError);
       toast.push(message, 'error');
@@ -193,7 +193,7 @@ export function AiProvidersPanel() {
             <Badge tone={draft.enabled ? 'success' : 'neutral'}>{draft.enabled ? 'Bật' : 'Tắt'}</Badge>
             <span className="key-state" style={{ marginLeft: 'auto' }}>
               <span className={`key-state ${draft.hasKey || draft.apiKey ? 'key-state--set' : ''}`}>
-                {draft.keyTouched ? '🔑 key mới sẽ được lưu' : draft.hasKey ? `🔑 key đã lưu ····${draft.keyHint ?? ''}` : '🔒 chưa có key'}
+                {draft.keyTouched ? 'key mới sẽ được lưu' : draft.hasKey ? `key đã lưu ····${draft.keyHint ?? ''}` : 'chưa có key'}
               </span>
             </span>
           </div>

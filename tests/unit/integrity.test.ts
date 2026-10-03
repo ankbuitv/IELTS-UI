@@ -4,6 +4,7 @@ import {
   EVENT_SEVERITY,
   INTEGRITY_EVENT_TYPES,
   INTEGRITY_PRESETS,
+  TAB_LOCK_STRIKES,
   countEvents,
   describeIntegrity,
   isCountedEvent,
@@ -41,7 +42,17 @@ describe('integrity policy presets', () => {
       expect(typeof preset.requireFullscreen).toBe('boolean');
     }
     expect(INTEGRITY_PRESETS.STRICT_EXAM.requireFullscreen).toBe(true);
-    expect(INTEGRITY_PRESETS.PRACTICE.monitorVisibility).toBe(false);
+  });
+
+  it('locks the tab in EVERY exam mode, practice included, and submits at the same limit', () => {
+    for (const mode of ['PRACTICE', 'STANDARD_EXAM', 'STRICT_EXAM'] as const) {
+      const preset = INTEGRITY_PRESETS[mode];
+      expect(preset.monitorVisibility).toBe(true);
+      expect(preset.warnAtEvents).toBe(1);
+      expect(preset.autoSubmitAtEvents).toBe(TAB_LOCK_STRIKES);
+      expect(preset.showIndicator).toBe(true);
+    }
+    expect(TAB_LOCK_STRIKES).toBe(3);
   });
 });
 

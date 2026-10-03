@@ -16,6 +16,7 @@ import adminRoutes from './routes/admin';
 import fileRoutes from './routes/files';
 import importRoutes from './routes/imports';
 import speakingRoutes from './routes/speaking';
+import { dictionaryRouter, learnRouter } from './routes/learn';
 
 export function createApp() {
   const app = new Hono<AppBindings>();
@@ -57,6 +58,8 @@ export function createApp() {
   app.route('/api/attempts', attemptRoutes);
   app.route('/api/student', studentRoutes);
   app.route('/api/speaking', speakingRoutes);
+  app.route('/api/learn', learnRouter);
+  app.route('/api/dictionary', dictionaryRouter);
   app.route('/api', classroomRoutes);
   app.route('/api/teacher', teacherRoutes);
   app.route('/api/admin', adminRoutes);
@@ -121,6 +124,8 @@ interface DatabaseProbe {
   missingTables?: string[];
   missingColumns?: string[];
   unhealableColumns?: string[];
+  /** Tables whose CHECK constraint predates a migration (rebuilt automatically on the next request). */
+  staleConstraints?: string[];
 }
 
 /**
@@ -133,10 +138,12 @@ async function probeDatabase(env: AppBindings['Bindings']): Promise<DatabaseProb
     const drift = await schemaDrift(env);
     return {
       reachable: true,
-      schemaReady: drift.missingTables.length === 0 && drift.missingColumns.length === 0,
+      schemaReady:
+        drift.missingTables.length === 0 && drift.missingColumns.length === 0 && drift.staleConstraints.length === 0,
       missingTables: drift.missingTables,
       missingColumns: drift.missingColumns,
       unhealableColumns: drift.unhealableColumns,
+      staleConstraints: drift.staleConstraints,
     };
   } catch (error) {
     return { reachable: false, schemaReady: false, missingTables: [(error as Error)?.message ?? 'unknown'] };

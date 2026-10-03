@@ -22,19 +22,23 @@ export const FONT_SCALE_LABELS: Record<FontScale, string> = {
   xlarge: 'Rất lớn',
 };
 
-/** Root font size in px per scale. 15.5px is the design default. */
+/**
+ * Root font size in px per scale. 14px is the design default: the interface was
+ * 15.5px and read as oversized next to the amount of content on each screen, so
+ * every step moved down by one notch (a stored "Vừa" now means 14px).
+ */
 export const FONT_SCALE_PX: Record<FontScale, number> = {
-  compact: 14,
-  normal: 15.5,
-  large: 17,
-  xlarge: 19,
+  compact: 13,
+  normal: 14,
+  large: 16,
+  xlarge: 18,
 };
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 
 export interface DisplayPrefs {
   fontScale: FontScale;
-  /** Multiplier for passage/reading text only (1 = 1.075rem). */
+  /** Multiplier for passage/reading text only (1 = 1rem). */
   readingScale: number;
   /** Line height for reading text. */
   readingLeading: number;
@@ -49,7 +53,7 @@ export interface DisplayPrefs {
 export const DEFAULT_PREFS: DisplayPrefs = {
   fontScale: 'normal',
   readingScale: 1,
-  readingLeading: 1.9,
+  readingLeading: 1.75,
   readingSpacing: 0,
   theme: 'system',
   wideReading: false,
@@ -100,7 +104,10 @@ export function applyPrefs(prefs: DisplayPrefs): void {
   root.style.setProperty('--reading-scale', String(prefs.readingScale));
   root.style.setProperty('--reading-leading', String(prefs.readingLeading));
   root.style.setProperty('--reading-spacing', `${prefs.readingSpacing}em`);
-  root.dataset.theme = prefs.theme === 'system' ? resolveSystemTheme() : prefs.theme;
+  const theme = prefs.theme === 'system' ? resolveSystemTheme() : prefs.theme;
+  root.dataset.theme = theme;
+  // The phone's own address bar takes the colour of the top bar.
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#162033' : '#ffffff');
   root.dataset.readingWidth = prefs.wideReading ? 'wide' : 'normal';
   root.dataset.reduceMotion = prefs.reduceMotion ? 'true' : 'false';
 }

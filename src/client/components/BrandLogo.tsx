@@ -1,85 +1,112 @@
-import { useId } from 'react';
-
 /**
- * Ai eo — original brand artwork, rendered inline so the navbar, sidebar and
- * footers never depend on a separate asset fetch.
+ * Ai eo — original brand artwork, drawn as plain SVG paths so the header, the
+ * footer and every share image look the same on every device (nothing in the
+ * logo depends on a font being installed).
  *
- * The mark is a rounded speech bubble (conversation / speaking practice) with
- * a check (marked work) and a small AI sparkle. It is deliberately distinct
- * from any official exam branding: no red roundel, no serif wordmark, no
- * imitation layout. Palette: white + cyan with violet/lime accents.
+ * The identity in one sentence: "the i in IELTS, talking". A speech bubble
+ * holds three rising bars (a score going up) and the last bar is an "i" with a
+ * golden dot. The wordmark is built from the same two shapes as the symbol,
+ * round rings and rounded bars, so mark and name read as one thing.
+ *
+ * It is deliberately its own thing: no exam name appears in it and nothing
+ * imitates a registered logo.
+ *
+ * Palette: IELTS-style red, deep navy ink and one golden accent.
  */
 
-export type BrandTheme = 'light' | 'dark';
-
-const FONT_STACK =
-  `'Baloo 2','Nunito','Quicksand','Segoe UI Rounded','SF Pro Rounded',` +
-  `'Hiragino Maru Gothic ProN',ui-rounded,'Segoe UI',system-ui,sans-serif`;
+/**
+ * light  on white or light grey
+ * dark   on navy or any dark surface
+ * brand  on a solid red surface (the bubble turns white)
+ * auto   follows the --logo-* CSS variables, so one header works in light and dark mode
+ */
+export type BrandTheme = 'light' | 'dark' | 'brand' | 'auto';
 
 interface Palette {
-  bubbleFrom: string;
-  bubbleTo: string;
-  tailMain: string;
-  tailSmall: string;
-  sparkle: string;
-  lime: string;
-  wordA: string;
-  wordB: string;
+  /** The bubble / tile. */
+  tile: string;
+  /** The three bars drawn on the tile. */
+  bars: string;
+  /** The wordmark. */
+  ink: string;
+  /** The dot of the "i" (symbol and wordmark). */
+  dot: string;
 }
 
 const PALETTES: Record<BrandTheme, Palette> = {
-  light: {
-    bubbleFrom: '#22d3ee',
-    bubbleTo: '#0891b2',
-    tailMain: '#0891b2',
-    tailSmall: '#22d3ee',
-    sparkle: '#8b5cf6',
-    lime: '#84cc16',
-    wordA: '#0f172a',
-    wordB: '#0891b2',
-  },
-  dark: {
-    bubbleFrom: '#67e8f9',
-    bubbleTo: '#06b6d4',
-    tailMain: '#22d3ee',
-    tailSmall: '#67e8f9',
-    sparkle: '#a78bfa',
-    lime: '#a3e635',
-    wordA: '#ffffff',
-    wordB: '#67e8f9',
-  },
+  /** On white or light grey. */
+  light: { tile: '#D3222B', bars: '#FFFFFF', ink: '#14233A', dot: '#FFC53D' },
+  /** On navy or any dark surface. */
+  dark: { tile: '#E5343C', bars: '#FFFFFF', ink: '#FFFFFF', dot: '#FFC53D' },
+  /** On a solid red surface: the bubble turns white. */
+  brand: { tile: '#FFFFFF', bars: '#D3222B', ink: '#FFFFFF', dot: '#FFC53D' },
+  /** Colours come from CSS custom properties (see globals.css and the dark theme). */
+  auto: { tile: 'var(--logo-tile)', bars: 'var(--logo-bars)', ink: 'var(--logo-ink)', dot: 'var(--logo-dot)' },
 };
 
-function IconArt({ gradientId, palette }: { gradientId: string; palette: Palette }) {
+/** A palette entry is either a literal colour or a CSS variable; variables go through `style`. */
+const isVar = (value: string) => value.startsWith('var(');
+const fillOf = (value: string) => (isVar(value) ? { style: { fill: value } } : { fill: value });
+const strokeOf = (value: string) => (isVar(value) ? { style: { stroke: value } } : { stroke: value });
+
+/** Speech bubble with a tail at the bottom left, in the 64 x 64 symbol grid. */
+const BUBBLE = 'M18 3H46A14 14 0 0 1 60 17V35A14 14 0 0 1 46 49H31L18 60V49A14 14 0 0 1 4 35V17A14 14 0 0 1 18 3Z';
+
+function SymbolArt({ palette }: { palette: Palette }) {
   return (
     <>
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor={palette.bubbleFrom} />
-          <stop offset="1" stopColor={palette.bubbleTo} />
-        </linearGradient>
-      </defs>
-      <rect x="7" y="9" width="42" height="34" rx="12.5" fill={`url(#${gradientId})`} />
-      <path
-        d="M19.5 26.5l6.2 6.2L35.5 22"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="5.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="16.5" cy="48" r="4.6" fill={palette.tailMain} />
-      <circle cx="8.5" cy="55.5" r="2.7" fill={palette.tailSmall} />
-      <path
-        d="M53 5c.9 3.6 2.4 5.1 6 6-3.6.9-5.1 2.4-6 6-.9-3.6-2.4-5.1-6-6 3.6-.9 5.1-2.4 6-6Z"
-        fill={palette.sparkle}
-      />
-      <circle cx="58" cy="24" r="2.8" fill={palette.lime} />
+      <path d={BUBBLE} {...fillOf(palette.tile)} />
+      <rect x="13" y="32" width="8" height="12" rx="4" {...fillOf(palette.bars)} />
+      <rect x="28" y="25" width="8" height="19" rx="4" {...fillOf(palette.bars)} />
+      <rect x="43" y="18" width="8" height="26" rx="4" {...fillOf(palette.bars)} />
+      <circle cx="47" cy="11.4" r="4.3" {...fillOf(palette.dot)} />
     </>
   );
 }
 
-/** Compact icon / avatar. Stays readable down to ~20px. */
+/**
+ * The lowercase wordmark "ai eo", in its own units: the x-height is 30, the
+ * baseline sits at y = 15 and the stroke is 8. Each letter is a ring or a
+ * rounded bar, so the whole word is a handful of paths.
+ */
+function WordmarkArt({ palette }: { palette: Palette }) {
+  return (
+    <>
+      <g fill="none" {...strokeOf(palette.ink)} strokeWidth="8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 0a11 11 0 1 0 22 0a11 11 0 1 0 -22 0" />
+        <path d="M26 -11V11" />
+        <path d="M38.5 -11V11" />
+        <path d="M77.57 8.43A11 11 0 1 1 81.44 -1.15" />
+        <path d="M94 0a11 11 0 1 0 22 0a11 11 0 1 0 -22 0" />
+        <path d="M59.5 0H82.5" strokeWidth="5.4" strokeLinecap="butt" />
+      </g>
+      <circle cx="38.5" cy="-25.5" r="5" {...fillOf(palette.dot)} />
+    </>
+  );
+}
+
+/** The speech-bubble symbol on its own (loading states, empty states, avatars). */
+export function BrandMark({
+  theme = 'light',
+  size = 32,
+  title = 'Ai eo',
+}: {
+  theme?: BrandTheme;
+  size?: number;
+  title?: string;
+}) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" role="img" aria-label={title} focusable="false">
+      <title>{title}</title>
+      <SymbolArt palette={PALETTES[theme]} />
+    </svg>
+  );
+}
+
+/**
+ * App icon: a rounded red tile with the three bars and the dot, and no bubble
+ * tail, so it stays readable down to 16px (favicon, home-screen icon).
+ */
 export function BrandIcon({
   theme = 'light',
   size = 32,
@@ -89,27 +116,20 @@ export function BrandIcon({
   size?: number;
   title?: string;
 }) {
-  const gradientId = `aieo-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const palette = PALETTES[theme];
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 64 64"
-      role="img"
-      aria-label={title}
-      focusable="false"
-    >
+    <svg width={size} height={size} viewBox="0 0 64 64" role="img" aria-label={title} focusable="false">
       <title>{title}</title>
-      <IconArt gradientId={gradientId} palette={palette} />
+      <rect width="64" height="64" rx="14" {...fillOf(palette.tile)} />
+      <rect x="12" y="37" width="9" height="12" rx="4.5" {...fillOf(palette.bars)} />
+      <rect x="27.5" y="29" width="9" height="20" rx="4.5" {...fillOf(palette.bars)} />
+      <rect x="43" y="21" width="9" height="28" rx="4.5" {...fillOf(palette.bars)} />
+      <circle cx="47.5" cy="12.6" r="4.6" {...fillOf(palette.dot)} />
     </svg>
   );
 }
 
-/**
- * Horizontal navbar lockup: icon + rounded two-tone "Ai eo" wordmark.
- * `textLength` keeps the lockup width deterministic across platforms.
- */
+/** Horizontal lockup: symbol + the "ai eo" wordmark. */
 export function BrandLogo({
   theme = 'light',
   height = 36,
@@ -119,33 +139,15 @@ export function BrandLogo({
   height?: number;
   title?: string;
 }) {
-  const gradientId = `aieo-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const palette = PALETTES[theme];
   const width = Math.round((height * 184) / 64);
   return (
-    <svg
-      width={width}
-      height={height}
-      viewBox="0 0 184 64"
-      role="img"
-      aria-label={title}
-      focusable="false"
-    >
+    <svg width={width} height={height} viewBox="0 0 184 64" role="img" aria-label={title} focusable="false">
       <title>{title}</title>
-      <IconArt gradientId={gradientId} palette={palette} />
-      <text
-        x="72"
-        y="42"
-        fontFamily={FONT_STACK}
-        fontSize="33"
-        fontWeight={800}
-        letterSpacing="-0.5"
-        textLength={104}
-        lengthAdjust="spacingAndGlyphs"
-      >
-        <tspan fill={palette.wordA}>Ai </tspan>
-        <tspan fill={palette.wordB}>eo</tspan>
-      </text>
+      <SymbolArt palette={palette} />
+      <g transform="translate(77 31) scale(0.8667)">
+        <WordmarkArt palette={palette} />
+      </g>
     </svg>
   );
 }

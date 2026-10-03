@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Icon } from '../../components/Icon';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Button, Card, ConfirmButton, EmptyState, Field, Loading, Modal, Notice, Select, TextArea, TextInput, useToast } from '../../components/ui';
@@ -116,7 +117,7 @@ export function AdminTestsPage() {
                 <tr key={test.id}>
                   <td>
                     {test.title}{' '}
-                    {test.requires_access_code === 1 ? <Badge tone="warning">🔒 Code</Badge> : null}
+                    {test.requires_access_code === 1 ? <Badge tone="warning"><Icon name="lock" size={11} /> Code</Badge> : null}
                     <div className="tiny muted">
                       {test.slug} · {test.content_origin.replace('_', ' ').toLowerCase()}
                     </div>

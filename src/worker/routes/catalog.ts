@@ -80,7 +80,7 @@ function summarise(row: {
 router.get('/tests', requireAuth, async (c) => {
   const user = currentUser(c);
   const rows = await c.env.DB.prepare(
-    `SELECT t.id, t.slug, t.title, t.type, t.summary, t.content_origin, t.updated_at,
+    `SELECT t.id, t.slug, t.title, t.type, t.summary, t.content_origin, t.updated_at, v.published_at,
             t.access_code_hash IS NOT NULL AS requires_code,
             v.id AS version_id, v.version_number, v.total_questions, v.duration_seconds, v.is_complete_test,
             (SELECT COUNT(*) FROM mock_components mc WHERE mc.mock_version_id = v.id) AS component_count,
@@ -88,7 +88,7 @@ router.get('/tests', requireAuth, async (c) => {
        FROM tests t
        JOIN test_versions v ON v.id = t.current_version_id
       WHERE t.status = 'PUBLISHED'
-      ORDER BY t.type, t.title`,
+      ORDER BY COALESCE(v.published_at, t.updated_at) DESC, t.created_at DESC, t.title`,
   )
     .bind(user.id)
     .all<{
@@ -99,6 +99,7 @@ router.get('/tests', requireAuth, async (c) => {
       summary: string;
       content_origin: string;
       updated_at: string;
+      published_at: string | null;
       requires_code: number;
       version_id: string;
       version_number: number;
@@ -183,6 +184,8 @@ router.get('/tests', requireAuth, async (c) => {
       summary: row.summary,
       contentOrigin: row.content_origin,
       updatedAt: row.updated_at,
+      /** When the live version went public; the catalogue is ordered newest first by this. */
+      publishedAt: row.published_at ?? row.updated_at,
       versionId: row.version_id,
       versionNumber: row.version_number,
       totalQuestions: row.total_questions,

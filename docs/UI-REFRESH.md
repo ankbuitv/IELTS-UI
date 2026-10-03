@@ -1,231 +1,195 @@
-# Interface refresh — a light, product-first workspace
+# Ai eo — exam-style redesign, AI judges, Learn path
 
-Scope: one visual pass over the existing interface, with **no functional change**.
-Every route, class name, form, policy and server contract is unchanged; what
-changed is the visual language: a light application shell, a real icon set, a
-landing page that shows the product, and one consistent surface treatment.
+This replaces the earlier "light workspace" refresh (cyan/violet SaaS look). The
+brief was: drop that interface, build one that looks like the computer-delivered
+IELTS screen rather than an AI-generated dashboard, mark Writing and Speaking
+automatically with two anonymous judges, add a dictionary and a Duolingo-style
+learning path, and forbid leaving the exam tab.
 
-Direction: a light SaaS workspace — white surfaces on a cool canvas, hairline
-borders, soft shadows, cyan primary with a violet secondary accent, icons on
-navigation, and generous but disciplined type.
+Everything here is **practice tooling**. Ai eo is not affiliated with IELTS, the
+British Council, IDP or Cambridge, and every band it shows is labelled an estimate.
 
 ---
 
-## 1. What was wrong before
+## 1. Design language
 
-- **Two visual languages in one product.** The stylesheet documented a
-  "predominantly white" workspace with a white sidebar, but the sidebar, the
-  sign-in rail and the marketing footer all rendered a deep teal gradient. Half
-  the app looked like a dark console bolted onto a light interface.
-- **Navigation without icons.** Every rail item was text only, so the sidebar
-  had to be read rather than scanned, and the only glyphs in the product were
-  emoji used as feature icons on the landing page.
-- **A landing page that described the product instead of showing it.** The hero
-  carried a list of four rows where a product still belongs.
-- **Inconsistent radii and shadows.** Corner radii ran from 8px to 26px and
-  shadows were asymmetric across cards, buttons and modals.
-- **Dead CSS.** A duplicated `.public-footer__notice` rule (two blocks, the
-  later silently winning) and dark-surface tokens referenced by nothing.
+| Decision | Value |
+| --- | --- |
+| Look | Flat and square: hairline rules, 2–6 px radii, no card shadows (shadows only on overlays). |
+| Colour | Crimson `#C8102E` for actions and emphasis, near-black `#14171b` for the top bar, headers and score panels, cool grey canvas. One accent colour per skill (Listening teal, Reading blue, Writing amber, Speaking violet). |
+| Type | System Arial/Helvetica stack, no web fonts (the two `@fontsource` packages were removed). Dense by default. |
+| Icons | One SVG set (`components/Icon.tsx`). No emoji anywhere in the UI, because they render differently on every device. |
+| Dark theme | Re-points the same tokens (`refresh.css`). Surfaces that must stay dark in both themes use `--bar` and `--solid`, never the ink scale (which inverts). |
+| Density / size | Base 16 px with compact controls (the first complaint was "too big, looks loose"). Document height equals the viewport on the exam screen; other pages scroll the document. |
 
-## 2. What changed
+Tokens live in `src/client/styles/globals.css` (`:root`). The stylesheets are
+split by concern: `globals.css` (tokens + UI kit), `shell.css`, `public.css`
+(landing, sign-in, register), `pages.css` (dashboard, practice, results),
+`learn.css`, `exam.css`, `refresh.css` (dark theme, display menu, speaking).
 
-**Tokens (`src/client/styles/globals.css`).** Radii tightened to a 8/12/16/22
-scale, three shadow levels rebuilt around slate-based transparency, a
-`--gradient-accent` (cyan → violet) added, the `--deep-*` dark-surface tokens
-and `--gradient-deep` removed with their last consumers, and the body no longer
-paints two fixed radial washes behind every page.
+### Shell (`components/AppShell.tsx`)
 
-**Application shell (`AppShell.tsx`).** The rail is now white with hairline
-borders: grouped sections (Study, Workspace), an icon per item, a soft cyan tint
-plus a light ring for the active item, and a signed-in **identity card** at the
-bottom with an initials avatar and a one-click sign out. The top bar carries the
-current section name (derived from the route) instead of a static string, a
-primary "Start practising" action, and the account avatar. The mobile drawer is
-labelled as a dialog, closes on Escape and now also closes when the viewport
-returns to the desktop breakpoint, so the backdrop can never cover a page whose
-rail is visible.
+- Top bar on every page: logo, role-aware navigation, **Start a test**, display
+  menu, account.
+  - Candidate: Home · Learn · Practice · Results · Vocabulary · Dictionary · More.
+  - Teacher: Teaching · Marking · Practice · Learn · More. Administrator adds
+    Admin first. Candidate places that do not fit sit under **More**.
+- Phones get a bottom tab bar (four places + More) and a bottom sheet; tablets
+  and desktops get the top navigation. No page checked overflows horizontally at 390 px; wide tables scroll inside their own frame.
+- Public pages (landing, sign-in, register) share the same header; the landing
+  page shows a sample practice report rather than describing the product.
 
-**Icon set (`components/Icon.tsx`).** A dependency-free stroke set on a 24×24
-grid (navigation, actions, status and skills). One visual language replaces the
-emoji, and because icons always sit beside a text label they are `aria-hidden`
-by default; `label` is available for icon-only controls.
+### Exam screen
 
-**Landing page (`pages/auth/PublicPages.tsx`).** The hero now shows a still of
-the product: window chrome, a quiet sidebar, three metric tiles and the four
-skill rows, followed by an honest note about estimated bands. Section heads
-gained eyebrows, skill cards and features gained icons, and the footer moved
-from a dark slab to a light column layout.
+Dark title bar (test, autosave state, **Tab lock n/3**, display, dictionary,
+timer, Submit), a part tab strip, split panes (passage left, questions right;
+a view switch and a draggable divider), grey instruction bands per question
+group, a bottom bar with the palette, Prev/Next. Writing is split task / answer
+with a live word count. On a phone the panes become a Passage ⇄ Questions toggle.
+Essays are also kept in `localStorage` (`aieo.exam-draft.<attemptId>`) so a failing
+save never loses work.
 
-**Sign-in / register (`globals.css`).** The split screen survives, but the brand
-rail is now a light tinted panel with the same cyan/violet wash and hairline
-grid, so the auth pages match the rest of the product. The password policy
-meter, bootstrap-admin notice and inline reveal toggle are untouched.
+### Result report
 
-**Everywhere else.** Cards, stats, buttons, inputs, badges, tables, tabs,
-sub-navigation, modals, toasts and the exam shell keep their structure and
-inherit the tightened tokens; the exam screen deliberately stays the calmest
-surface in the product.
+A dark report header (title, submitted, duration, big band tile), the note on
+where each band came from, then per-skill cards. Writing shows the AI panel
+(consensus tab, one tab per judge, four criteria with each judge's score,
+Vietnamese summary, strengths, work-on-next, corrections). Reading and Listening
+show the score, the band (estimated or projected) and the question review.
 
-## 3. The question panel rebuilt
+---
 
-The question pane was the weakest surface in the product: a group header with a
-type label and a range button, then every question as a plain row, with each
-True/False question repeating three full-width option rows underneath it.
+## 2. AI judges
 
-- **Instruction banner.** Every group now opens with a filled banner stating the
-  range, the question type and the requirement, the way a printed paper does
-  ("Questions 1–5 · True / False / Not Given · Do the following statements
-  agree…"). The banner sits *outside* the question card so the requirement is
-  read before the questions it governs, and the range doubles as a jump link.
-- **Card of questions.** Questions live in one white card with hairline
-  separators, a circular number badge inline with the statement, and a soft cyan
-  wash on the active question.
-- **Fixed: the duplicated True/False labels.** The options were built inline as
-  `{ id: 'TRUE', text: 'TRUE' }` and the control printed *both* fields, so the
-  interface read `TRUETRUE`, `FALSEFALSE` and `NOT_GIVENNOT GIVEN` — the stored
-  token leaking next to its own label. The choices are now defined once, the
-  control prints the label only, and True/False/Not Given and Yes/No/Not Given
-  render as a compact segmented control instead of three stacked rows repeated
-  under every statement.
-- **Multiple choice** options became bordered rows with the letter in its own
-  badge, so the option text is what the eye lands on.
-- **Answer boxes live inside the sentence** for completion tasks. When a
-  summary, note or table body carries the `[[n]]` placeholder for the question
-  being rendered, the box is drawn at that position — number chip beside it,
-  growing with the answer — and the other placeholders stay visible as muted
-  numbers, exactly as the paper runs. Questions without an inline position keep
-  the box below the prompt.
-- Flags use the icon set, and the released-answer labels are humanised
-  (`NOT_GIVEN` is displayed as `NOT GIVEN`).
+- **Who marks what.** Writing and Speaking are marked by AI automatically;
+  Reading and Listening never are (they use the protected answer key).
+- **Judge01 / Judge02.** Candidates, teachers and the API only ever see these two
+  labels. `ai/judges.ts` resolves them from `OLLAMA_MODEL` (Judge01) and
+  `OLLAMA_MODEL_2` (Judge02, default `gemma4:31b`). Model names, vendors,
+  endpoints and error text from providers are scrubbed (`ai/failure.ts`); a unit
+  test (`judge-anonymity.test.ts`) scans every file the browser downloads for model
+  or vendor names.
+- **"Training" the judges.** The models are not fine-tuned. Each judge gets the
+  same marking brief on **every** call (`MARKING_PROMPT_VERSION`,
+  `ai/marking-prompts.ts`): the public band descriptors for each criterion,
+  reference essays at 5.0, 6.5 and 8.0 (for scale only), caps for short or off-topic responses,
+  and a strict JSON contract. Changing the brief means bumping the version.
+- **Panel.** Each judge scores the four criteria and the overall band
+  independently. The consensus is the mean (rounded to a half band); a spread of a
+  whole band or more is shown as "judges differ". Strengths, improvements and
+  corrections are merged without duplicates; the Vietnamese summary is
+  Judge01's, or Judge02's if Judge01 is down.
+- **When it runs.** Writing: the result page calls `POST /api/attempts/:id/ai-mark`
+  as soon as it opens (a long, client-driven request, because background work on
+  the platform is cut about 30 s after the response). Speaking: marked inside
+  `POST /api/speaking/sessions/:id/submit`. Both are idempotent: only judges that
+  have not answered are asked again, `force` re-marks, 30 calls per hour per user.
+- **Failure behaviour.** One judge down → `PARTIAL`, the other's mark is shown and
+  the missing one is filled in on the next call. Both down → 503 with a generic
+  message and a retry button; the work is already saved. The old
+  "The AI provider could not mark this response." text is gone.
+- **Speaking.** Judges read the transcript, so pronunciation is reported as "not
+  assessed" and the other three criteria are marked. A teacher can still score a
+  recording.
+- **Vocabulary side effect.** Each judge also returns three to five words about
+  half a band above the candidate; they are saved to the notebook (origin `AI`).
+- **A teacher's band always wins** and is never overwritten by a later AI run.
 
-## 4. Accessibility and behaviour preserved
+## 3. Band estimates
 
-- The segmented True/False control and the multiple-choice rows are real radio
-  inputs (visually hidden, keyboard-reachable in group order), so arrow-key
-  selection and screen-reader group semantics still work; the visual state is
-  also carried by the label text, never by colour alone.
-- Focus rings, keyboard paths, `prefers-reduced-motion`, semantic landmarks and
-  the textual status labels are unchanged.
-- Colour still never carries meaning alone: the navigator keeps its legend, the
-  integrity indicator keeps a warning level, accuracy bars print their values.
-- Contrast was re-checked for the new active rail item (cyan-700 on cyan-50) and
-  for the small uppercase section labels (slate-400 on white, decorative only,
-  duplicated by the nav group heading).
+| Kind | Source | Label |
+| --- | --- | --- |
+| Full paper (complete test flag, ≥ profile length) | Scoring profile table | Estimated band |
+| Short set, ≥ 8 questions | Raw score scaled to the profile length, then the table | Projected band |
+| Fewer than 8 questions | — | Raw score only |
+| Writing / Speaking | AI panel | AI judges |
+| Writing / Speaking with a teacher mark | Teacher | Teacher |
 
-## 5. How this pass was verified
+The dashboard averages the last three attempts per skill, shows the change from
+the previous one, and an overall band that is **Provisional** until Listening,
+Reading, Writing and Speaking all contribute.
 
-- `npm run typecheck`, `npm run lint`, `npm test` (158 unit tests) and
-  `npm run build` are green.
-- **Exam rendering check.** The same bundle was driven through a live attempt
-  (created over the API against the seeded reading test) to assert the question
-  panel itself: three groups render with their banners, each True/False question
-  yields exactly three pills labelled `TRUE`, `FALSE`, `NOT GIVEN`, and the
-  multiple-choice rows carry their letter badge. A second harness renders the
-  component directly for the completion paths that the sample content does not
-  exercise: the answer box lands inside the summary text and inside a table
-  cell, and the head badge is suppressed when the number is already in the text.
-- **Structural render check.** The SPA is bundled to an IIFE (jsdom cannot run
-  ES modules) and rendered route by route in jsdom against the live Worker:
-  landing, sign in, register, dashboard, practice catalogue, attempt history,
-  analytics and profile all mount with the expected markup — sidebar items and
-  icons, identity card, top-bar title, hero product still, skill cards and
-  footer notice — and with no React console error. This proves the tree renders
-  and the routes resolve; it does not evaluate layout, so pixel work still needs
-  a browser.
-- **Exam chrome check (second pass).** A live attempt against a 3-passage,
-  40-question reading test (built through the Imports pipeline from
-  `docs/samples/cities-knowledge-and-adaptation.json`) renders: three section
-  tabs with their own counts, the sticky footer with palette / score / section
-  tabs / Previous / Next, and a palette drawer holding all 40 numbered cells
-  grouped under Passage 1–3 — with no React console error.
-- **Review check.** The released result of the seeded reading attempt renders 13
-  **Why these answers** panels with their evidence, explanation and answer, next
-  to the `4 / 13` score.
-- The deployed Worker is smoke-tested on every deploy by the same `/api/health`
-  probe (`schemaReady: true`) used by `deploy/github-actions-deploy.yml`.
+## 4. Tab lock
 
-## 6. The exam chrome, sections and study tools (second pass)
+- Every mode, including practice, has `monitorVisibility` with
+  `TAB_LOCK_STRIKES = 3` (`shared/integrity.ts`): a strike when the tab becomes
+  hidden, or (on non-touch devices) when the window loses focus for 2.5 s.
+- On return a blocking overlay states the strike; the third strike submits the
+  attempt (`INTEGRITY_AUTO`), keeps and marks everything answered, and the result
+  page says why it ended.
+- **What it cannot do:** a web page cannot stop Alt+Tab, another monitor or
+  another device. The lock counts, blocks on return and says so on screen; it is
+  not proof of misconduct. The exam header shows `Tab lock n/3` at all times.
 
-The question panel was only half of the exam complaint. The chrome around it was
-still a generic app header, and the test did not *look* divided into parts. This
-pass rebuilt the frame and added the study features the reference has.
+## 5. Learn path, vocabulary, dictionary
 
-### 6.1 A test header, not an app header
+- **Path.** Four units × four lessons × six words (96 words,
+  `shared/learn-content.ts`). A lesson builds 12 exercises (`learn-engine.ts`):
+  choose, match, fill-in, listen, type, word order. Five hearts per lesson; a
+  miss is retried at the end. XP = 10 + exercises right first time (+5 for a
+  perfect lesson; repeats pay half). Stars at 70 % / 90 %. Daily goal (default
+  30 XP, 10–200) and a day streak. Lessons open in order, but the path starts at
+  the learner's level (recent overall band: < 4.5 → 4, < 6 → 5, < 7 → 6, else 7;
+  or chosen 4–7).
+- **Daily words.** `POST /api/learn/daily-words` asks the AI for words at the
+  learner's level (more on request), saved to the notebook. Words missed in a
+  lesson also go to the notebook and drop one Leitner box.
+- **Review.** Due words come back on a Leitner schedule (`/learn/review`).
+- **Dictionary.** `GET /api/dictionary/lookup?term=` resolves word bank → cache
+  (`dictionary_cache`) → AI → `api.dictionaryapi.dev`. Used by `/dictionary` and,
+  in practice mode only, by the popover in the exam header.
 
-- An exit control on the left opens **Leave the test?** — it states that answers
-  are already saved, that timed sections keep running, and that leaving the tab
-  is recorded, then routes back to the student workspace.
-- The task is named ("Test in progress" eyebrow + the test title), with the
-  answered counter (`12/40 answered`), the timer, the integrity indicator and
-  Submit. The red **Học từ vựng** button opens the vocabulary notebook.
-- Below it, a **section strip** lists every section as a tab with its own
-  `answered/total` chip, a completed tick, a lock for parts that are not open
-  yet and the per-section timer while that part is running. Locked parts cannot
-  be opened by clicking; the button explains why in its tooltip.
+## 6. Data and API
 
-### 6.2 A sticky exam footer
+Migration `0009_learn_and_vocabulary.sql`: vocabulary columns (`meaning_vi`,
+`pos`, `phonetic`, `example`, `level`, `origin`, and the Leitner fields `box` and `due_at`) and the tables
+`learn_profiles`, `learn_lessons_done`, `learn_xp_log`, `dictionary_cache`.
+`src/worker/lib/runtime-schema.sql` is regenerated by `npm run schema:generate`.
 
-The reference keeps navigation at the bottom of the screen, so the exam does
-too: a palette button (the question grid), **All questions**, the running score
-`n / total`, one tab per section (`1`, `2`, `3`, and the current one expands to
-its label and count), then **Previous** / **Next** — or **Continue to Part 3**
-when the section policy moves the candidate on, which still asks for a second
-confirming click.
+> **Run `wrangler d1 migrations apply` before the new Worker serves traffic.**
+> The Worker repairs a stale schema on first use, and if it adds a column of 0009
+> first, the migration later stops with `duplicate column name`.
 
-**On "Làm đúng x / 40".** The reference counts correct answers while the test is
-running because its client holds the key. Our payloads deliberately never carry
-answer keys into a live attempt (they are released only with the result), so the
-header and footer count *answered* questions and the accuracy figure appears on
-the result screen. Shipping a live correct-answer counter would hand the key to
-the browser.
+New endpoints (all scoped to the signed-in user): `/api/learn/overview`,
+`/api/learn/lessons/complete`, `/api/learn/review`, `/api/learn/review/complete`,
+`/api/learn/daily-words`, `/api/learn/level`, `/api/learn/goal`,
+`/api/dictionary/lookup`, `/api/attempts/:id/ai-mark`,
+`/api/speaking/sessions/:id/ai-mark`.
 
-### 6.3 Transcript as a conversation
+## 7. What was verified, and what was not
 
-Listening review now renders the transcript as alternating chat bubbles with a
-speaker avatar, the line, and the timestamp — the layout the reference uses — and
-the segments keep their `segment-<id>` anchors, so an explanation that cites
-`segment:ls1-03` can scroll to it. Transcripts remain review material: the live
-attempt payload still sends `transcript: null`.
+Verified in this change:
 
-### 6.4 Explanations under the review
+- `npm run lint` (0 errors), `npm run typecheck`, `npm test` (unit suites for the
+  panel, band projection, anonymity, Learn engine, chart axes, integrity presets),
+  `npm run build`, and the 85-check acceptance run (`npm run test:integration`).
+- In Chromium against the local Worker: landing, sign-in and register; dashboard,
+  practice, history, vocabulary, dictionary, speaking and learn on phone, tablet
+  and desktop; the light and dark themes; teacher and administrator pages; a
+  Reading and a Writing attempt end to end, including the Writing result page
+  firing the AI marking by itself; the lesson player (a deliberate miss, retry,
+  XP, stars, unlock); the tab lock (three strikes → automatic submission, work
+  kept, notice on the result); the in-exam dictionary popover.
+- Model failures against a **fake OpenAI-compatible provider**: both judges
+  answering, one down (`PARTIAL`, then filled in), both down (503), idempotent
+  repeat calls, no model name anywhere in student-facing JSON or HTML.
 
-The released review gained a **Why these answers** card: one block per question
-with the number, the prompt, the candidate's answer, the accepted answer, and a
-**Explanation** panel carrying the evidence, the reasoning and (for Listening) a
-**Listen from here** button that seeks the section audio to the cited segment.
+**Not verified:**
 
-### 6.5 The vocabulary notebook
+- **The real ollama.com models were never called** (the sandbox could not reach
+  them). The code uses the direct-API names; confirm `OLLAMA_MODEL` and
+  `OLLAMA_MODEL_2` against `GET https://ollama.com/api/tags` and run one Writing
+  attempt after deploying. Reply quality, latency and the 30-calls-per-hour limit
+  are unmeasured with real models.
+- Recording audio in a browser (Speaking was driven through its transcript path).
+- Safari and Firefox on real devices, screen readers, and the `Listen` button
+  voices (they depend on the device's speech synthesis).
 
-**Học từ vựng** now opens a real feature rather than a dead end: a per-candidate
-word list (D1 table `vocabulary_entries`, unique on `(user_id, term)`) with
-add / edit meaning / delete, search, a "words still to review" prompt and a
-self-test flip card that records how often a word was reviewed. Mutations are
-CSRF-protected like every other write. The authoring side is documented in
-[`docs/QUESTION-AUTHORING.md`](QUESTION-AUTHORING.md).
+## 8. Follow-ups worth considering
 
-### 6.6 Two panes, always (and a way out of the test that works)
-
-The candidate could not see the passage and the questions at the same time
-below 960px: the old layout stacked the panes and left a tab switcher in charge,
-which turned reading-and-answering into constant tab flipping. The layout is now
-driven by a choice, not by the viewport:
-
-- The exam body is a **vertical split by default at every width that can afford
-  two readable columns** (≥ 560px), each pane scrolling on its own. The
-  transcript renders inside the passage pane's scroll region, so the left column
-  keeps a single scrollbar.
-- A **View** control (`Passage & questions` / `Passage only` / `Questions only`)
-  is always visible and remembered per browser, and a **draggable divider**
-  resizes the split between 26% and 72% (also remembered). Jumping to a question
-  from the palette reveals the question pane instead of silently answering into
-  a hidden column.
-- **Save & exit** used to navigate to `/student`, a route that does not exist,
-  so it landed on the not-found page. It now goes to `/history`, where the
-  in-progress attempt is listed with its resume action.
-
-## 7. Deliberately not changed
-
-- No new runtime dependency (the icon set and the tokens are hand-written).
-- No dark mode. The product is a light workspace by decision; a theme toggle
-  would double the surface area of every screen for no requirement behind it.
-- Still no live correct-answer counter, for the reason in §6.2.
+- Move Writing marking to a Queue consumer once a single marking pass reliably
+  fits the platform's background-work limit.
+- Per-test brief overrides (for example a stricter Task 1 rubric) behind the same
+  `MARKING_PROMPT_VERSION`.
+- More lessons: the path is data (`learn-content.ts`); units can be added without
+  code changes.

@@ -1,12 +1,17 @@
 import { useMemo, useRef, useState } from 'react';
 import type { CandidateResponse } from '@shared/answer-key';
 import { api, describeError } from '../lib/api';
-import { Badge, Button, Card, Field, KeyValue, Notice, Stat, Tabs, TextArea, TextInput, useToast } from './ui';
+import { Badge, Button, Card, Field, KeyValue, Notice, Tabs, TextArea, TextInput, useToast } from './ui';
 import { QuestionRenderer } from './exam/QuestionRenderer';
 import { TranscriptView } from './exam/TranscriptView';
 import { AnswerExplanation, evidenceSegmentId } from './exam/AnswerExplanation';
 import { BAND_DISCLAIMER, formatBand, formatDateTime, formatDuration, formatPercent, formatScore, MODE_LABELS, SKILL_LABELS, TEST_TYPE_LABELS } from '../lib/format';
 import { AccuracyList } from './charts';
+import { AiMarkPanel } from './AiMarkPanel';
+import { Icon } from './Icon';
+import { useAiMarking } from '../hooks/useAiMarking';
+import { BAND_BASIS_LABELS, meanBand, roundHalfBand } from '@shared/bands';
+import type { AiMarkView } from '@shared/judges';
 
 export interface AttemptResultPayload {
   attemptId: string;
@@ -19,6 +24,8 @@ export interface AttemptResultPayload {
   status: string;
   startedAt: string;
   submittedAt: string | null;
+  /** CANDIDATE, TIMEOUT, INTEGRITY_AUTO (the tab lock) or ADMIN. */
+  submittedReason?: string | null;
   durationSeconds: number | null;
   resultVisibility: string;
   release: { reviewAvailable: boolean; scoreAvailable: boolean; reason: string; releasesAt: string | null };
@@ -38,6 +45,8 @@ export interface AttemptResultPayload {
     totalQuestions: number;
     band: number | null;
     bandAvailable: boolean;
+    /** FULL = complete paper, PROJECTED = short set scaled to a full paper. */
+    bandBasis?: 'FULL' | 'PROJECTED' | null;
     bandMessage: string;
     profileId: string | null;
     profileVersion: number | null;
@@ -83,6 +92,8 @@ export interface AttemptResultPayload {
       wordCount: number;
       prompt: string;
       score: { band: number | null; feedback: string; source: string; scoredAt: string; criteria?: Record<string, number> } | null;
+      /** The two AI judges' verdict; null until the response has been marked. */
+      ai?: AiMarkView | null;
     }>;
   }>;
   integrity: {
@@ -99,6 +110,45 @@ export interface AttemptResultPayload {
   student?: { id: string; email?: string; displayName?: string | null };
 }
 
+const isTask2 = (label: string) => /task\s*2/i.test(label);
+
+/** Writing is one band for the paper; Task 2 counts for twice as much as Task 1. */
+function combinedWritingBand(tasks: AttemptResultPayload['sessions'][number]['writing']): { band: number | null; teacher: boolean } {
+  let total = 0;
+  let weight = 0;
+  let teacher = false;
+  for (const task of tasks) {
+    const human = task.score && task.score.source !== 'AI' ? task.score : null;
+    const band = human?.band ?? task.ai?.band ?? task.score?.band ?? null;
+    if (band === null) continue;
+    if (human) teacher = true;
+    const w = isTask2(task.taskLabel) ? 2 : 1;
+    total += band * w;
+    weight += w;
+  }
+  return { band: weight === 0 ? null : roundHalfBand(total / weight), teacher };
+}
+
+interface BandTile {
+  key: string;
+  label: string;
+  band: number | null;
+  basis: string;
+  note?: string;
+}
+
+function AiRunning() {
+  return (
+    <div className="ai-running" role="status" aria-live="polite">
+      <span className="spinner" aria-hidden="true" />
+      <div>
+        <strong>Judge01 and Judge02 are marking your work</strong>
+        <span>This usually takes under a minute. Please keep this page open until both have answered.</span>
+      </div>
+    </div>
+  );
+}
+
 export function ResultSummary({
   result,
   marking,
@@ -106,9 +156,52 @@ export function ResultSummary({
 }: {
   result: AttemptResultPayload;
   marking?: { apiBase: '/api/admin' | '/api/teacher'; onSaved: () => Promise<void> };
-  /** Re-fetches this result view; called after an AI estimate is stored. */
+  /** Re-fetches this result view; called after the judges have answered. */
   onRefresh?: () => Promise<void>;
 }) {
+  const isOwner = !marking;
+  const writingTasks = result.sessions.flatMap((session) => session.writing);
+  const needsAi =
+    isOwner &&
+    result.submittedAt !== null &&
+    writingTasks.some((task) => task.responseText.trim().length > 0 && !task.ai && !(task.score && task.score.source !== 'AI'));
+  const marker = useAiMarking({
+    path: `/api/attempts/${result.attemptId}/ai-mark`,
+    enabled: isOwner,
+    needed: needsAi,
+    ...(onRefresh ? { onDone: onRefresh } : {}),
+  });
+
+  const tiles: BandTile[] = result.sessions.map((session) => {
+    if (session.skill === 'WRITING') {
+      const { band, teacher } = combinedWritingBand(session.writing);
+      return {
+        key: session.skillSessionId,
+        label: 'Writing',
+        band,
+        basis: band === null ? (marker.running ? 'Marking…' : 'Not marked yet') : teacher ? 'Teacher' : BAND_BASIS_LABELS.AI,
+      };
+    }
+    return {
+      key: session.skillSessionId,
+      label: SKILL_LABELS[session.skill] ?? session.skill,
+      band: session.band,
+      basis: session.band === null ? 'No band for this set' : session.bandBasis === 'PROJECTED' ? BAND_BASIS_LABELS.PROJECTED : BAND_BASIS_LABELS.FULL,
+    };
+  });
+  const bands = tiles.map((tile) => tile.band);
+  // The note under the header says where each band came from: answer-key bands use a
+  // practice conversion table, Writing and Speaking bands are the judges' estimate.
+  const usesTable = result.sessions.some((session) => session.skill !== 'WRITING' && session.band !== null);
+  const usesJudges = result.sessions.some((session) => session.skill === 'WRITING' && combinedWritingBand(session.writing).band !== null);
+  const disclaimer =
+    usesTable && usesJudges
+      ? 'Reading and Listening bands come from a practice conversion table; Writing and Speaking bands are estimates from the AI judges, or a teacher’s band when one was given. None of them is an official IELTS result, and Ai eo is not affiliated with IELTS, the British Council, IDP or Cambridge.'
+      : usesJudges
+        ? 'Writing and Speaking bands are estimates from the AI judges, or a teacher’s band when one was given. They are not an official IELTS result, and Ai eo is not affiliated with IELTS, the British Council, IDP or Cambridge.'
+        : BAND_DISCLAIMER;
+  const overall = tiles.length > 1 ? meanBand(bands) : (tiles[0]?.band ?? null);
+  const covered = tiles.filter((tile) => tile.band !== null).length;
   const accuracy = formatPercent(
     result.rawScore !== null && result.totalQuestions
       ? Math.round((result.rawScore / result.totalQuestions) * 1000) / 10
@@ -116,38 +209,70 @@ export function ResultSummary({
   );
 
   return (
-    <div className="stack">
-      <div className="grid grid--4">
-        <Stat label="Raw score" value={formatScore(result.rawScore, result.totalQuestions)} hint={accuracy !== '—' ? `${accuracy} accuracy` : undefined} />
-        <Stat
-          label="Estimated band"
-          value={formatBand(result.estimatedBand)}
-          hint={result.estimatedBand === null ? 'No applicable scoring profile' : 'Practice indication only'}
-        />
-        <Stat label="Duration" value={formatDuration(result.durationSeconds)} hint={`Submitted ${formatDateTime(result.submittedAt)}`} />
-        <Stat label="Test version" value={`v${result.versionNumber}`} hint={MODE_LABELS[result.mode] ?? result.mode} />
-      </div>
+    <div className="stack result">
+      <section className="report-head">
+        <div className="report-head__meta">
+          <p className="report-head__kicker">
+            {TEST_TYPE_LABELS[result.testType] ?? result.testType} · {MODE_LABELS[result.mode] ?? result.mode}
+          </p>
+          <h1>{result.testTitle}</h1>
+          <p className="report-head__sub">
+            Submitted {formatDateTime(result.submittedAt)} · {formatDuration(result.durationSeconds)} · version {result.versionNumber}
+            {result.rawScore !== null && (result.totalQuestions ?? 0) > 0 ? ` · raw score ${formatScore(result.rawScore, result.totalQuestions)}${accuracy !== '—' ? ` (${accuracy})` : ''}` : ''}
+          </p>
+        </div>
+        <div className="report-head__bands">
+          <div className={`report-overall${overall === null ? ' is-empty' : ''}`}>
+            <span className="report-overall__label">{tiles.length > 1 ? 'Estimated overall' : `${tiles[0]?.label ?? 'Estimated'} band`}</span>
+            <span className="report-overall__value">{formatBand(overall)}</span>
+            <span className="report-overall__basis">
+              {overall === null ? 'No band yet' : tiles.length > 1 && covered < tiles.length ? `${covered} of ${tiles.length} parts` : (tiles[0]?.basis ?? '')}
+            </span>
+          </div>
+          {tiles.length > 1 ? (
+            <ul className="report-tiles">
+              {tiles.map((tile) => (
+                <li key={tile.key}>
+                  <span className="report-tiles__label">{tile.label}</span>
+                  <span className="report-tiles__band">{formatBand(tile.band)}</span>
+                  <span className="report-tiles__basis">{tile.basis}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </section>
 
-      {result.estimatedBand !== null ? <Notice tone="info">{BAND_DISCLAIMER}</Notice> : null}
+      {result.submittedReason === 'INTEGRITY_AUTO' ? (
+        <Notice tone="warning" title="Submitted automatically">
+          You left the exam tab {result.integrity.tabAway > 0 ? `${result.integrity.tabAway} times` : 'too many times'}, so the tab lock submitted this attempt. Everything
+          you had answered was kept and marked.
+        </Notice>
+      ) : result.submittedReason === 'TIMEOUT' ? (
+        <Notice tone="info">The time limit ended, so this attempt was submitted automatically with everything you had answered.</Notice>
+      ) : null}
+      {overall !== null ? <p className="tiny muted result__disclaimer">{disclaimer}</p> : null}
       {!result.release.reviewAvailable ? <Notice tone="warning">{result.release.reason}</Notice> : null}
 
       {result.sessions.map((session) => (
         <Card
           key={session.skillSessionId}
-          title={`${SKILL_LABELS[session.skill] ?? session.skill} · ${session.label}`}
+          title={sessionTitle(session.skill, session.label)}
           hint={`${session.status} · started ${formatDateTime(session.startedAt)}`}
           actions={
             session.skill === 'WRITING' ? null : (
               <>
-                <Badge tone="neutral">
-                  {formatScore(session.rawScore, session.totalQuestions)}
-                </Badge>
-                {session.band !== null ? <Badge tone="accent">Estimated {formatBand(session.band)}</Badge> : null}
+                <Badge tone="neutral">{formatScore(session.rawScore, session.totalQuestions)}</Badge>
+                {session.band !== null ? (
+                  <Badge tone={session.bandBasis === 'PROJECTED' ? 'warning' : 'accent'}>
+                    {session.bandBasis === 'PROJECTED' ? 'Projected' : 'Estimated'} {formatBand(session.band)}
+                  </Badge>
+                ) : null}
               </>
             )
           }
         >
-          {session.skill !== 'WRITING' && session.band === null ? (
+          {session.skill !== 'WRITING' && (session.band === null || session.bandBasis === 'PROJECTED') ? (
             <p className="small muted">{session.bandMessage}</p>
           ) : null}
 
@@ -155,35 +280,60 @@ export function ResultSummary({
             <div className="stack">
               {session.writing.length === 0 ? <p className="muted small">No writing response was submitted.</p> : null}
               {session.writing.map((writing) => (
-                <div key={writing.questionId} className="card" style={{ background: 'var(--paper-muted)' }}>
+                <div key={writing.questionId} className="writing-result">
                   <div className="row row--between">
                     <strong>{writing.taskLabel || 'Writing task'}</strong>
                     <span className="tiny muted">{writing.wordCount} words</span>
                   </div>
-                  {writing.prompt ? <p className="small muted" style={{ whiteSpace: 'pre-wrap' }}>{writing.prompt}</p> : null}
-                  {writing.responseText ? (
+                  {writing.prompt ? (
                     <details>
-                      <summary className="small">View submitted response</summary>
-                      <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'var(--font-ui)', fontSize: '0.94rem', marginTop: 10 }}>
-                        {writing.responseText}
-                      </pre>
+                      <summary className="small">Task</summary>
+                      <p className="small muted" style={{ whiteSpace: 'pre-wrap' }}>{writing.prompt}</p>
                     </details>
                   ) : null}
-                  {writing.score ? (
-                    <Notice
-                      tone={writing.score.source === 'AI' ? 'info' : 'success'}
-                      title={`${writing.score.source === 'AI' ? 'AI estimate' : 'Score'}: band ${formatBand(writing.score.band)} (${writing.score.source.toLowerCase()})`}
-                    >
+                  {writing.responseText ? (
+                    <details>
+                      <summary className="small">Your response</summary>
+                      <pre className="writing-result__text">{writing.responseText}</pre>
+                    </details>
+                  ) : null}
+
+                  {writing.score && writing.score.source !== 'AI' ? (
+                    <Notice tone="success" title={`Teacher band ${formatBand(writing.score.band)}`}>
                       {writing.score.feedback || 'No written feedback was added.'}
                     </Notice>
-                  ) : (
-                    <p className="tiny muted">
-                      {marking
-                        ? 'Awaiting a band from you. Writing is never auto-scored for a class result.'
-                        : 'Writing is reviewed by a teacher. You can ask the AI for an immediate estimate below — a teacher’s band always replaces it.'}
-                    </p>
-                  )}
-                  {!marking ? <AiWritingButton attemptId={result.attemptId} onMarked={onRefresh ?? null} /> : null}
+                  ) : null}
+
+                  {writing.ai ? (
+                    <AiMarkPanel mark={writing.ai} heading={isOwner ? 'AI judges' : 'AI judges (estimate, not a teacher band)'} />
+                  ) : null}
+
+                  {isOwner ? (
+                    marker.running && !writing.ai ? (
+                      <AiRunning />
+                    ) : !writing.ai && !writing.responseText.trim() ? (
+                      <p className="tiny muted">There is no response to mark for this task.</p>
+                    ) : !writing.ai && !(writing.score && writing.score.source !== 'AI') ? (
+                      <Notice tone="danger" title="This response has not been marked yet">
+                        {marker.error ?? 'The judges did not answer.'}
+                        <div style={{ marginTop: 8 }}>
+                          <Button size="sm" variant="primary" loading={marker.running} onClick={() => void marker.run(false)}>
+                            Ask the judges again
+                          </Button>
+                        </div>
+                      </Notice>
+                    ) : writing.ai?.status === 'PARTIAL' ? (
+                      <div className="ai-retry">
+                        <span>
+                          <Icon name="alert" size={14} /> {writing.ai.unavailable.join(' and ')} could not answer, so this band comes from one judge.
+                        </span>
+                        <Button size="sm" loading={marker.running} onClick={() => void marker.run(false)}>
+                          Ask {writing.ai.unavailable.join(' and ')}
+                        </Button>
+                      </div>
+                    ) : null
+                  ) : null}
+
                   {marking ? (
                     <WritingMarkForm
                       apiBase={marking.apiBase}
@@ -198,7 +348,7 @@ export function ResultSummary({
             </div>
           ) : null}
 
-          {session.sectionResults.length > 0 ? (
+          {session.skill !== 'WRITING' && session.sectionResults.length > 0 ? (
             <div style={{ marginTop: 10 }}>
               <h4 style={{ margin: '0 0 6px' }} className="small">
                 By {session.skill === 'LISTENING' ? 'part' : session.skill === 'READING' ? 'passage' : 'task'}
@@ -258,7 +408,8 @@ export function ResultSummary({
       <Card title="Integrity summary" hint="Observable browser events recorded during this attempt">
         <KeyValue
           items={[
-            ['Counted events', `${result.integrity.counted} (tab hidden: ${result.integrity.tabAway}, fullscreen exits: ${result.integrity.fullscreenExits})`],
+            ['Tab lock', `${result.integrity.tabAway} time${result.integrity.tabAway === 1 ? '' : 's'} away from the exam tab (fullscreen exits: ${result.integrity.fullscreenExits})`],
+            ['Counted events', String(result.integrity.counted)],
             ['Copy / paste attempts', `${result.integrity.copies} / ${result.integrity.pastes}`],
             ['Connection interruptions', String(result.integrity.interruptions)],
             ['Total events logged', String(result.integrity.total)],
@@ -347,50 +498,6 @@ function criteriaForTask(taskLabel: string | undefined): typeof WRITING_CRITERIA
 
 function roundHalf(value: number): number {
   return Math.round(value * 2) / 2;
-}
-
-/**
- * "Mark my writing with AI" for the candidate's own submitted attempt.
- *
- * It is deliberately only an estimate: the band is stored as `scoring_source =
- * 'AI'`, a teacher's score replaces it, and the button disappears once a human
- * band exists. Nothing is marked while the attempt is still running.
- */
-function AiWritingButton({ attemptId, onMarked }: { attemptId: string; onMarked: (() => Promise<void>) | null }) {
-  const toast = useToast();
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
-
-  return (
-    <div className="row" style={{ marginTop: 10, gap: 8 }}>
-      <Button
-        size="sm"
-        variant={done ? 'ghost' : 'secondary'}
-        loading={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            const result = await api.post<{ marked: number; failures: Array<{ message: string }> }>(
-              `/api/attempts/${attemptId}/ai-mark-writing`,
-              {},
-            );
-            setDone(true);
-            const firstFailure = result.failures[0];
-            if (firstFailure) toast.push(firstFailure.message, 'warning');
-            else toast.push('AI đã chấm bài Writing của bạn (ước lượng).', 'success');
-            if (onMarked) await onMarked();
-          } catch (error) {
-            toast.push(describeError(error), 'error');
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        ✨ {done ? 'Chấm lại bằng AI' : 'Chấm bằng AI (ước lượng)'}
-      </Button>
-      <span className="tiny muted">Ước lượng để học tập, không phải điểm thi chính thức.</span>
-    </div>
-  );
 }
 
 export function WritingMarkForm({
@@ -523,6 +630,12 @@ function renderAnswer(answer: { value?: string; values?: string[] } | null): str
   if (!answer) return '—';
   if (answer.values) return answer.values.length > 0 ? answer.values.join(', ') : '—';
   return answer.value && answer.value.trim() ? answer.value : '—';
+}
+
+/** "Reading", or "Listening · Part 1" when the section carries a name of its own. */
+function sessionTitle(skill: string, label: string | null | undefined): string {
+  const base = SKILL_LABELS[skill] ?? skill;
+  return label && label.trim().toUpperCase() !== skill.toUpperCase() ? `${base} · ${label}` : base;
 }
 
 type SectionResultRow = AttemptResultPayload['sessions'][number]['sectionResults'][number];

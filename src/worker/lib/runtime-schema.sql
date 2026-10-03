@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 39   Indexes: 56
+-- Tables: 43   Indexes: 58
 -- =============================================================================
 
 -- table: users
@@ -550,7 +550,7 @@ CREATE TABLE IF NOT EXISTS vocabulary_entries (
   last_reviewed_at TEXT,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
-);
+, meaning_vi TEXT NOT NULL DEFAULT '', pos        TEXT NOT NULL DEFAULT '', phonetic   TEXT NOT NULL DEFAULT '', example    TEXT NOT NULL DEFAULT '', level      REAL, origin     TEXT NOT NULL DEFAULT 'USER', box        INTEGER NOT NULL DEFAULT 0, due_at     TEXT);
 
 -- table: writing_scores
 CREATE TABLE IF NOT EXISTS "writing_scores" (
@@ -640,6 +640,51 @@ CREATE TABLE IF NOT EXISTS asset_blobs (
   mime        TEXT NOT NULL DEFAULT 'application/octet-stream',
   created_at  TEXT NOT NULL,
   PRIMARY KEY (asset_id, chunk_index)
+);
+
+-- table: learn_profiles
+CREATE TABLE IF NOT EXISTS learn_profiles (
+  user_id         TEXT PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+  xp              INTEGER NOT NULL DEFAULT 0,
+  streak          INTEGER NOT NULL DEFAULT 0,
+  best_streak     INTEGER NOT NULL DEFAULT 0,
+  last_active_day TEXT,
+  daily_goal_xp   INTEGER NOT NULL DEFAULT 30,
+  start_band      REAL,
+  last_words_day  TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
+-- table: learn_lessons_done
+CREATE TABLE IF NOT EXISTS learn_lessons_done (
+  id                TEXT PRIMARY KEY,
+  user_id           TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  lesson_id         TEXT NOT NULL,
+  stars             INTEGER NOT NULL DEFAULT 0,
+  best_accuracy     REAL NOT NULL DEFAULT 0,
+  completions       INTEGER NOT NULL DEFAULT 0,
+  xp_earned         INTEGER NOT NULL DEFAULT 0,
+  last_completed_at TEXT NOT NULL,
+  UNIQUE (user_id, lesson_id)
+);
+
+-- table: learn_xp_log
+CREATE TABLE IF NOT EXISTS learn_xp_log (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  day        TEXT NOT NULL,
+  xp         INTEGER NOT NULL,
+  source     TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- table: dictionary_cache
+CREATE TABLE IF NOT EXISTS dictionary_cache (
+  term         TEXT PRIMARY KEY,
+  payload_json TEXT NOT NULL,
+  source       TEXT NOT NULL,
+  fetched_at   TEXT NOT NULL
 );
 
 -- index: idx_users_role
@@ -809,3 +854,9 @@ CREATE INDEX IF NOT EXISTS idx_speaking_sessions_user ON speaking_sessions (user
 
 -- index: idx_speaking_sessions_status
 CREATE INDEX IF NOT EXISTS idx_speaking_sessions_status ON speaking_sessions (status, created_at DESC);
+
+-- index: idx_vocabulary_due
+CREATE INDEX IF NOT EXISTS idx_vocabulary_due ON vocabulary_entries (user_id, due_at);
+
+-- index: idx_learn_xp_user_day
+CREATE INDEX IF NOT EXISTS idx_learn_xp_user_day ON learn_xp_log (user_id, day);

@@ -9,11 +9,13 @@ export function TakeExamPage() {
   const navigate = useNavigate();
   const session = useExamSession(attemptId);
 
+  // When the tab-lock limit submitted the attempt, the candidate must read the notice first:
+  // its button is what takes them to the results.
   useEffect(() => {
-    if (session.state?.submitted) {
+    if (session.state?.submitted && !session.lockedOut) {
       navigate(`/attempts/${attemptId}`, { replace: true });
     }
-  }, [session.state?.submitted, attemptId, navigate]);
+  }, [session.state?.submitted, session.lockedOut, attemptId, navigate]);
 
   if (session.loading && !session.state) {
     return (

@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
 import { ApiError } from '../lib/errors';
@@ -18,7 +18,10 @@ import {
   saveWritingResponse,
   submitAttempt,
 } from '../services/attempt-service';
-import { scoreWritingSubmissionWithAi } from '../services/ai-marking-service';
+import { describeAiFailure } from '../ai/failure';
+import { markWritingSubmission } from '../services/ai-marking-service';
+import { enforceRateLimit } from '../lib/rate-limit';
+import type { AiMarkView } from '../../shared/judges';
 import { INTEGRITY_EVENT_TYPES } from '../../shared/integrity';
 import { EXAM_MODES } from '../../shared/types';
 import { recordAudit } from '../lib/audit';
@@ -117,61 +120,89 @@ router.post('/:id/writing', async (c) => {
 });
 
 /**
- * Candidate-triggered AI feedback on the Writing tasks of their own attempt.
- * Available once the attempt is submitted; the band is labelled an estimate and
- * a teacher's score always takes precedence.
+ * AI marking of the Writing tasks of a finished attempt, done by the judging panel.
+ *
+ * The result page calls this by itself as soon as it opens (Writing is marked
+ * automatically; Reading and Listening never need it, they are marked against the
+ * protected key). It is idempotent: judges that already answered are not asked
+ * again, so a retry only fills in the judge that failed, and `force` re-marks
+ * everything. The band is labelled an estimate and a teacher's band always wins.
+ *
+ * This is deliberately a long, client-driven request rather than background work:
+ * background tasks on the platform are cut off roughly 30 seconds after the
+ * response, which is shorter than two reasoning models need.
  */
-router.post('/:id/ai-mark-writing', async (c) => {
+const aiMarkWriting = async (c: Context<AppBindings>) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
-  const attemptId = c.req.param('id');
-  const attempt = await c.env.DB.prepare(
-    'SELECT id, user_id, status FROM attempts WHERE id = ?',
-  )
+  const attemptId = c.req.param('id') ?? '';
+  const attempt = await c.env.DB.prepare('SELECT id, user_id, status FROM attempts WHERE id = ?')
     .bind(attemptId)
     .first<{ id: string; user_id: string; status: string }>();
   if (!attempt) throw ApiError.notFound('Attempt not found.');
   if (attempt.user_id !== user.id && user.role === 'STUDENT') {
     throw ApiError.forbidden('That attempt belongs to another candidate.');
   }
+  // Feedback on a draft would be exam help, so only a finished attempt qualifies.
+  if (attempt.status === 'IN_PROGRESS') {
+    throw ApiError.conflict('Submit the attempt before asking the judges to mark your writing.');
+  }
 
+  const body = await parseBody(c, z.object({ force: z.boolean().optional() }).optional());
   const submissions = await c.env.DB.prepare(
     `SELECT id FROM writing_submissions WHERE attempt_id = ? AND TRIM(response_text) != '' ORDER BY created_at`,
   )
     .bind(attemptId)
     .all<{ id: string }>();
   if (submissions.results.length === 0) {
-    throw ApiError.validation('There is no Writing response to mark on this attempt.');
+    return c.json({ ok: true, marked: 0, status: 'NOTHING_TO_MARK', marks: {}, failures: [] });
   }
 
-  const body = await parseBody(c, z.object({ providerId: z.string().max(64).optional() }).optional());
-  const grades = [];
-  const failures: Array<{ submissionId: string; message: string }> = [];
-  for (const submission of submissions.results) {
-    try {
-      grades.push(
-        await scoreWritingSubmissionWithAi(c.env, submission.id, {
-          ...(body?.providerId ? { providerId: body.providerId } : {}),
-        }),
-      );
-    } catch (error) {
-      failures.push({
-        submissionId: submission.id,
-        message: error instanceof ApiError ? error.message : 'The AI provider could not mark this response.',
-      });
+  await enforceRateLimit(
+    c.env,
+    { bucket: `ai-mark:${user.id}`, windowSeconds: 3600, limit: Number(c.env.AI_RATE_LIMIT_PER_HOUR || 30) },
+    'You have asked the judges to mark a lot of work this hour. Please try again a little later.',
+  );
+
+  // The tasks are independent, so they are marked concurrently: a reasoning model
+  // can take half a minute per response and two in a row made the page wait for a minute.
+  const settled = await Promise.allSettled(
+    submissions.results.map((submission) =>
+      markWritingSubmission(c.env, submission.id, { actorUserId: user.id, force: body?.force ?? false }),
+    ),
+  );
+
+  const marks: Record<string, AiMarkView> = {};
+  const failures: Array<{ submissionId: string; judge: string | null; message: string }> = [];
+  settled.forEach((outcome, index) => {
+    const submissionId = submissions.results[index]!.id;
+    if (outcome.status === 'fulfilled') {
+      marks[submissionId] = outcome.value.view;
+      for (const failure of outcome.value.failures) {
+        failures.push({ submissionId, judge: failure.judge, message: failure.message });
+      }
+    } else {
+      const failure = describeAiFailure(outcome.reason, { attemptId, submissionId, userId: user.id });
+      failures.push({ submissionId, judge: null, message: failure.message });
     }
-  }
+  });
 
-  if (grades.length === 0) {
-    throw new ApiError('AI_UNAVAILABLE', failures[0]?.message ?? 'The AI provider could not mark this attempt.');
+  if (Object.keys(marks).length === 0) {
+    // Surface the cause in words a candidate can act on (never the provider's details).
+    throw new ApiError('AI_UNAVAILABLE', failures[0]?.message ?? 'The judges could not mark this attempt.');
   }
+  const complete = Object.values(marks).every((mark) => mark.status === 'DONE') && failures.length === 0;
   return c.json({
     ok: true,
-    marked: grades.length,
+    marked: Object.keys(marks).length,
+    status: complete ? 'DONE' : 'PARTIAL',
+    marks,
     failures,
-    scores: grades.map((grade) => ({ band: grade.band, feedback: grade.feedback, criteria: grade.criteria })),
   });
-});
+};
+router.post('/:id/ai-mark', aiMarkWriting);
+// The first name of this endpoint, kept so a page cached by an older deploy still works.
+router.post('/:id/ai-mark-writing', aiMarkWriting);
 
 router.post('/:id/integrity', async (c) => {
   const user = currentUser(c);

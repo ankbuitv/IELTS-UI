@@ -2,6 +2,7 @@ import { api } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Card, Loading, Notice, Stat } from '../../components/ui';
 import { BarChart } from '../../components/charts';
+import { Icon } from '../../components/Icon';
 import { formatDateTime } from '../../lib/format';
 
 interface AdminAnalytics {
@@ -47,28 +48,28 @@ export function AdminDashboardPage() {
           label="Users"
           value={analytics.users.total}
           hint={`${analytics.users.students} students · ${analytics.users.teachers} teachers`}
-          icon="👥"
+          icon={<Icon name="users" size={18} />}
           accent="blue"
         />
         <Stat
           label="Published tests"
           value={analytics.tests.published}
           hint={`${analytics.tests.draft} draft · ${analytics.tests.review} in review`}
-          icon="📄"
+          icon={<Icon name="file" size={18} />}
           accent="brand"
         />
         <Stat
           label="Attempts (30d)"
           value={analytics.attempts.last30Days}
           hint={`${analytics.attempts.submitted} submitted in total`}
-          icon="🧭"
+          icon={<Icon name="trendingUp" size={18} />}
           accent="violet"
         />
         <Stat
           label="Assignment completion"
           value={analytics.completion.completionRate !== null ? `${analytics.completion.completionRate}%` : '—'}
           hint={`${analytics.completion.submittedAssignmentAttempts}/${analytics.completion.assignmentAttempts} assignment attempts submitted`}
-          icon="✅"
+          icon={<Icon name="check" size={18} />}
           accent="emerald"
         />
       </div>

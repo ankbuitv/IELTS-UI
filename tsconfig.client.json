@@ -9,6 +9,8 @@
   "include": [
     "src/client/**/*.ts",
     "src/client/**/*.tsx",
-    "src/shared/**/*.ts"
+    "src/shared/**/*.ts",
+    "tests/unit/client-*.test.ts",
+    "tests/unit/exam-sync.test.ts"
   ]
 }

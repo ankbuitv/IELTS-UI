@@ -13,6 +13,7 @@ import {
   listStudentAssignments,
 } from '../services/analytics-service';
 import { SKILLS, TEST_TYPES } from '../../shared/types';
+import { backfillProjectedBands } from '../services/estimates-service';
 import {
   VOCABULARY_MEANING_MAX,
   VOCABULARY_NOTE_MAX,
@@ -54,6 +55,8 @@ router.get('/dashboard', async (c) => {
 router.get('/attempts', async (c) => {
   const user = currentUser(c);
   const filters = parseQuery(c, filterSchema);
+  // Sets marked before short-set projection existed get their band here (idempotent, best effort).
+  await backfillProjectedBands(c.env, user.id).catch(() => 0);
   const attempts = await listAttempts(c.env, user.id, {
     from: filters.from ?? null,
     to: filters.to ?? null,
@@ -87,6 +90,10 @@ router.get('/analytics', async (c) => {
 const vocabularyEntrySchema = z.object({
   term: z.string().trim().min(1).max(VOCABULARY_TERM_MAX),
   meaning: z.string().max(VOCABULARY_MEANING_MAX).optional(),
+  meaningVi: z.string().max(VOCABULARY_MEANING_MAX).optional(),
+  pos: z.string().max(24).optional(),
+  phonetic: z.string().max(80).optional(),
+  example: z.string().max(VOCABULARY_NOTE_MAX).optional(),
   note: z.string().max(VOCABULARY_NOTE_MAX).nullish(),
   source: z.string().max(VOCABULARY_SOURCE_MAX).nullish(),
 });
@@ -120,6 +127,8 @@ router.patch('/vocabulary/:id', async (c) => {
       meaning: z.string().max(VOCABULARY_MEANING_MAX).optional(),
       note: z.string().max(VOCABULARY_NOTE_MAX).nullish(),
       reviewed: z.boolean().optional(),
+      /** The verdict of a review: right moves the word up a Leitner box, wrong drops it. */
+      correct: z.boolean().optional(),
     }),
   );
   const entry = await updateVocabularyEntry(c.env, user.id, c.req.param('id'), body);

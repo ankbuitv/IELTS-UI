@@ -3,13 +3,14 @@ import type { CandidateSection } from '@shared/question-types';
 
 export function PassagePane({
   sections,
-  activeSectionId,
   showInstructions,
+  lead,
   children,
 }: {
   sections: CandidateSection[];
-  activeSectionId?: string | null;
   showInstructions?: boolean;
+  /** Material that sits above the passage inside the same scroll region (audio, a figure). */
+  lead?: ReactNode;
   /**
    * Extra material that belongs with the source text (a listening transcript,
    * for example). It renders inside the same scroll region as the passage so
@@ -21,10 +22,7 @@ export function PassagePane({
   if (withPassages.length === 0) {
     return (
       <div className="exam-pane__scroll">
-        <p className="muted">
-          This part does not include a reading passage. Use the questions on the right; the audio and instructions for
-          each part are shown above the questions.
-        </p>
+        {lead}
         {children}
       </div>
     );
@@ -32,10 +30,11 @@ export function PassagePane({
 
   return (
     <div className="exam-pane__scroll">
+      {lead}
       {withPassages.map((section) => (
-        <article key={section.id} id={`passage-${section.id}`} style={{ marginBottom: 40 }}>
-          <div className="row row--between" style={{ marginBottom: 6 }}>
-            <h2 style={{ margin: 0 }}>{section.passage!.title || section.title}</h2>
+        <article key={section.id} id={`passage-${section.id}`} className="passage-article">
+          <div className="passage-article__head">
+            <h2>{section.passage!.title || section.title}</h2>
             <span className="tiny muted nowrap">{section.passage!.wordCount} words</span>
           </div>
           {section.passage!.subtitle ? <p className="muted small">{section.passage!.subtitle}</p> : null}
@@ -52,7 +51,6 @@ export function PassagePane({
               </div>
             ))}
           </div>
-          {activeSectionId === section.id ? <span className="tiny muted">Currently answering questions from this passage.</span> : null}
         </article>
       ))}
       {children}

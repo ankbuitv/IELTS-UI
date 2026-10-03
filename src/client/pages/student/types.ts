@@ -1,3 +1,4 @@
+import type { BandEstimates } from '@shared/bands';
 export interface SkillPerformance {
   skill: string;
   sessions: number;
@@ -98,6 +99,8 @@ export interface StudentDashboard {
   mockHistory: AttemptSummary[];
   practiceHistory: AttemptSummary[];
   totals: { attempts: number; submitted: number; inProgress: number; fullMocks: number };
+  /** Band estimate per skill and overall, from every kind of marking. */
+  estimates: BandEstimates;
 }
 
 export interface CatalogTest {
@@ -108,6 +111,8 @@ export interface CatalogTest {
   summary: string;
   contentOrigin: string;
   updatedAt: string;
+  /** When the live version went public; the catalogue is ordered newest first by this. */
+  publishedAt?: string;
   versionId: string;
   versionNumber: number;
   totalQuestions: number;

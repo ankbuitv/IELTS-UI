@@ -12,6 +12,30 @@ export interface SeriesPoint {
 
 export type ChartTone = 'brand' | 'violet' | 'emerald' | 'amber' | 'blue';
 
+/**
+ * Axis values people can read: whole steps such as 0, 3, 6, 9 for a band axis or 0, 25, 50, 75, 100
+ * for a percentage, instead of 0, 2.25, 4.5, 6.75, 9. Without a fixed top the axis is rounded up to
+ * the next tick so the highest gridline is never above the data it describes. `integersOnly`
+ * keeps every tick a whole number, for counts.
+ */
+export function niceScale(min: number, max: number, target = 4, fixedTop = false, integersOnly = false): { max: number; ticks: number[] } {
+  const span = max - min;
+  if (!Number.isFinite(span) || span <= 0) return { max: min + 1, ticks: [min, min + 1] };
+  const raw = span / target;
+  const exponent = Math.floor(Math.log10(raw));
+  const candidates: number[] = [];
+  for (let k = exponent - 1; k <= exponent + 1; k += 1) for (const base of [1, 2, 2.5, 3, 5, 10]) candidates.push(base * 10 ** k);
+  const feasible = candidates
+    .filter((candidate) => candidate >= raw * 0.8 - 1e-9 && (!integersOnly || (Number.isInteger(candidate) && candidate >= 1)))
+    .sort((a, b) => a - b);
+  const even = (candidate: number) => Math.abs(span / candidate - Math.round(span / candidate)) < 1e-9;
+  const step = (fixedTop ? feasible.find(even) : undefined) ?? feasible[0] ?? raw;
+  const top = fixedTop ? max : Math.ceil((max - min) / step - 1e-9) * step + min;
+  const ticks: number[] = [];
+  for (let value = min; value <= top + 1e-9; value += step) ticks.push(Math.round(value * 1e6) / 1e6);
+  return { max: top, ticks };
+}
+
 export function LineChart({
   points,
   height = 220,
@@ -38,8 +62,9 @@ export function LineChart({
 
   const width = 640;
   const padding = { top: 14, right: 18, bottom: 30, left: 40 };
-  const max = yMax ?? Math.max(...usable.map((point) => point.value)) * 1.1;
   const min = yMin;
+  const scale = niceScale(min, yMax ?? Math.max(...usable.map((point) => point.value)) * 1.1, 4, yMax !== undefined);
+  const max = scale.max;
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
   const step = points.length > 1 ? innerWidth / (points.length - 1) : 0;
@@ -47,13 +72,20 @@ export function LineChart({
   const x = (index: number) => padding.left + index * step;
   const y = (value: number) => padding.top + innerHeight - ((value - min) / (max - min || 1)) * innerHeight;
 
+  // A gap (no score for that attempt) ends the line; the next point starts a new
+  // segment with "M". Starting every later point with "L" after a leading gap
+  // produced an invalid path ("Expected moveto") and a console error.
   const path = points
-    .map((point, index) => (point.value === null ? null : `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(point.value)}`))
-    .filter(Boolean)
-    .join(' ');
+    .reduce<{ parts: string[]; open: boolean }>(
+      (acc, point, index) =>
+        point.value === null
+          ? { parts: acc.parts, open: false }
+          : { parts: [...acc.parts, `${acc.open ? 'L' : 'M'} ${x(index)} ${y(point.value)}`], open: true },
+      { parts: [], open: false },
+    )
+    .parts.join(' ');
 
-  const ticks = 4;
-  const tickValues = Array.from({ length: ticks + 1 }, (_, index) => min + ((max - min) / ticks) * index);
+  const tickValues = scale.ticks;
   const labelEvery = Math.max(1, Math.ceil(points.length / 8));
 
   return (
@@ -109,20 +141,22 @@ export function BarChart({
   const padding = { top: 14, right: 12, bottom: 34, left: 38 };
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
-  const max = Math.max(...bars.map((bar) => bar.value ?? 0)) * 1.15 || 1;
+  // Counts (attempts per day, students) never get a 2.5 gridline.
+  const wholeNumbers = bars.every((bar) => Number.isInteger(bar.value ?? 0));
+  const scale = niceScale(0, Math.max(...bars.map((bar) => bar.value ?? 0)) * 1.05 || 1, 4, false, wholeNumbers);
+  const max = scale.max;
   const slot = innerWidth / bars.length;
   const barWidth = Math.min(38, slot * 0.6);
 
   return (
     <svg className={`chart${tone ? ` chart--${tone}` : ''}`} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={yLabel ?? 'Bar chart'}>
-      {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
-        const value = max * fraction;
-        const yPos = padding.top + innerHeight - fraction * innerHeight;
+      {scale.ticks.map((value) => {
+        const yPos = padding.top + innerHeight - (value / max) * innerHeight;
         return (
-          <g key={fraction}>
+          <g key={value}>
             <line className="chart__grid" x1={padding.left} x2={width - padding.right} y1={yPos} y2={yPos} />
             <text className="chart__label" x={padding.left - 8} y={yPos + 3} textAnchor="end">
-              {formatValue(Number(value.toFixed(2)))}
+              {formatValue(value)}
             </text>
           </g>
         );

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Icon } from '../../components/Icon';
 import { QUESTION_TYPES, QUESTION_TYPE_META } from '@shared/question-types';
 import type { QuestionType } from '@shared/question-types';
 import { parseIntoEditableContent } from '@shared/import-convert';
@@ -739,7 +740,7 @@ function AccessCodeCard({
     >
       <div className="row" style={{ marginBottom: 12 }}>
         {locked ? (
-          <Badge tone="warning">🔒 Code required{test.access_code_set_at ? ` · set ${formatDateTime(test.access_code_set_at)}` : ''}</Badge>
+          <Badge tone="warning"><Icon name="lock" size={11} /> Code required{test.access_code_set_at ? ` · set ${formatDateTime(test.access_code_set_at)}` : ''}</Badge>
         ) : (
           <Badge tone="neutral">Open to all students</Badge>
         )}
@@ -1113,7 +1114,7 @@ function VersionEditorBody({
               </Field>
               <Field
                 label="Scoring profile"
-                hint="Default Reading and Listening tables are created automatically. Writing is marked by a teacher."
+                hint="Default Reading and Listening tables are created automatically. Writing and Speaking are marked by the AI judges."
               >
                 {(id) => (
                   <Select

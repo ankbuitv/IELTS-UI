@@ -7,6 +7,8 @@ import { Icon } from '../../components/Icon';
 import { formatBand, formatDateTime } from '../../lib/format';
 import { BAND_DESCRIPTORS_NOTE } from '@shared/ai-rubric';
 import { SPEAKING_PART_META } from '@shared/speaking';
+import type { AiMarkView } from '@shared/judges';
+import { AiMarkPanel } from '../../components/AiMarkPanel';
 
 /**
  * Speaking practice with an AI examiner.
@@ -38,24 +40,6 @@ interface SpeakingPartResponse {
   hasAudio: boolean;
 }
 
-interface SpeakingCriterion {
-  key: string;
-  label: string;
-  band: number | null;
-  comment: string;
-}
-
-interface SpeakingScore {
-  band: number | null;
-  criteria: SpeakingCriterion[];
-  feedback: string;
-  strengths: string[];
-  improvements: string[];
-  corrections: Array<{ original: string; suggestion: string; reason: string }>;
-  notes: string[];
-  providerModel: string;
-}
-
 interface SpeakingSessionPayload {
   session: {
     id: string;
@@ -65,7 +49,6 @@ interface SpeakingSessionPayload {
     feedback: string;
     createdAt: string;
     markedAt: string | null;
-    providerModel: string | null;
   };
   topic: {
     id: string;
@@ -75,7 +58,8 @@ interface SpeakingSessionPayload {
     part3: string[];
   } | null;
   responses: SpeakingPartResponse[];
-  score: SpeakingScore | null;
+  /** The two AI judges' verdict, or null while the session has not been marked. */
+  score: AiMarkView | null;
 }
 
 interface SessionSummary {
@@ -155,26 +139,37 @@ function SpeakingLobby({ onStarted }: { onStarted: (sessionId: string) => void }
             onClick={() => void start(topic.id)}
             disabled={starting !== null}
           >
+            <span className="topic-card__icon">
+              <Icon name="mic" size={20} strokeWidth={2} />
+            </span>
             <span className="topic-card__title">{topic.title}</span>
             <span className="topic-card__summary">{topic.summary}</span>
             <span className="topic-card__meta">
               <Badge tone="neutral">Part 1 · 2 · 3</Badge>
-              {starting === topic.id ? <Badge tone="accent">Đang tạo…</Badge> : null}
+              {starting === topic.id ? (
+                <Badge tone="accent">Đang tạo…</Badge>
+              ) : (
+                <Icon name="arrowRight" size={16} strokeWidth={2.2} className="topic-card__go" />
+              )}
             </span>
           </button>
         ))}
+        <button type="button" className="topic-card topic-card--random" onClick={() => void start()} disabled={starting !== null}>
+          <span className="topic-card__icon">
+            <Icon name="wand" size={20} strokeWidth={2} />
+          </span>
+          <span className="topic-card__text">
+            <span className="topic-card__title">Chủ đề ngẫu nhiên</span>
+            <span className="topic-card__summary">Không chọn gì cả: hệ thống lấy một bộ đề bất kỳ cho bạn.</span>
+          </span>
+          {starting === 'custom' ? <Badge tone="accent">Đang tạo…</Badge> : <Icon name="arrowRight" size={18} strokeWidth={2.2} className="topic-card__go" />}
+        </button>
       </div>
-
-      <Card title="Chủ đề ngẫu nhiên" hint="Không chọn gì cả — hệ thống sẽ lấy một bộ đề bất kỳ.">
-        <Button variant="secondary" loading={starting === 'custom'} onClick={() => void start()}>
-          <Icon name="wand" size={15} /> Bắt đầu với đề ngẫu nhiên
-        </Button>
-      </Card>
 
       <Card title="Lịch sử luyện nói" hint="Mỗi lần luyện được lưu lại cùng bản chép lời và nhận xét.">
         {history.loading ? <Loading label="Đang tải…" /> : null}
         {history.data && history.data.sessions.length === 0 ? (
-          <EmptyState title="Chưa có buổi luyện nói nào">Chọn một chủ đề ở trên để bắt đầu.</EmptyState>
+          <EmptyState title="Chưa có buổi luyện nói nào" icon="mic">Chọn một chủ đề ở trên để bắt đầu.</EmptyState>
         ) : (
           <div className="stack" style={{ gap: 8 }}>
             {(history.data?.sessions ?? []).map((session) => (
@@ -257,10 +252,25 @@ function SpeakingSessionView({ sessionId }: { sessionId: string }) {
       );
       setAiError(result.aiError);
       if (result.aiError) toast.push(result.aiError, 'warning');
-      else toast.push('AI đã chấm xong bài nói của bạn.', 'success');
+      else toast.push('Hai giám khảo AI đã chấm xong bài nói của bạn.', 'success');
       await reload();
     } catch (submitError) {
       toast.push(describeError(submitError), 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /** Asks the judges again for a session that was submitted but not (fully) marked. */
+  const retryMarking = async () => {
+    setSubmitting(true);
+    setAiError(null);
+    try {
+      const result = await api.post<{ aiError?: string | null }>(`/api/speaking/sessions/${sessionId}/ai-mark`, {});
+      if (result.aiError) setAiError(result.aiError);
+      await reload();
+    } catch (retryError) {
+      setAiError(describeError(retryError));
     } finally {
       setSubmitting(false);
     }
@@ -271,6 +281,7 @@ function SpeakingSessionView({ sessionId }: { sessionId: string }) {
   if (!data || !session) return null;
 
   const marked = session.status === 'MARKED' && data.score;
+  const submittedUnmarked = session.status === 'SUBMITTED' || session.status === 'FAILED';
   const recordedParts = responses.filter((response) => response.transcript.trim() || response.hasAudio).length;
   const canSubmit = recordedParts > 0;
 
@@ -283,21 +294,40 @@ function SpeakingSessionView({ sessionId }: { sessionId: string }) {
           </p>
           <h1>{session.topicTitle}</h1>
           <p className="page-head__meta">
-            {recordedParts}/3 phần đã ghi · {session.status === 'MARKED' ? 'đã chấm bằng AI' : 'chưa chấm'}
+            {recordedParts}/3 phần đã ghi · {session.status === 'MARKED' ? 'đã được hai giám khảo AI chấm' : submittedUnmarked ? 'đã nộp, chờ chấm' : 'chưa nộp'}
           </p>
         </div>
         {marked ? (
           <Badge tone="success">~{formatBand(data.score?.band ?? null)}</Badge>
+        ) : submittedUnmarked ? (
+          <Button variant="primary" loading={submitting} onClick={() => void retryMarking()}>
+            <Icon name="rotate" size={15} /> Chấm lại
+          </Button>
         ) : (
           <Button variant="primary" loading={submitting} disabled={!canSubmit} onClick={() => void submit()}>
-            <Icon name="sparkle" size={15} /> Nộp &amp; chấm bằng AI
+            <Icon name="sparkle" size={15} /> Nộp &amp; chấm tự động
           </Button>
         )}
       </div>
 
-      {aiError ? (
-        <Notice tone="warning" title="Chưa chấm được bằng AI">
-          {aiError} Bài nói của bạn vẫn được lưu; giáo viên có thể chấm sau.
+      {submitting ? (
+        <div className="ai-running" role="status" aria-live="polite">
+          <span className="spinner" aria-hidden="true" />
+          <div>
+            <strong>Judge01 và Judge02 đang chấm bài nói của bạn</strong>
+            <span>Thường mất dưới một phút. Hãy giữ trang này mở cho đến khi cả hai chấm xong.</span>
+          </div>
+        </div>
+      ) : null}
+
+      {aiError || (submittedUnmarked && !submitting) ? (
+        <Notice tone="warning" title="Chưa chấm xong">
+          {aiError ?? 'Bài nói đã được nộp nhưng chưa có điểm.'} Bài nói của bạn vẫn được lưu.
+          <div style={{ marginTop: 8 }}>
+            <Button size="sm" variant="primary" loading={submitting} onClick={() => void retryMarking()}>
+              Thử chấm lại
+            </Button>
+          </div>
         </Notice>
       ) : null}
 
@@ -372,9 +402,9 @@ function SpeakingSessionView({ sessionId }: { sessionId: string }) {
         <Button variant="ghost" onClick={() => navigate('/speaking')}>
           Về danh sách
         </Button>
-        {!marked ? (
+        {!marked && !submittedUnmarked ? (
           <Button variant="primary" loading={submitting} disabled={!canSubmit} onClick={() => void submit()}>
-            <Icon name="sparkle" size={15} /> Nộp &amp; chấm bằng AI
+            <Icon name="sparkle" size={15} /> Nộp &amp; chấm tự động
           </Button>
         ) : null}
       </div>
@@ -701,83 +731,10 @@ function PartRecorder({
 // ---------------------------------------------------------------------------
 // Result view
 // ---------------------------------------------------------------------------
-function SpeakingResult({ score, responses }: { score: SpeakingScore; responses: SpeakingPartResponse[] }) {
+function SpeakingResult({ score, responses }: { score: AiMarkView; responses: SpeakingPartResponse[] }) {
   return (
     <div className="stack">
-      <div className="band-hero">
-        <div className="band-hero__score">
-          <span className="band-hero__value">{score.band === null ? '—' : formatBand(score.band)}</span>
-          <span className="band-hero__label">Band ước lượng</span>
-        </div>
-        <div className="band-hero__body">
-          <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.65 }}>{score.feedback}</p>
-          <p className="tiny muted" style={{ marginTop: 8, marginBottom: 0 }}>
-            Chấm bởi {score.providerModel || 'AI'} · nhận xét là ước lượng, không phải điểm thi chính thức.
-          </p>
-        </div>
-      </div>
-
-      <div className="criteria-grid">
-        {score.criteria.map((criterion) => (
-          <div className="criterion" key={criterion.key}>
-            <div className="criterion__head">
-              <span className="criterion__label">{criterion.label}</span>
-              <span className="criterion__band">{criterion.band === null ? 'chưa chấm' : formatBand(criterion.band)}</span>
-            </div>
-            <p className="criterion__comment">{criterion.comment}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid--2">
-        <Card title="Điểm mạnh">
-          {score.strengths.length === 0 ? (
-            <p className="muted small">Chưa có nhận xét riêng.</p>
-          ) : (
-            <ul style={{ margin: 0, paddingLeft: 18 }}>
-              {score.strengths.map((item) => (
-                <li key={item} style={{ marginBottom: 6 }}>{item}</li>
-              ))}
-            </ul>
-          )}
-        </Card>
-        <Card title="Cần cải thiện">
-          {score.improvements.length === 0 ? (
-            <p className="muted small">Chưa có nhận xét riêng.</p>
-          ) : (
-            <ul style={{ margin: 0, paddingLeft: 18 }}>
-              {score.improvements.map((item) => (
-                <li key={item} style={{ marginBottom: 6 }}>{item}</li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
-
-      {score.corrections.length > 0 ? (
-        <Card title="Sửa lỗi cụ thể" hint="Nghe lại bản ghi và đọc to phần gợi ý.">
-          <div className="stack" style={{ gap: 12 }}>
-            {score.corrections.map((correction, index) => (
-              <div className="correction-row" key={`${correction.original}-${index}`}>
-                <del>{correction.original}</del>
-                <ins>{correction.suggestion}</ins>
-                <span className="correction-row__reason">{correction.reason}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : null}
-
-      {score.notes.length > 0 ? (
-        <Notice tone="info" title="Lưu ý">
-          <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
-            {score.notes.map((note) => (
-              <li key={note}>{note}</li>
-            ))}
-          </ul>
-        </Notice>
-      ) : null}
-
+      <AiMarkPanel mark={score} heading="Kết quả từ hai giám khảo AI" />
       {responses.some((response) => response.hasAudio) ? (
         <Card title="Nghe lại và tự sửa">
           <div className="stack" style={{ gap: 10 }}>

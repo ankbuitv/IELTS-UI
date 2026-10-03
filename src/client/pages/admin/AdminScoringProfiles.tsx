@@ -64,8 +64,8 @@ export function AdminScoringProfilesPage() {
 
       <Notice tone="info" title="Default Reading and Listening tables are created automatically">
         A fresh database seeds two built-in practice conversion tables (40 questions). They are estimates only — not
-        official IELTS bands — and existing rows are never overwritten. Writing has no automatic profile: essays go to a
-        teacher or administrator to mark.
+        official IELTS bands — and existing rows are never overwritten. Writing and Speaking have no conversion table: their
+        bands come from the two AI judges, and a teacher’s band replaces that estimate when one is given.
       </Notice>
 
       {loading ? <Loading /> : null}

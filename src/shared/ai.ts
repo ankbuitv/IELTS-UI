@@ -88,9 +88,16 @@ export const PROVIDER_KIND_LABELS: Record<AiProviderKind, string> = {
 };
 
 /**
- * The hosted Ollama models carry a `-cloud` suffix; a self-hosted daemon uses
- * the bare tag. `cloudModelTag()` adds the suffix for ollama.com so an admin who
- * types `gpt-oss:120b` still reaches the right model.
+ * Ollama names the same hosted model differently depending on who is asking:
+ *
+ *   - the Ollama app / CLI, and a local daemon that forwards to the cloud, use a
+ *     `-cloud` (or `:cloud`) suffix: `gpt-oss:120b-cloud`;
+ *   - a DIRECT request to ollama.com (`https://ollama.com/v1`, the endpoint this
+ *     platform calls) uses the bare name listed by `/api/tags`: `gpt-oss:120b`.
+ *
+ * An admin can legitimately type either, so `ollamaModelCandidates()` returns
+ * the spellings to try, best first, and the worker falls back to the provider's
+ * own model list when none of them exists.
  */
 export const OLLAMA_CLOUD_HOST = 'ollama.com';
 
@@ -106,16 +113,30 @@ export function cloudModelTag(model: string): string {
   return `${trimmed}-cloud`;
 }
 
+/** `gpt-oss:120b-cloud` → `gpt-oss:120b`; `deepseek-v3.2:cloud` → `deepseek-v3.2`. */
+export function bareModelTag(model: string): string {
+  return (model ?? '').trim().replace(/-cloud$/i, '').replace(/:cloud$/i, '');
+}
+
+/**
+ * Model spellings to try, in order. Direct ollama.com wants the bare name first;
+ * any other endpoint is called with the name exactly as the admin typed it.
+ */
+export function ollamaModelCandidates(model: string, baseUrl: string): string[] {
+  const typed = (model ?? '').trim();
+  if (!typed) return [];
+  if (!isOllamaCloudBaseUrl(baseUrl)) return [typed];
+  return [...new Set([bareModelTag(typed), typed, cloudModelTag(typed)].filter(Boolean))];
+}
+
 /** Models offered as one-tap presets; the field itself stays free text. */
 export const MODEL_PRESETS: Array<{ id: string; label: string; kind?: AiProviderKind }> = [
-  { id: 'gpt-oss:120b-cloud', label: 'gpt-oss:120b-cloud — strongest open reasoning model', kind: 'OLLAMA' },
-  { id: 'gemma4:31b-cloud', label: 'gemma4:31b-cloud — Google, balanced quality', kind: 'OLLAMA' },
-  { id: 'gpt-oss:20b-cloud', label: 'gpt-oss:20b-cloud — fast, cheap', kind: 'OLLAMA' },
-  { id: 'gemma3:27b-cloud', label: 'gemma3:27b-cloud — previous generation', kind: 'OLLAMA' },
-  { id: 'qwen3-coder:480b-cloud', label: 'qwen3-coder:480b-cloud — large', kind: 'OLLAMA' },
-  { id: 'deepseek-v3.2:cloud', label: 'deepseek-v3.2:cloud', kind: 'OLLAMA' },
-  { id: 'gpt-oss:120b', label: 'gpt-oss:120b — local Ollama daemon only', kind: 'OLLAMA' },
-  { id: 'gemma3:27b', label: 'gemma3:27b — local Ollama daemon only', kind: 'OLLAMA' },
+  { id: 'gpt-oss:120b', label: 'gpt-oss:120b — strongest open reasoning model (ollama.com)', kind: 'OLLAMA' },
+  { id: 'gemma4:31b', label: 'gemma4:31b — Google, balanced quality (ollama.com)', kind: 'OLLAMA' },
+  { id: 'gpt-oss:20b', label: 'gpt-oss:20b — fast, cheap (ollama.com)', kind: 'OLLAMA' },
+  { id: 'gemma3:27b', label: 'gemma3:27b — previous generation (ollama.com)', kind: 'OLLAMA' },
+  { id: 'deepseek-v3.2', label: 'deepseek-v3.2 (ollama.com)', kind: 'OLLAMA' },
+  { id: 'gpt-oss:120b-cloud', label: 'gpt-oss:120b-cloud — name used by a local Ollama app / CLI', kind: 'OLLAMA' },
   { id: 'gpt-4.1', label: 'gpt-4.1', kind: 'OPENAI' },
   { id: 'gpt-4.1-mini', label: 'gpt-4.1-mini', kind: 'OPENAI' },
   { id: 'gpt-5-mini', label: 'gpt-5-mini', kind: 'OPENAI' },
@@ -151,6 +172,12 @@ export function buildProviderEndpoint(provider: Pick<AiProviderConfig, 'kind' | 
   if (base.endsWith('/chat/completions')) return base;
   if (/\/v\d+$/.test(base)) return `${base}/chat/completions`;
   return `${base}/v1/chat/completions`;
+}
+
+/** The provider's model list (`GET …/models`), derived the same way as the chat URL. */
+export function buildModelsEndpoint(provider: Pick<AiProviderConfig, 'kind' | 'baseUrl'>): string {
+  const chat = buildProviderEndpoint(provider);
+  return chat.replace(/\/chat\/completions$/, '/models');
 }
 
 /** Transcription endpoint for providers that expose OpenAI's audio API. */
