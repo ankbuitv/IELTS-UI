@@ -23,6 +23,17 @@ export interface JudgeCorrection {
   original: string;
   suggestion: string;
   reason: string;
+  /**
+   * False when the original is grammatically acceptable and the suggestion is
+   * only a stylistic alternative. Such items are shown as "Suggestions", never
+   * as grammar errors, so learners are not taught a rule that does not exist.
+   * Absent (older scores) is treated as a genuine error.
+   */
+  isActualError?: boolean;
+  /** GRAMMAR | VOCABULARY | STYLE | PUNCTUATION | SPELLING (best effort). */
+  category?: string;
+  /** 0..1 self-reported confidence; low-confidence items read as suggestions. */
+  confidence?: number;
 }
 
 /** A word the judge suggests learning, pitched at the candidate's own level. */
@@ -65,6 +76,11 @@ export interface AiMarkView {
   judges: JudgeOpinion[];
   /** Highest minus lowest judge band (null with fewer than two bands). */
   spread: number | null;
+  /**
+   * Set when the judges split by a band or more and a third examiner settled the
+   * final band. `band` above is then the adjudicated band, not the plain mean.
+   */
+  adjudication?: { band: number | null; rationale: string } | null;
   /** Judges that could not answer, by label. */
   unavailable: JudgeLabel[];
   createdAt: string;

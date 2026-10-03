@@ -32,8 +32,26 @@ describe('normaliseGrade', () => {
     expect(grade.band).toBe(6.5);
     expect(grade.criteria.map((criterion) => criterion.key)).toEqual(WRITING);
     expect(grade.criteria[0]).toMatchObject({ label: 'Task achievement', band: 6, comment: 'Comment TASK_ACHIEVEMENT' });
-    expect(grade.corrections).toEqual([{ original: 'peoples is', suggestion: 'people are', reason: 'agreement' }]);
+    expect(grade.corrections).toEqual([{ original: 'peoples is', suggestion: 'people are', reason: 'agreement', isActualError: true }]);
     expect(grade.providerModel).toBe('gpt-oss:120b');
+  });
+
+  it('keeps a stylistic alternative flagged as not an actual error', () => {
+    const grade = normaliseGrade(
+      {
+        overallBand: 7,
+        criteria: WRITING.map((key) => ({ key, band: 7, comment: 'ok' })),
+        feedback: 'Strong.',
+        corrections: [
+          { original: 'programs which can foster', suggestion: 'programs that can foster', reason: 'restrictive clause', isActualError: false, category: 'STYLE', confidence: 0.7 },
+        ],
+        notes: [],
+      },
+      'p1',
+      'gpt-oss:120b',
+      WRITING,
+    );
+    expect(grade.corrections[0]).toMatchObject({ isActualError: false, category: 'STYLE', confidence: 0.7 });
   });
 
   it('accepts criteria as an object keyed by the model’s own labels', () => {

@@ -19,10 +19,13 @@ import type { ExamSessionApi } from './useExamSession';
 import { ExamDictionary } from './ExamDictionary';
 import { TabLockOverlay } from './TabLockOverlay';
 import { useExamViewportLock } from './useExamViewport';
+import { useInputLockdown } from '../../hooks/useInputLockdown';
 
 export function ExamShell({ session, onFinished }: { session: ExamSessionApi; onFinished: () => void }) {
   // The exam owns the viewport: only its panes scroll (see exam.css).
   useExamViewportLock();
+  // Discourage the right-click menu and open-devtools shortcuts during the exam.
+  useInputLockdown();
 
   const { state } = session;
   const toast = useToast();

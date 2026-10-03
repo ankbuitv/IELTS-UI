@@ -245,8 +245,7 @@ export function ResultSummary({
 
       {result.submittedReason === 'INTEGRITY_AUTO' ? (
         <Notice tone="warning" title="Submitted automatically">
-          You left the exam tab {result.integrity.tabAway > 0 ? `${result.integrity.tabAway} times` : 'too many times'}, so the tab lock submitted this attempt. Everything
-          you had answered was kept and marked.
+          The exam was submitted automatically to keep conditions fair. Everything you had answered was kept and marked.
         </Notice>
       ) : result.submittedReason === 'TIMEOUT' ? (
         <Notice tone="info">The time limit ended, so this attempt was submitted automatically with everything you had answered.</Notice>
@@ -405,6 +404,7 @@ export function ResultSummary({
         </Card>
       ))}
 
+      {marking ? (
       <Card title="Integrity summary" hint="Observable browser events recorded during this attempt">
         <KeyValue
           items={[
@@ -431,6 +431,7 @@ export function ResultSummary({
           </details>
         ) : null}
       </Card>
+      ) : null}
     </div>
   );
 }

@@ -43,11 +43,13 @@ export function AiMarkPanel({ mark, heading }: { mark: AiMarkView; heading?: str
         <div className="aimark__who">
           <strong>{heading ?? 'AI marking'}</strong>
           <span>
-            {mark.judges.length >= 2
-              ? 'Judge01 and Judge02 marked this independently. The band is their average.'
-              : mark.unavailable.length > 0
-                ? `Marked by ${mark.judges[0]?.judge ?? 'one judge'}. ${mark.unavailable.join(' and ')} could not answer this time.`
-                : `Marked by ${mark.judges[0]?.judge ?? 'the judge'}.`}
+            {mark.adjudication
+              ? 'The judges split, so a third examiner reviewed the response and both opinions to settle this band.'
+              : mark.judges.length >= 2
+                ? 'Judge01 and Judge02 marked this independently. The band is their average.'
+                : mark.unavailable.length > 0
+                  ? `Marked by ${mark.judges[0]?.judge ?? 'one judge'}. ${mark.unavailable.join(' and ')} could not answer this time.`
+                  : `Marked by ${mark.judges[0]?.judge ?? 'the judge'}.`}
           </span>
           {split ? (
             <Badge tone="warning">The judges differ by {mark.spread?.toFixed(1)} bands: read both opinions</Badge>
@@ -121,20 +123,42 @@ export function AiMarkPanel({ mark, heading }: { mark: AiMarkView; heading?: str
         </div>
       ) : null}
 
-      {corrections.length > 0 ? (
+      {corrections.some((correction) => correction.isActualError !== false) ? (
         <div className="aimark__corrections">
           <h4>Corrections</h4>
-          {corrections.map((correction, index) => (
-            <div key={`${correction.original}-${index}`} className="correction-row">
-              <span>
-                <del>{correction.original}</del>
-              </span>
-              <span>
-                <ins>{correction.suggestion}</ins>
-              </span>
-              {correction.reason ? <span className="correction-row__reason">{correction.reason}</span> : null}
-            </div>
-          ))}
+          {corrections
+            .filter((correction) => correction.isActualError !== false)
+            .map((correction, index) => (
+              <div key={`${correction.original}-${index}`} className="correction-row">
+                <span>
+                  <del>{correction.original}</del>
+                </span>
+                <span>
+                  <ins>{correction.suggestion}</ins>
+                </span>
+                {correction.reason ? <span className="correction-row__reason">{correction.reason}</span> : null}
+              </div>
+            ))}
+        </div>
+      ) : null}
+
+      {corrections.some((correction) => correction.isActualError === false) ? (
+        <div className="aimark__corrections">
+          <h4>Suggestions</h4>
+          <p className="tiny muted" style={{ margin: '0 0 6px' }}>
+            These are optional — your original wording is already correct.
+          </p>
+          {corrections
+            .filter((correction) => correction.isActualError === false)
+            .map((correction, index) => (
+              <div key={`s-${correction.original}-${index}`} className="correction-row">
+                <span>{correction.original}</span>
+                <span>
+                  <ins>{correction.suggestion}</ins>
+                </span>
+                {correction.reason ? <span className="correction-row__reason">{correction.reason}</span> : null}
+              </div>
+            ))}
         </div>
       ) : null}
 

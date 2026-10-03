@@ -170,6 +170,26 @@ export function DictionaryPanel({
               ) : null}
             </section>
           ))}
+
+          <footer className="dict__more" style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="tiny muted">View more</span>
+            <a
+              className="chip"
+              href={`https://www.oxfordlearnersdictionaries.com/definition/english/${encodeURIComponent(entry.term.replace(/\s+/g, '_').toLowerCase())}`}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              <Icon name="external" size={12} /> Oxford
+            </a>
+            <a
+              className="chip"
+              href={`https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(entry.term.replace(/\s+/g, '-').toLowerCase())}`}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              <Icon name="external" size={12} /> Cambridge
+            </a>
+          </footer>
         </article>
       ) : !loading && !message ? (
         compact ? (

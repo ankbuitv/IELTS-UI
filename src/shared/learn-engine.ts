@@ -12,7 +12,14 @@
  *   order   put the words of a sentence in order
  *   match   pair four words with their meanings
  */
-import { WORD_BANK, type LearnWord } from './learn-content';
+import type {
+  LessonPayload,
+  LessonWord as LearnWord,
+  ParaphrasePayload,
+  ReadingPayload,
+  SpeakingPayload,
+  WritingPayload,
+} from './learn';
 
 export interface ExplainWord {
   term: string;
@@ -80,7 +87,55 @@ export interface MatchExercise extends ExerciseBase {
   meaningOrder: number[];
 }
 
-export type Exercise = ChooseExercise | FillExercise | ListenExercise | TypeExercise | OrderExercise | MatchExercise;
+export interface ParaphraseExercise extends ExerciseBase {
+  kind: 'paraphrase';
+  /** The sentence to restate. */
+  prompt: string;
+  options: string[];
+  answer: number;
+  /** Why the answer holds and the others do not. */
+  note: string;
+}
+
+export interface ReadExercise extends ExerciseBase {
+  kind: 'read';
+  passage: string;
+  stem: string;
+  options: string[];
+  answer: number;
+  /** The line of the passage the answer comes from. */
+  evidence: string;
+}
+
+export interface WriteExercise extends ExerciseBase {
+  kind: 'write';
+  /** Vietnamese instruction telling the learner what to say. */
+  instruction: string;
+  hint: string;
+  /** The English sentence they are aiming at. */
+  answer: string;
+}
+
+export interface SpeakExercise extends ExerciseBase {
+  kind: 'speak';
+  question: string;
+  /** What a good answer has to cover. */
+  cue: string;
+  /** A model answer, revealed after the learner has tried. */
+  sample: string;
+}
+
+export type Exercise =
+  | ChooseExercise
+  | FillExercise
+  | ListenExercise
+  | TypeExercise
+  | OrderExercise
+  | MatchExercise
+  | ParaphraseExercise
+  | ReadExercise
+  | WriteExercise
+  | SpeakExercise;
 export type ExerciseKind = Exercise['kind'];
 
 // ------------------------------------------------------------------ random
@@ -243,7 +298,7 @@ export function buildMatch(words: readonly LearnWord[], random: () => number, id
 
 // ------------------------------------------------------------------ lesson
 export interface BuildLessonOptions {
-  /** Extra words used for distractors; defaults to the built-in bank. */
+  /** Extra words used for distractors, normally the other words at the same band. */
   pool?: readonly LearnWord[];
 }
 
@@ -255,9 +310,12 @@ export function buildLesson(words: readonly LearnWord[], seed: string, options: 
   const random = seededRandom(seed);
   const own = words.filter((word) => word.term.trim() && word.meaning.trim());
   if (own.length === 0) return [];
-  // Distractor pool: the lesson's own words first, then the bank (deduplicated).
+  // Distractor pool: the lesson's own words first, then whatever the caller
+  // supplies (the catalogue sends the words of the same band). There is no
+  // built-in fallback: importing the seed content here would pull every lesson
+  // back into the browser bundle, which is the whole thing this avoids.
   const pool: LearnWord[] = [...own];
-  for (const word of options.pool ?? WORD_BANK) {
+  for (const word of options.pool ?? []) {
     if (!pool.some((existing) => existing.term.toLowerCase() === word.term.toLowerCase())) pool.push(word);
   }
 
@@ -283,15 +341,124 @@ export function buildLesson(words: readonly LearnWord[], seed: string, options: 
 }
 
 /** A review lesson built from the learner's notebook: every word is both recognised and recalled. */
-export function buildReviewLesson(words: readonly LearnWord[], seed: string): Exercise[] {
+export function buildReviewLesson(words: readonly LearnWord[], seed: string, extraPool: readonly LearnWord[] = []): Exercise[] {
   const random = seededRandom(seed);
-  const pool = [...words, ...WORD_BANK];
+  const pool = [...words, ...extraPool];
   const exercises: Exercise[] = [];
   words.forEach((word, index) => {
     exercises.push(buildChoose(word, pool, random, `${seed}:rc:${index}`));
     exercises.push(index % 2 === 0 ? buildType(word, `${seed}:rt:${index}`) : (buildFill(word, pool, random, `${seed}:rf:${index}`) ?? buildType(word, `${seed}:rt:${index}`)));
   });
   return exercises;
+}
+
+// ------------------------------------------------------- the other four kinds
+/**
+ * A paraphrase item carries its own three wrong sentences, because a
+ * plausible near-miss cannot be picked out of a word bank: "the price fell"
+ * and "the price fell sharply" differ in exactly the way the exercise tests.
+ */
+export function buildParaphraseLesson(items: ParaphrasePayload['items'], seed: string): Exercise[] {
+  const random = seededRandom(seed);
+  const exercises: Exercise[] = [];
+  items.forEach((item, index) => {
+    if (!item.original.trim() || !item.answer.trim() || item.distractors.length < 3) return;
+    const options = shuffle([item.answer, ...item.distractors.slice(0, 3)], random);
+    exercises.push({
+      kind: 'paraphrase',
+      id: `${seed}:pp:${index}`,
+      terms: [],
+      // `explain` carries the item so the feedback panel has something to show.
+      explain: { term: item.original, pos: 'sentence', meaning: item.note, vi: '', example: item.answer },
+      prompt: item.original,
+      options,
+      answer: options.indexOf(item.answer),
+      note: item.note,
+    });
+  });
+  return exercises;
+}
+
+/** One exercise per question; the passage travels with it so the player can keep it on screen. */
+export function buildReadingLesson(payload: ReadingPayload, seed: string): Exercise[] {
+  const exercises: Exercise[] = [];
+  const passage = (payload.passage ?? '').trim();
+  if (!passage) return exercises;
+  payload.questions.forEach((question, index) => {
+    if (!question.stem.trim() || question.options.length < 4) return;
+    if (question.answer < 0 || question.answer >= question.options.length) return;
+    exercises.push({
+      kind: 'read',
+      id: `${seed}:rd:${index}`,
+      terms: [],
+      explain: { term: question.stem, pos: 'question', meaning: question.evidence, vi: '', example: '' },
+      passage,
+      stem: question.stem,
+      options: question.options,
+      answer: question.answer,
+      evidence: question.evidence,
+    });
+  });
+  return exercises;
+}
+
+export function buildWritingLesson(items: WritingPayload['items'], seed: string): Exercise[] {
+  const exercises: Exercise[] = [];
+  items.forEach((item, index) => {
+    if (!item.model.trim() || !item.instruction.trim()) return;
+    exercises.push({
+      kind: 'write',
+      id: `${seed}:wr:${index}`,
+      terms: [],
+      explain: { term: item.model, pos: 'sentence', meaning: item.instruction, vi: item.hint, example: item.model },
+      instruction: item.instruction,
+      hint: item.hint,
+      answer: item.model,
+    });
+  });
+  return exercises;
+}
+
+export function buildSpeakingLesson(items: SpeakingPayload['items'], seed: string): Exercise[] {
+  const exercises: Exercise[] = [];
+  items.forEach((item, index) => {
+    if (!item.question.trim() || !item.sample.trim()) return;
+    exercises.push({
+      kind: 'speak',
+      id: `${seed}:sp:${index}`,
+      terms: [],
+      explain: { term: item.question, pos: 'question', meaning: item.cue, vi: '', example: item.sample },
+      question: item.question,
+      cue: item.cue,
+      sample: item.sample,
+    });
+  });
+  return exercises;
+}
+
+/**
+ * Builds a lesson from a stored body, whatever kind it is.
+ *
+ * This is the single place that knows the kind-to-exercise mapping, so the
+ * client and any future server-side check agree on what a lesson contains.
+ */
+export function buildLessonFromPayload(
+  payload: LessonPayload,
+  seed: string,
+  options: { pool?: readonly LearnWord[] } = {},
+): Exercise[] {
+  switch (payload.kind) {
+    case 'VOCAB':
+      return buildLesson(payload.words, seed, { pool: options.pool });
+    case 'PARAPHRASE':
+      return buildParaphraseLesson(payload.items, seed);
+    case 'READING':
+      return buildReadingLesson(payload, seed);
+    case 'WRITING':
+      return buildWritingLesson(payload.items, seed);
+    case 'SPEAKING':
+      return buildSpeakingLesson(payload.items, seed);
+  }
 }
 
 // ----------------------------------------------------------------- checking
@@ -333,6 +500,24 @@ export function checkTyped(typed: string, answer: string): { correct: boolean; a
   return { correct: false, almost: false };
 }
 
+/**
+ * A written sentence is right when it matches the model closely enough.
+ *
+ * One slip is forgiven in a single word, but a sentence is dozens of characters
+ * long, so the allowance scales with it — roughly one per fourteen characters.
+ * Punctuation and a missing final period are not vocabulary gaps either.
+ */
+export function checkSentence(typed: string, model: string): { correct: boolean; almost: boolean } {
+  const clean = (value: string) => normaliseAnswer(value).replace(/[.,;:!?]+$/g, '').replace(/\s+/g, ' ').trim();
+  const given = clean(typed);
+  const target = clean(model);
+  if (!given || !target) return { correct: false, almost: false };
+  if (given === target) return { correct: true, almost: false };
+  const tolerance = Math.max(1, Math.floor(target.length / 14));
+  if (editDistance(given, target) <= tolerance) return { correct: true, almost: true };
+  return { correct: false, almost: false };
+}
+
 export function checkOrder(tokens: readonly string[], answer: readonly string[]): boolean {
   return tokens.length === answer.length && tokens.every((token, index) => token === answer[index]);
 }
@@ -350,6 +535,13 @@ export function correctAnswerText(exercise: Exercise): string {
       return exercise.answer.join(' ');
     case 'match':
       return exercise.pairs.map((pair) => `${pair.term} = ${pair.meaning}`).join('; ');
+    case 'paraphrase':
+    case 'read':
+      return exercise.options[exercise.answer] ?? '';
+    case 'write':
+      return exercise.answer;
+    case 'speak':
+      return exercise.sample;
     default:
       return '';
   }

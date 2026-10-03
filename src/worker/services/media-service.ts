@@ -1,4 +1,6 @@
 import type { Env } from '../env';
+import { putBlob } from './blob-store';
+import { nowIso } from '../lib/ids';
 
 /**
  * The single place that decides how a stored asset becomes a URL.
@@ -74,4 +76,77 @@ export function hasObjectStorage(_env: Env): boolean {
 /** True when this asset's bytes are stored in D1 rather than fetched from a URL. */
 export function isInlineAsset(storageKind: string): boolean {
   return storageKind === 'OBJECT_STORAGE';
+}
+
+const AUDIO_MIME = (value: string | null, url: string): string => {
+  if (value && value.startsWith('audio/')) return value.split(';')[0] ?? 'audio/mpeg';
+  const lower = url.toLowerCase();
+  if (lower.endsWith('.m4a') || lower.endsWith('.aac')) return 'audio/mp4';
+  if (lower.endsWith('.ogg') || lower.endsWith('.oga')) return 'audio/ogg';
+  if (lower.endsWith('.wav')) return 'audio/wav';
+  return 'audio/mpeg';
+};
+
+const toBase64 = (buffer: ArrayBuffer): string => Buffer.from(new Uint8Array(buffer)).toString('base64');
+
+export interface AudioIngestResult {
+  stored: boolean;
+  reason?: string;
+}
+
+/**
+ * Downloads the bytes behind an `EXTERNAL_URL` audio asset and stores them in
+ * D1, switching the row to `OBJECT_STORAGE`.
+ *
+ * Listening audio that is streamed from a third-party host at exam time is only
+ * as reliable as that host — and hosts that hand out expiring signed URLs, or
+ * that simply go away, turn a paid-for exam into a silent one. Copying the bytes
+ * home once, at import or when an administrator asks, makes playback same-origin
+ * (served by `/api/files/:id` with Range support) and independent of the source.
+ *
+ * Returns `stored:false` with a reason instead of throwing, so a flaky source
+ * degrades to the old external-URL behaviour rather than breaking the import.
+ */
+export async function ingestExternalAudio(env: Env, assetId: string): Promise<AudioIngestResult> {
+  const row = await env.DB.prepare(
+    'SELECT storage_kind, external_url, filename FROM assets WHERE id = ?',
+  )
+    .bind(assetId)
+    .first<{ storage_kind: string; external_url: string | null; filename: string | null }>();
+  if (!row || !row.external_url) return { stored: false, reason: 'Asset not found.' };
+  if (row.storage_kind === 'OBJECT_STORAGE') return { stored: true };
+
+  const maxBytes = Number(env.MAX_UPLOAD_BYTES || 26_214_400);
+  let response: Response;
+  try {
+    response = await fetch(row.external_url, {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(30_000),
+      headers: { 'user-agent': 'ielts-platform/1.0 (audio ingest)' },
+    });
+  } catch {
+    return { stored: false, reason: 'The source could not be reached.' };
+  }
+  if (!response.ok) return { stored: false, reason: `The source answered ${response.status}.` };
+
+  const length = Number(response.headers.get('content-length') ?? 0);
+  if (length > maxBytes) return { stored: false, reason: 'The file is larger than the upload limit.' };
+
+  let buffer: ArrayBuffer;
+  try {
+    buffer = await response.arrayBuffer();
+  } catch {
+    return { stored: false, reason: 'The download was interrupted.' };
+  }
+  if (buffer.byteLength === 0) return { stored: false, reason: 'The source sent no data.' };
+  if (buffer.byteLength > maxBytes) return { stored: false, reason: 'The file is larger than the upload limit.' };
+
+  const mime = AUDIO_MIME(response.headers.get('content-type'), row.external_url);
+  await putBlob(env, 'asset_blobs', 'asset_id', assetId, toBase64(buffer), { mime, bytes: buffer.byteLength });
+  await env.DB.prepare(
+    'UPDATE assets SET storage_kind = ?, mime = ?, size_bytes = ?, updated_at = ? WHERE id = ?',
+  )
+    .bind('OBJECT_STORAGE', mime, buffer.byteLength, nowIso(), assetId)
+    .run();
+  return { stored: true };
 }

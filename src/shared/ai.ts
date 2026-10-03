@@ -189,6 +189,15 @@ export function buildTranscriptionEndpoint(
   return `${root}/audio/transcriptions`;
 }
 
+/** The OpenAI-compatible text-to-speech route, for generated practice audio. */
+export function buildSpeechEndpoint(
+  provider: Pick<AiProviderConfig, 'kind' | 'baseUrl'>,
+): string {
+  const base = normaliseBaseUrl(provider.baseUrl) || DEFAULT_PROVIDER_BASE_URLS[provider.kind];
+  const root = /\/v\d+$/.test(base) ? base : `${base}/v1`;
+  return `${root}/audio/speech`;
+}
+
 export interface AiProviderDraft {
   id?: string;
   label?: string;

@@ -12,7 +12,7 @@ import {
   type TranscriptSegment,
 } from '../../shared/sections';
 import type { Skill } from '../../shared/types';
-import { normaliseExternalUrl } from './media-service';
+import { ingestExternalAudio, normaliseExternalUrl } from './media-service';
 import { resolveActiveProfileId } from './scoring-profile-service';
 
 export interface EditableQuestion {
@@ -499,8 +499,10 @@ async function ensureAudioAsset(env: Env, rawUrl: string, versionId: string, act
     .first<{ id: string }>();
   if (existing) {
     await env.DB.prepare('UPDATE assets SET test_version_id = COALESCE(test_version_id, ?), visibility = ? WHERE id = ?')
-      .bind(versionId, 'ATTEMPT', existing.id)
+      .bind(versionId, 'ATTEMPT', 'ATTEMPT', existing.id)
       .run();
+    // Copy the bytes home so playback no longer depends on the source host.
+    await ingestExternalAudio(env, existing.id);
     return existing.id;
   }
   const id = newId('ast');
@@ -513,6 +515,9 @@ async function ensureAudioAsset(env: Env, rawUrl: string, versionId: string, act
   )
     .bind(id, url, filename.slice(0, 160), versionId, actorId, timestamp, timestamp)
     .run();
+  // Best effort: if the source is reachable now, store the audio in D1 so the
+  // exam plays it same-origin later even if the source goes away.
+  await ingestExternalAudio(env, id);
   return id;
 }
 

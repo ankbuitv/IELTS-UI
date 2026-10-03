@@ -2,13 +2,17 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
 import { ApiError } from '../lib/errors';
-import { normaliseExternalUrl } from '../services/media-service';
+import { ingestExternalAudio, normaliseExternalUrl } from '../services/media-service';
 import { putBlob } from '../services/blob-store';
 import { assertCsrf, assertSameOrigin, clientIp } from '../lib/http';
 import { parseBody, parseQuery } from '../lib/validate';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { currentUser } from '../middleware/auth';
+import { enforceRateLimit } from '../lib/rate-limit';
 import { recordAudit } from '../lib/audit';
+import { deleteLesson, listLessonsForAdmin, setLessonStatus, setLessonVideo } from '../services/learn-catalogue-service';
+import { generateLessons } from '../services/learn-generation-service';
+import { isLearnBand, type LearnBand } from '../../shared/learn';
 import { newId, nowIso } from '../lib/ids';
 import { hashPassword } from '../lib/crypto';
 import {
@@ -1596,6 +1600,145 @@ router.delete('/assets/:id', async (c) => {
   });
 
   return c.json({ ok: true });
+});
+
+// ---------------------------------------------------------------- learn lessons
+/**
+ * Managing the learning catalogue.
+ *
+ * Generated lessons land as DRAFT: this is teaching material, and a wrong answer
+ * key is worse than a missing lesson, so a person reads a batch before any
+ * learner sees it. Nothing here names the provider that produced a lesson.
+ */
+router.get('/learn/lessons', async (c) => {
+  const { band, status, kind } = parseQuery(
+    c,
+    z.object({
+      band: z.coerce.number().optional(),
+      status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
+      kind: z.enum(['VOCAB', 'PARAPHRASE', 'READING', 'WRITING', 'SPEAKING']).optional(),
+    }),
+  );
+  if (band !== undefined && !isLearnBand(band)) throw ApiError.validation('Choose a band between 4.0 and 8.0.');
+  return c.json({
+    lessons: await listLessonsForAdmin(c.env, {
+      band: (band ?? null) as LearnBand | null,
+      status: status ?? null,
+      kind: kind ?? null,
+    }),
+  });
+});
+
+router.post('/learn/generate', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      band: z.number().min(4).max(8),
+      kind: z.enum(['VOCAB', 'PARAPHRASE', 'READING', 'WRITING', 'SPEAKING']),
+      count: z.number().int().min(1).max(4).default(1),
+      unitTitle: z.string().min(1).max(80),
+      unitBlurb: z.string().max(160).optional(),
+      publish: z.boolean().default(false),
+      legendary: z.boolean().default(false),
+    }),
+  );
+  if (!isLearnBand(body.band)) throw ApiError.validation('Choose a band from 4.0 to 8.0 in half bands.');
+  // One AI call per request; a burst here is a mis-click, not a workflow.
+  await enforceRateLimit(
+    c.env,
+    { bucket: `learn-generate:${actor.id}`, windowSeconds: 3600, limit: 30 },
+    'That is a lot of generated lessons in a short time. Try again in a little while.',
+  );
+  const unitKey = `gen-${body.band.toFixed(1)}-${body.kind.toLowerCase()}`.replace(/\./g, '_');
+  const result = await generateLessons(c.env, {
+    band: body.band,
+    kind: body.kind,
+    count: body.count,
+    unitKey,
+    unitTitle: body.unitTitle,
+    unitBlurb: body.unitBlurb,
+    publish: body.publish,
+    legendary: body.legendary,
+    actorUserId: actor.id,
+  });
+  return c.json(result);
+});
+
+router.put('/learn/lessons/:id/status', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']) }));
+  const id = c.req.param('id');
+  await setLessonStatus(c.env, id, body.status);
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'LEARN_LESSON_STATUS',
+    entityType: 'learn_lesson',
+    entityId: id,
+    metadata: { status: body.status },
+    ip: clientIp(c),
+  });
+  return c.json({ ok: true });
+});
+
+router.put('/learn/lessons/:id/video', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ videoUrl: z.string().max(500) }));
+  const id = c.req.param('id');
+  await setLessonVideo(c.env, id, body.videoUrl);
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'LEARN_LESSON_VIDEO',
+    entityType: 'learn_lesson',
+    entityId: id,
+    metadata: { videoUrl: body.videoUrl.slice(0, 200) },
+    ip: clientIp(c),
+  });
+  return c.json({ ok: true });
+});
+
+router.delete('/learn/lessons/:id', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const id = c.req.param('id');
+  await deleteLesson(c.env, id);
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'LEARN_LESSON_ARCHIVE',
+    entityType: 'learn_lesson',
+    entityId: id,
+    ip: clientIp(c),
+  });
+  return c.json({ ok: true });
+});
+
+/**
+ * Copies an externally hosted audio asset's bytes into D1, so playback no longer
+ * depends on the source host. Returns why it could not, when it could not — a
+ * flaky or dead source is reported, not turned into an error banner.
+ */
+router.post('/assets/:id/reingest', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const id = c.req.param('id');
+  const asset = await c.env.DB.prepare('SELECT id, kind, storage_kind FROM assets WHERE id = ?')
+    .bind(id)
+    .first<{ id: string; kind: string; storage_kind: string }>();
+  if (!asset) throw ApiError.notFound('Asset not found.');
+  if (asset.kind !== 'AUDIO') throw ApiError.validation('Only audio assets can be re-ingested.');
+  const result = await ingestExternalAudio(c.env, id);
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'ASSET_REINGEST',
+    entityType: 'asset',
+    entityId: id,
+    metadata: { stored: result.stored, reason: result.reason ?? null },
+    ip: clientIp(c),
+  });
+  return c.json({ stored: result.stored, reason: result.reason ?? null });
 });
 
 async function uniqueSlug(env: AppBindings['Bindings'], title: string): Promise<string> {

@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 43   Indexes: 58
+-- Tables: 47   Indexes: 63
 -- =============================================================================
 
 -- table: users
@@ -654,7 +654,7 @@ CREATE TABLE IF NOT EXISTS learn_profiles (
   last_words_day  TEXT,
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL
-);
+, band_source TEXT NOT NULL DEFAULT '');
 
 -- table: learn_lessons_done
 CREATE TABLE IF NOT EXISTS learn_lessons_done (
@@ -685,6 +685,70 @@ CREATE TABLE IF NOT EXISTS dictionary_cache (
   payload_json TEXT NOT NULL,
   source       TEXT NOT NULL,
   fetched_at   TEXT NOT NULL
+);
+
+-- table: learn_lessons
+CREATE TABLE IF NOT EXISTS "learn_lessons" (
+  id           TEXT PRIMARY KEY,
+  band         REAL NOT NULL,
+  unit_key     TEXT NOT NULL,
+  unit_title   TEXT NOT NULL DEFAULT '',
+  unit_blurb   TEXT NOT NULL DEFAULT '',
+  position     INTEGER NOT NULL DEFAULT 0,
+  title        TEXT NOT NULL,
+  blurb        TEXT NOT NULL DEFAULT '',
+  kind         TEXT NOT NULL DEFAULT 'VOCAB'
+               CHECK (kind IN ('VOCAB', 'PARAPHRASE', 'READING', 'WRITING', 'SPEAKING')),
+  payload_json TEXT NOT NULL,
+  origin       TEXT NOT NULL DEFAULT 'BUILT_IN'
+               CHECK (origin IN ('BUILT_IN', 'ADMIN_AI', 'PERSONAL_AI')),
+  status       TEXT NOT NULL DEFAULT 'PUBLISHED'
+               CHECK (status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED')),
+  owner_id     TEXT REFERENCES users (id) ON DELETE CASCADE,
+  created_by   TEXT,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+, video_url TEXT NOT NULL DEFAULT '', legendary INTEGER NOT NULL DEFAULT 0);
+
+-- table: learn_plans
+CREATE TABLE IF NOT EXISTS learn_plans (
+  id              TEXT PRIMARY KEY,
+  user_id         TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  target_band     REAL NOT NULL,
+  exam_date       TEXT,
+  minutes_per_day INTEGER NOT NULL DEFAULT 30,
+  status          TEXT NOT NULL DEFAULT 'ACTIVE'
+                  CHECK (status IN ('ACTIVE', 'ARCHIVED')),
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
+-- table: learn_plan_items
+CREATE TABLE IF NOT EXISTS learn_plan_items (
+  id           TEXT PRIMARY KEY,
+  plan_id      TEXT NOT NULL REFERENCES learn_plans (id) ON DELETE CASCADE,
+  day          TEXT NOT NULL,
+  slot         INTEGER NOT NULL DEFAULT 0,
+  kind         TEXT NOT NULL CHECK (kind IN ('LESSON', 'REVIEW', 'MOCK_TEST')),
+  lesson_id    TEXT REFERENCES learn_lessons (id) ON DELETE SET NULL,
+  label        TEXT NOT NULL DEFAULT '',
+  band         REAL,
+  skill        TEXT CHECK (skill IS NULL OR skill IN ('READING', 'LISTENING', 'WRITING', 'OVERALL')),
+  status       TEXT NOT NULL DEFAULT 'PENDING'
+               CHECK (status IN ('PENDING', 'DONE', 'SKIPPED')),
+  completed_at TEXT,
+  created_at   TEXT NOT NULL
+);
+
+-- table: speech_cache
+CREATE TABLE IF NOT EXISTS speech_cache (
+  cache_key  TEXT PRIMARY KEY,
+  voice      TEXT NOT NULL,
+  text_hash  TEXT NOT NULL,
+  mime       TEXT NOT NULL,
+  data_b64   TEXT NOT NULL,
+  bytes      INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
 );
 
 -- index: idx_users_role
@@ -860,3 +924,18 @@ CREATE INDEX IF NOT EXISTS idx_vocabulary_due ON vocabulary_entries (user_id, du
 
 -- index: idx_learn_xp_user_day
 CREATE INDEX IF NOT EXISTS idx_learn_xp_user_day ON learn_xp_log (user_id, day);
+
+-- index: idx_learn_lessons_band
+CREATE INDEX IF NOT EXISTS idx_learn_lessons_band ON learn_lessons (band, status, position);
+
+-- index: idx_learn_lessons_owner
+CREATE INDEX IF NOT EXISTS idx_learn_lessons_owner ON learn_lessons (owner_id, band);
+
+-- index: idx_learn_plans_user
+CREATE INDEX IF NOT EXISTS idx_learn_plans_user ON learn_plans (user_id, status);
+
+-- index: idx_learn_plan_items_day
+CREATE INDEX IF NOT EXISTS idx_learn_plan_items_day ON learn_plan_items (plan_id, day, slot);
+
+-- index: idx_speech_cache_created
+CREATE INDEX IF NOT EXISTS idx_speech_cache_created ON speech_cache (created_at);

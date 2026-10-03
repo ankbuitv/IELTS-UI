@@ -6,22 +6,25 @@ import { describeAiFailure } from '../ai/failure';
 import { buildVocabMessages } from '../ai/coach-prompts';
 import { levelHintForUser } from './ai-marking-service';
 import { saveAiVocabulary, updateVocabularyEntry, type SuggestedWord } from './vocabulary-service';
-import { WORD_BANK, findBankWord, lessonById } from '../../shared/learn-content';
+import { getLessonForCompletion, wordPool } from './learn-catalogue-service';
+import { WORD_BANK } from '../../shared/learn-content';
 import { seededRandom, shuffle } from '../../shared/learn-engine';
 import {
+  LEARN_BAND_DEFAULT,
   XP_REVIEW_PER_WORD,
+  bandForEstimate,
   isPlausibleDay,
   lessonXp,
-  levelForBand,
   nextStreak,
   starsFor,
   type DailyWordsResult,
-  type LearnLevel,
+  type LearnBand,
   type LearnOverview,
   type LearnProfile,
   type LearnProgressItem,
   type LessonCompletionInput,
   type LessonCompletionResult,
+  type LessonWord,
   type ReviewResultInput,
 } from '../../shared/learn';
 
@@ -29,8 +32,8 @@ import {
  * Learn path service.
  *
  * What is trusted lives here: XP, the streak, the daily goal and lesson stars.
- * The lesson content and exercises are generated on the device, so the server
- * only validates the lesson id and the plausibility of what the client reports
+ * The exercises are generated on the device, so the server only validates the
+ * lesson against the catalogue and the plausibility of what the client reports
  * (never more correct answers than exercises, a calendar day near today). A
  * learner can only ever inflate their own numbers, which no one else sees.
  */
@@ -42,6 +45,7 @@ interface ProfileRow {
   last_active_day: string | null;
   daily_goal_xp: number;
   start_band: number | null;
+  band_source: string;
   last_words_day: string | null;
 }
 
@@ -58,7 +62,7 @@ async function ensureProfile(env: Env, userId: string): Promise<ProfileRow> {
     .bind(userId, now, now)
     .run();
   const row = await env.DB.prepare(
-    `SELECT user_id, xp, streak, best_streak, last_active_day, daily_goal_xp, start_band, last_words_day
+    `SELECT user_id, xp, streak, best_streak, last_active_day, daily_goal_xp, start_band, band_source, last_words_day
        FROM learn_profiles WHERE user_id = ?`,
   )
     .bind(userId)
@@ -67,15 +71,29 @@ async function ensureProfile(env: Env, userId: string): Promise<ProfileRow> {
   return row;
 }
 
-async function resolveLevel(
+/**
+ * Where the learner sits on the 4.0–8.0 ladder.
+ *
+ * A band they picked themselves wins over an estimate, because a candidate who
+ * says "I am a 6" knows their own aim better than the last six tests do.
+ * `band_source` tells the two apart now that either may be any half band;
+ * rows written before that column existed carry an empty source and still read
+ * as chosen.
+ */
+async function resolveBand(
   env: Env,
   userId: string,
   row: ProfileRow,
-): Promise<{ level: LearnLevel; source: LearnProfile['levelSource']; band: number | null }> {
-  if (row.start_band !== null) return { level: levelForBand(row.start_band), source: 'CHOSEN', band: row.start_band };
+): Promise<{ band: LearnBand; source: LearnProfile['bandSource']; estimate: number | null }> {
+  if (row.start_band !== null && row.band_source !== 'ESTIMATED') {
+    return { band: bandForEstimate(row.start_band), source: 'CHOSEN', estimate: row.start_band };
+  }
   const estimate = await levelHintForUser(env, userId).catch(() => null);
-  if (estimate !== null) return { level: levelForBand(estimate), source: 'ESTIMATED', band: estimate };
-  return { level: 5, source: 'DEFAULT', band: null };
+  if (estimate !== null) return { band: bandForEstimate(estimate), source: 'ESTIMATED', estimate };
+  if (row.start_band !== null) {
+    return { band: bandForEstimate(row.start_band), source: 'DEFAULT', estimate: row.start_band };
+  }
+  return { band: LEARN_BAND_DEFAULT, source: 'DEFAULT', estimate: null };
 }
 
 async function xpOnDay(env: Env, userId: string, day: string): Promise<number> {
@@ -86,7 +104,7 @@ async function xpOnDay(env: Env, userId: string, day: string): Promise<number> {
 }
 
 async function toProfile(env: Env, userId: string, row: ProfileRow, day: string): Promise<LearnProfile> {
-  const level = await resolveLevel(env, userId, row);
+  const placement = await resolveBand(env, userId, row);
   return {
     xp: row.xp,
     streak: row.streak,
@@ -94,9 +112,9 @@ async function toProfile(env: Env, userId: string, row: ProfileRow, day: string)
     dailyGoalXp: row.daily_goal_xp,
     todayXp: await xpOnDay(env, userId, day),
     lastActiveDay: row.last_active_day,
-    level: level.level,
-    levelSource: level.source,
-    startBand: level.band,
+    band: placement.band,
+    bandSource: placement.source,
+    startBand: placement.estimate,
   };
 }
 
@@ -146,10 +164,11 @@ export async function getLearnOverview(env: Env, userId: string, dayInput: strin
   return { profile, progress, dueWords: due?.due ?? 0, dailyWordsDone: row.last_words_day === day, week };
 }
 
-export async function setLearnLevel(env: Env, userId: string, level: LearnLevel): Promise<void> {
+/** Places the learner on a rung of the ladder, overriding any estimate. */
+export async function setLearnBand(env: Env, userId: string, band: LearnBand): Promise<void> {
   await ensureProfile(env, userId);
-  await env.DB.prepare('UPDATE learn_profiles SET start_band = ?, updated_at = ? WHERE user_id = ?')
-    .bind(level, nowIso(), userId)
+  await env.DB.prepare("UPDATE learn_profiles SET start_band = ?, band_source = 'CHOSEN', updated_at = ? WHERE user_id = ?")
+    .bind(band, nowIso(), userId)
     .run();
 }
 
@@ -197,7 +216,9 @@ async function award(
 
 export async function completeLesson(env: Env, userId: string, input: LessonCompletionInput): Promise<LessonCompletionResult> {
   const day = requireDay(input.day);
-  const lesson = lessonById(input.lessonId);
+  // The lesson must exist in the catalogue and be one this learner may play:
+  // a personal generated lesson belongs to its owner only.
+  const lesson = await getLessonForCompletion(env, userId, input.lessonId);
   if (!lesson) throw ApiError.notFound('That lesson does not exist.');
   const total = Math.floor(input.total);
   const correct = Math.floor(input.correct);
@@ -232,14 +253,20 @@ export async function completeLesson(env: Env, userId: string, input: LessonComp
 
   const awarded = await award(env, userId, row, xp, day, `lesson:${lesson.id}`);
 
-  // Missed words go to the notebook so they come back for review.
+  // Missed words go to the notebook so they come back for review. Only words
+  // this lesson actually teaches are accepted, so a crafted request cannot use
+  // this endpoint to write arbitrary text into the notebook.
   let wordsSaved = 0;
   const missed = [...new Set(input.mistakes.map((term) => term.trim()).filter(Boolean))].slice(0, 12);
+  // Only a vocabulary lesson teaches words; the other kinds carry no terms, so
+  // there is nothing for a mistake to refer to and nothing is saved.
+  const taught = lesson.payload.kind === 'VOCAB' ? lesson.payload.words : [];
+  const wordsByTerm = new Map(taught.map((word) => [word.term.toLowerCase(), word]));
   const suggestions: SuggestedWord[] = [];
   for (const term of missed) {
-    const word = findBankWord(term);
+    const word = wordsByTerm.get(term.toLowerCase());
     if (!word) continue;
-    suggestions.push({ term: word.term, pos: word.pos, meaning: word.meaning, meaningVi: word.vi, example: word.example, level: word.level });
+    suggestions.push({ term: word.term, pos: word.pos, meaning: word.meaning, meaningVi: word.vi, example: word.example, level: lesson.band });
     // A word already in the notebook is brought back sooner.
     await env.DB.prepare(
       'UPDATE vocabulary_entries SET box = MAX(0, box - 1), due_at = NULL, updated_at = ? WHERE user_id = ? AND term = ? COLLATE NOCASE',
@@ -342,7 +369,7 @@ function suggestionFrom(raw: unknown): SuggestedWord | null {
 }
 
 /**
- * Today's words: the AI picks them for the learner's level; if it is not
+ * Today's words: the AI picks them for the learner's band; if it is not
  * available, words from the built-in bank that they do not have yet.
  */
 export async function getDailyWords(
@@ -352,10 +379,10 @@ export async function getDailyWords(
 ): Promise<DailyWordsResult> {
   const day = requireDay(options.day);
   const row = await ensureProfile(env, userId);
-  const level = await resolveLevel(env, userId, row);
+  const placement = await resolveBand(env, userId, row);
 
   if (!options.extra && row.last_words_day === day) {
-    return { added: 0, source: 'NONE', alreadyDone: true, level: level.level, words: await readDailyWords(env, userId, DAILY_WORD_COUNT) };
+    return { added: 0, source: 'NONE', alreadyDone: true, band: placement.band, words: await readDailyWords(env, userId, DAILY_WORD_COUNT) };
   }
 
   const knownRows = await env.DB.prepare('SELECT term FROM vocabulary_entries WHERE user_id = ? ORDER BY created_at DESC LIMIT 150')
@@ -368,7 +395,7 @@ export async function getDailyWords(
   let source: DailyWordsResult['source'] = 'NONE';
   try {
     const { data } = await completeJson<{ words?: unknown[] }>(env, {
-      messages: buildVocabMessages({ band: level.band ?? level.level, count: DAILY_WORD_COUNT, known, dayIndex }),
+      messages: buildVocabMessages({ band: placement.estimate ?? placement.band, count: DAILY_WORD_COUNT, known, dayIndex }),
       temperature: 0.7,
       maxTokens: 1_400,
       timeoutMs: 25_000,
@@ -385,13 +412,13 @@ export async function getDailyWords(
     const have = new Set(known.map((term) => term.toLowerCase()));
     const random = seededRandom(`${userId}:${day}:${options.extra ? 'x' : 'd'}`);
     const candidates = shuffle(
-      WORD_BANK.filter((word) => word.level >= level.level && !have.has(word.term.toLowerCase())),
+      WORD_BANK.filter((word) => word.band >= placement.band && !have.has(word.term.toLowerCase())),
       random,
     ).slice(0, DAILY_WORD_COUNT);
     added = await saveAiVocabulary(
       env,
       userId,
-      candidates.map((word) => ({ term: word.term, pos: word.pos, meaning: word.meaning, meaningVi: word.vi, example: word.example, level: word.level })),
+      candidates.map((word) => ({ term: word.term, pos: word.pos, meaning: word.meaning, meaningVi: word.vi, example: word.example, level: word.band })),
       DAILY_WORDS_SOURCE,
       'WORDBANK',
     );
@@ -403,7 +430,27 @@ export async function getDailyWords(
     .bind(day, nowIso(), userId)
     .run();
 
-  return { added, source, alreadyDone: false, level: level.level, words: await readDailyWords(env, userId, Math.max(added, DAILY_WORD_COUNT)) };
+  return { added, source, alreadyDone: false, band: placement.band, words: await readDailyWords(env, userId, Math.max(added, DAILY_WORD_COUNT)) };
+}
+
+/** The band a learner is placed on, for callers outside this service. */
+export async function getLearnBand(env: Env, userId: string): Promise<LearnBand> {
+  const row = await ensureProfile(env, userId);
+  const { band } = await resolveBand(env, userId, row);
+  return band;
+}
+
+/**
+ * Wrong options for the review lesson: words from the learner's own band.
+ *
+ * The exercise engine no longer carries a built-in word bank (that would pull
+ * every lesson back into the browser bundle), so the pool has to come from the
+ * catalogue like it does for a normal lesson.
+ */
+export async function getReviewPool(env: Env, userId: string): Promise<LessonWord[]> {
+  const row = await ensureProfile(env, userId);
+  const { band } = await resolveBand(env, userId, row);
+  return wordPool(env, band, '');
 }
 
 /** Notebook words that are due, shaped for the review lesson. */

@@ -1,7 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LEARN_LEVEL_LABELS, LEARN_LEVELS, streakAlive, type DailyWordsResult, type LearnLevel, type LearnOverview } from '@shared/learn';
-import { LESSONS, UNITS, unlockedThrough, type FlatLesson } from '@shared/learn-content';
+import {
+  LEARN_BANDS,
+  LEARN_BAND_LABELS,
+  LESSON_KIND_LABELS,
+  bandBelow,
+  bandIsOpen,
+  openPositionCount,
+  streakAlive,
+  type CatalogueResponse,
+  type CatalogueUnit,
+  type DailyWordsResult,
+  type LearnBand,
+  type LearnOverview,
+} from '@shared/learn';
 import { useAsync } from '../../hooks/useAsync';
 import { Icon, type IconName } from '../../components/Icon';
 import { Stars } from '../../components/learn/Stars';
@@ -21,21 +33,53 @@ function weekdayInitial(day: string): string {
 
 const WAVE = [0, 38, 64, 38, 0, -38, -64, -38];
 
+/** A lesson as the catalogue sends it, in path order within its band. */
+type PathLesson = CatalogueUnit['lessons'][number];
+
 /**
  * Learn: the daily path.
  *
- * A column of lessons that unlock one after another, with XP, a daily streak
- * and a daily goal on top, today's AI words and a review of due words beside
- * it. The lessons are short (about ten exercises, two or three minutes).
+ * A column of lessons that unlock one after another inside a band, with a band
+ * strip across the top, XP, a daily streak and a daily goal, today's AI words
+ * and a review of due words beside it. The lessons are short (about ten
+ * exercises, two or three minutes).
+ *
+ * The path comes from the catalogue API rather than the bundle, so an
+ * administrator can publish lessons at any band without shipping a new client.
  */
 export function LearnPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const overview = useAsync<LearnOverview>(() => learnApi.overview(), []);
+  const [band, setBand] = useState<LearnBand | null>(null);
+  const catalogue = useAsync<CatalogueResponse>(() => learnApi.catalogue(band ?? undefined), [band]);
   const [daily, setDaily] = useState<DailyWordsResult | null>(null);
   const [dailyBusy, setDailyBusy] = useState(false);
+  const [planBusy, setPlanBusy] = useState(false);
   const [openLesson, setOpenLesson] = useState<string | null>(null);
-  const [levelOpen, setLevelOpen] = useState(false);
+  // Words the learner has marked as already known: skipped from the daily list, kept for redo.
+  const [knownWords, setKnownWords] = useState<Set<string>>(() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem('aieo.word-known') ?? '[]'));
+    } catch {
+      return new Set<string>();
+    }
+  });
+  const [hideKnown, setHideKnown] = useState(false);
+  const toggleKnown = (term: string) => {
+    setKnownWords((prev) => {
+      const next = new Set(prev);
+      if (next.has(term)) next.delete(term);
+      else next.add(term);
+      try {
+        localStorage.setItem('aieo.word-known', JSON.stringify([...next]));
+      } catch {
+        // Private mode: the mark just won't persist.
+      }
+      return next;
+    });
+  };
+  const [bandOpenModal, setBandOpenModal] = useState(false);
   const askedForWords = useRef(false);
 
   const data = overview.data;
@@ -60,18 +104,34 @@ export function LearnPage() {
   const profile = data?.profile;
   const progress = data?.progress ?? {};
 
-  const { currentIndex, furthest } = useMemo(() => {
-    let best = -1;
-    for (const lesson of LESSONS) if ((progress[lesson.id]?.completions ?? 0) > 0) best = Math.max(best, lesson.index);
-    const unlocked = Math.min(LESSONS.length - 1, unlockedThrough(best, profile?.level ?? 5));
-    return { currentIndex: unlocked, furthest: best };
-  }, [progress, profile?.level]);
+  const bands = catalogue.data?.bands ?? [];
+  const selectedBand = catalogue.data?.selected.band ?? null;
+  const selectedLabel = catalogue.data?.selected.label ?? '';
 
-  const stateOf = (lesson: FlatLesson): NodeState => {
-    if ((progress[lesson.id]?.completions ?? 0) > 0 && lesson.index !== currentIndex) return 'done';
-    if (lesson.index === currentIndex) return 'current';
-    if (lesson.index < currentIndex) return 'open';
-    return 'locked';
+  // A band is finished when every lesson in it has been done at least once.
+  const completeBands = useMemo(
+    () => bands.filter((item) => item.lessonCount > 0 && item.completedCount >= item.lessonCount).map((item) => item.band),
+    [bands],
+  );
+
+  const path = useMemo<PathLesson[]>(
+    () =>
+      (catalogue.data?.selected.units ?? []).flatMap((unit) => unit.lessons),
+    [catalogue.data],
+  );
+
+  const isOpen = selectedBand === null || bandIsOpen(selectedBand, profile?.band ?? 5, completeBands);
+  const completedPositions = path.filter((lesson) => (progress[lesson.id]?.completions ?? 0) > 0).map((lesson) => lesson.position);
+  const currentIndex = Math.max(0, Math.min(path.length - 1, openPositionCount(completedPositions, path.length) - 1));
+
+  const stateOf = (lesson: PathLesson, index: number): NodeState => {
+    if (!isOpen || path.length === 0) return 'locked';
+    // A legendary lesson unlocks only once the learner reaches its band in practice.
+    if (lesson.legendary && (profile?.band ?? 0) < (selectedBand ?? 0)) return 'locked';
+    if (index > currentIndex) return 'locked';
+    if ((progress[lesson.id]?.completions ?? 0) > 0 && index !== currentIndex) return 'done';
+    if (index === currentIndex) return 'current';
+    return 'open';
   };
 
   const moreWords = async () => {
@@ -88,12 +148,13 @@ export function LearnPage() {
     }
   };
 
-  const chooseLevel = async (level: LearnLevel) => {
+  const chooseBand = async (next: LearnBand) => {
     try {
-      await learnApi.setLevel(level);
-      setLevelOpen(false);
+      await learnApi.setBand(next);
+      setBandOpenModal(false);
+      setBand(next);
       await overview.reload();
-      toast.push(`Level set to ${LEARN_LEVEL_LABELS[level]}.`, 'success');
+      toast.push(`Band set to ${next.toFixed(1)} · ${LEARN_BAND_LABELS[next]}.`, 'success');
     } catch (cause) {
       toast.push(describeError(cause), 'error');
     }
@@ -113,7 +174,9 @@ export function LearnPage() {
   const alive = streakAlive(profile.lastActiveDay, today);
   const activeToday = profile.lastActiveDay === today;
   const maxWeek = Math.max(1, ...data.week.map((item) => item.xp));
-  const doneCount = LESSONS.filter((lesson) => (progress[lesson.id]?.completions ?? 0) > 0).length;
+  const totalLessons = bands.reduce((total, item) => total + item.lessonCount, 0);
+  const doneCount = bands.reduce((total, item) => total + item.completedCount, 0);
+  const blockingBand = selectedBand !== null ? bandBelow(selectedBand) : null;
 
   return (
     <div className="learn">
@@ -165,29 +228,67 @@ export function LearnPage() {
         <aside className="learn__today" aria-label="Today">
           <section className="card learn-card">
             <header className="learn-card__head">
+              <h2>Study plan</h2>
+              <Link className="learn-card__link" to="/learn/plan">
+                Open
+                <Icon name="arrowRight" size={13} />
+              </Link>
+            </header>
+            <p className="muted small">
+              A dated route from your current band to the one you want, built from your recent test scores.
+            </p>
+            <Button size="sm" block loading={planBusy} onClick={() => void makeRevisionLesson(navigate, setPlanBusy, toast.push)}>
+              <Icon name="sparkle" size={13} />
+              Lesson from my mistakes
+            </Button>
+          </section>
+
+          <section className="card learn-card">
+            <header className="learn-card__head">
               <h2>Today’s words</h2>
-              <Button size="sm" variant="ghost" onClick={() => void moreWords()} loading={dailyBusy}>
-                <Icon name="plus" size={13} />5 more
-              </Button>
+              <div className="row">
+                <Button size="sm" variant="ghost" onClick={() => setHideKnown((value) => !value)}>
+                  <Icon name="eye" size={13} />
+                  {hideKnown ? 'Showing all' : 'Hide known'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => void moreWords()} loading={dailyBusy}>
+                  <Icon name="plus" size={13} />5 more
+                </Button>
+              </div>
             </header>
             {dailyBusy && !daily ? (
-              <p className="muted small">Choosing words for your level…</p>
+              <p className="muted small">Choosing words for your band…</p>
             ) : daily && daily.words.length > 0 ? (
               <ul className="daily-words">
-                {daily.words.slice(0, 6).map((word) => (
-                  <li key={word.id}>
-                    <div className="daily-words__top">
-                      <b>{word.term}</b>
-                      {word.pos ? <span className="muted tiny">{word.pos}</span> : null}
-                      {canSpeak() ? (
-                        <button type="button" className="vocab-item__speak" onClick={() => speak(word.term)} aria-label={`Hear “${word.term}”`}>
-                          <Icon name="play" size={10} />
-                        </button>
-                      ) : null}
-                    </div>
-                    <span className="daily-words__vi">{word.meaningVi || word.meaning}</span>
-                  </li>
-                ))}
+                {daily.words
+                  .filter((word) => !hideKnown || !knownWords.has(word.term))
+                  .slice(0, 6)
+                  .map((word) => {
+                    const isKnown = knownWords.has(word.term);
+                    return (
+                      <li key={word.id} style={isKnown ? { opacity: 0.5 } : undefined}>
+                        <div className="daily-words__top">
+                          <b>{word.term}</b>
+                          {word.pos ? <span className="muted tiny">{word.pos}</span> : null}
+                          {canSpeak() ? (
+                            <button type="button" className="vocab-item__speak" onClick={() => speak(word.term)} aria-label={`Hear “${word.term}”`}>
+                              <Icon name="play" size={10} />
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="vocab-item__speak"
+                            onClick={() => toggleKnown(word.term)}
+                            aria-label={isKnown ? `Mark “${word.term}” as still learning` : `Mark “${word.term}” as known`}
+                            title={isKnown ? 'Still learning' : 'I know this'}
+                          >
+                            <Icon name={isKnown ? 'rotate' : 'check'} size={10} />
+                          </button>
+                        </div>
+                        <span className="daily-words__vi">{word.meaningVi || word.meaning}</span>
+                      </li>
+                    );
+                  })}
               </ul>
             ) : (
               <p className="muted small">New words are added here each day. They are saved to your notebook automatically.</p>
@@ -214,128 +315,215 @@ export function LearnPage() {
 
           <section className="card learn-card">
             <header className="learn-card__head">
-              <h2>Your level</h2>
-              <Button size="sm" variant="ghost" onClick={() => setLevelOpen(true)}>
+              <h2>Your band</h2>
+              <Button size="sm" variant="ghost" onClick={() => setBandOpenModal(true)}>
                 Change
               </Button>
             </header>
             <p className="learn-level">
-              <b>{LEARN_LEVEL_LABELS[profile.level]}</b>
+              <b>
+                {profile.band.toFixed(1)} · {LEARN_BAND_LABELS[profile.band]}
+              </b>
               <span className="muted small">
-                {profile.levelSource === 'CHOSEN'
+                {profile.bandSource === 'CHOSEN'
                   ? 'Chosen by you.'
-                  : profile.levelSource === 'ESTIMATED'
-                    ? `Picked from your recent bands (about ${profile.startBand?.toFixed(1)}).`
+                  : profile.bandSource === 'ESTIMATED'
+                    ? `Picked from your recent test bands (about ${profile.startBand?.toFixed(1)}).`
                     : 'A starting point. Take a practice test or change it yourself.'}
               </span>
             </p>
             <p className="muted tiny">
-              {doneCount} of {LESSONS.length} lessons finished.
+              {doneCount} of {totalLessons} lessons finished.
             </p>
           </section>
         </aside>
 
         <section className="learn__path" aria-label="Lesson path">
-          {UNITS.map((unit, unitIndex) => {
-            const lessons = LESSONS.filter((lesson) => lesson.unitId === unit.id);
-            const unitDone = lessons.every((lesson) => (progress[lesson.id]?.completions ?? 0) > 0);
-            const finished = lessons.filter((lesson) => (progress[lesson.id]?.completions ?? 0) > 0).length;
-            const unitLocked = lessons.every((lesson) => stateOf(lesson) === 'locked');
-            return (
-              <div key={unit.id} className={`unit unit--c${unitIndex % 4}${unitLocked ? ' unit--locked' : ''}`}>
-                <header className="unit__head">
-                  <div>
-                    <p className="unit__kicker">
-                      Unit {unit.id.slice(1)} · {unit.band}
-                    </p>
-                    <h2>{unit.title}</h2>
-                    <p>{unit.blurb}</p>
-                  </div>
-                  {unitDone ? (
-                    <span className="unit__done">
-                      <Icon name="check" size={14} strokeWidth={3} /> Complete
-                    </span>
-                  ) : (
-                    <span className="unit__count">
-                      {unitLocked ? <Icon name="lock" size={13} strokeWidth={2.4} /> : null}
-                      {finished}/{lessons.length}
-                    </span>
-                  )}
-                </header>
-                <ol className="unit__nodes">
-                  {lessons.map((lesson) => {
-                    const state = stateOf(lesson);
-                    const item = progress[lesson.id];
-                    const offset = WAVE[lesson.index % WAVE.length]!;
-                    const open = openLesson === lesson.id;
-                    const icon: IconName = state === 'done' ? 'check' : state === 'locked' ? 'lock' : 'play';
-                    return (
-                      <li key={lesson.id} className={`node-row${state === 'locked' ? ' node-row--locked' : ''}`} style={{ '--offset': `${offset}px` } as React.CSSProperties}>
-                        <div className="node-wrap">
-                          {state === 'current' ? <span className="node-start">Start</span> : null}
-                          <button
-                            type="button"
-                            className={`node node--${state}`}
-                            aria-expanded={open}
-                            aria-label={`${lesson.title}, ${state === 'locked' ? 'locked' : state === 'done' ? 'finished' : 'available'}`}
-                            onClick={() => setOpenLesson(open ? null : lesson.id)}
-                          >
-                            <Icon name={icon} size={28} strokeWidth={state === 'done' ? 3.2 : 2.2} filled={state === 'current'} />
-                          </button>
-                          {item && item.completions > 0 ? <Stars value={item.stars} size={13} /> : null}
-                        </div>
-                        <div className="node-label">
-                          <b>{lesson.title}</b>
-                          <span>{lesson.blurb}</span>
-                        </div>
-                        {open ? (
-                          <div className="node-pop" role="dialog" aria-label={lesson.title}>
-                            <h3>{lesson.title}</h3>
-                            <p className="muted small">{lesson.blurb}</p>
-                            <p className="node-pop__words">{lesson.words.map((word) => word.term).join(' · ')}</p>
-                            {state === 'locked' ? (
-                              <p className="small">
-                                Finish {LESSONS[Math.max(0, lesson.index - 1)]?.title ?? 'the previous lesson'} to unlock this lesson.
-                              </p>
-                            ) : (
-                              <Button variant="primary" block onClick={() => navigate(`/learn/lesson/${lesson.id}`)}>
-                                {state === 'done' ? 'Practise again' : 'Start lesson'}
-                                <span className="node-pop__xp">+{item?.completions ? '~7' : '~20'} XP</span>
-                              </Button>
-                            )}
+          <nav className="band-strip" aria-label="Choose a band">
+            {bands.map((item) => {
+              const on = item.band === selectedBand;
+              const empty = item.lessonCount === 0;
+              const finished = item.lessonCount > 0 && item.completedCount >= item.lessonCount;
+              return (
+                <button
+                  key={item.band}
+                  type="button"
+                  className={`band-chip${on ? ' is-on' : ''}${empty ? ' is-empty' : ''}${finished ? ' is-done' : ''}`}
+                  onClick={() => {
+                    setBand(item.band);
+                    setOpenLesson(null);
+                  }}
+                  aria-current={on ? 'true' : undefined}
+                  title={LEARN_BAND_LABELS[item.band]}
+                >
+                  <b>{item.band.toFixed(1)}</b>
+                  <span>
+                    {empty ? 'no lessons yet' : `${item.completedCount}/${item.lessonCount}`}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {catalogue.loading && !catalogue.data ? <Loading label="Loading the path…" /> : null}
+          {catalogue.error && !catalogue.data ? (
+            <Notice tone="danger" title="The path could not be loaded">
+              {catalogue.error}
+            </Notice>
+          ) : null}
+
+          {!isOpen ? (
+            <div className="unit unit--locked">
+              <header className="unit__head">
+                <div>
+                  <p className="unit__kicker">
+                    Band {selectedBand?.toFixed(1)} · {selectedLabel}
+                  </p>
+                  <h2>
+                    <Icon name="lock" size={15} strokeWidth={2.4} /> Locked
+                  </h2>
+                  <p>
+                    Finish band {blockingBand?.toFixed(1)} to open this band, or set your own band to
+                    jump straight here.
+                  </p>
+                </div>
+              </header>
+              <Button variant="primary" onClick={() => setBandOpenModal(true)}>
+                Change your band
+              </Button>
+            </div>
+          ) : (
+            catalogue.data?.selected.units.map((unit, unitIndex) => {
+              const lessons = path.filter((lesson) => lesson.unitKey === unit.unitKey);
+              const finished = lessons.filter((lesson) => (progress[lesson.id]?.completions ?? 0) > 0).length;
+              const unitDone = lessons.length > 0 && finished === lessons.length;
+              const unitLocked = lessons.length > 0 && lessons.every((lesson) => stateOf(lesson, path.indexOf(lesson)) === 'locked');
+              return (
+                <div key={unit.unitKey} className={`unit unit--c${unitIndex % 4}${unitLocked ? ' unit--locked' : ''}`}>
+                  <header className="unit__head">
+                    <div>
+                      <p className="unit__kicker">Band {selectedBand?.toFixed(1)}</p>
+                      <h2>{unit.title}</h2>
+                      <p>{unit.blurb}</p>
+                    </div>
+                    {unitDone ? (
+                      <span className="unit__done">
+                        <Icon name="check" size={14} strokeWidth={3} /> Complete
+                      </span>
+                    ) : (
+                      <span className="unit__count">
+                        {unitLocked ? <Icon name="lock" size={13} strokeWidth={2.4} /> : null}
+                        {finished}/{lessons.length}
+                      </span>
+                    )}
+                  </header>
+                  <ol className="unit__nodes">
+                    {lessons.map((lesson) => {
+                      const index = path.indexOf(lesson);
+                      const state = stateOf(lesson, index);
+                      const item = progress[lesson.id];
+                      const offset = WAVE[index % WAVE.length]!;
+                      const open = openLesson === lesson.id;
+                      const icon: IconName = state === 'done' ? 'check' : state === 'locked' ? 'lock' : 'play';
+                      const previous = path[index - 1];
+                      return (
+                        <li key={lesson.id} className={`node-row${state === 'locked' ? ' node-row--locked' : ''}`} style={{ '--offset': `${offset}px` } as React.CSSProperties}>
+                          <div className="node-wrap">
+                            {state === 'current' ? <span className="node-start">Start</span> : null}
+                            <button
+                              type="button"
+                              className={`node node--${state}`}
+                              aria-expanded={open}
+                              aria-label={`${lesson.title}, ${state === 'locked' ? 'locked' : state === 'done' ? 'finished' : 'available'}`}
+                              onClick={() => setOpenLesson(open ? null : lesson.id)}
+                            >
+                              <Icon name={icon} size={28} strokeWidth={state === 'done' ? 3.2 : 2.2} filled={state === 'current'} />
+                            </button>
+                            {item && item.completions > 0 ? <Stars value={item.stars} size={13} /> : null}
                           </div>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ol>
-              </div>
-            );
-          })}
-          <p className="learn__end">
-            {furthest >= LESSONS.length - 1
-              ? 'You have finished every lesson. New words keep arriving every day.'
-              : 'More lessons are added over time.'}
-          </p>
+                          <div className="node-label">
+                            <b>{lesson.title}</b>
+                            <span>{lesson.blurb}</span>
+                            <em className="node-kind">{LESSON_KIND_LABELS[lesson.kind]}</em>
+                            {lesson.legendary ? (
+                              <em className="node-kind" style={{ color: '#b8860b', fontWeight: 700 }}>★ Legendary</em>
+                            ) : null}
+                          </div>
+                          {open ? (
+                            <div className="node-pop" role="dialog" aria-label={lesson.title}>
+                              <h3>{lesson.title}</h3>
+                              <p className="muted small">{lesson.blurb}</p>
+                              <p className="node-pop__words">{lesson.preview}</p>
+                              {state === 'locked' ? (
+                                <p className="small">
+                                  Finish {previous?.title ?? 'the previous lesson'} to unlock this lesson.
+                                </p>
+                              ) : (
+                                <Button variant="primary" block onClick={() => navigate(`/learn/lesson/${lesson.id}`)}>
+                                  {state === 'done' ? 'Practise again' : 'Start lesson'}
+                                  <span className="node-pop__xp">+{item?.completions ? '~7' : '~20'} XP</span>
+                                </Button>
+                              )}
+                            </div>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              );
+            })
+          )}
+
+          {isOpen && path.length > 0 ? (
+            <p className="learn__end">
+              {doneCount >= totalLessons
+                ? 'You have finished every lesson. New lessons are added over time.'
+                : 'More lessons are added at every band over time.'}
+            </p>
+          ) : null}
         </section>
       </div>
 
-      <Modal open={levelOpen} onClose={() => setLevelOpen(false)} title="Choose your level">
-        <p className="muted small">The path starts at the first lesson of the level you pick, and the AI pitches your daily words to it.</p>
+      <Modal open={bandOpenModal} onClose={() => setBandOpenModal(false)} title="Choose your band">
+        <p className="muted small">The path opens at the band you pick, and the AI pitches your daily words to it.</p>
         <div className="level-choices">
-          {LEARN_LEVELS.map((level) => (
+          {LEARN_BANDS.map((item) => (
             <button
-              key={level}
+              key={item}
               type="button"
-              className={`level-choice${profile.level === level ? ' is-on' : ''}`}
-              onClick={() => void chooseLevel(level)}
+              className={`level-choice${profile.band === item ? ' is-on' : ''}`}
+              onClick={() => void chooseBand(item)}
             >
-              <b>{LEARN_LEVEL_LABELS[level]}</b>
-              <span>{UNITS.find((unit) => unit.level === level)?.band}</span>
+              <b>{item.toFixed(1)}</b>
+              <span>{LEARN_BAND_LABELS[item]}</span>
             </button>
           ))}
         </div>
       </Modal>
     </div>
   );
+}
+
+/**
+ * Builds today's revision lesson from the words this learner keeps getting
+ * wrong, then opens it.
+ *
+ * The server keeps one per learner per day and returns the same one for the
+ * rest of that day, so pressing the button twice does not produce two lessons.
+ */
+async function makeRevisionLesson(
+  navigate: (to: string) => void,
+  setBusy: (busy: boolean) => void,
+  push: (message: string, tone?: 'success' | 'info' | 'warning' | 'error') => void,
+) {
+  setBusy(true);
+  try {
+    const response = await learnApi.buildPersonalLesson();
+    navigate(`/learn/lesson/${response.lessonId}`);
+  } catch (cause) {
+    push(cause instanceof Error ? cause.message : 'That revision lesson could not be built.', 'error');
+  } finally {
+    setBusy(false);
+  }
 }

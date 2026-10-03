@@ -5,6 +5,7 @@ import {
   bareModelTag,
   buildModelsEndpoint,
   buildProviderEndpoint,
+  buildSpeechEndpoint,
   buildTranscriptionEndpoint,
   isLocalBaseUrl,
   normaliseBaseUrl,
@@ -762,6 +763,38 @@ export async function testProvider(
     const message = error instanceof ApiError ? error.message : (error as Error)?.message ?? 'Unknown error.';
     return { ok: false, message, latencyMs: Date.now() - started };
   }
+}
+
+/**
+ * Text to speech through an OpenAI-compatible `/audio/speech` route.
+ *
+ * Returns the raw audio bytes so the caller can cache and stream them; a
+ * provider that has no speech route surfaces as AI_UNAVAILABLE and the client
+ * falls back to the browser's own voices.
+ */
+export const SERVER_SPEECH_VOICES = ['nova', 'alloy', 'echo', 'fable', 'onyx', 'shimmer'] as const;
+export type ServerSpeechVoice = (typeof SERVER_SPEECH_VOICES)[number];
+
+export async function synthesizeSpeechWithProvider(
+  env: Env,
+  text: string,
+  voice: string,
+  providerId?: string,
+): Promise<{ bytes: ArrayBuffer; mime: string }> {
+  const { provider, apiKey } = await resolveProvider(env, providerId);
+  const response = await fetch(buildSpeechEndpoint(provider), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}) },
+    body: JSON.stringify({ model: 'gpt-4o-mini-tts', input: text, voice, response_format: 'mp3' }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 300);
+    console.error('ai_speech_error', provider.id, response.status, detail);
+    throw new ApiError('AI_UNAVAILABLE', `The text-to-speech endpoint of “${provider.label}” could not be reached.`);
+  }
+  const mime = response.headers.get('content-type')?.split(';')[0] || 'audio/mpeg';
+  return { bytes: await response.arrayBuffer(), mime };
 }
 
 /** Speech to text through an OpenAI-compatible `/audio/transcriptions` route. */

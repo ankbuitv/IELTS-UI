@@ -10,7 +10,7 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
 /**
  * Guardrails for the "Ai eo" identity: the components must render the
- * speech-bubble mark and the lowercase wordmark in the agreed palette, and the
+ * three-bar mark and the lowercase wordmark in the agreed palette, and the
  * shipped SVG assets must stay well-formed, on-palette and free of any
  * official-exam branding.
  */
@@ -24,21 +24,18 @@ describe('Ai eo brand components', () => {
     }
   });
 
-  it('uses the agreed palette: red tile, navy ink, golden dot', () => {
+  it('uses the agreed palette: brand-red mark, navy ink, white on red', () => {
     const light = renderToStaticMarkup(createElement(BrandLogo, { theme: 'light' }));
-    expect(light).toContain('#D3222B');
+    expect(light).toContain('#E1251B');
     expect(light).toContain('#14233A');
-    expect(light).toContain('#FFC53D');
 
     const dark = renderToStaticMarkup(createElement(BrandLogo, { theme: 'dark' }));
-    expect(dark).toContain('#E5343C');
-    expect(dark).toContain('#FFC53D');
+    expect(dark).toContain('#FF4D4D');
     // The wordmark turns white on a dark surface.
     expect(dark).not.toContain('#14233A');
 
     const brand = renderToStaticMarkup(createElement(BrandLogo, { theme: 'brand' }));
-    // On a red surface the bubble is white and the bars are red.
-    expect(brand).toContain('#D3222B');
+    // On a red surface the whole mark turns white.
     expect(brand).toContain('#FFFFFF');
   });
 
@@ -51,9 +48,12 @@ describe('Ai eo brand components', () => {
 
   it('follows the CSS variables in the "auto" theme, so one header serves light and dark mode', () => {
     const html = renderToStaticMarkup(createElement(BrandLogo, { theme: 'auto' }));
-    for (const name of ['--logo-tile', '--logo-bars', '--logo-ink', '--logo-dot']) {
+    for (const name of ['--logo-bars', '--logo-ink', '--logo-dot']) {
       expect(html).toContain(`var(${name})`);
     }
+    // The tile variable only appears on the icon, which is the only theme-aware tile.
+    const icon = renderToStaticMarkup(createElement(BrandIcon, { theme: 'auto' }));
+    expect(icon).toContain('var(--logo-tile)');
     // The variables are applied through `style`: var() is not reliable inside SVG attributes.
     expect(html).not.toMatch(/fill="var\(/);
     expect(html).not.toMatch(/stroke="var\(/);
@@ -89,10 +89,10 @@ describe('Ai eo brand assets', () => {
       expect(svg).toContain('</svg>');
       expect(svg).toContain('<title>Ai eo</title>');
       // Current palette: the light red or its dark-surface sibling.
-      expect(svg, file).toMatch(/#(D3222B|E5343C)/i);
+      expect(svg, file).toMatch(/#(E1251B|FF4D4D)/i);
       // Earlier palettes must not come back: cyan, and the previous crimson.
       expect(svg).not.toMatch(/#(22d3ee|06b6d4|0891b2|67e8f9|0e7490)/i);
-      expect(svg).not.toMatch(/#(C8102E|E0243F|A50D26|FF6B7D)/i);
+      expect(svg).not.toMatch(/#(C8102E|E0243F|A50D26|FF6B7D|D3222B|E5343C)/i);
       // The artwork never prints an exam name; the only mention is the disclaimer.
       expect(svg.replace('No affiliation with IELTS, British Council, IDP or Cambridge.', '')).not.toMatch(/IELTS/);
       // Every asset carries the non-affiliation note.

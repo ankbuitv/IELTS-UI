@@ -15,6 +15,7 @@ import {
 import { StudentDashboardPage } from './pages/student/Dashboard';
 import { VocabularyPage } from './pages/student/VocabularyPage';
 import { LearnPage } from './pages/student/LearnPage';
+import { PlanPage } from './pages/student/PlanPage';
 import { LessonPage, ReviewPage } from './pages/student/LessonPages';
 import { DictionaryPage } from './pages/student/DictionaryPage';
 import { SpeakingPage } from './pages/student/SpeakingPage';
@@ -30,6 +31,7 @@ import { AdminScoringProfilesPage } from './pages/admin/AdminScoringProfiles';
 import { AdminUsersPage } from './pages/admin/AdminUsers';
 import { AdminAttemptsPage } from './pages/admin/AdminAttempts';
 import { AdminSettingsPage } from './pages/admin/AdminSettings';
+import { AdminLearnPage } from './pages/admin/AdminLearn';
 
 function RequireAuth({ children, roles }: { children: ReactNode; roles?: Array<'STUDENT' | 'TEACHER' | 'ADMIN'> }) {
   const { user, loading } = useAuth();
@@ -157,6 +159,14 @@ export function App() {
           }
         />
         <Route
+          path="learn/plan"
+          element={
+            <RequireAuth>
+              <PlanPage />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="vocabulary"
           element={
             <RequireAuth>
@@ -240,6 +250,7 @@ export function App() {
           <Route path="users" element={<AdminUsersPage />} />
           <Route path="attempts" element={<AdminAttemptsPage />} />
           <Route path="writing" element={<AdminWritingQueuePage />} />
+          <Route path="learn" element={<AdminLearnPage />} />
           <Route path="settings" element={<AdminSettingsPage />} />
         </Route>
 

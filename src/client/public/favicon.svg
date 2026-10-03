@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   Ai eo — favicon.
-  Original artwork: three rising bars, the last one an "i" with a golden dot, on a rounded red tile.
-  Drawn without the speech bubble so it stays readable at 16 px.
+  The mark: three rounded bars, the shortest one an "i" with its dot above, all
+  in the brand red and on no background, so it sits on a light or a dark tab.
+  Drawn as plain shapes — no font, no filter — so it stays crisp at 16 px.
   No affiliation with IELTS, British Council, IDP or Cambridge.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Ai eo">
   <title>Ai eo</title>
-  <rect width="64" height="64" rx="14" fill="#D3222B"/>
-  <rect x="12" y="37" width="9" height="12" rx="4.5" fill="#FFFFFF"/>
-  <rect x="27.5" y="29" width="9" height="20" rx="4.5" fill="#FFFFFF"/>
-  <rect x="43" y="21" width="9" height="28" rx="4.5" fill="#FFFFFF"/>
-  <circle cx="47.5" cy="12.6" r="4.6" fill="#FFC53D"/>
+  <rect x="12" y="32" width="9" height="20" rx="4.5" fill="#E1251B"/>
+  <circle cx="16.5" cy="21" r="4.5" fill="#E1251B"/>
+  <rect x="27.5" y="12" width="9" height="40" rx="4.5" fill="#E1251B"/>
+  <rect x="43" y="22" width="9" height="30" rx="4.5" fill="#E1251B"/>
 </svg>

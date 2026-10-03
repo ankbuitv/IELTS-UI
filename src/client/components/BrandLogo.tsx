@@ -1,45 +1,45 @@
 /**
- * Ai eo — original brand artwork, drawn as plain SVG paths so the header, the
+ * Ai eo — original brand artwork, drawn as plain SVG shapes so the header, the
  * footer and every share image look the same on every device (nothing in the
  * logo depends on a font being installed).
  *
- * The identity in one sentence: "the i in IELTS, talking". A speech bubble
- * holds three rising bars (a score going up) and the last bar is an "i" with a
- * golden dot. The wordmark is built from the same two shapes as the symbol,
- * round rings and rounded bars, so mark and name read as one thing.
+ * The mark: three rounded bars, the shortest one an "i" with its dot above. It
+ * is a single colour and carries no tile, so the same paths work on white, on
+ * navy and on the brand red — only the colour changes, never the geometry.
  *
  * It is deliberately its own thing: no exam name appears in it and nothing
  * imitates a registered logo.
  *
- * Palette: IELTS-style red, deep navy ink and one golden accent.
+ * Palette: brand red #E1251B, deep navy ink, and one brighter red for dark
+ * surfaces where #E1251B would sit too heavy.
  */
 
 /**
  * light  on white or light grey
  * dark   on navy or any dark surface
- * brand  on a solid red surface (the bubble turns white)
+ * brand  on a solid red surface (the mark turns white)
  * auto   follows the --logo-* CSS variables, so one header works in light and dark mode
  */
 export type BrandTheme = 'light' | 'dark' | 'brand' | 'auto';
 
 interface Palette {
-  /** The bubble / tile. */
+  /** The tile behind the mark, used by `BrandIcon` only. */
   tile: string;
-  /** The three bars drawn on the tile. */
+  /** The three bars. */
   bars: string;
   /** The wordmark. */
   ink: string;
-  /** The dot of the "i" (symbol and wordmark). */
+  /** The dot of the "i" — the same colour as the bars, the mark is monochrome. */
   dot: string;
 }
 
 const PALETTES: Record<BrandTheme, Palette> = {
   /** On white or light grey. */
-  light: { tile: '#D3222B', bars: '#FFFFFF', ink: '#14233A', dot: '#FFC53D' },
+  light: { tile: '#FFFFFF', bars: '#E1251B', ink: '#14233A', dot: '#E1251B' },
   /** On navy or any dark surface. */
-  dark: { tile: '#E5343C', bars: '#FFFFFF', ink: '#FFFFFF', dot: '#FFC53D' },
-  /** On a solid red surface: the bubble turns white. */
-  brand: { tile: '#FFFFFF', bars: '#D3222B', ink: '#FFFFFF', dot: '#FFC53D' },
+  dark: { tile: '#0F172A', bars: '#FF4D4D', ink: '#FFFFFF', dot: '#FF4D4D' },
+  /** On a solid red surface: the mark turns white. */
+  brand: { tile: '#FFFFFF', bars: '#FFFFFF', ink: '#FFFFFF', dot: '#FFFFFF' },
   /** Colours come from CSS custom properties (see globals.css and the dark theme). */
   auto: { tile: 'var(--logo-tile)', bars: 'var(--logo-bars)', ink: 'var(--logo-ink)', dot: 'var(--logo-dot)' },
 };
@@ -49,17 +49,18 @@ const isVar = (value: string) => value.startsWith('var(');
 const fillOf = (value: string) => (isVar(value) ? { style: { fill: value } } : { fill: value });
 const strokeOf = (value: string) => (isVar(value) ? { style: { stroke: value } } : { stroke: value });
 
-/** Speech bubble with a tail at the bottom left, in the 64 x 64 symbol grid. */
-const BUBBLE = 'M18 3H46A14 14 0 0 1 60 17V35A14 14 0 0 1 46 49H31L18 60V49A14 14 0 0 1 4 35V17A14 14 0 0 1 18 3Z';
-
+/**
+ * The mark, in the 64 x 64 grid: a short bar with its dot above (the "i"), then
+ * the tallest bar, then a middle one. Identical to `public/favicon.svg` — keep
+ * the two in step, they are the same artwork.
+ */
 function SymbolArt({ palette }: { palette: Palette }) {
   return (
     <>
-      <path d={BUBBLE} {...fillOf(palette.tile)} />
-      <rect x="13" y="32" width="8" height="12" rx="4" {...fillOf(palette.bars)} />
-      <rect x="28" y="25" width="8" height="19" rx="4" {...fillOf(palette.bars)} />
-      <rect x="43" y="18" width="8" height="26" rx="4" {...fillOf(palette.bars)} />
-      <circle cx="47" cy="11.4" r="4.3" {...fillOf(palette.dot)} />
+      <rect x="12" y="32" width="9" height="20" rx="4.5" {...fillOf(palette.bars)} />
+      <circle cx="16.5" cy="21" r="4.5" {...fillOf(palette.dot)} />
+      <rect x="27.5" y="12" width="9" height="40" rx="4.5" {...fillOf(palette.bars)} />
+      <rect x="43" y="22" width="9" height="30" rx="4.5" {...fillOf(palette.bars)} />
     </>
   );
 }
@@ -85,7 +86,7 @@ function WordmarkArt({ palette }: { palette: Palette }) {
   );
 }
 
-/** The speech-bubble symbol on its own (loading states, empty states, avatars). */
+/** The mark on its own, with no tile (loading states, empty states, avatars). */
 export function BrandMark({
   theme = 'light',
   size = 32,
@@ -104,8 +105,8 @@ export function BrandMark({
 }
 
 /**
- * App icon: a rounded red tile with the three bars and the dot, and no bubble
- * tail, so it stays readable down to 16px (favicon, home-screen icon).
+ * App icon: the mark on a rounded tile, so it keeps its shape as a home-screen
+ * icon or a favicon where a transparent background would disappear.
  */
 export function BrandIcon({
   theme = 'light',
@@ -120,16 +121,13 @@ export function BrandIcon({
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" role="img" aria-label={title} focusable="false">
       <title>{title}</title>
-      <rect width="64" height="64" rx="14" {...fillOf(palette.tile)} />
-      <rect x="12" y="37" width="9" height="12" rx="4.5" {...fillOf(palette.bars)} />
-      <rect x="27.5" y="29" width="9" height="20" rx="4.5" {...fillOf(palette.bars)} />
-      <rect x="43" y="21" width="9" height="28" rx="4.5" {...fillOf(palette.bars)} />
-      <circle cx="47.5" cy="12.6" r="4.6" {...fillOf(palette.dot)} />
+      <rect width="64" height="64" rx="16" {...fillOf(palette.tile)} />
+      <SymbolArt palette={palette} />
     </svg>
   );
 }
 
-/** Horizontal lockup: symbol + the "ai eo" wordmark. */
+/** Horizontal lockup: the mark + the "ai eo" wordmark. */
 export function BrandLogo({
   theme = 'light',
   height = 36,

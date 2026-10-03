@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { sfx } from '../../lib/sfx';
 import {
   MAX_HEARTS,
   checkOrder,
+  checkSentence,
   checkTyped,
   correctAnswerText,
   scoreLesson,
@@ -9,9 +11,13 @@ import {
   type LessonScore,
   type MatchExercise,
   type OrderExercise,
+  type ParaphraseExercise,
+  type ReadExercise,
+  type SpeakExercise,
   type TypeExercise,
+  type WriteExercise,
 } from '@shared/learn-engine';
-import { canSpeak, speak } from '../../lib/speech';
+import { canSpeak, getPreferredVoiceURI, isServerVoice, listEnglishVoices, listServerVoices, serverVoiceOf, setPreferredVoiceURI, speak, speakWithServer } from '../../lib/speech';
 import { Icon } from '../Icon';
 import { Button } from '../ui';
 import { Stars } from './Stars';
@@ -31,22 +37,36 @@ interface Outcome {
   firstTryCorrect: boolean;
 }
 
+/** Turns a YouTube watch / youtu.be / embed link into an embeddable URL; other URLs pass through. */
+function embeddableVideo(url: string): string | null {
+  const value = url.trim();
+  if (!value) return null;
+  const yt = value.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{6,})/);
+  if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}`;
+  return /^https:\/\//.test(value) ? value : null;
+}
+
 export function LessonPlayer({
   title,
   exercises,
   onExit,
   onFinish,
   onRestart,
+  videoUrl,
+  legendary,
 }: {
   title: string;
   exercises: Exercise[];
   onExit: () => void;
   onFinish: (score: LessonScore) => Promise<LessonFinish>;
   onRestart: () => void;
+  videoUrl?: string;
+  legendary?: boolean;
 }) {
   const [queue, setQueue] = useState<Exercise[]>(exercises);
   const [index, setIndex] = useState(0);
   const [hearts, setHearts] = useState(MAX_HEARTS);
+  const [soundOn, setSoundOn] = useState(() => sfx.isEnabled());
   const [phase, setPhase] = useState<Phase>('answering');
   const [verdict, setVerdict] = useState<{ correct: boolean; almost?: boolean } | null>(null);
   const [answered, setAnswered] = useState(false);
@@ -86,6 +106,8 @@ export function LessonPlayer({
     const outcome = submit.current?.();
     if (!outcome) return;
     const id = baseId(current);
+    if (outcome.correct) sfx.correct();
+    else sfx.incorrect();
     if (!(id in outcomes)) setOutcomes((previous) => ({ ...previous, [id]: { terms: current.terms, firstTryCorrect: outcome.correct } }));
     if (!outcome.correct) {
       const left = hearts - 1;
@@ -104,6 +126,7 @@ export function LessonPlayer({
 
   const next = () => {
     if (index + 1 >= queue.length) {
+      sfx.complete();
       void finish(scoreLesson(Object.values(outcomes)));
       return;
     }
@@ -219,9 +242,39 @@ export function LessonPlayer({
           <Icon name="heart" size={17} />
           {hearts}
         </span>
+        <button
+          type="button"
+          className="lesson__close"
+          aria-pressed={soundOn}
+          aria-label={soundOn ? 'Mute sounds' : 'Unmute sounds'}
+          title={soundOn ? 'Mute sounds' : 'Unmute sounds'}
+          onClick={() => {
+            const next = !soundOn;
+            setSoundOn(next);
+            sfx.setEnabled(next);
+            if (next) sfx.correct();
+          }}
+        >
+          <Icon name="volume" size={18} style={{ opacity: soundOn ? 1 : 0.45 }} />
+        </button>
       </header>
 
       <main className="lesson__main">
+        {legendary ? (
+          <p className="lesson__retry" style={{ color: '#b8860b', fontWeight: 700 }}>★ Legendary — harder set. Look-ups are off; answer from memory.</p>
+        ) : null}
+        {videoUrl && embeddableVideo(videoUrl) ? (
+          <div className="lesson__video" style={{ margin: '0 0 14px' }}>
+            <iframe
+              src={embeddableVideo(videoUrl)!}
+              title="Lesson video"
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: 12, background: '#000' }}
+            />
+          </div>
+        ) : null}
         {current ? (
           <div className="lesson__stage" key={current.id}>
             {isRetry ? <p className="lesson__retry">Try this one again</p> : null}
@@ -300,16 +353,34 @@ function ExerciseView(props: ViewProps) {
       return <OrderExerciseView {...props} exercise={exercise} />;
     case 'match':
       return <MatchExerciseView {...props} exercise={exercise} />;
-    default:
-      return null;
+    case 'paraphrase':
+      return <ParaphraseExerciseView {...props} exercise={exercise} />;
+    case 'read':
+      return <ReadExerciseView {...props} exercise={exercise} />;
+    case 'write':
+      return <WriteExerciseView {...props} exercise={exercise} />;
+    case 'speak':
+      return <SpeakExerciseView {...props} exercise={exercise} />;
   }
 }
 
 function OptionExercise({ exercise, disabled, verdict, registerSubmit, onAnswered }: ViewProps) {
   const [picked, setPicked] = useState<number | null>(null);
   const spoken = useRef(false);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [serverVoices, setServerVoices] = useState<string[]>([]);
+  const [voiceURI, setVoiceURI] = useState<string | null>(getPreferredVoiceURI());
+  const [audioFailed, setAudioFailed] = useState(false);
   const options = exercise.kind === 'choose' || exercise.kind === 'fill' || exercise.kind === 'listen' ? exercise.options : [];
   const answer = exercise.kind === 'choose' || exercise.kind === 'fill' || exercise.kind === 'listen' ? exercise.answer : -1;
+
+  const speakWith = (text: string, rate: number, choice: string | null) =>
+    isServerVoice(choice) ? speakWithServer(text, serverVoiceOf(choice as string)) : speak(text, rate, choice);
+
+  const play = (rate = 0.9) => {
+    setAudioFailed(false);
+    void speakWith(exercise.kind === 'listen' ? exercise.speak : '', rate, voiceURI).then((ok) => setAudioFailed(!ok));
+  };
 
   useEffect(() => {
     registerSubmit(() => (picked === null ? null : { correct: picked === answer }));
@@ -317,11 +388,14 @@ function OptionExercise({ exercise, disabled, verdict, registerSubmit, onAnswere
   useEffect(() => onAnswered(picked !== null), [picked, onAnswered]);
 
   useEffect(() => {
-    if (exercise.kind === 'listen' && !spoken.current) {
+    if (exercise.kind !== 'listen') return;
+    void listEnglishVoices().then(setVoices);
+    void listServerVoices().then(setServerVoices);
+    if (!spoken.current) {
       spoken.current = true;
-      speak(exercise.speak);
+      void speakWith(exercise.speak, 0.9, voiceURI).then((ok) => setAudioFailed(!ok));
     }
-  }, [exercise]);
+  }, [exercise, voiceURI]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -351,14 +425,53 @@ function OptionExercise({ exercise, disabled, verdict, registerSubmit, onAnswere
         <>
           <p className="lesson__kicker">Listen and choose</p>
           <div className="lesson__listen">
-            <button type="button" className="lesson__speaker" onClick={() => speak(exercise.speak)} aria-label="Play the word">
+            <button type="button" className="lesson__speaker" onClick={() => play(0.9)} aria-label="Play the word">
               <Icon name="play" size={26} />
             </button>
-            <button type="button" className="lesson__speaker lesson__speaker--slow" onClick={() => speak(exercise.speak, 0.55)} aria-label="Play slowly">
+            <button type="button" className="lesson__speaker lesson__speaker--slow" onClick={() => play(0.55)} aria-label="Play slowly">
               <Icon name="rotate" size={20} />
             </button>
+            {serverVoices.length > 0 || voices.length > 1 ? (
+              <select
+                className="lesson__voice"
+                value={voiceURI ?? ''}
+                aria-label="Choose a voice"
+                onChange={(event) => {
+                  const next = event.target.value || null;
+                  setVoiceURI(next);
+                  setPreferredVoiceURI(next);
+                  setAudioFailed(false);
+                  void speakWith(exercise.speak, 0.9, next).then((ok) => setAudioFailed(!ok));
+                }}
+              >
+                {voiceURI === null ? <option value="">Default voice</option> : null}
+                {serverVoices.length > 0 ? (
+                  <optgroup label="AI voices">
+                    {serverVoices.map((voice) => (
+                      <option key={`srv:${voice}`} value={`srv:${voice}`}>
+                        {voice[0]?.toUpperCase()}
+                        {voice.slice(1)} (AI)
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {voices.length > 0 ? (
+                  <optgroup label="This device">
+                    {voices.map((voice) => (
+                      <option key={voice.voiceURI} value={voice.voiceURI}>
+                        {voice.name} ({voice.lang})
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+              </select>
+            ) : null}
           </div>
-          {!canSpeak() ? <p className="muted small">Audio is not available in this browser. The word is “{exercise.speak}”.</p> : null}
+          {!canSpeak() || audioFailed ? (
+            <p className="muted small">
+              This device will not play the audio. The word is “<b>{exercise.speak}</b>”.
+            </p>
+          ) : null}
         </>
       ) : null}
       <div className="lesson__options" role="radiogroup">
@@ -531,6 +644,192 @@ function MatchExerciseView({ exercise, disabled, registerSubmit, onAnswered }: V
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Pick the restatement that keeps the meaning. */
+function ParaphraseExerciseView({ exercise, disabled, verdict, registerSubmit, onAnswered }: ViewProps & { exercise: ParaphraseExercise }) {
+  const [picked, setPicked] = useState<number | null>(null);
+  useEffect(() => {
+    registerSubmit(() => (picked === null ? null : { correct: picked === exercise.answer }));
+  }, [picked, exercise.answer, registerSubmit]);
+  useEffect(() => onAnswered(picked !== null), [picked, onAnswered]);
+
+  return (
+    <div>
+      <p className="lesson__kicker">Choose the sentence that means the same</p>
+      <h1 className="lesson__prompt lesson__prompt--sentence">{exercise.prompt}</h1>
+      <div className="lesson__options" role="radiogroup">
+        {exercise.options.map((option, index) => {
+          const state =
+            disabled && verdict
+              ? index === exercise.answer
+                ? ' is-right'
+                : index === picked
+                  ? ' is-wrong'
+                  : ''
+              : picked === index
+                ? ' is-picked'
+                : '';
+          return (
+            <button
+              key={option}
+              type="button"
+              role="radio"
+              aria-checked={picked === index}
+              className={`lesson__option${state}`}
+              disabled={disabled}
+              onClick={() => setPicked(index)}
+            >
+              <span className="lesson__key">{index + 1}</span>
+              <span>{option}</span>
+            </button>
+          );
+        })}
+      </div>
+      {verdict && !verdict.correct ? <p className="lesson__note">{exercise.note}</p> : null}
+    </div>
+  );
+}
+
+/** A short passage with four-option questions; the passage stays on screen. */
+function ReadExerciseView({ exercise, disabled, verdict, registerSubmit, onAnswered }: ViewProps & { exercise: ReadExercise }) {
+  const [picked, setPicked] = useState<number | null>(null);
+  useEffect(() => {
+    registerSubmit(() => (picked === null ? null : { correct: picked === exercise.answer }));
+  }, [picked, exercise.answer, registerSubmit]);
+  useEffect(() => onAnswered(picked !== null), [picked, onAnswered]);
+
+  return (
+    <div>
+      <p className="lesson__kicker">Read and answer</p>
+      <div className="lesson__passage">{exercise.passage}</div>
+      <h1 className="lesson__prompt lesson__prompt--sentence">{exercise.stem}</h1>
+      <div className="lesson__options" role="radiogroup">
+        {exercise.options.map((option, index) => {
+          const state =
+            disabled && verdict
+              ? index === exercise.answer
+                ? ' is-right'
+                : index === picked
+                  ? ' is-wrong'
+                  : ''
+              : picked === index
+                ? ' is-picked'
+                : '';
+          return (
+            <button
+              key={option}
+              type="button"
+              role="radio"
+              aria-checked={picked === index}
+              className={`lesson__option${state}`}
+              disabled={disabled}
+              onClick={() => setPicked(index)}
+            >
+              <span className="lesson__key">{index + 1}</span>
+              <span>{option}</span>
+            </button>
+          );
+        })}
+      </div>
+      {verdict ? <p className="lesson__note">In the passage: “{exercise.evidence}”</p> : null}
+    </div>
+  );
+}
+
+/** Turn a Vietnamese instruction into an English sentence. */
+function WriteExerciseView({ exercise, disabled, verdict, registerSubmit, onAnswered }: ViewProps & { exercise: WriteExercise }) {
+  const [value, setValue] = useState('');
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => inputRef.current?.focus(), []);
+  useEffect(() => {
+    registerSubmit(() => (value.trim() ? checkSentence(value, exercise.answer) : null));
+  }, [value, exercise.answer, registerSubmit]);
+  useEffect(() => onAnswered(value.trim().length > 0), [value, onAnswered]);
+
+  return (
+    <div>
+      <p className="lesson__kicker">Write the sentence</p>
+      <h1 className="lesson__prompt lesson__prompt--sentence">{exercise.instruction}</h1>
+      {exercise.hint ? <p className="lesson__hint muted">{exercise.hint}</p> : null}
+      <textarea
+        ref={inputRef}
+        className="lesson__textarea"
+        rows={3}
+        value={value}
+        disabled={disabled}
+        placeholder="Type the English sentence…"
+        onChange={(event) => setValue(event.target.value)}
+      />
+      {verdict && !verdict.correct ? <p className="lesson__note">Model answer: {exercise.answer}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * Answer a question aloud, then compare with a model.
+ *
+ * Nothing here grades speech — the learner judges their own answer against the
+ * model, and that judgement is what is scored. Pretending otherwise would put a
+ * number on the screen that means nothing.
+ */
+function SpeakExerciseView({ exercise, disabled, verdict, registerSubmit, onAnswered }: ViewProps & { exercise: SpeakExercise }) {
+  const [revealed, setRevealed] = useState(false);
+  const [said, setSaid] = useState<boolean | null>(null);
+  useEffect(() => {
+    registerSubmit(() => (said === null ? null : { correct: said }));
+  }, [said, registerSubmit]);
+  useEffect(() => onAnswered(said !== null), [said, onAnswered]);
+
+  return (
+    <div>
+      <p className="lesson__kicker">Answer out loud</p>
+      <h1 className="lesson__prompt lesson__prompt--sentence">{exercise.question}</h1>
+      <div className="row">
+        {canSpeak() ? (
+          <Button size="sm" onClick={() => speak(exercise.question, 0.85)}>
+            <Icon name="play" size={13} /> Hear it
+          </Button>
+        ) : null}
+        {!revealed ? (
+          <Button size="sm" onClick={() => setRevealed(true)}>
+            Show model answer
+          </Button>
+        ) : null}
+      </div>
+      {exercise.cue ? <p className="lesson__hint muted">A good answer covers: {exercise.cue}</p> : null}
+      {revealed ? (
+        <>
+          <div className="lesson__sample">{exercise.sample}</div>
+          <p className="lesson__retry">Did you say something like this?</p>
+          <div className="lesson__options" role="radiogroup">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={said === true}
+              className={`lesson__option${said === true ? ' is-picked' : ''}${disabled && verdict ? (said === true ? ' is-right' : '') : ''}`}
+              disabled={disabled}
+              onClick={() => setSaid(true)}
+            >
+              <span className="lesson__key">1</span>
+              <span>Yes, roughly</span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={said === false}
+              className={`lesson__option${said === false ? ' is-picked' : ''}${disabled && verdict ? (said === false ? ' is-wrong' : ' is-right') : ''}`}
+              disabled={disabled}
+              onClick={() => setSaid(false)}
+            >
+              <span className="lesson__key">2</span>
+              <span>Not yet</span>
+            </button>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

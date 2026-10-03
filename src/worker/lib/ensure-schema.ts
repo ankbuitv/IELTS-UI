@@ -73,6 +73,11 @@ export const CHECK_REBUILDS: ReadonlyArray<{ table: string; requires: RegExp; wh
     requires: /scoring_source[^,]*CHECK\s*\([^)]*'AI'/i,
     why: "scoring_source must allow 'AI' (migration 0007)",
   },
+  {
+    table: 'learn_lessons',
+    requires: /kind[^,]*CHECK\s*\([^)]*'SPEAKING'/i,
+    why: "kind must allow the five lesson types (migration 0012)",
+  },
 ];
 
 export interface SchemaReport {
