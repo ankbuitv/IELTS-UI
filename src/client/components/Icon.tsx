@@ -57,7 +57,16 @@ export type IconName =
   | 'trash'
   | 'download'
   | 'wand'
-  | 'heart';
+  | 'heart'
+  | 'home'
+  | 'flame'
+  | 'star'
+  | 'volume'
+  | 'graduation'
+  | 'bubble'
+  | 'checkCircle'
+  | 'bolt'
+  | 'eye';
 
 const PATHS: Record<IconName, ReactElement> = {
   grid: (
@@ -314,6 +323,43 @@ const PATHS: Record<IconName, ReactElement> = {
     </>
   ),
   heart: <path d="M12 20.4s-7.6-4.5-7.6-10.1A4.3 4.3 0 0 1 12 7.5a4.3 4.3 0 0 1 7.6 2.8c0 5.6-7.6 10.1-7.6 10.1z" />,
+  home: (
+    <>
+      <path d="M4 11.2 12 4l8 7.2V19a1.5 1.5 0 0 1-1.5 1.5H15v-5.2H9v5.2H5.5A1.5 1.5 0 0 1 4 19z" />
+    </>
+  ),
+  flame: (
+    <path d="M12 2.8c.6 3.3 4.4 5.2 4.4 9.6a4.4 4.4 0 0 1-8.8 0c0-1.8.7-3 1.6-3.9.3 1.3 1 2 1.9 2.1C10.6 7.8 10.7 5.3 12 2.8z" />
+  ),
+  star: <path d="M12 3.4l2.7 5.5 6 .9-4.4 4.2 1 6L12 17.2 6.7 20l1-6L3.3 9.8l6-.9z" />,
+  volume: (
+    <>
+      <path d="M4 9.6h3.3L12 5.6v12.8l-4.7-4H4z" />
+      <path d="M15.6 9.2a4 4 0 0 1 0 5.6" />
+      <path d="M18.2 6.6a7.7 7.7 0 0 1 0 10.8" />
+    </>
+  ),
+  graduation: (
+    <>
+      <path d="M2.6 9.6 12 5l9.4 4.6L12 14.2z" />
+      <path d="M6.6 11.8v4c0 1.1 2.4 2.9 5.4 2.9s5.4-1.8 5.4-2.9v-4" />
+      <path d="M21.4 9.6v5" />
+    </>
+  ),
+  bubble: <path d="M5.5 4.5h13A2.5 2.5 0 0 1 21 7v8a2.5 2.5 0 0 1-2.5 2.5H12L7.5 21v-3.5h-2A2.5 2.5 0 0 1 3 15V7a2.5 2.5 0 0 1 2.5-2.5z" />,
+  checkCircle: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8 12.4 2.8 2.8 5.4-5.6" />
+    </>
+  ),
+  bolt: <path d="M13.2 2.8 5.2 13.4h5.6l-1 7.8 8-10.6h-5.6z" />,
+  eye: (
+    <>
+      <path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12z" />
+      <circle cx="12" cy="12" r="2.8" />
+    </>
+  ),
   list: (
     <>
       <path d="M8.5 6.5h11" />
@@ -338,11 +384,13 @@ interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
   name: IconName;
   size?: number | string;
   strokeWidth?: number;
+  /** Solid shape instead of an outline (streak flame, hearts, stars). */
+  filled?: boolean;
   /** Provide only when the icon is the sole label for a control. */
   label?: string;
 }
 
-export function Icon({ name, size = 18, strokeWidth = 1.7, label, className = '', ...rest }: IconProps) {
+export function Icon({ name, size = 18, strokeWidth = 1.7, filled = false, label, className = '', ...rest }: IconProps) {
   const art = PATHS[name];
   return (
     <svg
@@ -350,7 +398,7 @@ export function Icon({ name, size = 18, strokeWidth = 1.7, label, className = ''
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill="none"
+      fill={filled ? 'currentColor' : 'none'}
       stroke="currentColor"
       strokeWidth={strokeWidth}
       strokeLinecap="round"

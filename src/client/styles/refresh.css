@@ -32,38 +32,47 @@ html[data-reduce-motion='true'] *::after {
 }
 
 /* ------------------------------------------------------------ 2. dark mode */
+/* The same tokens, re-pointed: the ink scale inverts, surfaces become deep navy and the
+   brand red is nudged so white text on it keeps its contrast. Components follow with no changes. */
 html[data-theme='dark'] {
   color-scheme: dark;
 
-  --paper: #16191e;
-  --paper-muted: #1c2026;
-  --canvas: #0e1013;
-  --bar: #0a0b0d;
-  --solid: #272d36;
-  --solid-edge: #0a0b0d;
+  --paper: #162033;
+  --paper-muted: #1b2740;
+  --canvas: #0d1524;
+  --bar: #0a111d;
+  --solid: #2a3a5a;
+  --solid-edge: #0a111d;
 
-  --ink-950: #f5f6f8;
-  --ink-900: #eceef1;
-  --ink-800: #dde1e6;
-  --ink-700: #c6ccd4;
-  --ink-600: #a4acb7;
-  --ink-500: #858d99;
-  --ink-400: #666e7a;
-  --ink-300: #444b56;
-  --ink-200: #2e343d;
-  --ink-100: #232830;
-  --ink-50: #1a1e24;
+  --ink-950: #f4f7fb;
+  --ink-900: #e9eef6;
+  --ink-800: #d7dfeb;
+  --ink-700: #bcc7d8;
+  --ink-600: #9aa8bd;
+  --ink-500: #8190a8;
+  --ink-400: #63728b;
+  --ink-300: #43526b;
+  --ink-200: #2d3a52;
+  --ink-100: #223049;
+  --ink-50: #1a263c;
 
-  --brand-50: #2a1116;
-  --brand-100: #3b151c;
-  --brand-200: #5c1f2b;
-  --brand-300: #8c2e40;
-  --brand-400: #c43a52;
-  --brand-500: #de3f58;
-  --brand-600: #d92c45;
-  --brand-700: #ff8d9b;
-  --brand-800: #ffb3bd;
+  --brand-50: #2c1219;
+  --brand-100: #3f1620;
+  --brand-200: #61202d;
+  --brand-300: #8f3042;
+  --brand-400: #c63a4f;
+  --brand-500: #e0404f;
+  --brand-600: #d82a37;
+  --brand-700: #ff8f98;
+  --brand-800: #ffb9bf;
+  --brand-edge: #9f1b26;
   --on-brand: #ffffff;
+  --logo-ink: #ffffff;
+  --logo-tile: #e5343c;
+
+  --sun-soft: #3a2d0a;
+  --sun-border: #6b5416;
+  --sun-ink: #ffd985;
 
   --success: #4cc38a;
   --success-soft: #0d2a1f;
@@ -74,19 +83,22 @@ html[data-theme='dark'] {
   --danger: #ff7a6e;
   --danger-soft: #331512;
   --danger-border: #7a2d27;
-  --info: #6aa8f0;
+  --info: #7cb0f5;
   --info-soft: #0f1f36;
   --info-border: #234574;
-  --violet: #b394e8;
+  --violet: #b8a0f0;
   --violet-soft: #20173a;
   --violet-border: #45367a;
   --teal: #4ec5bf;
   --teal-soft: #0c2a29;
   --teal-border: #1d5855;
 
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 14px 34px rgba(0, 0, 0, 0.7);
-  --focus-ring: 0 0 0 2px var(--paper), 0 0 0 4px var(--info);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px -4px rgba(0, 0, 0, 0.5);
+  --shadow: 0 2px 4px rgba(0, 0, 0, 0.35), 0 12px 28px -10px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 18px 48px -12px rgba(0, 0, 0, 0.75);
+  --focus-halo: rgba(255, 255, 255, 0.16);
+  --focus-ring: 0 0 0 2px var(--paper), 0 0 0 4px var(--focus-color);
   --focus-border: var(--ink-950);
 }
 html[data-theme='dark'] body { background: var(--canvas); color: var(--ink-700); }
@@ -100,20 +112,12 @@ html[data-theme='dark'] .exam-bottombar,
 html[data-theme='dark'] .modal,
 html[data-theme='dark'] .card { background: var(--paper); border-color: var(--ink-200); }
 html[data-theme='dark'] .exam-pane--work { background: var(--canvas); }
-html[data-theme='dark'] .report-overall { border-color: var(--ink-200); }
 html[data-theme='dark'] .passage { color: var(--ink-800); }
 html[data-theme='dark'] .nav-strip__item { background: var(--paper-muted); color: var(--ink-700); border-color: var(--ink-200); }
-html[data-theme='dark'] .btn { background: var(--paper-muted); border-color: var(--ink-300); color: var(--ink-800); }
-html[data-theme='dark'] .btn:hover:not(:disabled) { background: var(--ink-50); border-color: var(--ink-600); }
-html[data-theme='dark'] .btn--primary { background: var(--brand-600); border-color: var(--brand-600); color: #fff; }
-html[data-theme='dark'] .btn--primary:hover:not(:disabled) { background: var(--brand-500); border-color: var(--brand-500); }
-html[data-theme='dark'] .btn--secondary { background: transparent; border-color: var(--ink-600); color: var(--ink-900); }
-html[data-theme='dark'] .btn--secondary:hover:not(:disabled) { background: var(--ink-900); color: var(--paper); }
-html[data-theme='dark'] .btn--ghost { background: transparent; border-color: transparent; }
 html[data-theme='dark'] input,
 html[data-theme='dark'] select,
 html[data-theme='dark'] textarea { background: var(--paper-muted); color: var(--ink-900); border-color: var(--ink-300); }
-html[data-theme='dark'] ::selection { background: rgba(217, 44, 69, 0.45); color: #fff; }
+html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color: #fff; }
 
 /* ------------------------------------------------------- 3. display menu */
 .display-menu { position: relative; display: inline-flex; }

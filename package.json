@@ -29,6 +29,7 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
+    "@fontsource/be-vietnam-pro": "^5.3.0",
     "@tanstack/react-query": "^5.103.1",
     "fflate": "^0.8.3",
     "hono": "^4.13.8",

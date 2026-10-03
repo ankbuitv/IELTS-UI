@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from './BrandLogo';
 import { DisplayMenu } from './DisplayMenu';
 import { Icon, type IconName } from './Icon';
+import { SiteFooter } from './SiteFooter';
 import { Button, Loading } from './ui';
 import { initials } from '../lib/format';
 
 /**
  * Application shell.
  *
- * A near-black top bar with the main places as text links (desktop) or a bottom
- * tab bar (below 960px), and one "More" panel that is a dropdown on a wide
- * screen and a bottom sheet on a phone. The standing disclaimer is a single
- * quiet line in the footer rather than a banner on every page.
+ * A white top bar with the logo and pill-style links (desktop) or a bottom tab bar (below
+ * 960px), and one "More" panel that is a dropdown on a wide screen and a bottom sheet on a
+ * phone. The navy footer carries the brand, the links and the standing disclaimer, so there is
+ * no banner on every page.
  */
 interface NavItem {
   to: string;
@@ -23,7 +24,7 @@ interface NavItem {
 
 /** Main places for a signed-in candidate, in the order they are used. */
 const MAIN_NAV: NavItem[] = [
-  { to: '/dashboard', label: 'Home', icon: 'grid' },
+  { to: '/dashboard', label: 'Home', icon: 'home' },
   { to: '/learn', label: 'Learn', icon: 'target' },
   { to: '/practice', label: 'Practice', icon: 'book' },
   { to: '/history', label: 'Results', icon: 'award' },
@@ -41,17 +42,18 @@ const MORE_NAV: NavItem[] = [
 
 /** The four phone tabs for a candidate; the fifth opens the More sheet. */
 const TAB_NAV: NavItem[] = [
-  { to: '/dashboard', label: 'Home', icon: 'grid' },
+  { to: '/dashboard', label: 'Home', icon: 'home' },
   { to: '/learn', label: 'Learn', icon: 'target' },
   { to: '/practice', label: 'Practice', icon: 'book' },
   { to: '/vocabulary', label: 'Words', icon: 'layers' },
 ];
 
+/** Sections of the landing page; from any other public page these navigate to "/" and scroll. */
 const PUBLIC_NAV = [
-  { href: '#skills', label: 'Four skills' },
-  { href: '#learn', label: 'Learn' },
-  { href: '#marking', label: 'AI marking' },
-  { href: '#teachers', label: 'For teachers' },
+  { hash: '#skills', label: 'Four skills' },
+  { hash: '#learn', label: 'Learning path' },
+  { hash: '#marking', label: 'AI marking' },
+  { hash: '#teachers', label: 'For teachers' },
 ];
 
 const STAFF_ADMIN: NavItem = { to: '/admin', label: 'Admin', icon: 'shield' };
@@ -125,7 +127,7 @@ export function AppShell() {
       <header className="site-header">
         <div className="site-header__inner">
           <NavLink to={user ? nav.home : '/'} className="site-brand" aria-label="Ai eo home">
-            <BrandLogo theme="dark" height={28} />
+            <BrandLogo theme="auto" height={32} />
           </NavLink>
 
           {user ? (
@@ -148,13 +150,11 @@ export function AppShell() {
             </nav>
           ) : (
             <nav className="site-nav site-nav--public" aria-label="Site">
-              {location.pathname === '/'
-                ? PUBLIC_NAV.map((item) => (
-                    <a key={item.href} href={item.href}>
-                      {item.label}
-                    </a>
-                  ))
-                : null}
+              {PUBLIC_NAV.map((item) => (
+                <Link key={item.hash} to={{ pathname: '/', hash: item.hash }}>
+                  {item.label}
+                </Link>
+              ))}
             </nav>
           )}
 
@@ -183,7 +183,7 @@ export function AppShell() {
                   Sign in
                 </Button>
                 <Button size="sm" variant="primary" onClick={() => navigate('/register')}>
-                  Create account
+                  Create free account
                 </Button>
               </>
             )}
@@ -195,15 +195,7 @@ export function AppShell() {
         <Outlet />
       </main>
 
-      <footer className="site-footer">
-        <div className="site-footer__inner">
-          <span className="site-footer__brand">Ai eo</span>
-          <span>
-            Independent practice platform. Not affiliated with IELTS, IDP, the British Council or Cambridge. Band
-            scores are practice estimates, not official results.
-          </span>
-        </div>
-      </footer>
+      <SiteFooter role={user?.role} compact={Boolean(user)} />
 
       {user ? (
         <nav className="site-tabbar" aria-label="Main">
