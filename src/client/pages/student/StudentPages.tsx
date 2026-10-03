@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiRequestError, api, describeError, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
+import { useInputLockdown } from '../../hooks/useInputLockdown';
 import {
   Badge,
   Button,
@@ -526,6 +527,10 @@ export function AttemptHistoryPage() {
 // ---------------------------------------------------------------------------
 export function AttemptResultPage() {
   const { attemptId = '' } = useParams();
+  const navigate = useNavigate();
+  const toast = useToast();
+  useInputLockdown();
+  const [restarting, setRestarting] = useState<string | null>(null);
   const { data, loading, error, reload } = useAsync<AttemptResultPayload>(
     () => api.get(`/api/attempts/${attemptId}/result`),
     [attemptId],
@@ -536,13 +541,49 @@ export function AttemptResultPage() {
   if (error && !data) return <Notice tone="danger">{error}</Notice>;
   if (!data) return null;
 
+  const wrongSectionIds = [
+    ...new Set(
+      data.sessions
+        .flatMap((session) => (session.review ?? []).filter((item) => item.isCorrect === false).map((item) => item.sectionId))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  const startAttempt = async (scope: 'full' | 'weak') => {
+    setRestarting(scope);
+    try {
+      const result = await api.post<{ attemptId: string }>('/api/attempts', {
+        testId: data.testId,
+        mode: 'PRACTICE',
+        ...(scope === 'weak' && wrongSectionIds.length > 0 ? { sectionIds: wrongSectionIds } : {}),
+      });
+      navigate(`/exam/${result.attemptId}`);
+    } catch (cause) {
+      toast.push(describeError(cause), 'error');
+    } finally {
+      setRestarting(null);
+    }
+  };
+
   return (
     <div className="stack">
-      <div className="row">
+      <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <Link className="btn btn--ghost btn--sm" to="/history">
           <Icon name="chevronRight" size={13} className="icon--flip" />
           All results
         </Link>
+        <div className="row">
+          {wrongSectionIds.length > 0 ? (
+            <Button size="sm" loading={restarting === 'weak'} onClick={() => void startAttempt('weak')}>
+              <Icon name="rotate" size={13} />
+              Practice my wrong questions
+            </Button>
+          ) : null}
+          <Button size="sm" variant="primary" loading={restarting === 'full'} onClick={() => void startAttempt('full')}>
+            <Icon name="play" size={13} />
+            Do this test again
+          </Button>
+        </div>
       </div>
       <ResultSummary result={data} onRefresh={reload} />
     </div>
