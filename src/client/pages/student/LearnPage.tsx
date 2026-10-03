@@ -12,6 +12,13 @@ import { canSpeak, speak } from '../../lib/speech';
 
 type NodeState = 'done' | 'current' | 'open' | 'locked';
 
+/** M, T, W… for a YYYY-MM-DD day, read as a calendar date so the time zone cannot shift it. */
+function weekdayInitial(day: string): string {
+  const [year, month, date] = day.split('-').map(Number);
+  if (!year || !month || !date) return '';
+  return new Date(year, month - 1, date).toLocaleDateString('en', { weekday: 'narrow' });
+}
+
 const WAVE = [0, 38, 64, 38, 0, -38, -64, -38];
 
 /**
@@ -143,7 +150,10 @@ export function LearnPage() {
             <div className="learn-week" aria-hidden="true">
               {data.week.map((item) => (
                 <span key={item.day} title={`${item.day}: ${item.xp} XP`} className={item.day === today ? 'is-today' : ''}>
-                  <i style={{ height: `${Math.max(8, Math.round((item.xp / maxWeek) * 100))}%` }} className={item.xp > 0 ? 'on' : ''} />
+                  <span className="learn-week__bar">
+                    <i style={{ height: `${Math.max(14, Math.round((item.xp / maxWeek) * 100))}%` }} className={item.xp > 0 ? 'on' : ''} />
+                  </span>
+                  <small>{weekdayInitial(item.day)}</small>
                 </span>
               ))}
             </div>

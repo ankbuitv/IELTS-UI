@@ -276,8 +276,9 @@ html { scroll-behavior: smooth; }
 .btn--primary:hover:not(:disabled) { --btn-bg: var(--brand-500); --btn-bd: var(--brand-500); --btn-edge: var(--brand-edge); color: var(--on-brand); }
 .btn--secondary { --btn-bg: var(--solid); --btn-bd: var(--solid); --btn-fg: var(--on-solid); --btn-edge: var(--solid-edge); }
 .btn--secondary:hover:not(:disabled) { --btn-bg: var(--ink-800); --btn-bd: var(--ink-800); --btn-edge: var(--solid-edge); color: var(--on-solid); }
-.btn--danger { --btn-bg: var(--danger); --btn-bd: var(--danger); --btn-fg: #fff; --btn-edge: #9f1d14; }
-.btn--danger:hover:not(:disabled) { --btn-bg: #c22618; --btn-bd: #c22618; --btn-edge: #9f1d14; color: #fff; }
+/* The brand is red, so a destructive action cannot be a solid red button: it is an outline until the pointer is on it. */
+.btn--danger { --btn-bg: var(--paper); --btn-bd: var(--danger-border); --btn-fg: #b42318; --btn-edge: var(--danger-border); }
+.btn--danger:hover:not(:disabled) { --btn-bg: var(--danger); --btn-bd: var(--danger); --btn-fg: #fff; --btn-edge: #9f1d14; color: #fff; }
 .btn--success { --btn-bg: var(--success); --btn-bd: var(--success); --btn-fg: #fff; --btn-edge: #0b5f43; }
 .btn--success:hover:not(:disabled) { --btn-bg: #0f6f4e; --btn-bd: #0f6f4e; --btn-edge: #0b5f43; color: #fff; }
 .btn--ghost { --btn-bg: transparent; --btn-bd: transparent; --btn-edge: transparent; --btn-fg: var(--ink-700); box-shadow: none; }

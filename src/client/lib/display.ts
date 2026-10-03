@@ -104,7 +104,10 @@ export function applyPrefs(prefs: DisplayPrefs): void {
   root.style.setProperty('--reading-scale', String(prefs.readingScale));
   root.style.setProperty('--reading-leading', String(prefs.readingLeading));
   root.style.setProperty('--reading-spacing', `${prefs.readingSpacing}em`);
-  root.dataset.theme = prefs.theme === 'system' ? resolveSystemTheme() : prefs.theme;
+  const theme = prefs.theme === 'system' ? resolveSystemTheme() : prefs.theme;
+  root.dataset.theme = theme;
+  // The phone's own address bar takes the colour of the top bar.
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#162033' : '#ffffff');
   root.dataset.readingWidth = prefs.wideReading ? 'wide' : 'normal';
   root.dataset.reduceMotion = prefs.reduceMotion ? 'true' : 'false';
 }

@@ -102,6 +102,8 @@ html[data-theme='dark'] {
   --focus-border: var(--ink-950);
 }
 html[data-theme='dark'] body { background: var(--canvas); color: var(--ink-700); }
+html[data-theme='dark'] .btn--danger { --btn-fg: #ff9a90; }
+html[data-theme='dark'] .btn--danger:hover:not(:disabled) { --btn-bg: #e5483b; --btn-bd: #e5483b; --btn-fg: #fff; }
 html[data-theme='dark'] .exam-root,
 html[data-theme='dark'] .site { background: var(--canvas); }
 html[data-theme='dark'] .exam-topbar,

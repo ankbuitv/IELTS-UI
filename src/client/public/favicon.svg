@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Ai eo — favicon (the app icon, readable at 16px).
-  Original artwork: a speech bubble holding three rising bars, the last one an "i" with a golden dot,
-  beside a lowercase wordmark built from the same rounded shapes.
+  Ai eo — favicon.
+  Original artwork: three rising bars, the last one an "i" with a golden dot, on a rounded red tile.
+  Drawn without the speech bubble so it stays readable at 16 px.
   No affiliation with IELTS, British Council, IDP or Cambridge.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Ai eo">
