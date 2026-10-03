@@ -43,11 +43,13 @@ export function AiMarkPanel({ mark, heading }: { mark: AiMarkView; heading?: str
         <div className="aimark__who">
           <strong>{heading ?? 'AI marking'}</strong>
           <span>
-            {mark.judges.length >= 2
-              ? 'Judge01 and Judge02 marked this independently. The band is their average.'
-              : mark.unavailable.length > 0
-                ? `Marked by ${mark.judges[0]?.judge ?? 'one judge'}. ${mark.unavailable.join(' and ')} could not answer this time.`
-                : `Marked by ${mark.judges[0]?.judge ?? 'the judge'}.`}
+            {mark.adjudication
+              ? 'The judges split, so a third examiner reviewed the response and both opinions to settle this band.'
+              : mark.judges.length >= 2
+                ? 'Judge01 and Judge02 marked this independently. The band is their average.'
+                : mark.unavailable.length > 0
+                  ? `Marked by ${mark.judges[0]?.judge ?? 'one judge'}. ${mark.unavailable.join(' and ')} could not answer this time.`
+                  : `Marked by ${mark.judges[0]?.judge ?? 'the judge'}.`}
           </span>
           {split ? (
             <Badge tone="warning">The judges differ by {mark.spread?.toFixed(1)} bands: read both opinions</Badge>

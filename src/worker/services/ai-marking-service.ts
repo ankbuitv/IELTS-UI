@@ -5,9 +5,11 @@ import { completeJson } from '../ai/providers';
 import { describeAiFailure } from '../ai/failure';
 import { resolveJudges, withJudgeRetry, type Judge } from '../ai/judges';
 import {
+  buildAdjudicationMessages,
   buildSpeakingMessages,
   buildWritingMessages,
   MARKING_PROMPT_VERSION,
+  type AdjudicationOpinion,
   type SpeakingPromptInput,
   type WritingPromptInput,
 } from '../ai/marking-prompts';
@@ -15,6 +17,7 @@ import { setWritingScore } from './marking-service';
 import { saveAiVocabulary } from './vocabulary-service';
 import { WRITING_CRITERIA, SPEAKING_CRITERIA } from '../../shared/ai-rubric';
 import { clampBand, meanBand, roundHalfBand } from '../../shared/bands';
+import { JUDGE_SPLIT_THRESHOLD } from '../../shared/judges';
 import type {
   AiMarkView,
   JudgeCorrection,
@@ -148,6 +151,35 @@ export async function gradeWriting(env: Env, input: WritingGradeInput): Promise<
       ...(input.judge.model ? { model: input.judge.model } : {}),
       messages: buildWritingMessages(input),
       temperature: 0.2,
+      maxTokens: AI_MARKING_MAX_TOKENS,
+      timeoutMs: AI_MARKING_TIMEOUT_MS,
+      reasoningEffort: 'medium',
+      jsonSchema: { name: 'ielts_writing_feedback', schema: GRADE_SCHEMA as unknown as Record<string, unknown> },
+    }),
+  );
+  return normaliseGrade(data, provider.id, provider.model, WRITING_CRITERIA.map((criterion) => criterion.key));
+}
+
+export interface AdjudicationGradeInput {
+  judge: Judge;
+  taskLabel: string;
+  prompt: string;
+  responseText: string;
+  opinions: AdjudicationOpinion[];
+}
+
+/**
+ * The tie-breaker: a third examiner reads the response and both split verdicts
+ * and settles the final band. Only called when the panel differs by a band or
+ * more, so it is never the cost of an agreed mark.
+ */
+export async function gradeAdjudication(env: Env, input: AdjudicationGradeInput): Promise<AiGradeResult> {
+  const { data, provider } = await withJudgeRetry(() =>
+    completeJson<RawGrade>(env, {
+      providerId: input.judge.providerId,
+      ...(input.judge.model ? { model: input.judge.model } : {}),
+      messages: buildAdjudicationMessages(input),
+      temperature: 0.1,
       maxTokens: AI_MARKING_MAX_TOKENS,
       timeoutMs: AI_MARKING_TIMEOUT_MS,
       reasoningEffort: 'medium',
@@ -775,7 +807,35 @@ export async function markWritingSubmission(
       throw new ApiError('AI_UNAVAILABLE', failures[0]?.message ?? 'The judges could not mark this response. Please try again.');
     }
 
-    const view = viewFromOpinions('WRITING', answers, panel.map((judge) => judge.label));
+    let view = viewFromOpinions('WRITING', answers, panel.map((judge) => judge.label));
+
+    // A split of a band or more is settled by a third examiner, not by averaging.
+    if (view.spread !== null && view.spread >= JUDGE_SPLIT_THRESHOLD && answers.size >= 2 && panel[0]) {
+      try {
+        const opinions: AdjudicationOpinion[] = [...answers.values()].map((answer) => ({
+          judge: answer.opinion.judge,
+          band: answer.opinion.band,
+          criteria: answer.opinion.criteria.map((criterion) => ({ key: criterion.key, band: criterion.band, comment: criterion.comment })),
+          feedback: answer.opinion.feedback,
+        }));
+        const adjudicated = await gradeAdjudication(env, {
+          judge: panel[0],
+          taskLabel: submission.task_label,
+          prompt: submission.prompt_snapshot,
+          responseText: submission.response_text,
+          opinions,
+        });
+        view = {
+          ...view,
+          band: adjudicated.band,
+          criteria: adjudicated.criteria.length > 0 ? adjudicated.criteria : view.criteria,
+          adjudication: { band: adjudicated.band, rationale: adjudicated.feedback },
+        };
+      } catch {
+        // Adjudication is best-effort: if the tie-breaker is unavailable, the panel mean stands.
+      }
+    }
+
     if (asked.length > 0) {
       await setWritingScore(env, {
         writingSubmissionId: submissionId,

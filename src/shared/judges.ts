@@ -76,6 +76,11 @@ export interface AiMarkView {
   judges: JudgeOpinion[];
   /** Highest minus lowest judge band (null with fewer than two bands). */
   spread: number | null;
+  /**
+   * Set when the judges split by a band or more and a third examiner settled the
+   * final band. `band` above is then the adjudicated band, not the plain mean.
+   */
+  adjudication?: { band: number | null; rationale: string } | null;
   /** Judges that could not answer, by label. */
   unavailable: JudgeLabel[];
   createdAt: string;
