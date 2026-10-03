@@ -68,7 +68,9 @@ html[data-theme='dark'] {
   --brand-edge: #9f1b26;
   --on-brand: #ffffff;
   --logo-ink: #ffffff;
-  --logo-tile: #e5343c;
+  --logo-tile: #0f172a;
+  --logo-bars: #ff4d4d;
+  --logo-dot: #ff4d4d;
 
   --sun-soft: #3a2d0a;
   --sun-border: #6b5416;

@@ -80,9 +80,9 @@
   --bar-muted: #aab6c8;
   /* The logo in its "auto" theme follows these, so it reads on a white or a dark header. */
   --logo-ink: #14233a;
-  --logo-tile: #d3222b;
-  --logo-bars: #ffffff;
-  --logo-dot: #ffc53d;
+  --logo-tile: #ffffff;
+  --logo-bars: #e1251b;
+  --logo-dot: #e1251b;
 
   /* ---- states and skills ---- */
   --success: #12805a;

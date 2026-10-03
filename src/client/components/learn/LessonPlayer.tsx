@@ -16,7 +16,7 @@ import {
   type TypeExercise,
   type WriteExercise,
 } from '@shared/learn-engine';
-import { canSpeak, speak } from '../../lib/speech';
+import { canSpeak, getPreferredVoiceURI, listEnglishVoices, setPreferredVoiceURI, speak } from '../../lib/speech';
 import { Icon } from '../Icon';
 import { Button } from '../ui';
 import { Stars } from './Stars';
@@ -319,8 +319,16 @@ function ExerciseView(props: ViewProps) {
 function OptionExercise({ exercise, disabled, verdict, registerSubmit, onAnswered }: ViewProps) {
   const [picked, setPicked] = useState<number | null>(null);
   const spoken = useRef(false);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceURI, setVoiceURI] = useState<string | null>(getPreferredVoiceURI());
+  const [audioFailed, setAudioFailed] = useState(false);
   const options = exercise.kind === 'choose' || exercise.kind === 'fill' || exercise.kind === 'listen' ? exercise.options : [];
   const answer = exercise.kind === 'choose' || exercise.kind === 'fill' || exercise.kind === 'listen' ? exercise.answer : -1;
+
+  const play = (rate = 0.9) => {
+    setAudioFailed(false);
+    void speak(exercise.kind === 'listen' ? exercise.speak : '', rate, voiceURI).then((ok) => setAudioFailed(!ok));
+  };
 
   useEffect(() => {
     registerSubmit(() => (picked === null ? null : { correct: picked === answer }));
@@ -328,11 +336,13 @@ function OptionExercise({ exercise, disabled, verdict, registerSubmit, onAnswere
   useEffect(() => onAnswered(picked !== null), [picked, onAnswered]);
 
   useEffect(() => {
-    if (exercise.kind === 'listen' && !spoken.current) {
+    if (exercise.kind !== 'listen') return;
+    void listEnglishVoices().then(setVoices);
+    if (!spoken.current) {
       spoken.current = true;
-      speak(exercise.speak);
+      void speak(exercise.speak, 0.9, voiceURI).then((ok) => setAudioFailed(!ok));
     }
-  }, [exercise]);
+  }, [exercise, voiceURI]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -362,14 +372,39 @@ function OptionExercise({ exercise, disabled, verdict, registerSubmit, onAnswere
         <>
           <p className="lesson__kicker">Listen and choose</p>
           <div className="lesson__listen">
-            <button type="button" className="lesson__speaker" onClick={() => speak(exercise.speak)} aria-label="Play the word">
+            <button type="button" className="lesson__speaker" onClick={() => play(0.9)} aria-label="Play the word">
               <Icon name="play" size={26} />
             </button>
-            <button type="button" className="lesson__speaker lesson__speaker--slow" onClick={() => speak(exercise.speak, 0.55)} aria-label="Play slowly">
+            <button type="button" className="lesson__speaker lesson__speaker--slow" onClick={() => play(0.55)} aria-label="Play slowly">
               <Icon name="rotate" size={20} />
             </button>
+            {voices.length > 1 ? (
+              <select
+                className="lesson__voice"
+                value={voiceURI ?? ''}
+                aria-label="Choose a voice"
+                onChange={(event) => {
+                  const next = event.target.value || null;
+                  setVoiceURI(next);
+                  setPreferredVoiceURI(next);
+                  setAudioFailed(false);
+                  void speak(exercise.speak, 0.9, next).then((ok) => setAudioFailed(!ok));
+                }}
+              >
+                {voiceURI === null ? <option value="">Default voice</option> : null}
+                {voices.map((voice) => (
+                  <option key={voice.voiceURI} value={voice.voiceURI}>
+                    {voice.name} ({voice.lang})
+                  </option>
+                ))}
+              </select>
+            ) : null}
           </div>
-          {!canSpeak() ? <p className="muted small">Audio is not available in this browser. The word is “{exercise.speak}”.</p> : null}
+          {!canSpeak() || audioFailed ? (
+            <p className="muted small">
+              This device will not play the audio. The word is “<b>{exercise.speak}</b>”.
+            </p>
+          ) : null}
         </>
       ) : null}
       <div className="lesson__options" role="radiogroup">

@@ -168,7 +168,8 @@
 .lesson__option.is-picked .lesson__key { border-color: var(--info); color: var(--info); }
 .lesson__option.is-right .lesson__key { border-color: var(--success); color: var(--success); }
 .lesson__option.is-wrong .lesson__key { border-color: var(--danger); color: var(--danger); }
-.lesson__listen { display: flex; gap: 10px; margin: 6px 0 18px; }
+.lesson__listen { display: flex; gap: 10px; align-items: center; margin: 6px 0 18px; }
+.lesson__voice { margin-left: 4px; padding: 6px 8px; font-size: 0.8rem; border: 2px solid var(--ink-200); border-radius: var(--radius); background: var(--paper); color: var(--ink-700); max-width: 200px; }
 .lesson__speaker { width: 68px; height: 68px; display: grid; place-items: center; border: 0; background: var(--brand-600); color: #fff; border-radius: 50%; cursor: pointer; box-shadow: 0 4px 0 var(--brand-800); }
 .lesson__speaker--slow { width: 46px; height: 46px; align-self: center; background: var(--solid); box-shadow: 0 4px 0 var(--solid-edge); }
 .lesson__input { width: 100%; padding: 14px 14px; font-size: 1.15rem; border: 2px solid var(--ink-300); border-bottom-width: 4px; border-radius: var(--radius-lg); background: var(--paper); }
