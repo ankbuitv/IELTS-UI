@@ -88,7 +88,7 @@ export function ShopPage() {
   return (
     <div className="shop">
       <header className="shop__hero">
-        <Mascot mood="wave" size={132} />
+        <div className="shop__mascots" aria-hidden="true"><Mascot variant="brand" look="right" mood="wave" size={112} /><Mascot variant="bo" look="right" mood="happy" size={68} /></div>
         <div className="shop__hero-text">
           <p className="shop__kicker">Learn shop</p>
           <h1>Spend what you earned</h1>

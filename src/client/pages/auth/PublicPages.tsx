@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { BrandLogo, BrandMark } from '../../components/BrandLogo';
+import { Mascot } from '../../components/learn/Mascot';
 import { Icon, type IconName } from '../../components/Icon';
 import { Button, Field, Notice, PasswordInput, TextInput } from '../../components/ui';
 import { api, describeError } from '../../lib/api';
@@ -210,6 +211,11 @@ function HeroStage() {
         <Icon name="flame" size={15} filled />
         12 day streak
       </span>
+      <div className="hero-stage__mascots" aria-hidden="true">
+        <Mascot variant="brand" look="right" mood="wave" size={82} />
+        <Mascot variant="reading" look="right" mood="happy" size={58} />
+        <Mascot variant="scholar" look="left" mood="idle" size={54} />
+      </div>
       <MockExam />
       <MockJudges />
       <MockBand />

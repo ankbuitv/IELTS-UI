@@ -19,7 +19,7 @@ import { boostState } from '@shared/shop';
 import { useAsync } from '../../hooks/useAsync';
 import { Icon, type IconName } from '../../components/Icon';
 import { Stars } from '../../components/learn/Stars';
-import { Mascot, type MascotMood } from '../../components/learn/Mascot';
+import { Mascot, MascotSquad, type MascotMood, type MascotVariant } from '../../components/learn/Mascot';
 import { Confetti, StreakPulse } from '../../components/learn/Effects';
 import { DictionaryPanel } from '../../components/learn/DictionaryPanel';
 import { Button, Loading, MedalMark, Modal, Notice, useToast } from '../../components/ui';
@@ -259,7 +259,8 @@ export function LearnPage() {
         <Confetti burst={celebrate} pieces={36} />
         <div className="arena__mascot">
           {streakHot ? <StreakPulse burst={1} /> : null}
-          <Mascot mood={mood} size={172} />
+          <Mascot variant="scholar" look="right" mood={mood} size={144} />
+          <MascotSquad variants={['brand', 'reading', 'listening', 'writing', 'speaking']} mood="happy" size={40} />
         </div>
         <div className="arena__text">
           <p className="arena__kicker">
@@ -609,10 +610,18 @@ export function LearnPage() {
               return (
                 <div key={unit.unitKey} className={`unit unit--c${unitIndex % 4}${unitLocked ? ' unit--locked' : ''}`}>
                   <header className="unit__head">
-                    <div>
-                      <p className="unit__kicker">Band {selectedBand?.toFixed(1)}</p>
-                      <h2>{unit.title}</h2>
-                      <p>{unit.blurb}</p>
+                    <div className="unit__head-main">
+                      <Mascot
+                        variant={(['reading', 'listening', 'writing', 'speaking', 'scholar', 'crown', 'brand', 'bo'] as const)[unitIndex % 8] as MascotVariant}
+                        look="right"
+                        mood={unitDone ? 'wow' : 'happy'}
+                        size={54}
+                      />
+                      <div>
+                        <p className="unit__kicker">Band {selectedBand?.toFixed(1)}</p>
+                        <h2>{unit.title}</h2>
+                        <p>{unit.blurb}</p>
+                      </div>
                     </div>
                     {unitDone ? (
                       <span className="unit__done">

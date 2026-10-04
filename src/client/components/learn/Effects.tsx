@@ -14,7 +14,7 @@
  */
 import { useMemo } from 'react';
 import { Icon } from '../Icon';
-import { Mascot } from './Mascot';
+import { Mascot, MascotSquad } from './Mascot';
 
 const CONFETTI_COLOURS = ['#e23a41', '#ffc53d', '#2f9e5f', '#3f7bff', '#a45cf0', '#ff8fa3'];
 
@@ -155,7 +155,8 @@ export function ComboMilestone({ burst, combo }: { burst: number; combo: number 
       <span className="fx-milestone__ring fx-milestone__ring--late" aria-hidden="true" />
       <div className="fx-milestone__card">
         <span className="fx-milestone__mascot" aria-hidden="true">
-          <Mascot mood="wow" size={76} />
+          <Mascot variant="crown" mood="wow" size={76} />
+          <MascotSquad variants={['brand', 'reading', 'listening', 'speaking']} mood="happy" size={38} />
         </span>
         <span className="fx-milestone__title">{info.title}</span>
         <b className="fx-milestone__count">

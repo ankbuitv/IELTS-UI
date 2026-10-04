@@ -534,3 +534,177 @@ export interface PlanRequest {
   examDay: string | null;
   minutesPerDay: number;
 }
+
+
+export const MASCOT_VARIANTS = [
+  'brand',
+  'bo',
+  'reading',
+  'listening',
+  'writing',
+  'speaking',
+  'scholar',
+  'crown',
+] as const;
+export type MascotVariant = (typeof MASCOT_VARIANTS)[number];
+
+export interface MascotPalette {
+  name: string;
+  bodyTop: string;
+  bodyBottom: string;
+  bellyTop: string;
+  bellyBottom: string;
+  wingLeft: string;
+  wingRight: string;
+  cheek: string;
+  beak: string;
+  feetA: string;
+  feetB: string;
+}
+
+export const MASCOT_PALETTES: Record<MascotVariant, MascotPalette> = {
+  brand: {
+    name: 'Ai eo',
+    bodyTop: '#ff574d',
+    bodyBottom: '#d9251b',
+    bellyTop: '#fff7f6',
+    bellyBottom: '#ffe1de',
+    wingLeft: '#14233a',
+    wingRight: '#0f1c31',
+    cheek: '#fda4af',
+    beak: '#f5a623',
+    feetA: '#f5a623',
+    feetB: '#d9820b',
+  },
+  bo: {
+    name: 'Bơ',
+    bodyTop: '#5fd39a',
+    bodyBottom: '#1f9d63',
+    bellyTop: '#f2fff8',
+    bellyBottom: '#d6f5e4',
+    wingLeft: '#1f8f5b',
+    wingRight: '#1a8253',
+    cheek: '#ff9fb0',
+    beak: '#f5a623',
+    feetA: '#f5a623',
+    feetB: '#e3941a',
+  },
+  reading: {
+    name: 'Reader',
+    bodyTop: '#60a5fa',
+    bodyBottom: '#2563eb',
+    bellyTop: '#f5f9ff',
+    bellyBottom: '#dbeafe',
+    wingLeft: '#1d4ed8',
+    wingRight: '#1e40af',
+    cheek: '#f9a8d4',
+    beak: '#f59e0b',
+    feetA: '#f59e0b',
+    feetB: '#d97706',
+  },
+  listening: {
+    name: 'Listener',
+    bodyTop: '#2dd4bf',
+    bodyBottom: '#0d9488',
+    bellyTop: '#f0fdfa',
+    bellyBottom: '#ccfbf1',
+    wingLeft: '#0f766e',
+    wingRight: '#115e59',
+    cheek: '#fda4af',
+    beak: '#f59e0b',
+    feetA: '#f59e0b',
+    feetB: '#d97706',
+  },
+  writing: {
+    name: 'Scribe',
+    bodyTop: '#fbbf24',
+    bodyBottom: '#d97706',
+    bellyTop: '#fffbeb',
+    bellyBottom: '#fef3c7',
+    wingLeft: '#b45309',
+    wingRight: '#92400e',
+    cheek: '#fb7185',
+    beak: '#ea580c',
+    feetA: '#ea580c',
+    feetB: '#c2410c',
+  },
+  speaking: {
+    name: 'Orator',
+    bodyTop: '#a78bfa',
+    bodyBottom: '#7c3aed',
+    bellyTop: '#f5f3ff',
+    bellyBottom: '#ede9fe',
+    wingLeft: '#6d28d9',
+    wingRight: '#5b21b6',
+    cheek: '#f472b6',
+    beak: '#f59e0b',
+    feetA: '#f59e0b',
+    feetB: '#d97706',
+  },
+  scholar: {
+    name: 'Scholar',
+    bodyTop: '#38bdf8',
+    bodyBottom: '#0284c7',
+    bellyTop: '#f0f9ff',
+    bellyBottom: '#e0f2fe',
+    wingLeft: '#0369a1',
+    wingRight: '#075985',
+    cheek: '#fda4af',
+    beak: '#f59e0b',
+    feetA: '#f59e0b',
+    feetB: '#d97706',
+  },
+  crown: {
+    name: 'Champion',
+    bodyTop: '#fb7185',
+    bodyBottom: '#e11d48',
+    bellyTop: '#fff1f2',
+    bellyBottom: '#ffe4e6',
+    wingLeft: '#be123c',
+    wingRight: '#9f1239',
+    cheek: '#fde047',
+    beak: '#f59e0b',
+    feetA: '#f59e0b',
+    feetB: '#d97706',
+  },
+};
+
+export function mascotCastForExercise(
+  kind: string,
+  index = 0,
+): {
+  lead: MascotVariant;
+  buddies: [MascotVariant, MascotVariant];
+  badge: string;
+} {
+  const cycle: MascotVariant[] = ['brand', 'reading', 'listening', 'writing', 'speaking', 'scholar', 'crown', 'bo'];
+  const pickBuddies = (lead: MascotVariant): [MascotVariant, MascotVariant] => {
+    const others = cycle.filter((item) => item !== lead);
+    const a = others[index % others.length]!;
+    const b = others[(index + 3) % others.length]!;
+    return [a, b];
+  };
+
+  switch (kind) {
+    case 'read':
+      return { lead: 'reading', buddies: ['scholar', 'brand'], badge: 'IELTS Reading' };
+    case 'listen':
+      return { lead: 'listening', buddies: ['brand', 'speaking'], badge: 'IELTS Listening' };
+    case 'write':
+    case 'type':
+    case 'order':
+      return { lead: 'writing', buddies: ['reading', 'scholar'], badge: 'IELTS Writing' };
+    case 'speak':
+      return { lead: 'speaking', buddies: ['listening', 'crown'], badge: 'IELTS Speaking' };
+    case 'paraphrase':
+      return { lead: 'scholar', buddies: ['reading', 'writing'], badge: 'IELTS Paraphrase' };
+    case 'match': {
+      const lead = cycle[(index + 2) % cycle.length]!;
+      return { lead, buddies: pickBuddies(lead), badge: 'Word Match' };
+    }
+    default: {
+      const lead = cycle[index % cycle.length]!;
+      return { lead, buddies: pickBuddies(lead), badge: 'IELTS Vocab' };
+    }
+  }
+}

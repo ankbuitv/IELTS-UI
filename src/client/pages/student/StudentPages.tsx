@@ -3,6 +3,7 @@ import { ALLOWED_AVATAR_EXTENSIONS, MAX_AVATAR_BYTES, sniffAvatarBytes, validate
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiRequestError, api, describeError, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
+import { MascotSquad } from '../../components/learn/Mascot';
 import {
   Badge,
   Button,
@@ -198,6 +199,7 @@ export function PracticePage() {
           </div>
         </div>
         <div className="practice-hero__mode">
+          <MascotSquad variants={['reading', 'listening', 'writing', 'speaking']} mood="happy" size={48} />
           <div className="practice-mode-card">
             <div className="practice-mode-card__top">
               <Icon name={strict ? 'shieldCheck' : 'book'} size={18} />

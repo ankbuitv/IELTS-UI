@@ -26,7 +26,7 @@ import type { TranslationResult } from '@shared/learn';
 import { Icon } from '../Icon';
 import { Button, Modal, useToast } from '../ui';
 import { Stars } from './Stars';
-import { Mascot, reactionTo, type MascotMood } from './Mascot';
+import { Mascot, MascotSquad, mascotCastForExercise, reactionTo, type MascotMood } from './Mascot';
 import { ComboBadge, ComboMilestone, Confetti, FloatingAward, ScreenFlash, comboMilestone } from './Effects';
 import { LookupHint, LookupProvider, LookupText } from './LookupText';
 import { BLOCKED_MESSAGE, useInputLockdown } from '../../hooks/useInputLockdown';
@@ -493,11 +493,13 @@ export function LessonPlayer({
         <ScreenFlash burst={flash.burst} tone={flash.tone} />
         <div className="lesson__end">
           <Mascot
+            variant="brand"
             mood="sad"
-            size={168}
+            size={156}
             message={`That is all five hearts. Do a quick practice round or use coins to get all ${HEART_REFILL_AMOUNT} back and keep going.`}
             tone="bad"
           />
+          <MascotSquad variants={['reading', 'listening', 'writing', 'speaking']} mood="think" size={46} />
           <h1>Out of hearts</h1>
           <p className="muted">
             You ran out of tries on “{title}”. Finish one short practice round to win all {HEART_REFILL_AMOUNT} hearts back for free, or spend coins to refill right now — the lesson picks up where it stopped.
@@ -555,8 +557,9 @@ export function LessonPlayer({
         <ScreenFlash burst={flash.burst} tone={flash.tone} />
         <div className="lesson__end">
           <Mascot
+            variant={perfect ? 'crown' : 'brand'}
             mood={perfect ? 'wow' : 'happy'}
-            size={196}
+            size={176}
             message={
               perfect
                 ? 'A perfect run. Every answer right first time — that is a lesson finished properly.'
@@ -564,6 +567,7 @@ export function LessonPlayer({
             }
             tone="good"
           />
+          <MascotSquad variants={['reading', 'listening', 'writing', 'speaking', 'scholar']} mood={perfect ? 'wow' : 'happy'} size={50} />
           <h1>{perfect ? 'Perfect lesson' : 'Lesson complete'}</h1>
           <p className="muted">{title}</p>
           <dl className="lesson__stats">
@@ -694,29 +698,46 @@ export function LessonPlayer({
               />
             </div>
           ) : null}
-          {current ? (
-            <div className="lesson__stage" key={current.id}>
-              {isRetry ? <p className="lesson__retry">Try this one again</p> : null}
-              <ExerciseView
-                exercise={current}
-                disabled={phase !== 'answering'}
-                hinted={hinted}
-                verdict={verdict}
-                registerSubmit={(fn) => {
-                  submit.current = fn;
-                }}
-                onAnswered={setAnswered}
-              />
-              <div className="lesson__mascot">
-                <Mascot
-                  mood={phase === 'feedback' ? reaction.mood : isRetry ? 'think' : 'idle'}
-                  size={92}
-                  message={phase === 'feedback' ? reaction.message : isRetry ? 'This one again — you know it now.' : undefined}
-                  tone={reaction.tone}
-                />
+          {current ? (() => {
+            const cast = mascotCastForExercise(current.kind, index);
+            const activeMood: MascotMood = phase === 'feedback' ? reaction.mood : isRetry ? 'think' : 'idle';
+            const buddyMood: MascotMood = phase === 'feedback' ? (verdict?.correct ? 'happy' : 'sad') : 'idle';
+            return (
+              <div className={`lesson__stage lesson__stage--${current.kind}`} key={current.id}>
+                <aside className="lesson__mascot" aria-label="Lesson companions">
+                  <div className="lesson__mascot-lead">
+                    <Mascot
+                      variant={cast.lead}
+                      look="right"
+                      mood={activeMood}
+                      size={94}
+                      message={phase === 'feedback' ? reaction.message : isRetry ? 'This one again — you know it now.' : undefined}
+                      tone={reaction.tone}
+                    />
+                  </div>
+                  <div className="lesson__mascot-buddies" aria-hidden="true">
+                    {cast.buddies.map((buddy) => (
+                      <Mascot key={buddy} variant={buddy} look="right" mood={buddyMood} size={42} />
+                    ))}
+                  </div>
+                  <span className="lesson__mascot-tag">{cast.badge}</span>
+                </aside>
+                <div className="lesson__exercise-col">
+                  {isRetry ? <p className="lesson__retry">Try this one again</p> : null}
+                  <ExerciseView
+                    exercise={current}
+                    disabled={phase !== 'answering'}
+                    hinted={hinted}
+                    verdict={verdict}
+                    registerSubmit={(fn) => {
+                      submit.current = fn;
+                    }}
+                    onAnswered={setAnswered}
+                  />
+                </div>
               </div>
-            </div>
-          ) : null}
+            );
+          })() : null}
         </main>
 
         <footer className={`lesson__foot${phase === 'feedback' ? (verdict?.correct ? ' lesson__foot--good' : ' lesson__foot--bad') : ''}`}>
@@ -1163,9 +1184,11 @@ function MatchExerciseView({ exercise, disabled, hinted, registerSubmit, onAnswe
   // A hint points at the first pair still to be found, in both columns.
   const hintedPair = hinted ? exercise.pairs.findIndex((_, index) => !solved.includes(index)) : -1;
 
+  // Once all pairs have been matched, the exercise is counted as right even if
+  // the learner mis-clicked a pair along the way and re-matched them all.
   useEffect(() => {
-    registerSubmit(() => (complete ? { correct: slips === 0 } : null));
-  }, [complete, slips, registerSubmit]);
+    registerSubmit(() => (complete ? { correct: true } : null));
+  }, [complete, registerSubmit]);
   useEffect(() => onAnswered(complete), [complete, onAnswered]);
 
   const pickMeaning = (pairIndex: number) => {
@@ -1218,6 +1241,30 @@ function MatchExerciseView({ exercise, disabled, hinted, registerSubmit, onAnswe
           ))}
         </div>
       </div>
+      {slips > 0 || solved.length > 0 ? (
+        <div className="lesson__match-foot">
+          <span className="muted small">
+            {complete
+              ? 'All pairs matched — press Check to continue.'
+              : slips > 0
+                ? 'Keep going — finish matching all pairs and it counts as correct.'
+                : `${solved.length} of ${exercise.pairs.length} pairs matched.`}
+          </span>
+          {!disabled && solved.length > 0 && !complete ? (
+            <button
+              type="button"
+              className="btn btn--sm btn--ghost"
+              onClick={() => {
+                setSolved([]);
+                setTerm(null);
+                setWrongPair(null);
+              }}
+            >
+              Reset pairs
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1524,36 +1571,52 @@ function HeartPracticeRound({
           <p className="lesson__retry">
             Heart recovery practice · {title} — get {target} right to refill all {HEART_REFILL_AMOUNT} hearts (no hearts lost here)
           </p>
-          {current ? (
-            <div className="lesson__stage" key={current.id}>
-              <ExerciseView
-                exercise={current}
-                disabled={stepPhase !== 'answering'}
-                hinted={false}
-                verdict={verdict}
-                registerSubmit={(fn) => {
-                  submit.current = fn;
-                }}
-                onAnswered={setAnswered}
-              />
-              <div className="lesson__mascot">
-                <Mascot
-                  mood={stepPhase === 'feedback' ? (verdict?.correct ? 'happy' : 'think') : 'idle'}
-                  size={88}
-                  message={
-                    stepPhase === 'feedback'
-                      ? verdict?.correct
-                        ? cleared >= target
-                          ? `All ${HEART_REFILL_AMOUNT} hearts are yours again!`
-                          : `${target - cleared} more to refill your hearts.`
-                        : 'No heart lost in practice — it will come round once more.'
-                      : undefined
-                  }
-                  tone={stepPhase === 'feedback' ? (verdict?.correct ? 'good' : 'bad') : undefined}
-                />
+          {current ? (() => {
+            const cast = mascotCastForExercise(current.kind, index);
+            const activeMood: MascotMood = stepPhase === 'feedback' ? (verdict?.correct ? 'happy' : 'think') : 'idle';
+            return (
+              <div className={`lesson__stage lesson__stage--${current.kind}`} key={current.id}>
+                <aside className="lesson__mascot" aria-label="Practice companions">
+                  <div className="lesson__mascot-lead">
+                    <Mascot
+                      variant={cast.lead}
+                      look="right"
+                      mood={activeMood}
+                      size={88}
+                      message={
+                        stepPhase === 'feedback'
+                          ? verdict?.correct
+                            ? cleared >= target
+                              ? `All ${HEART_REFILL_AMOUNT} hearts are yours again!`
+                              : `${target - cleared} more to refill your hearts.`
+                            : 'No heart lost in practice — it will come round once more.'
+                          : undefined
+                      }
+                      tone={stepPhase === 'feedback' ? (verdict?.correct ? 'good' : 'bad') : undefined}
+                    />
+                  </div>
+                  <div className="lesson__mascot-buddies" aria-hidden="true">
+                    {cast.buddies.map((buddy) => (
+                      <Mascot key={buddy} variant={buddy} look="right" mood={activeMood} size={40} />
+                    ))}
+                  </div>
+                  <span className="lesson__mascot-tag">{cast.badge}</span>
+                </aside>
+                <div className="lesson__exercise-col">
+                  <ExerciseView
+                    exercise={current}
+                    disabled={stepPhase !== 'answering'}
+                    hinted={false}
+                    verdict={verdict}
+                    registerSubmit={(fn) => {
+                      submit.current = fn;
+                    }}
+                    onAnswered={setAnswered}
+                  />
+                </div>
               </div>
-            </div>
-          ) : null}
+            );
+          })() : null}
         </main>
 
         <footer className={`lesson__foot${stepPhase === 'feedback' ? (verdict?.correct ? ' lesson__foot--good' : ' lesson__foot--bad') : ''}`}>

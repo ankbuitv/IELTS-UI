@@ -75,7 +75,7 @@ export function LeaderboardPage() {
   return (
     <div className="board">
       <header className="board__hero">
-        <Mascot mood="wow" size={116} />
+        <div className="board__mascots" aria-hidden="true"><Mascot variant="crown" look="right" mood="wow" size={104} /><Mascot variant="scholar" look="right" mood="happy" size={64} /></div>
         <div>
           <p className="board__kicker">Leaderboards</p>
           <h1>{scope === 'learn' ? 'Who is putting the work in' : 'Who is sitting the tests'}</h1>

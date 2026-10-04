@@ -163,15 +163,15 @@
 .lesson__hearts { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; color: var(--brand-600); font-variant-numeric: tabular-nums; }
 .lesson__hearts svg { fill: currentColor; }
 .lesson__main { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 18px 24px; }
-.lesson__stage { max-width: 640px; margin: 0 auto; padding-top: clamp(6px, 5vh, 56px); animation: lesson-in 200ms var(--ease); }
+.lesson__stage { max-width: 840px; width: 100%; margin: 0 auto; padding-top: clamp(2px, 1.5vh, 14px); display: grid; grid-template-columns: 152px minmax(0, 1fr); gap: 24px; align-items: start; animation: lesson-in 200ms var(--ease); }
 @keyframes lesson-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .lesson__kicker { margin: 0 0 6px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-500); }
 .lesson__retry { margin: 0 0 6px; font-size: 0.78rem; font-weight: 700; color: var(--brand-700); }
-.lesson__prompt { font-size: clamp(1.25rem, 3.4vw, 1.7rem); margin: 0 0 18px; line-height: 1.25; color: var(--ink-950); letter-spacing: -0.015em; }
+.lesson__prompt { font-size: clamp(1.18rem, 2.4vw, 1.48rem); margin: 0 0 12px; line-height: 1.25; color: var(--ink-950); letter-spacing: -0.015em; }
 .lesson__prompt--sentence { font-weight: 400; line-height: 1.5; }
 .lesson__hint { margin: -8px 0 10px; color: var(--ink-600); }
 .lesson__mask { font-family: var(--font-mono); font-size: 1.25rem; letter-spacing: 0.15em; margin: 0 0 12px; color: var(--ink-800); white-space: pre-wrap; }
-.lesson__options { display: grid; gap: 10px; }
+.lesson__options { display: grid; gap: 8px; }
 .lesson__option {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px 14px; font-family: inherit; font-size: 1rem; line-height: 1.35;
   background: var(--paper); color: var(--ink-900); border: 2px solid var(--ink-200); border-bottom-width: 4px; border-radius: var(--radius-lg); cursor: pointer;
@@ -352,7 +352,7 @@
 .node-kind { font-style: normal; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-500); }
 
 /* ------------------------------------------- lesson kinds beyond vocabulary */
-.lesson__passage { max-height: 190px; overflow-y: auto; padding: 14px 16px; margin: 0 0 16px; border-left: 4px solid var(--brand-400); border-radius: 0 var(--radius) var(--radius) 0; background: var(--paper-muted); color: var(--ink-800); line-height: 1.65; white-space: pre-wrap; }
+.lesson__passage { max-height: 168px; overflow-y: auto; padding: 12px 15px; margin: 0 0 12px; border-left: 4px solid var(--brand-400); border-radius: 0 var(--radius) var(--radius) 0; background: var(--paper-muted); color: var(--ink-800); line-height: 1.6; white-space: pre-wrap; }
 .lesson__note { margin: 14px 0 0; font-size: 0.9rem; color: var(--ink-700); line-height: 1.55; }
 .lesson__textarea { width: 100%; padding: 12px 14px; font: inherit; font-size: 1rem; line-height: 1.5; resize: vertical; border: 2px solid var(--ink-300); border-bottom-width: 4px; border-radius: var(--radius-lg); background: var(--paper); color: var(--ink-950); }
 .lesson__textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 1px; border-color: var(--ink-400); }
@@ -588,7 +588,95 @@
 .lesson__boost { font-size: 0.76rem; font-weight: 800; color: #7a4a00; background: var(--sun-soft); border: 1px solid var(--sun-border); padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
 .lesson__hint { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-family: inherit; font-size: 0.78rem; font-weight: 700; color: #5a35b8; background: #f3ecff; border: 1px solid #d9c8ff; border-radius: 99px; cursor: pointer; }
 .lesson__hint:disabled { opacity: 0.5; cursor: not-allowed; }
-.lesson__mascot { display: flex; justify-content: center; margin-top: 18px; }
+/* Left-side mascot companion rail: always sits to the left of the exercise looking right. */
+.lesson__mascot {
+  position: sticky;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 10px;
+  border-radius: var(--radius-xl);
+  background: var(--paper-muted);
+  border: 1.5px solid var(--ink-200);
+  text-align: center;
+}
+.lesson__mascot-lead .mascot {
+  flex-direction: column;
+  gap: 6px;
+}
+.lesson__mascot-lead .mascot__bubble {
+  max-width: 140px;
+  padding: 7px 10px;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  text-align: center;
+}
+.lesson__mascot-lead .mascot__bubble::before,
+.lesson__mascot-lead .mascot__bubble::after {
+  display: none;
+}
+.lesson__mascot-buddies {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.lesson__mascot-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--paper);
+  border: 1px solid var(--ink-200);
+  color: var(--ink-600);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.lesson__exercise-col {
+  min-width: 0;
+  width: 100%;
+}
+.lesson__match-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.mascot--look-right .mascot__body { transform: rotate(2deg); transform-origin: 60px 78px; }
+.mascot--look-left .mascot__body { transform: rotate(-2deg); transform-origin: 60px 78px; }
+.mascot-squad {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.arena__mascot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.unit__head-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.board__mascots,
+.shop__mascots {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
 .lesson__feedback-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .lesson__sentence { margin: 6px 0 0; font-size: 0.98rem; line-height: 1.55; color: var(--ink-900); }
 .lesson__pairs { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 3px; font-size: 0.9rem; }
@@ -726,6 +814,22 @@
   .shop__earn { text-align: left; }
   .board__hero { flex-direction: column; text-align: center; }
   .board__controls { justify-content: center; }
+  .lesson__stage { grid-template-columns: 1fr; gap: 10px; padding-top: 2px; }
+  .lesson__mascot {
+    position: static;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 10px;
+    text-align: left;
+  }
+  .lesson__mascot-lead .mascot { flex-direction: row; gap: 8px; }
+  .lesson__mascot-lead .mascot__art { width: 56px; height: 56px; }
+  .lesson__mascot-lead .mascot__bubble { max-width: 210px; text-align: left; }
+  .lesson__mascot-buddies .mascot__art { width: 32px; height: 32px; }
+  .lesson__mascot-tag { margin-left: auto; }
   .lesson__feedback--quiet { flex-direction: column; align-items: flex-start; }
   .fx-float { right: 12px; }
 }

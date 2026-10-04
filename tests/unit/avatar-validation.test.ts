@@ -131,3 +131,35 @@ describe('buildHeartRecoveryExercises', () => {
     expect(new Set(drill.map((item) => item.id)).size).toBe(5);
   });
 });
+
+import { MASCOT_PALETTES, MASCOT_VARIANTS, mascotCastForExercise } from '../../src/shared/learn';
+
+describe('Mascot variants & IELTS lesson cast', () => {
+  it('defines distinct palettes for brand and IELTS skill mascots', () => {
+    expect(MASCOT_VARIANTS).toContain('brand');
+    expect(MASCOT_VARIANTS).toContain('reading');
+    expect(MASCOT_VARIANTS).toContain('listening');
+    expect(MASCOT_VARIANTS).toContain('writing');
+    expect(MASCOT_VARIANTS).toContain('speaking');
+    expect(MASCOT_VARIANTS).toContain('scholar');
+    expect(MASCOT_VARIANTS).toContain('crown');
+    expect(MASCOT_PALETTES.brand.bodyBottom).toBe('#d9251b');
+    expect(MASCOT_PALETTES.reading.bodyBottom).toBe('#2563eb');
+  });
+
+  it('assigns IELTS skill mascots and multi-colour companions to lesson exercises', () => {
+    const readCast = mascotCastForExercise('read', 0);
+    expect(readCast.lead).toBe('reading');
+    expect(readCast.buddies).toHaveLength(2);
+    expect(new Set([readCast.lead, ...readCast.buddies]).size).toBe(3);
+
+    const listenCast = mascotCastForExercise('listen', 1);
+    expect(listenCast.lead).toBe('listening');
+
+    const writeCast = mascotCastForExercise('write', 2);
+    expect(writeCast.lead).toBe('writing');
+
+    const speakCast = mascotCastForExercise('speak', 3);
+    expect(speakCast.lead).toBe('speaking');
+  });
+});
