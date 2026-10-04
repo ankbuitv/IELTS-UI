@@ -27,6 +27,8 @@ export interface ExplainWord {
   meaning: string;
   vi: string;
   example: string;
+  /** Translation of the full example, separate from the vocabulary gloss. */
+  sentenceVi?: string;
 }
 
 interface ExerciseBase {
@@ -91,6 +93,8 @@ export interface ParaphraseExercise extends ExerciseBase {
   kind: 'paraphrase';
   /** The sentence to restate. */
   prompt: string;
+  /** Vietnamese meaning of the source sentence, when the content includes it. */
+  promptVi?: string;
   options: string[];
   answer: number;
   /** Why the answer holds and the others do not. */
@@ -188,7 +192,14 @@ function maskFor(term: string): string {
 }
 
 function explainOf(word: LearnWord): ExplainWord {
-  return { term: word.term, pos: word.pos, meaning: word.meaning, vi: word.vi, example: word.example };
+  return {
+    term: word.term,
+    pos: word.pos,
+    meaning: word.meaning,
+    vi: word.vi,
+    example: word.example,
+    ...(word.exampleVi ? { sentenceVi: word.exampleVi } : {}),
+  };
 }
 
 /** Distractors: other words, preferring the same part of speech so the answer is not obvious by form. */
@@ -303,8 +314,10 @@ export interface BuildLessonOptions {
 }
 
 /**
- * A lesson of about ten exercises. Recognition comes first (choose, match),
- * then recall (fill, listen, type, order), so each word is met more than once.
+ * A full 30-question vocabulary workout. Six words are met through five
+ * different retrieval modes (meaning, context, listening, spelling and word
+ * order); one fill question is replaced by a four-word matching challenge so
+ * the lesson still practises matching without exceeding the 30-question cap.
  */
 export function buildLesson(words: readonly LearnWord[], seed: string, options: BuildLessonOptions = {}): Exercise[] {
   const random = seededRandom(seed);
@@ -323,21 +336,42 @@ export function buildLesson(words: readonly LearnWord[], seed: string, options: 
   const n = order.length;
   const at = (index: number) => order[((index % n) + n) % n]!;
   const exercises: Exercise[] = [];
-  const push = (exercise: Exercise | null) => {
-    if (exercise) exercises.push(exercise);
-  };
   let counter = 0;
   const nextId = (kind: string) => `${seed}:${kind}:${counter++}`;
+  const modes = ['choose', 'fill', 'listen', 'type', 'order'] as const;
 
-  for (let i = 0; i < Math.min(n, 4); i += 1) push(buildChoose(at(i), pool, random, nextId('choose')));
-  push(buildMatch(shuffle(order, random), random, nextId('match')));
-  for (let i = 2; i < 5; i += 1) push(buildFill(at(i), pool, random, nextId('fill')) ?? buildChoose(at(i), pool, random, nextId('choose')));
-  push(buildListen(at(n - 1), pool, random, nextId('listen')));
-  push(buildType(at(0), nextId('type')));
-  if (n > 2) push(buildType(at(n - 2), nextId('type')));
-  const orderable = order.find((word) => buildOrder(word, () => 0.5, 'probe'));
-  if (orderable) push(buildOrder(orderable, random, nextId('order')));
-  return exercises;
+  // Cycling the source words rather than trimming to a small sample means even
+  // a lesson with fewer than six words still reaches the same predictable size.
+  for (let index = 0; index < 30; index += 1) {
+    const word = at(index % n);
+    const mode = modes[Math.floor(index / n) % modes.length]!;
+    let exercise: Exercise | null = null;
+    switch (mode) {
+      case 'choose':
+        exercise = buildChoose(word, pool, random, nextId('choose'));
+        break;
+      case 'fill':
+        exercise = buildFill(word, pool, random, nextId('fill')) ?? buildChoose(word, pool, random, nextId('choose'));
+        break;
+      case 'listen':
+        exercise = buildListen(word, pool, random, nextId('listen'));
+        break;
+      case 'type':
+        exercise = buildType(word, nextId('type'));
+        break;
+      case 'order':
+        exercise = buildOrder(word, random, nextId('order')) ?? buildFill(word, pool, random, nextId('fill'));
+        break;
+    }
+    if (exercise) exercises.push(exercise);
+  }
+
+  // A single match challenge adds variety while keeping the user-facing total at
+  // exactly 30. Keep all five base exercise modes on the page.
+  const match = buildMatch(shuffle(order, random), random, nextId('match'));
+  if (match && exercises.length >= 30) exercises[1] = match;
+  else if (match) exercises.push(match);
+  return exercises.slice(0, 30);
 }
 
 /** A review lesson built from the learner's notebook: every word is both recognised and recalled. */
@@ -369,8 +403,16 @@ export function buildParaphraseLesson(items: ParaphrasePayload['items'], seed: s
       id: `${seed}:pp:${index}`,
       terms: [],
       // `explain` carries the item so the feedback panel has something to show.
-      explain: { term: item.original, pos: 'sentence', meaning: item.note, vi: '', example: item.answer },
+      explain: {
+        term: item.original,
+        pos: 'sentence',
+        meaning: item.note,
+        vi: '',
+        example: item.answer,
+        ...(item.answerVi ? { sentenceVi: item.answerVi } : {}),
+      },
       prompt: item.original,
+      ...(item.originalVi ? { promptVi: item.originalVi } : {}),
       options,
       answer: options.indexOf(item.answer),
       note: item.note,
@@ -391,7 +433,14 @@ export function buildReadingLesson(payload: ReadingPayload, seed: string): Exerc
       kind: 'read',
       id: `${seed}:rd:${index}`,
       terms: [],
-      explain: { term: question.stem, pos: 'question', meaning: question.evidence, vi: '', example: '' },
+      explain: {
+        term: question.stem,
+        pos: 'question',
+        meaning: question.evidence,
+        vi: '',
+        example: '',
+        ...(question.evidenceVi ? { sentenceVi: question.evidenceVi } : {}),
+      },
       passage,
       stem: question.stem,
       options: question.options,
@@ -410,7 +459,14 @@ export function buildWritingLesson(items: WritingPayload['items'], seed: string)
       kind: 'write',
       id: `${seed}:wr:${index}`,
       terms: [],
-      explain: { term: item.model, pos: 'sentence', meaning: item.instruction, vi: item.hint, example: item.model },
+      explain: {
+        term: item.model,
+        pos: 'sentence',
+        meaning: item.instruction,
+        vi: item.hint,
+        example: item.model,
+        ...(item.modelVi ? { sentenceVi: item.modelVi } : {}),
+      },
       instruction: item.instruction,
       hint: item.hint,
       answer: item.model,
@@ -427,7 +483,14 @@ export function buildSpeakingLesson(items: SpeakingPayload['items'], seed: strin
       kind: 'speak',
       id: `${seed}:sp:${index}`,
       terms: [],
-      explain: { term: item.question, pos: 'question', meaning: item.cue, vi: '', example: item.sample },
+      explain: {
+        term: item.question,
+        pos: 'question',
+        meaning: item.cue,
+        vi: '',
+        example: item.sample,
+        ...(item.sampleVi ? { sentenceVi: item.sampleVi } : {}),
+      },
       question: item.question,
       cue: item.cue,
       sample: item.sample,

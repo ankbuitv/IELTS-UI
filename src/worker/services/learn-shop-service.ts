@@ -159,6 +159,7 @@ export async function useItem(
   key: ShopItemKey,
 ): Promise<{ state: ShopState; applied: boolean; detail: string }> {
   const item = shopItem(key);
+  if (item.cosmetic) throw ApiError.validation('Cosmetics are permanent unlocks. Equip them from your player profile.');
   const now = nowIso();
   const spent = await env.DB.prepare(
     'UPDATE learn_inventory SET quantity = quantity - 1, updated_at = ? WHERE user_id = ? AND item_key = ? AND quantity > 0',

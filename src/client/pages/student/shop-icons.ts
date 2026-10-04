@@ -12,5 +12,13 @@ export function itemIcon(key: ShopItemKey): IconName {
       return 'heart';
     case 'hint':
       return 'bulb';
+    case 'cosmetic_name_gold':
+      return 'star';
+    case 'cosmetic_name_nebula':
+      return 'sparkle';
+    case 'cosmetic_profile_glow':
+      return 'sparkle';
+    case 'cosmetic_profile_sparkle':
+      return 'star';
   }
 }
