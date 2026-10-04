@@ -258,6 +258,12 @@ For a completely fresh local database (wipe, migrate, re-seed):
 For UI work with hot reload, run `npm run dev:client` (Vite on `:5173`, proxying
 `/api` to the Worker on `:8787`).
 
+One wrinkle inherited from `wrangler dev`: it reads the asset manifest once at
+start-up, so running `npm run build` (or `npm run build:client`) while the dev
+server is up leaves it serving a manifest for files that no longer exist — every
+page returns 404 until it is restarted. Either use `dev:client` for UI work, or
+restart `npm run dev` after a build.
+
 `SESSION_SECRET` is required in production; in development the Worker falls back
 to a clearly-marked local value so a fresh clone starts without configuration.
 
@@ -277,7 +283,7 @@ to a clearly-marked local value so a fresh clone starts without configuration.
 | `npm run test:integration` | End-to-end acceptance run against a live Worker |
 | `npm run db:migrate:local` / `:remote` | Apply D1 migrations |
 | `npm run db:seed:local` / `:remote` | Load the original sample content |
-| `npm run db:demo` | Create the demo accounts and publish the sample tests (needs a running Worker) |
+| `npm run db:demo` | Create the demo accounts, play two Learn lessons as the student, and publish the sample tests (needs a running Worker) |
 | `npm run db:reset:local` | Wipe, migrate and re-seed the **local** database |
 | `npm run deploy` | Build and deploy the Worker |
 
@@ -296,6 +302,11 @@ accounts and publishes both tests so the platform is immediately explorable:
 | Admin | `admin@demo.test` | `Demo-Passw0rd!23` |
 | Teacher | `teacher@demo.test` | `Demo-Passw0rd!23` |
 | Student | `student@demo.test` | `Demo-Passw0rd!23` |
+
+The student account is given a **head start** — two Learn lessons played with a
+perfect score, worth 75 coins and a one-day streak — so `/learn/shop` has
+something to spend the first time the demo is opened. It happens only on a
+profile that has never earned XP, so re-running the script never mints coins.
 
 Override them with `DEMO_PASSWORD`, or point the script at another Worker with
 `DEMO_BASE_URL`. The accounts are created through the public API, never by
