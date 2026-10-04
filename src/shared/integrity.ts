@@ -27,6 +27,10 @@ export const INTEGRITY_EVENT_TYPES = [
   'COPY_ATTEMPT',
   'PASTE_ATTEMPT',
   'CONTEXT_MENU_ATTEMPT',
+  /** A debugger was measured as attached to the page, and the veil went up. */
+  'INSPECTOR_OPEN',
+  /** The same measurement came back clean again and the veil came down. */
+  'INSPECTOR_CLOSED',
   'SESSION_START',
   'SESSION_RESUME',
   'SUBMIT',
@@ -113,6 +117,14 @@ export const INTEGRITY_PRESETS: Record<ExamMode, IntegrityPolicy> = {
  */
 export const COUNTED_EVENT_TYPES: IntegrityEventType[] = ['TAB_HIDDEN', 'FULLSCREEN_EXIT'];
 
+/**
+ * INSPECTOR_OPEN is logged but never counted. Detection is a measurement, not a
+ * fact about the person: a browser extension, an accessibility tool or an
+ * automated profile can attach a debugger without any intent to gain an
+ * advantage, and the page cannot tell those apart. The teacher sees that it
+ * happened and when it stopped; the attempt is not penalised for it.
+ */
+
 export const EVENT_LABELS: Record<IntegrityEventType, string> = {
   TAB_HIDDEN: 'Browser tab hidden',
   WINDOW_BLUR: 'Window lost focus',
@@ -125,6 +137,8 @@ export const EVENT_LABELS: Record<IntegrityEventType, string> = {
   COPY_ATTEMPT: 'Copy attempt',
   PASTE_ATTEMPT: 'Paste attempt',
   CONTEXT_MENU_ATTEMPT: 'Context menu attempt',
+  INSPECTOR_OPEN: 'Developer tools detected',
+  INSPECTOR_CLOSED: 'Developer tools closed',
   SESSION_START: 'Session started',
   SESSION_RESUME: 'Session resumed',
   SUBMIT: 'Submitted',
@@ -142,6 +156,8 @@ export const EVENT_SEVERITY: Record<IntegrityEventType, IntegritySeverity> = {
   COPY_ATTEMPT: 'WARNING',
   PASTE_ATTEMPT: 'WARNING',
   CONTEXT_MENU_ATTEMPT: 'INFO',
+  INSPECTOR_OPEN: 'WARNING',
+  INSPECTOR_CLOSED: 'INFO',
   SESSION_START: 'INFO',
   SESSION_RESUME: 'INFO',
   SUBMIT: 'INFO',

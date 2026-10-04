@@ -21,7 +21,7 @@ import {
   setLearnBand,
 } from '../services/learn-service';
 import { getCatalogue, getLessonPlay } from '../services/learn-catalogue-service';
-import { getShopState, purchaseItem, useItem } from '../services/learn-shop-service';
+import { buyHeartRefill, getShopState, heartRefillOptions, purchaseItem, useItem } from '../services/learn-shop-service';
 import { getLeaderboard } from '../services/learn-leaderboard-service';
 import { translateSentence } from '../services/learn-translate-service';
 import { auditPlan, getPlan, rebuildPlan, setPlanItemStatus } from '../services/learn-plan-service';
@@ -258,6 +258,40 @@ learnRouter.post('/items/use', async (c) => {
     'You have used a lot of items this hour. Try again in a little while.',
   );
   return c.json(await useItem(c.env, user.id, body.key as ShopItemKey));
+});
+
+// ------------------------------------------------------------------- hearts
+/**
+ * The three ways back from "Out of hearts", priced by the server.
+ *
+ * The screen shows a free practice drill, a coin purchase and any refill the
+ * learner already holds; only two of those three are numbers, and both come
+ * from here so the copy on the button cannot disagree with what the debit does.
+ */
+learnRouter.get('/hearts/options', async (c) => {
+  const user = currentUser(c);
+  return c.json(await heartRefillOptions(c.env, user.id));
+});
+
+/**
+ * Buys a heart refill outright.
+ *
+ * Deliberately separate from `/shop/buy`: this never puts an item in the bag, it
+ * spends the coins and answers, because the learner is standing on a lost lesson
+ * and a refill in the inventory would be spent by a screen they have already
+ * left. Rate limited harder than the shelf — one refill per lost lesson is the
+ * whole use, and a tight bucket is what stops this endpoint being used as a
+ * generic coin sink.
+ */
+learnRouter.post('/hearts/refill', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  await enforceRateLimit(
+    c.env,
+    { bucket: `learn-hearts:${user.id}`, windowSeconds: 3600, limit: 20 },
+    'That is a lot of refills in one hour. The practice drill is free and always open.',
+  );
+  return c.json(await buyHeartRefill(c.env, user.id));
 });
 
 // ------------------------------------------------------------- leaderboards

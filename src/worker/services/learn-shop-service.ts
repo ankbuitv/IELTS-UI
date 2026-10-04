@@ -21,7 +21,9 @@ import { ApiError } from '../lib/errors';
 import { newId, nowIso } from '../lib/ids';
 import {
   HINT_REMOVES_OPTIONS,
+  HEART_PRACTICE_SIZE,
   HEART_REFILL_AMOUNT,
+  heartRefillPrice,
   boostUntilFrom,
   isShopItemKey,
   shopItem,
@@ -177,12 +179,75 @@ export async function useItem(
     return { state: await getShopState(env, userId), applied: true, detail: 'Double XP is running. Every lesson pays twice.' };
   }
   if (key === 'heart_refill') {
-    return { state: await getShopState(env, userId), applied: true, detail: `Back to ${HEART_REFILL_AMOUNT} hearts.` };
+    return { state: await getShopState(env, userId), applied: true, detail: `All ${HEART_REFILL_AMOUNT} hearts are back.` };
   }
   if (key === 'hint') {
     return { state: await getShopState(env, userId), applied: true, detail: `${HINT_REMOVES_OPTIONS} wrong answers are gone.` };
   }
   return { state: await getShopState(env, userId), applied: true, detail: 'Your streak is covered for one missed day.' };
+}
+
+/**
+ * Buys a heart refill outright, from the "Out of hearts" screen.
+ *
+ * The shelf sells refills in advance; this sells one at the moment it is
+ * needed, for the same price, without putting it in the bag first — a learner
+ * who has just lost a lesson should not have to leave it, open the shop, buy a
+ * refill and come back to find the lesson gone. It is one conditional debit and
+ * one log row, in the same shape as `purchaseItem`, so the coin ledger still
+ * explains every balance.
+ *
+ * Nothing here decides how many hearts come back: hearts live in the lesson
+ * player, which restores the full row when this call succeeds. The server only
+ * decides whether the coins were actually there.
+ */
+export async function buyHeartRefill(env: Env, userId: string): Promise<{ state: ShopState; spent: number; hearts: number }> {
+  const price = heartRefillPrice();
+  const wallet = await readWallet(env, userId);
+  if (wallet.coins < price) {
+    throw ApiError.validation(
+      `A refill costs ${price} coins and you have ${wallet.coins}. The practice drill on this screen earns the hearts back for free.`,
+    );
+  }
+  const now = nowIso();
+  const debit = await env.DB.prepare(
+    'UPDATE learn_profiles SET coins = coins - ?, updated_at = ? WHERE user_id = ? AND coins >= ?',
+  )
+    .bind(price, now, userId, price)
+    .run();
+  if ((debit.meta?.changes ?? 0) === 0) {
+    throw ApiError.validation('Your balance changed while buying. Try again.');
+  }
+  await env.DB.batch([
+    env.DB.prepare(
+      'INSERT INTO learn_shop_orders (id, user_id, item_key, quantity, unit_price, coins_spent, balance_after, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ).bind(newId('order'), userId, 'heart_refill', 1, price, price, wallet.coins - price, now),
+    env.DB.prepare(
+      'INSERT INTO learn_coin_log (id, user_id, day, delta, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).bind(newId('coin'), userId, '', -price, 'hearts:refill', now),
+  ]);
+  return { state: await getShopState(env, userId), spent: price, hearts: HEART_REFILL_AMOUNT };
+}
+
+/**
+ * What the "Out of hearts" screen offers, so the three ways back are described
+ * by the server that prices them rather than by copy the client invents.
+ */
+export async function heartRefillOptions(env: Env, userId: string): Promise<{
+  price: number;
+  coins: number;
+  held: number;
+  practiceSize: number;
+  hearts: number;
+}> {
+  const wallet = await readWallet(env, userId);
+  return {
+    price: heartRefillPrice(),
+    coins: wallet.coins,
+    held: wallet.inventory.heart_refill ?? 0,
+    practiceSize: HEART_PRACTICE_SIZE,
+    hearts: HEART_REFILL_AMOUNT,
+  };
 }
 
 // ------------------------------------------------------------------- quests

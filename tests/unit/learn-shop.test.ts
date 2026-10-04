@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   DAILY_LOGIN_COINS,
   DAILY_QUESTS,
+  HEART_PRACTICE_SIZE,
   HEART_REFILL_AMOUNT,
+  heartRefillPrice,
   HINT_REMOVES_OPTIONS,
   SHOP_ITEMS,
   SHOP_ITEM_KEYS,
@@ -21,6 +23,7 @@ import {
   streakWithFreeze,
   type ShopItemKey,
 } from '../../src/shared/shop';
+import { MAX_HEARTS } from '../../src/shared/learn-engine';
 import {
   LEADERBOARD_LIMIT,
   formatAttempts,
@@ -105,7 +108,15 @@ describe('shop catalogue', () => {
   });
 
   it('keeps the consumables coherent with what the lesson does with them', () => {
-    expect(HEART_REFILL_AMOUNT).toBe(3);
+    // A refill restores the whole row: a learner who has just lost every heart
+    // gets a lesson they can finish, not one they are likely to lose again.
+    expect(HEART_REFILL_AMOUNT).toBe(MAX_HEARTS);
+    // The free practice drill is short enough to be a way back in, not a punishment.
+    expect(HEART_PRACTICE_SIZE).toBeGreaterThan(0);
+    expect(HEART_PRACTICE_SIZE).toBeLessThanOrEqual(MAX_HEARTS + 3);
+    // Buying outright costs exactly what the shelf charges, so there is no
+    // discount for waiting until the lesson is already lost.
+    expect(heartRefillPrice()).toBe(shopItem('heart_refill').price);
     // A hint must leave at least one wrong option beside the answer, or the
     // question would be decided by the hint rather than by the learner.
     expect(HINT_REMOVES_OPTIONS).toBeLessThan(3);

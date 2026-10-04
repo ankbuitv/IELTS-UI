@@ -11,13 +11,15 @@
  *
  *   streak_freeze  keeps a streak alive across one missed day
  *   xp_boost       doubles every XP award for a short window
- *   heart_refill   gives the lesson three more hearts after a wipe-out
+ *   heart_refill   gives the lesson all its hearts back after a wipe-out
  *   hint           removes two wrong options (or reveals a letter)
  *
  * Prices are cheapest-first on purpose: a hint and a refill are everyday help,
  * a freeze is insurance against losing weeks of work, and it should hurt a
  * little to buy.
  */
+
+import { MAX_HEARTS } from './learn-engine';
 
 export const SHOP_ITEM_KEYS = ['streak_freeze', 'xp_boost', 'heart_refill', 'hint'] as const;
 export type ShopItemKey = (typeof SHOP_ITEM_KEYS)[number];
@@ -68,8 +70,8 @@ export const SHOP_ITEMS: readonly ShopItemDef[] = [
   {
     key: 'heart_refill',
     name: 'Heart refill',
-    tagline: 'Back to three hearts, keep going',
-    detail: 'Use it on the “Out of hearts” screen and the lesson continues where you left off.',
+    tagline: `All ${MAX_HEARTS} hearts back, keep going`,
+    detail: 'Use it on the “Out of hearts” screen and the lesson continues where you left off. No refill in your bag? The same screen lets you earn the hearts back with a short practice drill, or buy them outright with coins.',
     price: 20,
     maxOwned: 5,
     tone: 'rose',
@@ -105,8 +107,32 @@ export function doubleXpMinutes(): number {
 }
 export const XP_BOOST_MULTIPLIER = 2;
 
-/** Hearts a refill hands back. */
-export const HEART_REFILL_AMOUNT = 3;
+/**
+ * Hearts a refill hands back: all of them.
+ *
+ * It used to be three, which left a learner who had just lost five hearts
+ * staring at a lesson they were still likely to lose. A refill is either worth
+ * finishing the lesson or it is a coin sink, so it restores the full row — and
+ * the same full row is what the free practice drill on the "Out of hearts"
+ * screen pays, so buying never beats practising, it only saves the time.
+ */
+export const HEART_REFILL_AMOUNT = MAX_HEARTS;
+
+/**
+ * How many questions the free practice drill asks before it hands the hearts
+ * back. Five is one of each finger: long enough that the hearts were earned,
+ * short enough that a learner mid-lesson does not feel sent to the corner.
+ */
+export const HEART_PRACTICE_SIZE = 5;
+
+/**
+ * Coins a refill costs when it is bought straight from the "Out of hearts"
+ * screen rather than held in the bag. The same price as the shelf item, so
+ * there is no discount for buying late and no penalty for buying early.
+ */
+export function heartRefillPrice(): number {
+  return shopItem('heart_refill').price;
+}
 /** Wrong options a hint removes (leaving two: the answer and one decoy). */
 export const HINT_REMOVES_OPTIONS = 2;
 

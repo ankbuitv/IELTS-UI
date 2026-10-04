@@ -17,6 +17,8 @@ import {
   updateProfile,
 } from '../services/auth-service';
 import { recordAudit } from '../lib/audit';
+import { clearAvatar, getAvatar, setPresetAvatar, setUploadedAvatar } from '../services/avatar-service';
+import { AVATAR_ACCEPT, AVATAR_MAX_BYTES, isAvatarPreset } from '../../shared/avatar';
 import { currentUser } from '../middleware/auth';
 import { parseBody } from '../lib/validate';
 import { loadPlatformSettings } from '../lib/settings';
@@ -192,6 +194,74 @@ router.patch('/profile', async (c) => {
         })
       : user,
   });
+});
+
+// ------------------------------------------------------------------- avatar
+/**
+ * The signed-in learner's avatar.
+ *
+ * Served as JSON with the picture inlined as a data URL rather than as an image
+ * at its own route: the SPA in an embedded preview authenticates with a bearer
+ * header, and an `<img>` element cannot send one, so an authenticated image URL
+ * would be a broken picture exactly where people are looking at the site. The
+ * upload is downscaled to 256 px in the browser and capped again here, so the
+ * payload stays in the tens of kilobytes.
+ */
+router.get('/avatar', async (c) => {
+  const user = currentUser(c);
+  return c.json({ avatar: await getAvatar(c.env, user.id), accept: AVATAR_ACCEPT, maxBytes: AVATAR_MAX_BYTES });
+});
+
+/**
+ * Sets the avatar: either a preset coat (JSON) or an uploaded picture
+ * (multipart). Both answer with the same shape as the GET, so the client has one
+ * code path.
+ *
+ * The upload is validated on the bytes that arrived — filename tails, declared
+ * type, size, magic signature, and for SVG the document's contents — by
+ * `shared/avatar.ts`, the same module the browser checked with before sending.
+ */
+router.post('/avatar', async (c) => {
+  assertSameOrigin(c);
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  await enforceRateLimit(
+    c.env,
+    { bucket: `avatar:${user.id}`, windowSeconds: 3600, limit: 30 },
+    'That is a lot of avatar changes in one hour. Try again later.',
+  );
+
+  const contentType = c.req.header('content-type') ?? '';
+  if (contentType.includes('multipart/form-data')) {
+    const form = await c.req.formData().catch(() => null);
+    if (!form) throw ApiError.validation('A multipart/form-data upload is required.');
+    const file = form.get('file');
+    if (!(file instanceof File)) throw ApiError.validation('Attach the picture in the "file" field.');
+    const avatar = await setUploadedAvatar(c.env, user.id, file);
+    await recordAudit(c.env, {
+      actorUserId: user.id,
+      action: 'AVATAR_UPLOAD',
+      entityType: 'USER',
+      entityId: user.id,
+      metadata: { mime: avatar.mime, bytes: avatar.bytes },
+      ip: clientIp(c),
+      userAgent: userAgent(c),
+    });
+    return c.json({ avatar });
+  }
+
+  const body = await parseBody(c, z.object({ preset: z.string().trim().min(1).max(32) }));
+  if (!isAvatarPreset(body.preset)) throw ApiError.validation('That avatar is not one of the presets.');
+  const avatar = await setPresetAvatar(c.env, user.id, body.preset);
+  return c.json({ avatar });
+});
+
+/** Back to initials. */
+router.delete('/avatar', async (c) => {
+  assertSameOrigin(c);
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  return c.json({ avatar: await clearAvatar(c.env, user.id) });
 });
 
 router.post('/password', async (c) => {

@@ -40,6 +40,15 @@ export interface LeaderboardRow {
   valueLabel: string;
   /** A second fact about the row: the streak, or the best band. */
   secondary: string;
+  /**
+   * The coat name of a preset avatar, or '' when the row has none.
+   *
+   * Presets are shipped with the board because they are one short string the
+   * client already knows how to draw. An uploaded picture is deliberately not:
+   * a board has no business handing fifty people's profile pictures to every
+   * reader, and the fallback (two initials in a coloured circle) is not a loss.
+   */
+  avatar: string;
 }
 
 export interface LeaderboardResponse {
@@ -48,6 +57,19 @@ export interface LeaderboardResponse {
   rows: LeaderboardRow[];
   /** The reader's own row, with its true rank, or null when they have no activity. */
   me: LeaderboardRow | null;
+  /**
+   * The reader's own row over all time, so a board set to "this week" can say
+   * "nothing this week yet, 54 XP in total" instead of the flat "you are not on
+   * this board" — which reads as a bug to somebody who finished a lesson ten
+   * minutes ago and is looking at the wrong window.
+   */
+  meAllTime: LeaderboardRow | null;
+  /**
+   * Whether the reader's account competes on this board at all. The boards are
+   * scoped to learner accounts; a teacher or an administrator who plays a lesson
+   * still has a total, and is shown one, but is not ranked against the class.
+   */
+  meEligible: boolean;
   /** Everyone with activity in the window, not just the rows returned. */
   total: number;
   /** `YYYY-MM-DD` the week started on (Monday); null for all time. */
