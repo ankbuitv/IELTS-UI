@@ -6,6 +6,7 @@
  * server only keeps what has to be trusted: XP, the daily streak, the daily
  * goal and the stars earned in each lesson.
  */
+import type { QuestView, ShopItemKey } from './shop';
 
 /**
  * The band ladder: every half band from 4.0 to 8.0.
@@ -182,6 +183,12 @@ export interface LearnProfile {
   bandSource: 'CHOSEN' | 'ESTIMATED' | 'DEFAULT';
   /** The band estimate the placement was derived from, when known. */
   startBand: number | null;
+  /** Coins in the wallet (the shop's currency). */
+  coins: number;
+  /** ISO instant the double-XP window ends, or null when no boost is running. */
+  xpBoostUntil: string | null;
+  /** Shop items held: quantity per item key; absent keys are zero. */
+  inventory: Partial<Record<ShopItemKey, number>>;
 }
 
 /**
@@ -373,6 +380,10 @@ export interface LearnOverview {
   dailyWordsDone: boolean;
   /** Last 7 days of XP, oldest first, keyed by day. */
   week: Array<{ day: string; xp: number }>;
+  /** Today's quests with their progress, and whether their coins were paid. */
+  quests: QuestView[];
+  /** Coins paid by quests settled during this request (normally zero). */
+  coinsFromQuests: number;
 }
 
 export interface LessonCompletionInput {
@@ -388,6 +399,10 @@ export interface LessonCompletionInput {
 
 export interface LessonCompletionResult {
   xpGained: number;
+  /** True when a double-XP item was running and the award was doubled. */
+  boosted: boolean;
+  /** Coins paid by this lesson. */
+  coinsGained: number;
   stars: number;
   newBest: boolean;
   firstCompletion: boolean;
@@ -395,7 +410,11 @@ export interface LessonCompletionResult {
   wordsSaved: number;
   streak: number;
   streakIncreased: boolean;
+  /** True when a streak freeze was spent to keep the streak across a missed day. */
+  freezeUsed: boolean;
   goalReached: boolean;
+  /** Quests that completed with this lesson and paid their coins now. */
+  questsClaimed: QuestView[];
   profile: LearnProfile;
   progress: LearnProgressItem;
 }
@@ -403,6 +422,34 @@ export interface LessonCompletionResult {
 export interface ReviewResultInput {
   results: Array<{ id: string; correct: boolean }>;
   day: string;
+}
+
+/** What the review player shows on its finish screen. */
+export interface ReviewCompletionResult {
+  xpGained: number;
+  boosted: boolean;
+  coinsGained: number;
+  reviewed: number;
+  streak: number;
+  streakIncreased: boolean;
+  goalReached: boolean;
+  questsClaimed: QuestView[];
+  profile: LearnProfile;
+}
+
+/**
+ * A Vietnamese rendering of one English sentence, for the answer panel.
+ *
+ * `source` is `CACHE` when the sentence had been translated before (which is
+ * how the built-in lessons become instant after the first learner sees them),
+ * `AI` on the first translation, and `NONE` when no provider answered —
+ * in which case the client falls back to the word's own Vietnamese gloss
+ * rather than showing nothing.
+ */
+export interface TranslationResult {
+  vi: string;
+  source: 'CACHE' | 'AI' | 'NONE';
+  available: boolean;
 }
 
 export interface DailyWordsResult {

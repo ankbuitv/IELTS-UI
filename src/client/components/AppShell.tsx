@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { boostState } from '@shared/shop';
 import { useAuth } from '../context/AuthContext';
+import { learnApi } from '../lib/learn-api';
 import { BrandLogo } from './BrandLogo';
 import { DisplayMenu } from './DisplayMenu';
 import { Icon, type IconName } from './Icon';
@@ -34,6 +36,9 @@ const MAIN_NAV: NavItem[] = [
 
 /** Everything else lives behind "More". */
 const MORE_NAV: NavItem[] = [
+  { to: '/learn/shop', label: 'Shop', icon: 'cart' },
+  { to: '/learn/leaderboard', label: 'Leaderboards', icon: 'trophy' },
+  { to: '/learn/plan', label: 'Study plan', icon: 'calendar' },
   { to: '/speaking', label: 'Speaking', icon: 'mic' },
   { to: '/analytics', label: 'My progress', icon: 'chart' },
   { to: '/classrooms', label: 'Classrooms', icon: 'users' },
@@ -84,6 +89,29 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [panelOpen, setPanelOpen] = useState(false);
+  const [coins, setCoins] = useState<number | null>(null);
+  const [boosted, setBoosted] = useState(false);
+
+  // The coin balance belongs to the whole shell, not to the shop page: it is the
+  // thing that makes "spend it or lose the habit" visible while the learner is
+  // on the path. Refreshed on every navigation, which is where a lesson or a
+  // purchase can have changed it. A failure is silent on purpose — the chip is
+  // a shortcut, and the shop page itself explains what went wrong.
+  useEffect(() => {
+    if (user?.role !== 'STUDENT') return;
+    let alive = true;
+    learnApi
+      .overview()
+      .then((data) => {
+        if (!alive) return;
+        setCoins(data.profile.coins);
+        setBoosted(boostState(data.profile.xpBoostUntil)?.active === true);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [user?.role, location.pathname]);
 
   // Close the panel whenever the page changes or Escape is pressed.
   useEffect(() => {
@@ -161,6 +189,18 @@ export function AppShell() {
           <div className="site-actions">
             {user ? (
               <>
+                {user.role === 'STUDENT' && coins !== null ? (
+                  <NavLink
+                    to="/learn/shop"
+                    className="coin-chip"
+                    title={boosted ? 'Coins — double XP is running' : 'Coins — spend them in the shop'}
+                    aria-label={`${coins} coins, open the shop`}
+                  >
+                    <Icon name="coin" size={15} />
+                    <b>{coins.toLocaleString('en')}</b>
+                    {boosted ? <em>×2</em> : null}
+                  </NavLink>
+                ) : null}
                 <DisplayMenu compact label="Display" />
                 <NavLink to="/practice" className="btn btn--sm btn--primary site-cta">
                   <Icon name="play" size={12} />

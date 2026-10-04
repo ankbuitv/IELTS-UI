@@ -34,6 +34,12 @@
 
 .site-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
 .site-actions .btn--ghost { color: var(--ink-800); }
+/* The coin balance, always one tap from the shop. */
+.coin-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px 5px 9px; background: var(--sun-soft); border: 1px solid var(--sun-border, var(--ink-200)); border-radius: 999px; color: var(--ink-900); font-family: inherit; font-size: 0.85rem; font-weight: 700; text-decoration: none; font-variant-numeric: tabular-nums; transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease); }
+.coin-chip:hover { border-color: var(--sun-500); transform: translateY(-1px); }
+.coin-chip svg { color: var(--sun-600, #b8860b); flex: none; }
+.coin-chip em { font-style: normal; font-size: 0.68rem; font-weight: 800; padding: 1px 4px; border-radius: 5px; background: var(--sun-500); color: #3a2a00; }
+.more-item__aside { margin-left: auto; font-size: 0.78rem; font-weight: 700; color: var(--ink-500); font-variant-numeric: tabular-nums; }
 .site-header .display-menu__label { display: none; }
 .site-header .display-menu__trigger { color: var(--ink-700); }
 .site-header .display-menu__aa { color: var(--ink-800); }

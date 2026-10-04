@@ -105,19 +105,51 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
 
 - A Duolingo-style **Learn path** (`/learn`): units of short lessons mixing
   choose, match, fill-in, listen, type and word-order exercises, with hearts,
-  XP, stars, a daily goal and a streak. Every lesson is tagged with a half band
-  on a **4.0–8.0 ladder** and lives in the `learn_lessons` table — seeded from
-  the built-in content the first time the catalogue is read — so lessons can be
-  published at any band without a deploy and no lesson text ships in the browser
-  bundle. The path opens at the learner's band (estimated from their recent test
-  bands, or chosen by them) and each band unlocks one lesson at a time.
+  XP, stars, a daily goal, coins and a streak. Every lesson is tagged with a half
+  band on a **4.0–8.0 ladder** and lives in the `learn_lessons` table — seeded
+  from the built-in content the first time the catalogue is read — so lessons
+  can be published at any band without a deploy and no lesson text ships in the
+  browser bundle. The path opens at the learner's band (estimated from their
+  recent test bands, or chosen by them) and each band unlocks one lesson at a
+  time. The page opens on an **arena** card: the mascot, the streak, XP, coins
+  and the daily-goal ring, with the day's quests and a leaderboard preview
+  beside the path.
+- **Bơ, the mascot** (`src/client/components/learn/Mascot.tsx`): an original
+  SVG creature with seven moods — it hops on a right answer, droops when one is
+  wrong, thinks while a question waits, waves when a streak needs topping up and
+  sleeps when the day is done. Every mood is legible at 56 px and at 190 px.
+- **One sound per event**: 25 synthesised effects in `src/client/lib/sfx.ts`
+  (tap, correct, combo, almost, wrong, heart lost, out of hearts, hint, reveal,
+  coin, buy, boost, freeze, streak, daily goal, level up, lesson start,
+  complete, perfect, fail, unlock, error, whoosh, match, select) — no audio
+  files, quiet, short, and a soundboard in the shop to hear them all. Alongside
+  them: confetti, floating XP/heart/coin numbers, combo badges and a reaction
+  flash, all switched off under `prefers-reduced-motion`.
+- **Coins, daily quests and a shop** (`/learn/shop`): lessons, reviews and
+  quests pay coins; coins buy a hint, a heart refill, 30 minutes of **double XP**
+  or a **streak freeze** that carries a streak across one missed day. Every coin
+  movement is logged (`learn_coin_log`, `learn_shop_orders`); prices and caps
+  live in `src/shared/shop.ts`, which the Worker charges from.
+- **Two leaderboards** (`/learn/leaderboard`): XP earned on the path and tests
+  submitted on the practice side, each for this week or all time, with the
+  reader's own rank always shown. Practice is ranked on attempts (with the best
+  band beside it), never on band alone.
+- **Understand the answer**: after every question the footer shows the whole
+  sentence — the blank filled in, the model answer, the line of evidence — with
+  the taught word underlined, a Vietnamese rendering of that sentence
+  (AI, cached per sentence for the whole platform, degrading to the word's own
+  gloss when no provider is configured), and the word's English and Vietnamese
+  meanings. **Press any word in a lesson to look it up** without leaving the
+  exercise; the popover is the same dictionary the notebook saves from.
 - **AI daily vocabulary**: new words pitched about half a band above the
   learner, plus the words the judges suggest from their own writing and
   speaking, saved to the notebook and revised with Leitner spaced review.
 - A **dictionary** (`/dictionary`) with English definitions, Vietnamese
   meanings, IPA and examples, also available as a popover inside practice
   exams. Lookups go word bank → cache → AI → a public dictionary API.
-- Design, rules and API: [`docs/UI-REFRESH.md`](docs/UI-REFRESH.md).
+- Design, rules and API: [`docs/UI-REFRESH.md`](docs/UI-REFRESH.md), and for the
+  mascot, sounds, coins, shop, quests and boards:
+  [`docs/LEARN-GAMIFICATION.md`](docs/LEARN-GAMIFICATION.md).
 
 **Classes & analytics**
 
@@ -392,6 +424,10 @@ full-mock flows. The recorded output of a green run is in
 
 ## Documentation
 
+- [`docs/LEARN-GAMIFICATION.md`](docs/LEARN-GAMIFICATION.md) — the mascot, the
+  25 synthesised sound effects, coins and quests, the shop (hint, heart refill,
+  double XP, streak freeze), the two leaderboards, sentence translation and
+  tap-to-look-up, with the schema, endpoints and rate limits.
 - [`docs/UI-REFRESH.md`](docs/UI-REFRESH.md) — the exam-style redesign that
   replaced the earlier light workspace: design language, shell, Learn path and
   dictionary, AI judges, tab lock, band estimates, and what was and was not

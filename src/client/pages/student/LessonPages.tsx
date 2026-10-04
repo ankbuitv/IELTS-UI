@@ -52,11 +52,14 @@ export function LessonPage() {
     async (score: { correct: number; total: number; mistakes: string[] }): Promise<LessonFinish> => {
       const result = await learnApi.completeLesson({ lessonId, ...score });
       const lines: string[] = [];
+      if (result.boosted) lines.push('Double XP was running, so this lesson paid twice.');
+      if (result.freezeUsed) lines.push('A streak freeze was spent, and your streak crossed the missed day.');
       if (result.streakIncreased) lines.push(`Streak: ${result.streak} day${result.streak === 1 ? '' : 's'} in a row.`);
       if (result.goalReached) lines.push('You reached today’s XP goal.');
+      for (const quest of result.questsClaimed) lines.push(`Quest complete: ${quest.label} — +${quest.coins} coins.`);
       if (result.wordsSaved > 0) lines.push(`${result.wordsSaved} word${result.wordsSaved === 1 ? '' : 's'} you missed went to your notebook for review.`);
       if (result.firstCompletion) lines.push('The next lesson is unlocked.');
-      return { xpGained: result.xpGained, stars: result.stars, lines };
+      return { xpGained: result.xpGained, stars: result.stars, coins: result.coinsGained, boosted: result.boosted, lines };
     },
     [lessonId],
   );
@@ -133,9 +136,11 @@ export function ReviewPage() {
       const missed = new Set(score.mistakes.map((term) => term.toLowerCase()));
       const result = await learnApi.completeReview((words ?? []).map((word) => ({ id: word.id, correct: !missed.has(word.term.toLowerCase()) })));
       const lines = [`${result.reviewed} word${result.reviewed === 1 ? '' : 's'} reviewed. Words you knew will come back later; the others tomorrow.`];
+      if (result.boosted) lines.push('Double XP was running, so the review paid twice.');
       if (result.streakIncreased) lines.push(`Streak: ${result.streak} days in a row.`);
       if (result.goalReached) lines.push('You reached today’s XP goal.');
-      return { xpGained: result.xpGained, lines };
+      for (const quest of result.questsClaimed) lines.push(`Quest complete: ${quest.label} — +${quest.coins} coins.`);
+      return { xpGained: result.xpGained, coins: result.coinsGained, boosted: result.boosted, lines };
     },
     [words],
   );
