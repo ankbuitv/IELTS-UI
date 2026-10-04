@@ -19,7 +19,16 @@
  * little to buy.
  */
 
-export const SHOP_ITEM_KEYS = ['streak_freeze', 'xp_boost', 'heart_refill', 'hint'] as const;
+export const SHOP_ITEM_KEYS = [
+  'streak_freeze',
+  'xp_boost',
+  'heart_refill',
+  'hint',
+  'cosmetic_name_gold',
+  'cosmetic_name_nebula',
+  'cosmetic_profile_glow',
+  'cosmetic_profile_sparkle',
+] as const;
 export type ShopItemKey = (typeof SHOP_ITEM_KEYS)[number];
 
 export type ShopItemTone = 'ice' | 'sun' | 'rose' | 'violet';
@@ -42,6 +51,8 @@ export interface ShopItemDef {
    * missing a day — so the shop only sells them, it never uses them.
    */
   manual: boolean;
+  /** Cosmetics stay owned and are equipped from the learner profile. */
+  cosmetic?: boolean;
 }
 
 export const SHOP_ITEMS: readonly ShopItemDef[] = [
@@ -84,6 +95,50 @@ export const SHOP_ITEMS: readonly ShopItemDef[] = [
     maxOwned: 9,
     tone: 'violet',
     manual: false,
+  },
+  {
+    key: 'cosmetic_name_gold',
+    name: 'Golden name',
+    tagline: 'Wear a little gold on the board',
+    detail: 'Unlock the gold name treatment for your profile and leaderboard card. Equip it from Profile after buying.',
+    price: 80,
+    maxOwned: 1,
+    tone: 'sun',
+    manual: false,
+    cosmetic: true,
+  },
+  {
+    key: 'cosmetic_name_nebula',
+    name: 'Nebula name',
+    tagline: 'A colourful name gradient',
+    detail: 'Unlock the nebula gradient for your display name on your profile and the leaderboard.',
+    price: 100,
+    maxOwned: 1,
+    tone: 'violet',
+    manual: false,
+    cosmetic: true,
+  },
+  {
+    key: 'cosmetic_profile_glow',
+    name: 'Profile aura',
+    tagline: 'A soft animated profile glow',
+    detail: 'Unlock a colourful aura around your avatar and profile card. Equip it from Profile after buying.',
+    price: 100,
+    maxOwned: 1,
+    tone: 'ice',
+    manual: false,
+    cosmetic: true,
+  },
+  {
+    key: 'cosmetic_profile_sparkle',
+    name: 'Starlight frame',
+    tagline: 'A bright frame with a little shimmer',
+    detail: 'Unlock a starry profile frame for your avatar and profile card. Equip it from Profile after buying.',
+    price: 100,
+    maxOwned: 1,
+    tone: 'rose',
+    manual: false,
+    cosmetic: true,
   },
 ];
 

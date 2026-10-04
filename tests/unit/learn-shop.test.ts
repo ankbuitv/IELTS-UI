@@ -30,6 +30,8 @@ import {
   weekStartOf,
 } from '../../src/shared/leaderboard';
 import { buildTranslationMessages } from '../../src/worker/ai/coach-prompts';
+import { useItem } from '../../src/worker/services/learn-shop-service';
+import type { Env } from '../../src/worker/env';
 
 /**
  * The coin economy is a promise made twice: the shelf shows a price and the
@@ -109,6 +111,10 @@ describe('shop catalogue', () => {
     // A hint must leave at least one wrong option beside the answer, or the
     // question would be decided by the hint rather than by the learner.
     expect(HINT_REMOVES_OPTIONS).toBeLessThan(3);
+  });
+
+  it('does not let the generic use-item route consume permanent cosmetics', async () => {
+    await expect(useItem({} as Env, 'learner', 'cosmetic_name_gold')).rejects.toThrow('permanent unlocks');
   });
 });
 

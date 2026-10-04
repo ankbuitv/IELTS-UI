@@ -1,5 +1,6 @@
 import { api, queryString } from './api';
 import type { LeaderboardResponse, LeaderboardScope, LeaderboardWindow } from '@shared/leaderboard';
+import type { FriendOverview, FriendSearchResult, GamificationProfile } from '@shared/gamification';
 import type { ShopItemKey, ShopState } from '@shared/shop';
 import type {
   LessonCompletionResult,
@@ -7,6 +8,7 @@ import type {
   TranslationResult,
   CatalogueResponse,
   DailyWordsResult,
+  EverydayLessonsResponse,
   DictionaryEntry,
   LearnBand,
   LearnOverview,
@@ -36,6 +38,8 @@ export interface ReviewWord {
 
 export const learnApi = {
   overview: () => api.get<LearnOverview>(`/api/learn/overview${queryString({ day: localDay() })}`),
+  /** Creates the current band's private six-lesson daily set on first visit. */
+  everydayLessons: (band: LearnBand) => api.post<EverydayLessonsResponse>('/api/learn/everyday', { band, day: localDay() }),
   /** The path: every band summarised plus the lessons of one band. */
   catalogue: (band?: LearnBand) =>
     api.get<CatalogueResponse>(`/api/learn/catalogue${queryString(band === undefined ? {} : { band })}`),
@@ -74,4 +78,15 @@ export const learnApi = {
   // ---------------------------------------------------------- leaderboards
   leaderboard: (scope: LeaderboardScope, window: LeaderboardWindow) =>
     api.get<LeaderboardResponse>(`/api/learn/leaderboard${queryString({ scope, window, day: localDay() })}`),
+
+  // -------------------------------------------------------- social profiles
+  myPlayerProfile: () => api.get<{ profile: GamificationProfile }>('/api/learn/profile'),
+  publicPlayerProfile: (userId: string) => api.get<{ profile: GamificationProfile }>(`/api/learn/profiles/${encodeURIComponent(userId)}`),
+  updatePlayerIdentity: (input: { avatarId?: string; nameEffect?: string; profileEffect?: string }) =>
+    api.patch<{ profile: GamificationProfile }>('/api/learn/profile', input),
+  friends: () => api.get<FriendOverview>('/api/learn/friends'),
+  searchPeople: (query: string) => api.get<{ results: FriendSearchResult[] }>(`/api/learn/people/search${queryString({ q: query })}`),
+  requestFriend: (userId: string) => api.post<{ ok: true }>(`/api/learn/friends/${encodeURIComponent(userId)}`, {}),
+  acceptFriend: (userId: string) => api.post<{ ok: true }>(`/api/learn/friends/${encodeURIComponent(userId)}/accept`, {}),
+  removeFriend: (userId: string) => api.delete<{ ok: true }>(`/api/learn/friends/${encodeURIComponent(userId)}`),
 };

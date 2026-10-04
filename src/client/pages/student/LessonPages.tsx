@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { LessonPlayPayload, LessonWord } from '@shared/learn';
 import { buildLessonFromPayload, buildReviewLesson } from '@shared/learn-engine';
 import { LessonPlayer, useLessonSeed, type LessonFinish } from '../../components/learn/LessonPlayer';
@@ -8,10 +8,20 @@ import { Loading, Notice } from '../../components/ui';
 import { learnApi, type ReviewWord } from '../../lib/learn-api';
 import { describeError } from '../../lib/api';
 
+function learnReturnPath(value: string | null): string {
+  if (value === '/learn' || value === '/learn/plan') return value;
+  if (value?.startsWith('/learn?') || value?.startsWith('/learn/everyday')) return value;
+  return '/learn';
+}
+
 /** A lesson from the path, played full screen. */
 export function LessonPage() {
   const { lessonId = '' } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = learnReturnPath(searchParams.get('returnTo'));
+  const planItemId = searchParams.get('planItem');
+  const closingQuote = searchParams.get('quote')?.slice(0, 240);
   const [seed, restart] = useLessonSeed(lessonId);
   const [lesson, setLesson] = useState<LessonPlayPayload | null>(null);
   const [missing, setMissing] = useState(false);
@@ -52,6 +62,10 @@ export function LessonPage() {
     async (score: { correct: number; total: number; mistakes: string[] }): Promise<LessonFinish> => {
       const result = await learnApi.completeLesson({ lessonId, ...score });
       const lines: string[] = [];
+      if (planItemId) {
+        try { await learnApi.setPlanItem(planItemId, 'DONE'); }
+        catch { lines.push('Your lesson is saved, but the Study Plan could not be updated. You can mark it complete from the plan.'); }
+      }
       if (result.boosted) lines.push('Double XP was running, so this lesson paid twice.');
       if (result.freezeUsed) lines.push('A streak freeze was spent, and your streak crossed the missed day.');
       if (result.streakIncreased) lines.push(`Streak: ${result.streak} day${result.streak === 1 ? '' : 's'} in a row.`);
@@ -61,16 +75,16 @@ export function LessonPage() {
       if (result.firstCompletion) lines.push('The next lesson is unlocked.');
       return { xpGained: result.xpGained, stars: result.stars, coins: result.coinsGained, boosted: result.boosted, lines };
     },
-    [lessonId],
+    [lessonId, planItemId],
   );
 
-  if (missing) return <Navigate to="/learn" replace />;
+  if (missing) return <Navigate to={returnTo} replace />;
   if (error) {
     return (
       <div className="lesson">
         <div className="lesson__end">
           <Notice tone="danger">{error}</Notice>
-          <Link className="btn" to="/learn">
+          <Link className="btn" to={returnTo}>
             Back to Learn
           </Link>
         </div>
@@ -86,9 +100,10 @@ export function LessonPage() {
       exercises={exercises}
       videoUrl={lesson.videoUrl}
       legendary={lesson.legendary}
-      onExit={() => navigate('/learn')}
+      onExit={() => navigate(returnTo)}
       onFinish={finish}
       onRestart={restart}
+      closingQuote={closingQuote}
     />
   );
 }
@@ -96,6 +111,9 @@ export function LessonPage() {
 /** A review of the notebook words that are due, played as a lesson. */
 export function ReviewPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = learnReturnPath(searchParams.get('returnTo'));
+  const planItemId = searchParams.get('planItem');
   const [words, setWords] = useState<ReviewWord[] | null>(null);
   const [pool, setPool] = useState<LessonWord[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -136,13 +154,17 @@ export function ReviewPage() {
       const missed = new Set(score.mistakes.map((term) => term.toLowerCase()));
       const result = await learnApi.completeReview((words ?? []).map((word) => ({ id: word.id, correct: !missed.has(word.term.toLowerCase()) })));
       const lines = [`${result.reviewed} word${result.reviewed === 1 ? '' : 's'} reviewed. Words you knew will come back later; the others tomorrow.`];
+      if (planItemId) {
+        try { await learnApi.setPlanItem(planItemId, 'DONE'); }
+        catch { lines.push('Your review is saved, but the Study Plan could not be updated. You can mark it complete from the plan.'); }
+      }
       if (result.boosted) lines.push('Double XP was running, so the review paid twice.');
       if (result.streakIncreased) lines.push(`Streak: ${result.streak} days in a row.`);
       if (result.goalReached) lines.push('You reached today’s XP goal.');
       for (const quest of result.questsClaimed) lines.push(`Quest complete: ${quest.label} — +${quest.coins} coins.`);
       return { xpGained: result.xpGained, coins: result.coinsGained, boosted: result.boosted, lines };
     },
-    [words],
+    [words, planItemId],
   );
 
   if (error) {
@@ -150,7 +172,7 @@ export function ReviewPage() {
       <div className="lesson">
         <div className="lesson__end">
           <Notice tone="danger">{error}</Notice>
-          <Link className="btn" to="/learn">
+          <Link className="btn" to={returnTo}>
             Back to Learn
           </Link>
         </div>
@@ -167,7 +189,7 @@ export function ReviewPage() {
           </div>
           <h1>Nothing to review</h1>
           <p className="muted">Every word in your notebook is up to date. New words arrive each day.</p>
-          <Link className="btn btn--primary btn--lg" to="/learn">
+          <Link className="btn btn--primary btn--lg" to={returnTo}>
             Back to Learn
           </Link>
         </div>
@@ -179,7 +201,7 @@ export function ReviewPage() {
       key={seed}
       title="Review"
       exercises={exercises}
-      onExit={() => navigate('/learn')}
+      onExit={() => navigate(returnTo)}
       onFinish={finish}
       onRestart={() => {
         restart();

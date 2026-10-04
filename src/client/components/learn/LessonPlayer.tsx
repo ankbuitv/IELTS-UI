@@ -25,7 +25,7 @@ import type { TranslationResult } from '@shared/learn';
 import { Icon } from '../Icon';
 import { Button } from '../ui';
 import { Stars } from './Stars';
-import { Mascot, reactionTo, type MascotMood } from './Mascot';
+import { Mascot, mascotForQuestion, reactionTo, type MascotMood } from './Mascot';
 import { Confetti, ComboBadge, FloatingAward, ScreenFlash } from './Effects';
 import { LookupHint, LookupProvider, LookupText } from './LookupText';
 
@@ -160,6 +160,7 @@ export function LessonPlayer({
   onRestart,
   videoUrl,
   legendary,
+  closingQuote,
 }: {
   title: string;
   exercises: Exercise[];
@@ -168,6 +169,7 @@ export function LessonPlayer({
   onRestart: () => void;
   videoUrl?: string;
   legendary?: boolean;
+  closingQuote?: string;
 }) {
   const [queue, setQueue] = useState<Exercise[]>(exercises);
   const [index, setIndex] = useState(0);
@@ -471,6 +473,7 @@ export function LessonPlayer({
               </div>
             ) : null}
           </dl>
+          {closingQuote ? <blockquote className="lesson__quote">“{closingQuote}”</blockquote> : null}
           {result?.lines.map((line) => (
             <p key={line} className="lesson__line">
               {line}
@@ -584,7 +587,8 @@ export function LessonPlayer({
               />
               <div className="lesson__mascot">
                 <Mascot
-                  mood={phase === 'feedback' ? reaction.mood : isRetry ? 'think' : 'idle'}
+                  character={mascotForQuestion(current.id)}
+                  mood={phase === 'feedback' ? reaction.mood : isRetry ? 'think' : index % 7 === 3 ? 'fly' : 'idle'}
                   size={92}
                   message={phase === 'feedback' ? reaction.message : isRetry ? 'This one again — you know it now.' : undefined}
                   tone={reaction.tone}
@@ -661,7 +665,8 @@ export function LessonPlayer({
  * that a learner can always have — with a quiet note rather than an error.
  */
 function FeedbackTranslation({ sentence, explain }: { sentence: string; explain: Exercise['explain'] }) {
-  const translation = useSentenceTranslation(sentence, Boolean(sentence));
+  const storedTranslation = explain.sentenceVi?.trim() ?? '';
+  const translation = useSentenceTranslation(sentence, Boolean(sentence) && !storedTranslation);
   const hasWord = Boolean(explain.term && explain.meaning);
 
   return (
@@ -669,12 +674,11 @@ function FeedbackTranslation({ sentence, explain }: { sentence: string; explain:
       {sentence ? (
         <p className={`lesson__vi${translation?.available ? '' : ' lesson__vi--empty'}`}>
           <span className="lesson__vi-label">Nghĩa cả câu</span>
-          {translation === null ? <em className="lesson__vi-loading">translating…</em> : null}
-          {translation?.available ? <span lang="vi">{translation.vi}</span> : null}
-          {translation && !translation.available ? (
-            <em className="muted">
-              The translation service is off, so here is the new word. Turn on a provider in Admin → AI to translate whole sentences.
-            </em>
+          {translation === null && !storedTranslation ? <em className="lesson__vi-loading">translating…</em> : null}
+          {storedTranslation ? <span lang="vi">{storedTranslation}</span> : null}
+          {!storedTranslation && translation?.available ? <span lang="vi">{translation.vi}</span> : null}
+          {!storedTranslation && translation && !translation.available ? (
+            <em className="muted">A Vietnamese sentence translation is not available for this item yet.</em>
           ) : null}
         </p>
       ) : null}
@@ -1089,6 +1093,7 @@ function ParaphraseExerciseView({ exercise, disabled, hinted, verdict, registerS
       <h1 className="lesson__prompt lesson__prompt--sentence">
         <LookupText as="span" text={exercise.prompt} />
       </h1>
+      {exercise.promptVi ? <p className="lesson__prompt-vi" lang="vi">{exercise.promptVi}</p> : null}
       <div className="lesson__options" role="radiogroup">
         {exercise.options.map((option, index) => {
           const gone = eliminated.has(index);

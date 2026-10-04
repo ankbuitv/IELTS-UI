@@ -157,6 +157,7 @@ export function ShopPage() {
                 {item.key === 'xp_boost' ? 'Switch on now' : 'Use now'}
               </Button>
             ) : null}
+            {item.cosmetic ? <Link className="shop-card__profile-link" to="/learn/profile">Equip on your profile <Icon name="arrowRight" size={13} /></Link> : null}
           </article>
         ))}
       </section>

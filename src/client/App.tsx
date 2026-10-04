@@ -18,6 +18,8 @@ import { LearnPage } from './pages/student/LearnPage';
 import { PlanPage } from './pages/student/PlanPage';
 import { ShopPage } from './pages/student/ShopPage';
 import { LeaderboardPage } from './pages/student/LeaderboardPage';
+import { EverydayLessonsPage } from './pages/student/EverydayLessonsPage';
+import { FriendPage, PublicPlayerProfilePage } from './pages/student/SocialPages';
 import { LessonPage, ReviewPage } from './pages/student/LessonPages';
 import { DictionaryPage } from './pages/student/DictionaryPage';
 import { SpeakingPage } from './pages/student/SpeakingPage';
@@ -181,6 +183,38 @@ export function App() {
           element={
             <RequireAuth>
               <LeaderboardPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="learn/everyday"
+          element={
+            <RequireAuth roles={['STUDENT', 'ADMIN']}>
+              <EverydayLessonsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="learn/friends"
+          element={
+            <RequireAuth roles={['STUDENT', 'ADMIN']}>
+              <FriendPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="learn/profile"
+          element={
+            <RequireAuth roles={['STUDENT', 'ADMIN']}>
+              <PublicPlayerProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="learn/profile/:userId"
+          element={
+            <RequireAuth roles={['STUDENT', 'ADMIN']}>
+              <PublicPlayerProfilePage />
             </RequireAuth>
           }
         />

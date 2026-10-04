@@ -43,7 +43,8 @@ export function normaliseWord(raw: unknown): LessonWord | null {
   const meaning = text(value.meaning, 240);
   if (!term || !meaning) return null;
   const example = text(value.example, 240) || `${term}.`;
-  return { term, pos: text(value.pos, 24) || 'word', meaning, vi: text(value.vi, 120), example };
+  const exampleVi = text(value.exampleVi ?? value.example_vi, 320);
+  return { term, pos: text(value.pos, 24) || 'word', meaning, vi: text(value.vi ?? value.meaningVi ?? value.meaning_vi, 120), example, ...(exampleVi ? { exampleVi } : {}) };
 }
 
 function normaliseVocab(raw: unknown): LessonPayload | null {
@@ -67,7 +68,9 @@ function normaliseParaphrase(raw: unknown): LessonPayload | null {
     // Three wrong options are the exercise: with fewer it is a coin toss, so drop it.
     if (!original || !answer || distractors.length < 3) continue;
     if (distractors.includes(answer)) continue;
-    items.push({ original, answer, distractors, note: text(value.note, 320) });
+    const originalVi = text(value.originalVi ?? value.original_vi, 320);
+    const answerVi = text(value.answerVi ?? value.answer_vi, 320);
+    items.push({ original, answer, distractors, note: text(value.note, 320), ...(originalVi ? { originalVi } : {}), ...(answerVi ? { answerVi } : {}) });
   }
   return items.length > 0 ? { kind: 'PARAPHRASE', items } : null;
 }
@@ -87,7 +90,8 @@ function normaliseReading(raw: unknown): LessonPayload | null {
     // Four distinct options with the answer inside them, or the question cannot be asked.
     if (!stem || options.length < 4 || !Number.isInteger(answer) || answer < 0 || answer >= options.length) continue;
     if (new Set(options).size !== options.length) continue;
-    questions.push({ stem, options: options.slice(0, 4), answer, evidence: text(value.evidence, 320) });
+    const evidenceVi = text(value.evidenceVi ?? value.evidence_vi, 320);
+    questions.push({ stem, options: options.slice(0, 4), answer, evidence: text(value.evidence, 320), ...(evidenceVi ? { evidenceVi } : {}) });
   }
   return questions.length > 0 ? { kind: 'READING', passage, questions } : null;
 }
@@ -100,7 +104,8 @@ function normaliseWriting(raw: unknown): LessonPayload | null {
     const instruction = text(value.instruction, 320);
     const model = text(value.model, 320);
     if (!instruction || !model) continue;
-    items.push({ instruction, model, hint: text(value.hint, 160) });
+    const modelVi = text(value.modelVi ?? value.model_vi, 320);
+    items.push({ instruction, model, hint: text(value.hint, 160), ...(modelVi ? { modelVi } : {}) });
   }
   return items.length > 0 ? { kind: 'WRITING', items } : null;
 }
@@ -113,7 +118,8 @@ function normaliseSpeaking(raw: unknown): LessonPayload | null {
     const question = text(value.question, 320);
     const sample = text(value.sample, 600);
     if (!question || !sample) continue;
-    items.push({ question, cue: text(value.cue, 240), sample });
+    const sampleVi = text(value.sampleVi ?? value.sample_vi, 600);
+    items.push({ question, cue: text(value.cue, 240), sample, ...(sampleVi ? { sampleVi } : {}) });
   }
   return items.length > 0 ? { kind: 'SPEAKING', items } : null;
 }
