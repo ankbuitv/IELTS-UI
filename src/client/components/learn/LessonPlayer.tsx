@@ -18,16 +18,17 @@ import {
   type WriteExercise,
 } from '@shared/learn-engine';
 import type { ShopState } from '@shared/shop';
-import { HINT_REMOVES_OPTIONS, boostState } from '@shared/shop';
+import { HEART_PRACTICE_SIZE, HEART_REFILL_AMOUNT, HINT_REMOVES_OPTIONS, boostState, heartRefillPrice } from '@shared/shop';
 import { canSpeak, getPreferredVoiceURI, isServerVoice, listEnglishVoices, listServerVoices, serverVoiceOf, setPreferredVoiceURI, speak, speakWithServer } from '../../lib/speech';
 import { learnApi } from '../../lib/learn-api';
 import type { TranslationResult } from '@shared/learn';
 import { Icon } from '../Icon';
-import { Button } from '../ui';
+import { Button, Modal } from '../ui';
 import { Stars } from './Stars';
-import { Mascot, reactionTo, type MascotMood } from './Mascot';
-import { Confetti, ComboBadge, FloatingAward, ScreenFlash } from './Effects';
+import { LESSON_MASCOT_VARIANTS, Mascot, MascotRow, reactionTo, type MascotMood, type MascotVariant } from './Mascot';
+import { ComboBurst, Confetti, ComboBadge, FloatingAward, ScreenFlash, comboTier } from './Effects';
 import { LookupHint, LookupProvider, LookupText } from './LookupText';
+import { useInputLockdown } from '../../hooks/useInputLockdown';
 
 /**
  * The lesson player.
@@ -47,6 +48,26 @@ import { LookupHint, LookupProvider, LookupText } from './LookupText';
  * switched on in the shop and shows here as a running badge). The wallet is
  * read once when the lesson opens and refreshed after every spend, so the
  * header never shows a balance the server disagrees with.
+ *
+ * Running out of hearts is not a dead end and not a paywall. The "Out of hearts"
+ * screen offers the same full row of hearts three ways: earn them back with a
+ * short practice drill built from this lesson's own words (free, and the reason
+ * the hearts existed), buy them outright with coins at the shelf price, or spend
+ * a refill already in the bag. The drill is a real set of questions, not a
+ * button — a learner who cannot pay still finishes the lesson tonight.
+ *
+ * Leaving mid-lesson asks first. The close button, the Escape key and a browser
+ * back all open the same confirmation once any answer has been given, because
+ * the progress of a lesson lives in this component and walking away drops it
+ * silently; a reload or a closed tab is caught by `beforeunload` for the same
+ * reason.
+ *
+ * The creature beside the questions changes coat as the lesson goes on (see
+ * `LESSON_MASCOT_VARIANTS`): one drawing, many colours, so a long lesson does
+ * not look like one long form. It sits on the left of the question at every
+ * width — beside the reading passage, beside the word bank, beside the
+ * microphone — and never underneath it, where it would push the answer off the
+ * screen on a phone.
  */
 type Phase = 'answering' | 'feedback' | 'done' | 'failed';
 
@@ -187,9 +208,19 @@ export function LessonPlayer({
   const [combo, setCombo] = useState(0);
   const [bestCombo, setBestCombo] = useState(0);
   const [confetti, setConfetti] = useState(0);
-  const [flash, setFlash] = useState<{ burst: number; tone: 'good' | 'bad' | 'goal' | 'level' }>({ burst: 0, tone: 'good' });
+  const [flash, setFlash] = useState<{ burst: number; tone: 'good' | 'bad' | 'goal' | 'level' | 'combo' }>({ burst: 0, tone: 'good' });
   const [award, setAward] = useState<{ burst: number; amount: number; tone: 'xp' | 'coin' | 'heart' }>({ burst: 0, amount: 0, tone: 'xp' });
   const [clock, setClock] = useState(0);
+  /** The "leave the lesson?" confirmation. */
+  const [exitOpen, setExitOpen] = useState(false);
+  /** The free practice drill that earns the hearts back. */
+  const [drillOpen, setDrillOpen] = useState(false);
+  /** Fired on the answer that reaches a combo milestone; the burst is keyed by it. */
+  const [comboBurst, setComboBurst] = useState(0);
+  const [refillBusy, setRefillBusy] = useState(false);
+  const [refillError, setRefillError] = useState<string | null>(null);
+  /** Bumped each time the drill opens, so a second drill is not the same five questions. */
+  const [drillTurn, setDrillTurn] = useState(0);
   const retried = useRef(new Set<string>());
   // The exercise component reports its current answer here; `check` reads it.
   const submit = useRef<(() => { correct: boolean; almost?: boolean } | null) | null>(null);
@@ -198,6 +229,26 @@ export function LessonPlayer({
   const current = queue[index];
 
   const baseId = (exercise: Exercise) => exercise.id.replace(/:retry$/, '');
+
+  /**
+   * The practice drill that earns the hearts back.
+   *
+   * Built from this lesson's own exercises, with the ones already missed first:
+   * the point of the drill is to meet the words that cost the hearts, not to
+   * pass five questions the learner had already got right. `drillTurn` rotates
+   * the order so a second attempt at the drill is not a memory of the first.
+   */
+  const drillExercises = useMemo(() => {
+    const rotate = <T,>(list: T[], by: number): T[] => {
+      if (list.length === 0) return list;
+      const at = ((by % list.length) + list.length) % list.length;
+      return [...list.slice(at), ...list.slice(0, at)];
+    };
+    const missed = exercises.filter((exercise) => outcomes[exercise.id] && !outcomes[exercise.id]!.firstTryCorrect);
+    const missedIds = new Set(missed.map((exercise) => exercise.id));
+    const rest = exercises.filter((exercise) => !missedIds.has(exercise.id));
+    return [...rotate(missed, drillTurn), ...rotate(rest, drillTurn)].slice(0, HEART_PRACTICE_SIZE);
+  }, [exercises, outcomes, drillTurn]);
 
   // The wallet (coins, items, running boost) is read once: the header shows it
   // and the hint/refill buttons spend it.
@@ -227,10 +278,21 @@ export function LessonPlayer({
     sfx.play('lessonStart');
   }, []);
 
+  // A lesson is worked, not read: the right-click menu and the open-devtools /
+  // view-source shortcuts go, on both key strokes, so the answers are not one
+  // keystroke from a translation of the whole screen.
+  //
+  // The two harder locks are switched off here on purpose. Selection stays on
+  // because a learner legitimately wants to select a word they have just met, and
+  // the inspector veil stays off because a lesson is practice, not an assessment:
+  // veiling a page because somebody opened a console while revising would be a
+  // punishment with nothing to protect. Both are on for the live exam.
+  useInputLockdown({ blockSelection: false, detectInspector: false });
+
   const boost = boostState(wallet?.xpBoostUntil, new Date());
   void clock; // re-render tick for the boost countdown
 
-  const celebrate = useCallback((tone: 'good' | 'bad' | 'goal' | 'level', pieces?: number, perfect = false) => {
+  const celebrate = useCallback((tone: 'good' | 'bad' | 'goal' | 'level' | 'combo', pieces?: number, perfect = false) => {
     setFlash((previous) => ({ burst: previous.burst + 1, tone }));
     if (pieces) {
       void perfect;
@@ -287,7 +349,18 @@ export function LessonPlayer({
         setCombo(nextCombo);
         setBestCombo((best) => Math.max(best, nextCombo));
         setAward({ burst: Date.now(), amount: 1, tone: 'xp' });
-        if (nextCombo >= 3) celebrate('good', nextCombo % 3 === 0 ? 24 : 0);
+        // A milestone (5, 10, 15, 20 …) is an event, not a bigger badge: its own
+        // flash, its own confetti, its own sound and a banner across the lesson.
+        // It fires only on the answer that lands exactly on the tier, so a run
+        // that passes through six does not fire twice.
+        const tier = comboTier(nextCombo);
+        if (tier) {
+          celebrate('combo', tier.pieces);
+          setComboBurst((value) => value + 1);
+          sfx.play('comboTier');
+        } else if (nextCombo >= 3) {
+          celebrate('good', nextCombo % 3 === 0 ? 24 : 0);
+        }
       }
       celebrate('good');
       setVerdict(outcome);
@@ -357,20 +430,97 @@ export function LessonPlayer({
 
   const spendRefill = async () => {
     const response = await spend('heart_refill');
-    if (!response?.applied) return;
-    setHearts(3);
-    sfx.play('boost');
-    setAward({ burst: Date.now(), amount: 3, tone: 'heart' });
-    // Back to the answer they just missed, with the verdict showing, so the
-    // lesson reads as "here is what it was, carry on" rather than a fresh question.
-    setPhase('feedback');
-    setVerdict({ correct: false });
+    if (!response?.applied) {
+      setRefillError(response?.detail ?? 'That refill could not be used.');
+      return;
+    }
+    restoreHearts();
   };
 
+  /**
+   * Hands the whole row of hearts back and puts the lesson where it stopped.
+   *
+   * All three ways back — the free drill, a coin purchase and a refill from the
+   * bag — end here, so they cannot drift apart: the same number of hearts, the
+   * same sound, the same "carry on from the question you missed" rather than a
+   * fresh one.
+   */
+  const restoreHearts = useCallback(() => {
+    setHearts(HEART_REFILL_AMOUNT);
+    setDrillOpen(false);
+    setRefillError(null);
+    setCombo(0);
+    sfx.play('heal');
+    setAward({ burst: Date.now(), amount: HEART_REFILL_AMOUNT, tone: 'heart' });
+    celebrate('goal', 18);
+    setPhase('feedback');
+    setVerdict({ correct: false });
+  }, [celebrate]);
+
+  /** Buys the hearts outright: the shelf price, no item in the bag, no detour to the shop. */
+  const buyRefill = async () => {
+    if (refillBusy) return;
+    setRefillBusy(true);
+    setRefillError(null);
+    try {
+      const response = await learnApi.buyHeartRefill();
+      setWallet(response.state);
+      sfx.play('buy');
+      restoreHearts();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The refill could not be bought.';
+      setRefillError(message);
+      sfx.play('error');
+    } finally {
+      setRefillBusy(false);
+    }
+  };
+
+  /**
+   * Leaving the lesson.
+   *
+   * Once any answer has been given there is progress to lose — it lives in this
+   * component and nowhere else — so the close button, Escape and the browser's
+   * back all stop here first. Before the first answer there is nothing to lose
+   * and the lesson simply closes: asking "are you sure?" about an empty screen
+   * teaches a learner to click through the dialog that will matter later.
+   */
+  const started = finished > 0 || index > 0 || answered;
+  const requestExit = useCallback(() => {
+    if (started) setExitOpen(true);
+    else onExit();
+  }, [started, onExit]);
+
+  // A reload or a closed tab is the same loss with no dialog available, so the
+  // browser's own confirmation is asked for instead.
+  useEffect(() => {
+    if (!started) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [started]);
+
   // Enter checks or continues; it is the keyboard path through a whole lesson.
+  // Escape asks to leave, unless a dialog is open, in which case it closes it.
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (phase === 'done' || phase === 'failed' || drillOpen) return;
+      event.preventDefault();
+      if (exitOpen) setExitOpen(false);
+      else requestExit();
+    };
+    window.addEventListener('keydown', onEscape);
+    return () => window.removeEventListener('keydown', onEscape);
+  }, [phase, drillOpen, exitOpen, requestExit]);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Enter' || event.isComposing) return;
+      if (exitOpen || drillOpen) return;
       const target = event.target as HTMLElement | null;
       if (target && target.tagName === 'BUTTON' && target.dataset.keepEnter !== 'true') return;
       event.preventDefault();
@@ -386,38 +536,106 @@ export function LessonPlayer({
   const refills = wallet?.inventory.heart_refill ?? 0;
 
   if (phase === 'failed') {
+    const price = heartRefillPrice();
+    const canAfford = (wallet?.coins ?? 0) >= price;
     return (
       <div className="lesson lesson--failed">
         <ScreenFlash burst={flash.burst} tone={flash.tone} />
         <div className="lesson__end">
-          <Mascot mood="sad" size={168} message="That is all five hearts. Nothing is lost — the words will come round again." tone="bad" />
+          <Mascot
+            mood="sad"
+            size={150}
+            variant="berry"
+            message={`That is all ${MAX_HEARTS} hearts. Nothing is lost — the words will come round again.`}
+            tone="bad"
+          />
           <h1>Out of hearts</h1>
           <p className="muted">
-            You ran out of tries on “{title}”. Your XP and coins so far are kept, and the words you missed will come back in your review.
-            {refills > 0 ? ' A heart refill picks the lesson up where it stopped.' : ''}
+            You ran out of tries on “{title}”. Your XP and coins so far are kept, and the words you missed will come back in your review. Pick
+            any of these and the lesson carries on from the question you missed.
           </p>
+
+          <div className="refill">
+            <article className="refill__card refill__card--free">
+              <span className="refill__badge">Free</span>
+              <h2>
+                <Icon name="target" size={17} /> Practise to earn them back
+              </h2>
+              <p>
+                {HEART_PRACTICE_SIZE} quick questions from this lesson. Answer them and all {HEART_REFILL_AMOUNT} hearts come back — no coins,
+                no shop, nothing to buy.
+              </p>
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={() => {
+                  sfx.play('select');
+                  setRefillError(null);
+                  setDrillTurn((value) => value + 1);
+                  setDrillOpen(true);
+                }}
+              >
+                <Icon name="play" size={15} filled />
+                Start the practice
+              </Button>
+            </article>
+
+            <article className="refill__card">
+              <h2>
+                <Icon name="coin" size={17} /> Buy them with coins
+              </h2>
+              <p>
+                {price} coins, straight back into the lesson. You have{' '}
+                <b className={canAfford ? 'refill__have' : 'refill__short'}>{wallet ? wallet.coins : '…'}</b>.
+              </p>
+              <Button size="lg" variant={canAfford ? 'default' : 'ghost'} loading={refillBusy} disabled={!wallet || !canAfford} onClick={() => void buyRefill()}>
+                <Icon name="cart" size={15} />
+                {canAfford ? `Refill for ${price} coins` : `You need ${price - (wallet?.coins ?? 0)} more`}
+              </Button>
+              {!wallet ? <p className="refill__note muted">The shop is unreachable, so buying is off for this lesson.</p> : null}
+            </article>
+
+            <article className="refill__card">
+              <h2>
+                <Icon name="heart" size={17} filled /> Use a refill you own
+              </h2>
+              <p>{refills > 0 ? `${refills} in your bag, ready to spend.` : 'None in your bag. The shop sells them, or practise above.'}</p>
+              <Button size="lg" variant="ghost" loading={busyItem} disabled={refills === 0} onClick={() => void spendRefill()}>
+                <Icon name="heart" size={15} filled />
+                {refills > 0 ? `Use one (${refills} left)` : 'No refills left'}
+              </Button>
+            </article>
+          </div>
+
+          {refillError ? (
+            <p className="lesson__line lesson__line--warn" role="alert">
+              {refillError}
+            </p>
+          ) : null}
+
           <div className="lesson__end-actions">
-            {refills > 0 ? (
-              <Button variant="primary" size="lg" loading={busyItem} onClick={() => void spendRefill()}>
-                <Icon name="heart" size={16} filled />
-                Use a heart refill ({refills} left)
-              </Button>
-            ) : (
-              // Nothing left to spend: the shop is where a refill comes from,
-              // and this lesson cannot be resumed across a page change.
-              <Button variant="primary" size="lg" onClick={onExit}>
-                <Icon name="cart" size={16} />
-                Get a refill in the shop
-              </Button>
-            )}
             <Button size="lg" onClick={onRestart}>
+              <Icon name="rotate" size={15} />
               Try the lesson again
             </Button>
             <Button size="lg" variant="ghost" onClick={onExit}>
+              <Icon name="chevronRight" size={15} className="icon--flip" />
               Back to the path
             </Button>
           </div>
         </div>
+
+        {drillOpen ? (
+          <HeartDrill
+            exercises={drillExercises}
+            hearts={HEART_REFILL_AMOUNT}
+            onDone={restoreHearts}
+            onCancel={() => {
+              sfx.play('whoosh');
+              setDrillOpen(false);
+            }}
+          />
+        ) : null}
       </div>
     );
   }
@@ -433,6 +651,7 @@ export function LessonPlayer({
           <Mascot
             mood={perfect ? 'wow' : 'happy'}
             size={196}
+            variant="gold"
             message={
               perfect
                 ? 'A perfect run. Every answer right first time — that is a lesson finished properly.'
@@ -440,6 +659,10 @@ export function LessonPlayer({
             }
             tone="good"
           />
+          {/* The coats this lesson wore, in a row: the learner has just met all of
+              them, and a crowd reads as a celebration where one creature reads as
+              a comment. */}
+          <MascotRow variants={LESSON_MASCOT_VARIANTS.slice(0, 5)} size={44} mood={perfect ? 'wow' : 'happy'} className="lesson__crowd" />
           <h1>{perfect ? 'Perfect lesson' : 'Lesson complete'}</h1>
           <p className="muted">{title}</p>
           <dl className="lesson__stats">
@@ -499,13 +722,32 @@ export function LessonPlayer({
   const isRetry = current?.id.endsWith(':retry');
   const reaction = reactionTo(phase === 'feedback' ? verdict : null);
   const model = current ? feedbackModel(current) : null;
+  // One coat per question, cycling the flock: the lesson changes colour as it
+  // goes without ever drawing a second creature. A retry keeps the coat of the
+  // question it is retrying, so the repeat reads as the same thing.
+  const questionNumber = current ? Math.max(0, exercises.findIndex((exercise) => exercise.id === baseId(current))) : 0;
+  const mascotVariant: MascotVariant = legendary
+    ? 'gold'
+    : (LESSON_MASCOT_VARIANTS[questionNumber % LESSON_MASCOT_VARIANTS.length] ?? 'sprout');
+  // A prop that follows the kind of work: reading gets the book, listening the
+  // headphones, speaking the pencil, and a retry the thinking cap.
+  const mascotAccessory = isRetry
+    ? 'cap'
+    : current?.kind === 'read' || current?.kind === 'paraphrase'
+      ? 'book'
+      : current?.kind === 'listen'
+        ? 'headphones'
+        : current?.kind === 'write' || current?.kind === 'speak'
+          ? 'pencil'
+          : 'none';
 
   return (
     <LookupProvider enabled={!legendary}>
       <div className={`lesson lesson--${phase}`}>
         <ScreenFlash burst={flash.burst} tone={flash.tone} />
+        <ComboBurst combo={combo} burst={comboBurst} />
         <header className="lesson__top">
-          <button type="button" className="lesson__close" onClick={onExit} aria-label="Leave the lesson">
+          <button type="button" className="lesson__close" onClick={requestExit} aria-label="Leave the lesson">
             <Icon name="close" size={20} />
           </button>
           <div className="lesson__bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label="Lesson progress">
@@ -516,10 +758,14 @@ export function LessonPlayer({
               <Icon key={index} name="heart" size={15} filled={index < hearts} style={{ opacity: index < hearts ? 1 : 0.28 }} />
             ))}
           </span>
-          {wallet && !legendary ? <span className="lesson__coins" title="Coins">🪙 {wallet.coins}</span> : null}
+          {wallet && !legendary ? (
+            <span className="lesson__coins" title="Coins">
+              <Icon name="coin" size={14} /> {wallet.coins}
+            </span>
+          ) : null}
           {boost.active ? (
             <span className="lesson__boost" title={`Double XP for ${boost.minutesLeft} more minutes`}>
-              ⚡ ×2 · {boost.minutesLeft}m
+              <Icon name="bolt" size={12} filled /> ×2 · {boost.minutesLeft}m
             </span>
           ) : null}
           {wallet && !legendary ? (
@@ -554,7 +800,9 @@ export function LessonPlayer({
 
         <main className="lesson__main">
           {legendary ? (
-            <p className="lesson__retry" style={{ color: '#b8860b', fontWeight: 700 }}>★ Legendary — harder set. Look-ups are off; answer from memory.</p>
+            <p className="lesson__legendary">
+              <Icon name="star" size={13} filled /> Legendary — harder set. Look-ups are off; answer from memory.
+            </p>
           ) : null}
           {walletError ? <p className="lesson__retry muted">The shop is unreachable, so hints and refills are off for this lesson.</p> : null}
           {videoUrl && embeddableVideo(videoUrl) ? (
@@ -571,23 +819,33 @@ export function LessonPlayer({
           ) : null}
           {current ? (
             <div className="lesson__stage" key={current.id}>
-              {isRetry ? <p className="lesson__retry">Try this one again</p> : null}
-              <ExerciseView
-                exercise={current}
-                disabled={phase !== 'answering'}
-                hinted={hinted}
-                verdict={verdict}
-                registerSubmit={(fn) => {
-                  submit.current = fn;
-                }}
-                onAnswered={setAnswered}
-              />
-              <div className="lesson__mascot">
+              {/*
+                The creature is a column, not a caption. It sits on the left of
+                every exercise kind — reading passage, word bank, microphone
+                alike — and stays there as the page scrolls; a mascot that moves
+                under the question pushes the answers off a phone screen.
+              */}
+              <div className="lesson__mascot lesson__mascot--side">
                 <Mascot
                   mood={phase === 'feedback' ? reaction.mood : isRetry ? 'think' : 'idle'}
-                  size={92}
+                  size={104}
+                  variant={mascotVariant}
+                  accessory={mascotAccessory}
                   message={phase === 'feedback' ? reaction.message : isRetry ? 'This one again — you know it now.' : undefined}
                   tone={reaction.tone}
+                />
+              </div>
+              <div className="lesson__body">
+                {isRetry ? <p className="lesson__retry">Try this one again</p> : null}
+                <ExerciseView
+                  exercise={current}
+                  disabled={phase !== 'answering'}
+                  hinted={hinted}
+                  verdict={verdict}
+                  registerSubmit={(fn) => {
+                    submit.current = fn;
+                  }}
+                  onAnswered={setAnswered}
                 />
               </div>
             </div>
@@ -645,6 +903,39 @@ export function LessonPlayer({
             </div>
           </div>
         </footer>
+
+        <Modal
+          open={exitOpen}
+          title="Leave this lesson?"
+          onClose={() => setExitOpen(false)}
+          actions={
+            <>
+              <Button size="lg" variant="ghost" onClick={() => setExitOpen(false)}>
+                Keep going
+              </Button>
+              <Button
+                size="lg"
+                variant="danger"
+                onClick={() => {
+                  setExitOpen(false);
+                  onExit();
+                }}
+              >
+                <Icon name="exit" size={15} />
+                Leave anyway
+              </Button>
+            </>
+          }
+        >
+          <div className="exit-ask">
+            <Mascot mood="think" size={92} variant={mascotVariant} />
+            <p>
+              You have answered <b>{finished}</b> of <b>{total}</b> question{total === 1 ? '' : 's'}. A lesson only pays when it is finished, so
+              leaving now drops this run — the words you missed will still come back in your review, but the XP and coins from these answers
+              will not.
+            </p>
+          </div>
+        </Modal>
       </div>
     </LookupProvider>
   );
@@ -657,23 +948,32 @@ export function LessonPlayer({
  * Both lines matter and they say different things: the translation is the
  * sentence ("The lecture on history starts at nine." → "Buổi giảng về lịch sử
  * bắt đầu lúc chín giờ."), and the meaning is the word the exercise was about.
- * When no provider answers, the word's gloss is still shown — it is the part
- * that a learner can always have — with a quiet note rather than an error.
+ *
+ * When no provider answers, the word's gloss is still shown — it is the part a
+ * learner can always have — and the missing sentence translation is *not*
+ * announced in the middle of the answer panel. It used to print "The translation
+ * service is off… Turn on a provider in Admin → AI" under every single question,
+ * which is an administrator's configuration note dropped into a learner's
+ * lesson, repeated forty times an hour. It is now one short line, in the
+ * learner's language, and the administrator's version lives where an
+ * administrator will see it: a notice on the Learn page, shown only to a role
+ * that can do something about it.
  */
 function FeedbackTranslation({ sentence, explain }: { sentence: string; explain: Exercise['explain'] }) {
   const translation = useSentenceTranslation(sentence, Boolean(sentence));
   const hasWord = Boolean(explain.term && explain.meaning);
+  const off = Boolean(translation && !translation.available);
 
   return (
     <div className="lesson__translation">
       {sentence ? (
-        <p className={`lesson__vi${translation?.available ? '' : ' lesson__vi--empty'}`}>
+        <p className={`lesson__vi${off ? ' lesson__vi--empty' : ''}`}>
           <span className="lesson__vi-label">Nghĩa cả câu</span>
-          {translation === null ? <em className="lesson__vi-loading">translating…</em> : null}
+          {translation === null ? <em className="lesson__vi-loading">đang dịch…</em> : null}
           {translation?.available ? <span lang="vi">{translation.vi}</span> : null}
-          {translation && !translation.available ? (
-            <em className="muted">
-              The translation service is off, so here is the new word. Turn on a provider in Admin → AI to translate whole sentences.
+          {off ? (
+            <em className="lesson__vi-off" title="Sentence translation needs an AI provider to be switched on.">
+              <Icon name="info" size={12} /> Chưa dịch được cả câu — nghĩa của từ mới vẫn ở ngay bên dưới.
             </em>
           ) : null}
         </p>
@@ -1006,6 +1306,17 @@ function OrderExerciseView({ exercise, disabled, hinted, verdict, registerSubmit
   );
 }
 
+/**
+ * Match each word with its meaning.
+ *
+ * Judged on the finished board, not on a clean run. A slip shows its red flash
+ * and the pair stays where it was, so the learner corrects themselves and
+ * carries on; when every pair is finally together the answer is right, because
+ * "got it wrong, then got it all right" is the thing the exercise was for. It is
+ * marked `almost` when there were slips, which is the same verdict a typed
+ * answer with a spelling wobble gets: counted correct, and the feedback still
+ * says it was not clean.
+ */
 function MatchExerciseView({ exercise, disabled, hinted, registerSubmit, onAnswered }: ViewProps & { exercise: MatchExercise }) {
   const [term, setTerm] = useState<number | null>(null);
   const [solved, setSolved] = useState<number[]>([]);
@@ -1016,7 +1327,7 @@ function MatchExerciseView({ exercise, disabled, hinted, registerSubmit, onAnswe
   const hintedPair = hinted ? exercise.pairs.findIndex((_, index) => !solved.includes(index)) : -1;
 
   useEffect(() => {
-    registerSubmit(() => (complete ? { correct: slips === 0 } : null));
+    registerSubmit(() => (complete ? { correct: true, almost: slips > 0 } : null));
   }, [complete, slips, registerSubmit]);
   useEffect(() => onAnswered(complete), [complete, onAnswered]);
 
@@ -1297,6 +1608,208 @@ function SpeakExerciseView({ exercise, disabled, verdict, registerSubmit, onAnsw
           </div>
         </>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The free way back from "Out of hearts".
+ *
+ * A short lesson inside the lost one: the same question furniture, the same
+ * sounds, the same creature, and no hearts to lose — a wrong answer here costs
+ * nothing except another look at the same question. Finish the set and the whole
+ * row of hearts comes back.
+ *
+ * It is deliberately *not* a formality. The questions come from the lesson the
+ * learner just lost, missed ones first, so the drill is the revision the hearts
+ * were trying to prompt in the first place; a learner who breezes through it has
+ * earned the refill, and one who does not stays on the question until they have.
+ */
+function HeartDrill({
+  exercises,
+  hearts,
+  onDone,
+  onCancel,
+}: {
+  exercises: Exercise[];
+  hearts: number;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const [attempt, setAttempt] = useState(0);
+  const [phase, setPhase] = useState<'answering' | 'feedback'>('answering');
+  const [verdict, setVerdict] = useState<{ correct: boolean; almost?: boolean } | null>(null);
+  const [answered, setAnswered] = useState(false);
+  const [misses, setMisses] = useState(0);
+  const [solved, setSolved] = useState(0);
+  // The exercise reports its current answer here; `check` reads it.
+  const submit = useRef<(() => { correct: boolean; almost?: boolean } | null) | null>(null);
+
+  const total = exercises.length;
+  const current = exercises[index];
+  const percent = total === 0 ? 0 : Math.round((solved / total) * 100);
+  const variant: MascotVariant = LESSON_MASCOT_VARIANTS[index % LESSON_MASCOT_VARIANTS.length]!;
+
+  // Both handlers are declared before the effect that binds them: the effect's
+  // closure reads them on every keystroke, and a `const` below its own reader is
+  // a temporal-dead-zone bug waiting for a re-render to reorder things.
+
+  const check = () => {
+    if (phase !== 'answering') return;
+    const outcome = submit.current?.();
+    if (!outcome) return;
+    setVerdict(outcome);
+    setPhase('feedback');
+    if (outcome.correct) {
+      sfx.correct();
+      setSolved((value) => value + 1);
+      window.setTimeout(() => sfx.play('reveal'), 200);
+    } else {
+      sfx.incorrect();
+      setMisses((value) => value + 1);
+    }
+  };
+
+  const next = () => {
+    if (!verdict?.correct) {
+      // A miss repeats the same question with a fresh mount, so the answer the
+      // learner just gave is cleared rather than sitting there marked wrong.
+      sfx.play('whoosh');
+      setAttempt((value) => value + 1);
+      setPhase('answering');
+      setVerdict(null);
+      setAnswered(false);
+      return;
+    }
+    if (index + 1 >= total) {
+      sfx.play('heal');
+      onDone();
+      return;
+    }
+    sfx.play('whoosh');
+    setIndex(index + 1);
+    setAttempt(0);
+    setPhase('answering');
+    setVerdict(null);
+    setAnswered(false);
+  };
+
+  useEffect(() => {
+    sfx.play('lessonStart');
+  }, []);
+
+  // Enter checks, then continues — the same keyboard path as the lesson.
+  // Re-bound on every render on purpose: the handler has to see this render's
+  // `phase` and `answered`, and a stale one would swallow the keystroke.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || event.isComposing) return;
+      const target = event.target as HTMLElement | null;
+      if (target && target.tagName === 'BUTTON' && target.dataset.keepEnter !== 'true') return;
+      event.preventDefault();
+      if (phase === 'answering' && answered) check();
+      else if (phase === 'feedback') next();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  // An empty set has nothing to practise with. Placed after every hook so the
+  // component never renders a different number of them.
+  if (total === 0 || !current) {
+    return (
+      <div className="drill" role="dialog" aria-modal="true" aria-label="Practice to refill your hearts">
+        <div className="drill__panel">
+          <h2>No practice available</h2>
+          <p className="muted">This lesson has no questions left to practise with. Buy a refill or start the lesson again.</p>
+          <Button size="lg" variant="primary" onClick={onCancel}>
+            Close
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const model = feedbackModel(current);
+  const reaction = reactionTo(phase === 'feedback' ? verdict : null);
+
+  return (
+    <div className="drill" role="dialog" aria-modal="true" aria-label="Practice to refill your hearts">
+      <div className="drill__panel">
+        <header className="drill__top">
+          <button type="button" className="lesson__close" onClick={onCancel} aria-label="Close the practice">
+            <Icon name="close" size={20} />
+          </button>
+          <div className="lesson__bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label="Practice progress">
+            <div className="lesson__bar-fill" style={{ width: `${percent}%` }} />
+          </div>
+          <span className="drill__hearts" title={`All ${hearts} hearts when you finish`}>
+            {Array.from({ length: hearts }, (_, heartIndex) => (
+              <Icon
+                key={heartIndex}
+                name="heart"
+                size={14}
+                filled={heartIndex < solved}
+                style={{ opacity: heartIndex < solved ? 1 : 0.25 }}
+              />
+            ))}
+          </span>
+        </header>
+
+        <p className="drill__kicker">
+          <Icon name="heart" size={13} filled /> Practice · question {Math.min(index + 1, total)} of {total}
+        </p>
+        <h2 className="drill__title">Earn the hearts back</h2>
+        <p className="drill__line muted">
+          No hearts to lose here. A wrong answer simply comes back until you have it — finish the set and all {hearts} return.
+        </p>
+
+        <div className="drill__stage" key={`${current.id}:${attempt}`}>
+          <ExerciseView
+            exercise={current}
+            disabled={phase !== 'answering'}
+            hinted={false}
+            verdict={verdict}
+            registerSubmit={(fn) => {
+              submit.current = fn;
+            }}
+            onAnswered={setAnswered}
+          />
+          <div className="lesson__mascot lesson__mascot--side">
+            <Mascot
+              mood={phase === 'feedback' ? reaction.mood : 'think'}
+              size={78}
+              variant={variant}
+              message={phase === 'feedback' ? reaction.message : 'One at a time. You have got this.'}
+              tone={reaction.tone}
+            />
+          </div>
+        </div>
+
+        {phase === 'feedback' ? (
+          <div className={`drill__feedback${verdict?.correct ? ' is-good' : ' is-bad'}`} role="status" aria-live="polite">
+            <strong>{verdict?.correct ? (verdict.almost ? 'Almost — mind the spelling' : 'Correct') : 'Not yet'}</strong>
+            <span className="lesson__answer">
+              Answer: <b>{correctAnswerText(current)}</b>
+            </span>
+            {model.sentence ? <LookupText as="p" className="lesson__sentence" text={model.sentence} highlight={model.highlight} /> : null}
+          </div>
+        ) : null}
+
+        <footer className="drill__foot">
+          <span className="muted small">{misses > 0 ? `${misses} miss${misses === 1 ? '' : 'es'} — keep going.` : 'Clean so far.'}</span>
+          {phase === 'feedback' ? (
+            <Button variant={verdict?.correct ? 'success' : 'danger'} size="lg" onClick={next} data-keep-enter="true">
+              {verdict?.correct ? (index + 1 >= total ? 'Take the hearts' : 'Continue') : 'Try it again'}
+            </Button>
+          ) : (
+            <Button variant="primary" size="lg" onClick={check} disabled={!answered}>
+              Check
+            </Button>
+          )}
+        </footer>
+      </div>
     </div>
   );
 }

@@ -618,3 +618,75 @@ table.data--zebra tbody tr:nth-child(even) { background: var(--paper-muted); }
 }
 .password-toggle:hover { background: var(--ink-100); color: var(--ink-900); }
 .password-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* ==========================================================================
+   Input lockdown: the veil over a page whose inspector is open.
+   Built imperatively by `useInputLockdown`, so it is styled here rather than in
+   a component stylesheet — it has to outlive whichever screen asked for it.
+   ========================================================================== */
+.inspector-veil {
+  position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; padding: 20px;
+  background: rgba(10, 18, 30, 0.94); color: #fff; overflow-y: auto;
+}
+.inspector-veil[hidden] { display: none; }
+.inspector-veil__card {
+  width: min(560px, 100%); display: grid; justify-items: center; gap: 12px; padding: 30px 28px; text-align: center;
+  background: var(--paper); color: var(--ink-800); border-radius: 20px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+.inspector-veil__mark {
+  display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%;
+  background: var(--brand-50); color: var(--brand-600); border: 2px solid var(--brand-200);
+}
+.inspector-veil__card h2 { margin: 0; font-size: 1.3rem; color: var(--ink-950); letter-spacing: -0.02em; }
+.inspector-veil__card p { margin: 0; font-size: 0.94rem; line-height: 1.6; }
+.inspector-veil__card kbd {
+  padding: 1px 6px; border-radius: 5px; background: var(--ink-100); border: 1px solid var(--ink-300);
+  border-bottom-width: 2px; font-family: var(--font-ui); font-size: 0.82rem; font-weight: 700; color: var(--ink-900);
+}
+.inspector-veil__aside { font-size: 0.84rem !important; color: var(--ink-500); }
+.inspector-veil__status {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 99px;
+  background: var(--ink-100); font-size: 0.8rem !important; font-weight: 700; color: var(--ink-700);
+}
+.inspector-veil__status::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--brand-600);
+  animation: veil-pulse 1.1s ease-in-out infinite;
+}
+@keyframes veil-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }
+
+/* Selection is off on a locked screen, except inside fields the candidate owns. */
+html.lockdown-selection, html.lockdown-selection body { -webkit-user-select: none; user-select: none; }
+html.lockdown-selection img, html.lockdown-selection svg { -webkit-user-drag: none; user-drag: none; }
+html.lockdown-selection textarea,
+html.lockdown-selection input:not([type='hidden']),
+html.lockdown-selection [contenteditable='true'] { -webkit-user-select: text; user-select: text; }
+/* Stop the long-press callout on a phone, which is the touch equivalent of the
+    right-click menu this hook removes. */
+html.lockdown-selection * { -webkit-touch-callout: none; }
+
+/* --------------------------------------------------------------- no sideways
+   The document must never scroll horizontally. Every overflow on this platform
+   came from the same three mistakes: a fixed pixel width wider than a phone, a
+   grid column that could not shrink (`1fr` instead of `minmax(0, 1fr)`), and
+   long unbroken tokens (emails, file names, URLs) in a narrow card. These rules
+   are the general guard; the per-screen fixes live in learn.css and pages.css. */
+html, body { overflow-x: hidden; max-width: 100%; }
+img, svg, video, canvas { max-width: 100%; height: auto; }
+table { max-width: 100%; }
+pre, code { overflow-wrap: anywhere; }
+/* A flex/grid child defaults to `min-width: auto`, which refuses to shrink below
+   its content's intrinsic width — the usual reason a card pushes the page out. */
+main *, header *, footer * { min-width: 0; }
+
+@media (max-width: 719px) {
+  :root { --page-pad: 12px; }
+  .page-head h1, h1 { font-size: clamp(1.3rem, 6.4vw, 1.8rem); }
+  .stack { gap: 12px; }
+  /* Anything wide (a table, a code block, a toolbar) scrolls *itself*, not the page. */
+  .table-wrap, .tabs, .toolbar__end { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .card { border-radius: var(--radius-lg); }
+  .modal { max-width: calc(100vw - 16px); }
+}
+@media (max-width: 400px) {
+  :root { --page-pad: 10px; }
+}

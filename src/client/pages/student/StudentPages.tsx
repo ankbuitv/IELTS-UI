@@ -22,10 +22,12 @@ import {
   useToast,
 } from '../../components/ui';
 import { Icon, type IconName } from '../../components/Icon';
+import { AvatarPicker } from '../../components/Avatar';
 import { ResultSummary, type AttemptResultPayload } from '../../components/ResultView';
 import { AccuracyList } from '../../components/charts';
 import { SkillPerformanceTable, TrendBars } from './Dashboard';
 import { AttemptList, newestFirst } from '../../components/AttemptList';
+import { Mascot } from '../../components/learn/Mascot';
 import type { AttemptSummary, CatalogTest, StudentDashboard } from './types';
 import {
   BAND_DISCLAIMER,
@@ -177,14 +179,46 @@ export function PracticePage() {
   if (loading) return <Loading label="Loading the published catalogue…" />;
   if (error) return <Notice tone="danger">{error}</Notice>;
 
+  const shown = tests.length;
+  const openable = all.filter((test) => !test.requiresAccessCode || test.unlocked).length;
+
   return (
-    <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Practice tests</h1>
-          <p className="page-head__meta">Published and frozen by an administrator, newest first. A version never changes underneath you.</p>
+    <div className="stack practice">
+      <header className="practice-hero">
+        <span className="practice-hero__mascot" aria-hidden="true">
+          {/* The IELTS-flavoured creature: navy coat, red scarf, a book under the
+              wing. It lives on the practice pages, where the work is exam work. */}
+          <Mascot mood="wave" size={132} variant="scholar" accessory="book" name="Bút" />
+        </span>
+        <div className="practice-hero__text">
+          <p className="practice-hero__kicker">
+            <Icon name="presentation" size={13} /> Practice tests
+          </p>
+          <h1>Sit a paper, get a band</h1>
+          <p>
+            Every test here is published and frozen by an administrator, newest first — a version never changes underneath you while you are
+            answering it. Reading and Listening mark themselves the moment you submit; Writing and Speaking go to two AI judges.
+          </p>
+          <ul className="practice-hero__facts">
+            <li>
+              <b>{all.length}</b>
+              <span>published</span>
+            </li>
+            <li>
+              <b>{openable}</b>
+              <span>open now</span>
+            </li>
+            <li>
+              <b>{counts.FULL_MOCK ?? 0}</b>
+              <span>full mocks</span>
+            </li>
+            <li>
+              <b>{shown}</b>
+              <span>showing</span>
+            </li>
+          </ul>
         </div>
-      </div>
+      </header>
 
       <div className="skill-tiles" role="group" aria-label="Filter by paper">
         {SKILL_TILES.filter((tile) => tile.type !== 'FULL_MOCK' || (counts.FULL_MOCK ?? 0) > 0).map((tile) => {
@@ -320,10 +354,10 @@ export function PracticePage() {
                           className="set-chip"
                           disabled={starting !== null}
                           onClick={() => void start(test, undefined, [section.id])}
-                          title={`${section.totalQuestions} câu${section.durationSeconds ? ` · ${Math.round(section.durationSeconds / 60)} phút` : ''}`}
+                          title={`${section.totalQuestions} questions${section.durationSeconds ? ` · ${Math.round(section.durationSeconds / 60)} min` : ''}`}
                         >
-                          {section.label || `Phần ${index + 1}`}
-                          <span className="set-chip__count">{section.totalQuestions} câu</span>
+                          {section.label || `Part ${index + 1}`}
+                          <span className="set-chip__count">{section.totalQuestions} Q</span>
                         </button>
                       ))}
                       {[2, 3, 4]
@@ -342,7 +376,7 @@ export function PracticePage() {
                               )
                             }
                           >
-                            {count} phần đầu
+                            First {count} parts
                           </button>
                         ))}
                     </div>
@@ -529,6 +563,8 @@ export function AttemptResultPage() {
   const { attemptId = '' } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  // Full lockdown: the result screen shows released questions and model answers,
+  // so nothing here should be one keystroke from being copied out.
   useInputLockdown();
   const [restarting, setRestarting] = useState<string | null>(null);
   const { data, loading, error, reload } = useAsync<AttemptResultPayload>(
@@ -706,7 +742,7 @@ function JoinByCode() {
 }
 
 export function ProfilePage() {
-  const { user, refresh } = useAuth();
+  const { user, avatar, setAvatar, refresh } = useAuth();
   const toast = useToast();
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [targetBand, setTargetBand] = useState('');
@@ -725,6 +761,15 @@ export function ProfilePage() {
         value={tabs}
         onChange={setTabs}
       />
+
+      {tabs === 'profile' ? (
+        <Card
+          title="Your picture"
+          hint="Shown in the top bar and beside your name on the leaderboards. Nothing here is public beyond a display name."
+        >
+          <AvatarPicker avatar={avatar} name={user?.displayName ?? ''} onChange={setAvatar} />
+        </Card>
+      ) : null}
 
       {tabs === 'profile' ? (
         <Card title="Profile details" hint={user?.email}>

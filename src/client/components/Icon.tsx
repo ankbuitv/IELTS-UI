@@ -26,6 +26,8 @@ export type IconName =
   | 'logout'
   | 'chevronRight'
   | 'chevronDown'
+  | 'chevronUp'
+  | 'chevronLeft'
   | 'check'
   | 'plus'
   | 'search'
@@ -36,6 +38,9 @@ export type IconName =
   | 'zap'
   | 'globe'
   | 'arrowRight'
+  | 'arrowLeft'
+  | 'arrowUp'
+  | 'arrowDown'
   | 'external'
   | 'flag'
   | 'info'
@@ -74,7 +79,17 @@ export type IconName =
   | 'bulb'
   | 'crown'
   | 'shieldCheck'
-  | 'hourglass';
+  | 'hourglass'
+  | 'medal'
+  | 'camera'
+  | 'image'
+  | 'link'
+  | 'exit'
+  | 'palette'
+  | 'heartCrack'
+  | 'combo'
+  | 'keyboard'
+  | 'noEntry';
 
 const PATHS: Record<IconName, ReactElement> = {
   grid: (
@@ -169,6 +184,11 @@ const PATHS: Record<IconName, ReactElement> = {
   ),
   chevronRight: <path d="M9.5 5.5 16 12l-6.5 6.5" />,
   chevronDown: <path d="M5.5 9.5 12 16l6.5-6.5" />,
+  // The other two directions: the reorder buttons in the test editor used to be
+  // a bare "↑"/"↓" character, which inherits the surrounding font and sits off
+  // centre in a square button. Drawn strokes line up with every other icon.
+  chevronUp: <path d="M5.5 14.5 12 8l6.5 6.5" />,
+  chevronLeft: <path d="M14.5 5.5 8 12l6.5 6.5" />,
   check: <path d="M5 12.8 9.6 17.5 19 7" />,
   plus: (
     <>
@@ -221,6 +241,24 @@ const PATHS: Record<IconName, ReactElement> = {
     <>
       <path d="M4.5 12h14" />
       <path d="M13 6.5 18.5 12 13 17.5" />
+    </>
+  ),
+  arrowLeft: (
+    <>
+      <path d="M19.5 12h-14" />
+      <path d="M11 6.5 5.5 12 11 17.5" />
+    </>
+  ),
+  arrowUp: (
+    <>
+      <path d="M12 19.5v-14" />
+      <path d="M6.5 11 12 5.5 17.5 11" />
+    </>
+  ),
+  arrowDown: (
+    <>
+      <path d="M12 4.5v14" />
+      <path d="M6.5 13 12 18.5 17.5 13" />
     </>
   ),
   external: (
@@ -438,6 +476,74 @@ const PATHS: Record<IconName, ReactElement> = {
       <path d="M4.5 17.5h.01" />
     </>
   ),
+  medal: (
+    <>
+      <path d="M8.4 3.2 12 9.4l3.6-6.2" />
+      <path d="M5.6 3.2 9 9" />
+      <path d="M18.4 3.2 15 9" />
+      <circle cx="12" cy="15.2" r="5.6" />
+      <path d="m12 12.4.9 1.9 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2-1.5-1.4 2-.3z" />
+    </>
+  ),
+  camera: (
+    <>
+      <path d="M3.5 8.6h3.2l1.5-2.4h7.6l1.5 2.4h3.2v10.2H3.5z" />
+      <circle cx="12" cy="13.4" r="3.5" />
+    </>
+  ),
+  image: (
+    <>
+      <rect x="3.2" y="4.8" width="17.6" height="14.4" rx="2.6" />
+      <circle cx="8.6" cy="10" r="1.7" />
+      <path d="m4.2 17.4 4.9-4.6 3.4 3.1 3-2.6 4.3 4.1" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="M10.2 13.8a3.6 3.6 0 0 0 5.3.3l2.6-2.6a3.6 3.6 0 0 0-5.1-5.1l-1.5 1.5" />
+      <path d="M13.8 10.2a3.6 3.6 0 0 0-5.3-.3l-2.6 2.6a3.6 3.6 0 0 0 5.1 5.1l1.5-1.5" />
+    </>
+  ),
+  exit: (
+    <>
+      <path d="M14 4.6h4.2a1.8 1.8 0 0 1 1.8 1.8v11.2a1.8 1.8 0 0 1-1.8 1.8H14" />
+      <path d="M9.6 15.8 5.8 12l3.8-3.8" />
+      <path d="M5.8 12h9.4" />
+      <path d="M4 4.6v14.8" />
+    </>
+  ),
+  palette: (
+    <>
+      <path d="M12 3.4a8.6 8.6 0 0 0 0 17.2c1.3 0 2-.9 2-1.9 0-1.4-1.1-1.7-1.1-2.8 0-.8.7-1.5 1.6-1.5h1.6a4.5 4.5 0 0 0 4.5-4.5c0-3.6-3.7-6.5-8.6-6.5Z" />
+      <circle cx="7.6" cy="11.4" r="1.1" />
+      <circle cx="10.6" cy="7.6" r="1.1" />
+      <circle cx="15.2" cy="8.2" r="1.1" />
+    </>
+  ),
+  heartCrack: (
+    <>
+      <path d="M12 20.4s-7.6-4.5-7.6-10.1A4.3 4.3 0 0 1 12 7.5a4.3 4.3 0 0 1 7.6 2.8c0 5.6-7.6 10.1-7.6 10.1z" />
+      <path d="M12.6 7.6 10 11.4l3 1.3-2.2 4" />
+    </>
+  ),
+  combo: (
+    <>
+      <path d="M12 3.2c2.2 3.1 1.1 5 3.5 6.7 1.6 1.1 2.3 2.5 2.3 4.1a5.8 5.8 0 1 1-11.6 0c0-2.4 1.3-4 2.6-5.3.2 1.5.9 2.4 1.9 2.7-.6-3.6.2-6.3 1.3-8.2Z" />
+      <path d="M12 20.2a2.6 2.6 0 0 0 2.6-2.6c0-1.6-1.5-2.2-2.6-4-1.1 1.8-2.6 2.4-2.6 4a2.6 2.6 0 0 0 2.6 2.6Z" />
+    </>
+  ),
+  keyboard: (
+    <>
+      <rect x="2.6" y="6.4" width="18.8" height="11.2" rx="2.4" />
+      <path d="M6.4 10h.01M9.6 10h.01M12.8 10h.01M16 10h.01M6.4 13h.01M17.6 13h.01M9.4 14.4h5.2" />
+    </>
+  ),
+  noEntry: (
+    <>
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="m6.2 6.2 11.6 11.6" />
+    </>
+  ),
   expand: (
     <>
       <path d="M14.5 4.5H19.5V9.5" />
@@ -478,6 +584,37 @@ export function Icon({ name, size = 18, strokeWidth = 1.7, filled = false, label
       {...rest}
     >
       {art}
+    </svg>
+  );
+}
+
+/**
+ * A rank medal, drawn rather than typed.
+ *
+ * The boards used to show 🥇🥈🥉, which is an emoji: on a device without a
+ * colour emoji font it renders as an empty box or a question mark, and it never
+ * matches the stroke weight of the icons beside it. This draws the same three
+ * metals on the 24×24 grid, so a podium reads identically everywhere.
+ */
+const MEDAL_TONES: Record<1 | 2 | 3, { rim: string; face: string; ribbon: string }> = {
+  1: { rim: '#c98a00', face: '#ffd25e', ribbon: '#e23a41' },
+  2: { rim: '#8d99a8', face: '#d7dee7', ribbon: '#3f7bff' },
+  3: { rim: '#9a5b2c', face: '#dda371', ribbon: '#12805a' },
+};
+
+export function Medal({ rank, size = 20 }: { rank: number; size?: number }) {
+  const tone = MEDAL_TONES[rank as 1 | 2 | 3];
+  if (!tone) return null;
+  return (
+    <svg className="icon medal" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M7.6 2.6h3.1L12 8.4 8.9 2.6z" fill={tone.ribbon} />
+      <path d="M16.4 2.6h-3.1L12 8.4l3.1-5.8z" fill={tone.ribbon} opacity="0.72" />
+      <circle cx="12" cy="14.6" r="6.4" fill={tone.rim} />
+      <circle cx="12" cy="14.6" r="5.1" fill={tone.face} />
+      <path
+        d="m12 11.5.95 2 2.2.28-1.62 1.5.42 2.17L12 16.4l-1.95 1.05.42-2.17-1.62-1.5 2.2-.28z"
+        fill={tone.rim}
+      />
     </svg>
   );
 }

@@ -315,3 +315,62 @@ a.skill-tile:hover .skill-tile__go { color: var(--skill); }
   .report-tiles { min-width: 0; width: 100%; }
   .aimark { padding: 16px; }
 }
+
+/* ==========================================================================
+   Practice: a hero for the catalogue, and the creature that belongs to it.
+   ========================================================================== */
+.practice-hero {
+  position: relative; overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 22px; align-items: center;
+  padding: 22px 26px; border-radius: var(--radius-xl); color: #fff;
+  background: linear-gradient(135deg, #14233a 0%, #1d55c0 58%, #3478f0 100%);
+  box-shadow: 0 6px 0 #101c30;
+}
+.practice-hero::after {
+  content: ''; position: absolute; right: -70px; top: -90px; width: 320px; height: 320px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.16), transparent 68%); pointer-events: none;
+}
+.practice-hero > * { position: relative; z-index: 1; }
+.practice-hero__mascot { display: grid; place-items: center; }
+.practice-hero__kicker {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0 0 6px;
+  font-size: 0.74rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255, 255, 255, 0.84);
+}
+.practice-hero h1 { margin: 0 0 8px; font-size: clamp(1.4rem, 2.6vw, 1.95rem); color: #fff; letter-spacing: -0.02em; text-wrap: balance; }
+.practice-hero p { margin: 0; color: rgba(255, 255, 255, 0.9); font-size: 0.94rem; line-height: 1.55; max-width: 68ch; }
+.practice-hero__facts { list-style: none; display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 0; padding: 0; }
+.practice-hero__facts li {
+  display: grid; justify-items: center; gap: 1px; min-width: 86px; padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.13); border-radius: var(--radius-lg);
+}
+.practice-hero__facts b { font-size: 1.3rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.practice-hero__facts span { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.8); }
+
+/* The dashboard hero keeps its bars and gains the brand coat before the text. */
+.dash-hero__mascot { position: relative; z-index: 1; display: grid; place-items: center; flex: none; margin-right: auto; }
+.dash-hero__mascot .mascot__art { width: 112px; height: 112px; }
+
+/* The landing hero's creature: bottom-left of the mock-up stack, in brand red.
+   It hangs off `.stage-holder`, not `.stage`, because `.stage` clips. */
+.stage-holder { position: relative; width: 100%; max-width: 580px; justify-self: end; }
+.stage-holder > .stage { max-width: none; justify-self: auto; }
+.stage__mascot {
+  position: absolute; left: -22px; bottom: -18px; z-index: 4;
+  filter: drop-shadow(0 12px 20px rgba(140, 18, 25, 0.3));
+}
+.stage__mascot .mascot__art { width: 124px; height: 124px; }
+
+@media (max-width: 1080px) {
+  .practice-hero { grid-template-columns: minmax(0, 1fr); }
+  .practice-hero__mascot { justify-self: start; }
+  .practice-hero__mascot .mascot__art { width: 104px; height: 104px; }
+}
+@media (max-width: 900px) {
+  .dash-hero__mascot .mascot__art { width: 84px; height: 84px; }
+  .stage-holder { max-width: none; justify-self: stretch; }
+  .stage__mascot { left: -8px; bottom: -10px; }
+  .stage__mascot .mascot__art { width: 94px; height: 94px; }
+}
+@media (max-width: 620px) {
+  .practice-hero { padding: 18px; gap: 12px; }
+  .practice-hero__facts li { min-width: 0; flex: 1 1 40%; padding: 7px 10px; }
+}

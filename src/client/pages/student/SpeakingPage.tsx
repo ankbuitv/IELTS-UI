@@ -290,7 +290,7 @@ function SpeakingSessionView({ sessionId }: { sessionId: string }) {
       <div className="page-head">
         <div>
           <p className="page-head__meta" style={{ marginBottom: 4 }}>
-            <Link to="/speaking">← Danh sách chủ đề</Link>
+            <Link to="/speaking"><Icon name="arrowLeft" size={14} /> Danh sách chủ đề</Link>
           </p>
           <h1>{session.topicTitle}</h1>
           <p className="page-head__meta">

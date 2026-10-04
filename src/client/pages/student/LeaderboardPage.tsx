@@ -23,9 +23,11 @@ import {
   type LeaderboardScope,
   type LeaderboardWindow,
 } from '@shared/leaderboard';
-import { Icon } from '../../components/Icon';
+import { Icon, Medal } from '../../components/Icon';
 import { Button, Loading, Notice } from '../../components/ui';
-import { Mascot } from '../../components/learn/Mascot';
+import { MascotRow } from '../../components/learn/Mascot';
+import { Avatar } from '../../components/Avatar';
+import { useAuth } from '../../context/AuthContext';
 import { useAsync } from '../../hooks/useAsync';
 import { learnApi } from '../../lib/learn-api';
 
@@ -39,18 +41,14 @@ const WINDOWS: Array<{ id: LeaderboardWindow; label: string }> = [
   { id: 'all', label: 'All time' },
 ];
 
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).slice(0, 2);
-  return parts.map((part) => part[0]?.toUpperCase() ?? '').join('') || '?';
-}
-
 function Row({ row, scope }: { row: LeaderboardRow; scope: LeaderboardScope }) {
-  const medal = row.rank <= 3 ? ['🥇', '🥈', '🥉'][row.rank - 1] : null;
   return (
     <li className={`board__row${row.isMe ? ' is-me' : ''}${row.rank <= 3 ? ' is-top' : ''}`}>
-      <span className="board__rank">{medal ?? row.rank}</span>
-      <span className={`board__avatar board__avatar--${scope}`} aria-hidden="true">
-        {initialsOf(row.name)}
+      {/* A drawn medal, not 🥇: an emoji is an empty box on a device without a
+          colour emoji font, and it never matched the stroke weight beside it. */}
+      <span className="board__rank">{row.rank <= 3 ? <Medal rank={row.rank} size={22} /> : row.rank}</span>
+      <span className={`board__avatar board__avatar--${scope}`}>
+        <Avatar name={row.name} preset={row.avatar} size={36} />
       </span>
       <span className="board__who">
         <b>
@@ -68,6 +66,7 @@ export function LeaderboardPage() {
   const [scope, setScope] = useState<LeaderboardScope>('learn');
   const [window, setWindow] = useState<LeaderboardWindow>('week');
   const board = useAsync<LeaderboardResponse>(() => learnApi.leaderboard(scope, window), [scope, window]);
+  const { user, avatar } = useAuth();
 
   const data = board.data;
   const podium = data?.rows.slice(0, 3) ?? [];
@@ -75,7 +74,7 @@ export function LeaderboardPage() {
   return (
     <div className="board">
       <header className="board__hero">
-        <Mascot mood="wow" size={116} />
+        <MascotRow variants={['gold', 'sprout', 'ocean']} mood="wow" size={72} />
         <div>
           <p className="board__kicker">Leaderboards</p>
           <h1>{scope === 'learn' ? 'Who is putting the work in' : 'Who is sitting the tests'}</h1>
@@ -128,13 +127,21 @@ export function LeaderboardPage() {
         <>
           {data.me ? (
             <section className="board__me" aria-label="Your place">
+              <Avatar name={data.me.name} avatar={avatar} size={54} />
               <div>
                 <p className="board__me-rank">
                   Your rank <b>#{data.me.rank}</b>
+                  {data.me.rank <= 3 ? <Medal rank={data.me.rank as 1 | 2 | 3} size={18} /> : null}
                 </p>
                 <p className="muted small">
                   {data.me.valueLabel} · {data.me.secondary}
                 </p>
+                {!data.meEligible ? (
+                  <p className="board__me-note">
+                    <Icon name="info" size={12} /> Your account is not a learner account, so this total is yours alone — it is not ranked
+                    against the class list below.
+                  </p>
+                ) : null}
               </div>
               <div className="board__me-hint">
                 {data.total > LEADERBOARD_LIMIT ? (
@@ -150,11 +157,45 @@ export function LeaderboardPage() {
               </div>
             </section>
           ) : (
-            <Notice tone="info" title="You are not on this board yet">
-              {scope === 'learn'
-                ? 'Finish one lesson this week and you will appear here with an XP total.'
-                : 'Submit a practice test and you will appear here with your test count.'}
-              <div className="row" style={{ marginTop: 8 }}>
+            <Notice
+              tone="info"
+              title={
+                !data.meEligible
+                  ? 'This board ranks learner accounts'
+                  : data.meAllTime
+                    ? 'Nothing on this board this week yet'
+                    : 'You are not on this board yet'
+              }
+            >
+              {!data.meEligible ? (
+                /* The third case, and the one that used to read as a bug: a
+                   teacher or an administrator has no row here *by design*, not
+                   because nothing was recorded. Saying "you are not on this board
+                   yet — finish a lesson" to somebody who can never be on it is
+                   the message that made the board look broken. */
+                <>
+                  Your account is a {user?.role === 'ADMIN' ? 'administrator' : 'teacher'} account, so it is kept off
+                  the class list below — that board belongs to the learners. {data.total > 0
+                    ? `${data.total} learner${data.total === 1 ? ' has' : 's have'} a total in this window.`
+                    : 'Nobody has a total in this window yet.'}{' '}
+                  You can still work the path yourself; your XP is tracked, it just is not ranked against the class.
+                </>
+              ) : data.meAllTime ? (
+                <>
+                  You have <b>{data.meAllTime.valueLabel}</b> in total — none of it inside this window. Switch to “All time” to see it, or{' '}
+                  {scope === 'learn' ? 'finish a lesson' : 'submit a test'} today and this week fills in.
+                </>
+              ) : scope === 'learn' ? (
+                'Finish one lesson this week and you will appear here with an XP total.'
+              ) : (
+                'Submit a practice test and you will appear here with your test count.'
+              )}
+              <div className="row board__me-actions">
+                {data.meEligible && data.meAllTime && window === 'week' ? (
+                  <Button size="sm" onClick={() => setWindow('all')}>
+                    <Icon name="clock" size={13} /> See all time
+                  </Button>
+                ) : null}
                 <Link className="btn btn--sm btn--primary" to={scope === 'learn' ? '/learn' : '/practice'}>
                   {scope === 'learn' ? 'Open the path' : 'Start a test'}
                 </Link>
@@ -167,10 +208,10 @@ export function LeaderboardPage() {
               {[podium[1]!, podium[0]!, podium[2]!].map((row) => (
                 <li key={row.rank} className={`podium podium--${row.rank}`}>
                   <span className="podium__medal" aria-hidden="true">
-                    {['🥇', '🥈', '🥉'][row.rank - 1]}
+                    <Medal rank={row.rank as 1 | 2 | 3} size={row.rank === 1 ? 40 : 32} />
                   </span>
-                  <span className="podium__avatar" aria-hidden="true">
-                    {initialsOf(row.name)}
+                  <span className="podium__avatar">
+                    <Avatar name={row.name} preset={row.avatar} avatar={row.isMe ? avatar : null} size={row.rank === 1 ? 62 : 50} />
                   </span>
                   <b>{row.name}</b>
                   <span className="podium__value">{row.valueLabel}</span>

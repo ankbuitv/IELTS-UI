@@ -137,7 +137,7 @@
 
 /* ----------------------------------------------------------- lesson player */
 .lesson { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; background: var(--paper); color: var(--ink-800); }
-.lesson__top { display: flex; align-items: center; gap: 14px; padding: 12px 16px; max-width: 760px; width: 100%; margin: 0 auto; }
+.lesson__top { display: flex; align-items: center; gap: 14px; padding: 12px 16px; max-width: 860px; width: 100%; margin: 0 auto; }
 .lesson__close { flex: none; width: 36px; height: 36px; display: grid; place-items: center; background: none; border: 0; color: var(--ink-500); cursor: pointer; border-radius: var(--radius); }
 .lesson__close:hover { background: var(--ink-100); color: var(--ink-950); }
 .lesson__bar { flex: 1; height: 14px; background: var(--ink-100); border-radius: 7px; overflow: hidden; }
@@ -145,7 +145,9 @@
 .lesson__hearts { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; color: var(--brand-600); font-variant-numeric: tabular-nums; }
 .lesson__hearts svg { fill: currentColor; }
 .lesson__main { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 18px 24px; }
-.lesson__stage { max-width: 640px; margin: 0 auto; padding-top: clamp(6px, 5vh, 56px); animation: lesson-in 200ms var(--ease); }
+/* Two columns from 861px up: the creature on the left, the question on the
+   right (see the third-pass section at the foot of this file). */
+.lesson__stage { max-width: 860px; margin: 0 auto; padding-top: clamp(6px, 5vh, 56px); animation: lesson-in 200ms var(--ease); }
 @keyframes lesson-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .lesson__kicker { margin: 0 0 6px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-500); }
 .lesson__retry { margin: 0 0 6px; font-size: 0.78rem; font-weight: 700; color: var(--brand-700); }
@@ -187,14 +189,14 @@
 .lesson__foot { border-top: 2px solid var(--ink-200); background: var(--paper); padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); }
 .lesson__foot--good { background: var(--success-soft); border-top-color: var(--success-border); }
 .lesson__foot--bad { background: var(--danger-soft); border-top-color: var(--danger-border); }
-.lesson__foot-inner { max-width: 640px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 52px; }
+.lesson__foot-inner { max-width: 860px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 52px; }
 .lesson__feedback { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 0.86rem; }
 .lesson__feedback strong { font-size: 1.1rem; }
 .lesson__foot--good strong { color: var(--success); }
 .lesson__foot--bad strong { color: #b42318; }
 .lesson__answer { color: var(--ink-800); }
 .lesson__explain { color: var(--ink-600); }
-.lesson__end { margin: auto; max-width: 480px; padding: 24px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.lesson__end { margin: auto; max-width: 560px; padding: 24px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .lesson__end h1 { font-size: 1.7rem; margin: 6px 0 0; }
 .lesson__end-mark { width: 76px; height: 76px; display: grid; place-items: center; border-radius: 50%; background: var(--success); color: #fff; }
 .lesson__end-mark--bad { background: var(--danger); }
@@ -440,7 +442,11 @@
 @keyframes mascot-droop { 0% { transform: translateY(0) rotate(0); } 40% { transform: translateY(6px) rotate(-5deg) scaleY(0.97); } 100% { transform: translateY(4px) rotate(-3deg) scaleY(0.97); } }
 @keyframes mascot-shake { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-6deg) scale(1.04); } 45% { transform: rotate(6deg) scale(1.06); } 70% { transform: rotate(-3deg); } }
 @keyframes mascot-sway { 0%, 100% { transform: rotate(-1.5deg); } 50% { transform: rotate(1.5deg); } }
-@keyframes mascot-wave { 0%, 100% { transform: rotate(6deg); } 50% { transform: rotate(-32deg); } }
+/* Starts and ends at the wing's resting angle. The shape carries a static
+   rotate() attribute, and a CSS transform *replaces* that attribute rather than
+   adding to it — so a wave that began at 0deg snapped the wing out of place on
+   the first frame. */
+@keyframes mascot-wave { 0%, 100% { transform: rotate(14deg); } 50% { transform: rotate(-26deg); } }
 @keyframes mascot-sparkle { 0% { opacity: 0; transform: scale(0.4); } 45% { opacity: 1; transform: scale(1.1); } 100% { opacity: 0.85; transform: scale(1); } }
 @keyframes mascot-tear { 0% { opacity: 0; transform: translateY(0); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(16px); } }
 @keyframes mascot-shadow { 0% { transform: scaleX(1); opacity: 0.1; } 40% { transform: scaleX(0.8); opacity: 0.06; } 100% { transform: scaleX(1); opacity: 0.1; } }
@@ -664,3 +670,302 @@
   }
   .fx-confetti { display: none; }
 }
+
+/* ==========================================================================
+   Learn, third pass: the creature beside the question, the way back from an
+   empty heart row, avatars, and a phone that no longer overflows.
+   ========================================================================== */
+
+/* ------------------------------------------------ the mascot as a column
+   It used to sit *under* the question (`justify-content: center` on a block
+   below the exercise), which on a phone pushed the answer buttons off the
+   screen and made the creature the last thing you saw. It is now the left-hand
+   column of a two-column grid at every exercise kind — reading passage, word
+   bank, matching board, microphone — and it stays put while the right-hand
+   column scrolls. Below 860 px it becomes a small head in the corner of the
+   stage rather than dropping underneath, because a column that thin is worse
+   than nothing. */
+.lesson__stage {
+  display: grid;
+  grid-template-columns: minmax(96px, 132px) minmax(0, 1fr);
+  gap: clamp(12px, 3vw, 26px);
+  align-items: start;
+  max-width: 860px;
+}
+.lesson__mascot--side {
+  position: sticky;
+  top: 0;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding-top: clamp(6px, 5vh, 46px);
+}
+.lesson__mascot--side .mascot { flex-direction: column; align-items: center; gap: 8px; }
+.lesson__mascot--side .mascot__bubble { max-width: 22ch; font-size: 0.8rem; text-align: center; }
+/* The bubble points down at the creature when the creature is above it. */
+.lesson__mascot--side .mascot__bubble::before { left: 50%; top: auto; bottom: -8px; transform: translateX(-50%) rotate(-135deg); }
+.lesson__body { grid-column: 2; grid-row: 1 / span 2; min-width: 0; }
+
+/* The legendary banner lost its inline styles and its ★ character. */
+.lesson__legendary {
+  display: flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 7px 12px;
+  font-size: 0.82rem; font-weight: 800; color: #7a4a00; background: var(--sun-soft);
+  border: 1px solid var(--sun-border); border-radius: var(--radius);
+}
+.lesson__legendary svg { color: #d99b00; flex: none; }
+.node-kind--legendary { display: inline-flex; align-items: center; gap: 3px; color: #b8860b; font-weight: 800; }
+
+/* Coins and the boost badge: drawn icons, not 🪙 and ⚡. */
+.lesson__coins { display: inline-flex; align-items: center; gap: 4px; }
+.lesson__coins svg { color: var(--sun-600); flex: none; }
+.lesson__boost { display: inline-flex; align-items: center; gap: 4px; }
+.lesson__boost svg { flex: none; }
+
+/* The "sentence translation is off" line: short, in the learner's language,
+   and visually quiet — it is a missing extra, not an error. */
+.lesson__vi-off {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 99px;
+  background: var(--ink-100); color: var(--ink-600); font-size: 0.78rem; font-style: normal; line-height: 1.5;
+}
+.lesson__vi-off svg { flex: none; opacity: 0.8; }
+
+/* ------------------------------------------------------- combo milestones */
+.fx-combo { display: inline-flex; }
+.fx-combo svg { flex: none; }
+.fx-combo--hot { background: #ffe1c7; color: #8a3d00; box-shadow: 0 0 0 2px #ffc48f; }
+.fx-confetti--combo i { filter: drop-shadow(0 0 5px rgba(255, 145, 60, 0.45)); }
+
+.fx-burst { position: fixed; inset: 0; z-index: 92; display: grid; place-items: center; pointer-events: none; }
+.fx-burst__ring {
+  position: absolute; width: min(58vmin, 420px); height: min(58vmin, 420px); border-radius: 50%;
+  border: 6px solid rgba(255, 197, 61, 0.75); animation: fx-burst-ring 900ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+@keyframes fx-burst-ring {
+  0% { transform: scale(0.2); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+.fx-burst__card {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 18px 30px;
+  border-radius: 22px; background: linear-gradient(150deg, #ff9d3d, #e23a41 70%); color: #fff;
+  box-shadow: 0 18px 40px rgba(140, 18, 25, 0.35), 0 5px 0 #a8131b;
+  animation: fx-burst-card 1100ms cubic-bezier(0.22, 1.4, 0.4, 1) forwards; text-align: center;
+}
+.fx-burst__card b { font-size: clamp(2.4rem, 9vw, 3.6rem); font-weight: 900; line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.fx-burst__card span { font-size: 0.86rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255, 255, 255, 0.92); }
+@keyframes fx-burst-card {
+  0% { transform: scale(0.5) rotate(-6deg); opacity: 0; }
+  22% { transform: scale(1.08) rotate(2deg); opacity: 1; }
+  34% { transform: scale(1) rotate(0); }
+  78% { transform: scale(1) rotate(0); opacity: 1; }
+  100% { transform: scale(0.94) translateY(-14px); opacity: 0; }
+}
+
+/* ------------------------------------------- out of hearts: three ways back */
+.lesson--failed .lesson__end { max-width: 860px; }
+.refill { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; width: 100%; margin: 14px 0 4px; }
+.refill__card {
+  position: relative; display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; text-align: left;
+  background: var(--paper); border: 2px solid var(--ink-200); border-bottom-width: 5px; border-radius: var(--radius-xl);
+}
+.refill__card h2 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 1rem; font-weight: 800; color: var(--ink-950); }
+.refill__card h2 svg { flex: none; color: var(--brand-600); }
+.refill__card p { margin: 0; font-size: 0.86rem; line-height: 1.5; color: var(--ink-600); }
+.refill__card .btn { margin-top: auto; justify-content: center; }
+.refill__card--free { border-color: var(--success-border); background: linear-gradient(180deg, var(--success-soft), var(--paper) 62%); }
+.refill__card--free h2 svg { color: var(--success); }
+.refill__badge {
+  position: absolute; top: -11px; right: 14px; padding: 2px 10px; border-radius: 99px;
+  background: var(--success); color: #fff; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.refill__have { color: var(--sun-700); font-variant-numeric: tabular-nums; }
+.refill__short { color: var(--danger); font-variant-numeric: tabular-nums; }
+.refill__note { font-size: 0.78rem !important; margin-top: 4px !important; }
+
+/* The practice drill: a lesson inside the lost lesson. */
+.drill {
+  position: fixed; inset: 0; z-index: 94; display: grid; place-items: center; padding: 16px;
+  background: rgba(14, 26, 43, 0.55); overflow-y: auto;
+}
+.drill__panel {
+  width: min(760px, 100%); display: flex; flex-direction: column; gap: 10px; padding: 18px clamp(14px, 3vw, 24px) 20px;
+  background: var(--paper); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(14, 26, 43, 0.4);
+  animation: lesson-pop 240ms ease-out;
+}
+.drill__top { display: flex; align-items: center; gap: 12px; }
+.drill__top .lesson__bar { flex: 1; }
+.drill__hearts { display: inline-flex; gap: 4px; color: var(--brand-600); }
+.drill__kicker {
+  display: inline-flex; align-items: center; gap: 6px; margin: 6px 0 0; font-size: 0.72rem; font-weight: 800;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--brand-700);
+}
+.drill__title { margin: 0; font-size: clamp(1.2rem, 3.4vw, 1.6rem); color: var(--ink-950); letter-spacing: -0.02em; }
+.drill__line { margin: 0; font-size: 0.88rem; line-height: 1.5; }
+.drill__stage {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(84px, 108px); gap: 14px; align-items: start;
+  padding: 12px 0; min-width: 0;
+}
+.drill__stage .lesson__mascot--side { grid-column: 2; grid-row: 1; position: static; padding-top: 0; }
+.drill__stage > :first-child { grid-column: 1; grid-row: 1; min-width: 0; }
+.drill__stage .lesson__prompt { font-size: clamp(1.05rem, 3vw, 1.35rem); margin-bottom: 12px; }
+.drill__feedback {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 10px 14px; border-radius: var(--radius-lg);
+  font-size: 0.86rem; border: 2px solid var(--ink-200); background: var(--paper-muted);
+}
+.drill__feedback strong { font-size: 1rem; }
+.drill__feedback.is-good { border-color: var(--success-border); background: var(--success-soft); }
+.drill__feedback.is-good strong { color: var(--success); }
+.drill__feedback.is-bad { border-color: var(--danger-border); background: var(--danger-soft); }
+.drill__feedback.is-bad strong { color: #b42318; }
+.drill__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 4px; }
+
+/* Leaving mid-lesson asks first. */
+.exit-ask { display: flex; align-items: center; gap: 16px; }
+.exit-ask .mascot { flex-direction: column; flex: none; }
+.exit-ask p { margin: 0; font-size: 0.94rem; line-height: 1.6; color: var(--ink-700); }
+
+/* ------------------------------------------------------------------ avatars */
+.avatar {
+  --avatar-size: 40px;
+  display: grid; place-items: center; width: var(--avatar-size); height: var(--avatar-size); flex: none;
+  border-radius: 50%; overflow: hidden; background: var(--ink-100);
+}
+.avatar--initials { background: var(--avatar-tint, var(--solid)); color: #fff; font-weight: 800; font-size: calc(var(--avatar-size) * 0.36); letter-spacing: 0.02em; }
+.avatar--image img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar--preset { background: var(--paper-muted); box-shadow: inset 0 0 0 2px var(--ink-200); }
+.avatar--preset .mascot__art { width: 116%; height: 116%; margin: 8% 0 0; }
+
+/* A picture in the top bar keeps its ring, and stops inheriting button text styles. */
+.site-avatar--rich { padding: 0; background: var(--paper); overflow: visible; }
+.site-avatar--rich .avatar { width: 100%; height: 100%; }
+.site-avatar--lg.site-avatar--rich { background: none; }
+
+.avatar-picker { display: flex; flex-direction: column; gap: 14px; }
+.avatar-picker__now { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.avatar-picker__meta { display: grid; gap: 3px; min-width: 0; }
+.avatar-picker__meta > b { font-size: 1.05rem; color: var(--ink-950); }
+.avatar-picker__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.avatar-picker__drop {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 2px dashed var(--ink-300);
+  border-radius: var(--radius-lg); background: var(--paper-muted); font-size: 0.86rem; line-height: 1.5; color: var(--ink-600);
+  transition: border-color var(--speed) var(--ease), background var(--speed) var(--ease);
+}
+.avatar-picker__drop > svg { flex: none; color: var(--ink-400); }
+.avatar-picker__drop.is-over { border-color: var(--brand-500); background: var(--brand-50); }
+.avatar-picker__drop code { padding: 1px 5px; border-radius: 5px; background: var(--ink-100); color: var(--ink-800); font-size: 0.82rem; }
+.avatar-picker__preview { width: 44px; height: 44px; flex: none; margin-left: auto; border-radius: 50%; object-fit: cover; border: 2px solid var(--ink-200); }
+.avatar-picker__input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.avatar-picker__presets { margin: 0; padding: 12px 14px 14px; border: 1px solid var(--ink-200); border-radius: var(--radius-lg); background: var(--paper); }
+.avatar-picker__presets legend { display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; font-size: 0.8rem; font-weight: 800; color: var(--ink-700); }
+.avatar-picker__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.avatar-chip {
+  display: grid; justify-items: center; gap: 2px; padding: 8px 4px 6px; font-family: inherit; cursor: pointer;
+  background: var(--paper-muted); border: 2px solid var(--ink-200); border-radius: var(--radius-lg);
+  transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease), background var(--speed) var(--ease);
+}
+.avatar-chip:hover { border-color: var(--ink-400); transform: translateY(-1px); }
+.avatar-chip.is-on { border-color: var(--brand-600); background: var(--brand-50); box-shadow: 0 2px 0 var(--brand-600); }
+.avatar-chip span { font-size: 0.7rem; font-weight: 700; color: var(--ink-600); text-transform: capitalize; }
+.avatar-chip.is-on span { color: var(--brand-700); }
+.avatar-picker__message { display: flex; align-items: flex-start; gap: 7px; margin: 0; font-size: 0.86rem; line-height: 1.5; }
+.avatar-picker__message svg { flex: none; margin-top: 2px; }
+.avatar-picker__message--bad { color: #b42318; }
+.avatar-picker__message--good { color: #0b5c42; }
+
+/* A row of the flock: the board hero, a finish screen, an empty state. */
+.mascot-row { display: inline-flex; align-items: flex-end; gap: 4px; }
+.mascot-row__one { flex-direction: column; }
+.mascot-row__one:nth-child(2n) { transform: translateY(-6px); }
+.mascot-row__one:nth-child(3n) { transform: translateY(3px) scaleX(-1); }
+
+/* The drawn medal sits where the emoji used to. */
+.medal { display: block; flex: none; }
+.board__rank { display: grid; place-items: center; }
+.podium__medal { display: grid; place-items: center; }
+
+/* Board hero and "your place" card, now that the row can hold a picture. */
+.board__hero { align-items: center; }
+.board__me { align-items: center; }
+.board__me > .avatar { flex: none; }
+.board__me > div { flex: 1; min-width: 0; }
+.board__me-rank { display: flex; align-items: center; gap: 6px; }
+.board__me-note { display: flex; align-items: flex-start; gap: 5px; margin: 4px 0 0; font-size: 0.78rem; line-height: 1.45; color: var(--sun-ink); }
+.board__me-note svg { flex: none; margin-top: 2px; }
+.board__me-actions { margin-top: 10px; flex-wrap: wrap; }
+.board__avatar { padding: 0; background: none; }
+
+/* ------------------------------------------------------ responsive, again
+   The lesson stage, the arena, the refill cards and the drill all had a column
+   that could not shrink (`minmax(0, 1fr)` was missing, or a fixed width was
+   wider than a phone), which is what made the page scroll sideways on a small
+   screen. These are the fixes, plus a hard stop on horizontal scrolling for the
+   whole document so one stubborn element can never take the page with it. */
+@media (max-width: 860px) {
+  .lesson__stage { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .lesson__body { grid-column: 1; grid-row: 2; }
+  .lesson__mascot--side {
+    grid-column: 1; grid-row: 1; position: static; flex-direction: row; justify-content: flex-start;
+    align-items: center; padding-top: 0; margin-bottom: 2px;
+  }
+  .lesson__mascot--side .mascot { flex-direction: row; align-items: center; }
+  .lesson__mascot--side .mascot__art { width: 62px !important; height: 62px !important; flex: none; }
+  .lesson__mascot--side .mascot__bubble { max-width: min(38ch, 60vw); text-align: left; }
+  .lesson__mascot--side .mascot__bubble::before { left: -8px; top: 16px; bottom: auto; transform: rotate(45deg); }
+  .drill__stage { grid-template-columns: minmax(0, 1fr); }
+  .drill__stage > :first-child { grid-column: 1; grid-row: 2; }
+  .drill__stage .lesson__mascot--side { grid-column: 1; grid-row: 1; }
+}
+@media (max-width: 720px) {
+  .lesson__top { gap: 8px; padding: 10px 12px; flex-wrap: nowrap; }
+  .lesson__top .lesson__bar { min-width: 40px; }
+  .lesson__hearts { gap: 3px; }
+  .lesson__hearts svg { width: 13px; height: 13px; }
+  .lesson__coins, .lesson__boost { font-size: 0.72rem; }
+  .lesson__main { padding: 10px 12px 20px; }
+  .lesson__stage { padding-top: 4px; }
+  .refill { grid-template-columns: minmax(0, 1fr); }
+  .lesson--failed .lesson__end { padding: 18px 12px; }
+  .exit-ask { flex-direction: column; text-align: center; }
+  .board__me { flex-direction: column; align-items: flex-start; }
+  .board__row { gap: 8px; padding: 9px 10px; }
+  .board__value { font-size: 0.86rem; }
+  .avatar-picker__now { gap: 12px; }
+  .avatar-picker__drop { flex-direction: column; align-items: flex-start; }
+  .avatar-picker__preview { margin-left: 0; }
+  .drill { padding: 8px; }
+  .drill__panel { padding: 14px 12px 16px; gap: 8px; }
+  .drill__foot { flex-direction: column-reverse; align-items: stretch; }
+  .drill__foot .btn { width: 100%; justify-content: center; }
+}
+
+/* The parts of the creature that the drawing gives classes to but nothing had a
+   rule for. Most are here so a mood can animate a *part* rather than the whole
+   figure: the sprout bobs when it thinks, the feet leave the ground when it
+   hops, the held prop settles in after the body does. `transform-box: view-box`
+   is what makes a pixel `transform-origin` mean user units inside the SVG. */
+.mascot__sprout, .mascot__wing, .mascot__feet, .mascot__prop, .mascot__mark { transform-box: view-box; }
+.mascot__sprout { transform-origin: 60px 40px; }
+.mascot--think .mascot__sprout { animation: mascot-sprout 2.6s ease-in-out infinite; }
+.mascot__wing--left { transform-origin: 20px 72px; }
+.mascot__wing--right { transform-origin: 100px 72px; }
+.mascot__feet { transform-origin: 60px 104px; }
+.mascot--happy .mascot__feet { animation: mascot-feet 620ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.mascot__prop { animation: mascot-prop 420ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.mascot__mark { font-family: var(--font-ui); }
+@keyframes mascot-sprout { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(4deg); } }
+@keyframes mascot-feet { 0% { transform: translateY(0); } 35% { transform: translateY(-7px); } 70% { transform: translateY(1px); } 100% { transform: translateY(0); } }
+@keyframes mascot-prop { 0% { opacity: 0; transform: translateY(-6px) scale(0.9); } 100% { opacity: 1; transform: none; } }
+
+/* The combo flash: hotter than a single correct answer, and orange rather than
+   green so a milestone is distinguishable from an ordinary hit at a glance. */
+.fx-flash--combo { background: radial-gradient(circle at 50% 46%, rgba(255, 145, 60, 0.4), transparent 66%); }
+
+.learn__note-actions { margin-top: 10px; flex-wrap: wrap; }
+
+/* The flock on the lesson-complete screen: a crowd behind the one creature that
+   is doing the talking. */
+.lesson__crowd { justify-content: center; margin: -6px 0 4px; flex-wrap: wrap; }

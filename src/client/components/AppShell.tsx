@@ -8,7 +8,7 @@ import { DisplayMenu } from './DisplayMenu';
 import { Icon, type IconName } from './Icon';
 import { SiteFooter } from './SiteFooter';
 import { Button, Loading } from './ui';
-import { initials } from '../lib/format';
+import { Avatar } from './Avatar';
 
 /**
  * Application shell.
@@ -85,7 +85,7 @@ function navFor(role: string | undefined): { top: NavItem[]; tabs: NavItem[]; ho
 const samePlace = (pathname: string, item: NavItem) => pathname === item.to || pathname.startsWith(`${item.to}/`);
 
 export function AppShell() {
-  const { user, loading, logout } = useAuth();
+  const { user, avatar, loading, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [panelOpen, setPanelOpen] = useState(false);
@@ -208,13 +208,13 @@ export function AppShell() {
                 </NavLink>
                 <button
                   type="button"
-                  className="site-avatar"
+                  className="site-avatar site-avatar--rich"
                   title={user.displayName}
                   aria-label="Account menu"
                   aria-expanded={panelOpen}
                   onClick={() => setPanelOpen((open) => !open)}
                 >
-                  {initials(user.displayName)}
+                  <Avatar name={user.displayName} avatar={avatar} size={34} />
                 </button>
               </>
             ) : (
@@ -262,8 +262,8 @@ export function AppShell() {
           <div className="more-backdrop" onClick={() => setPanelOpen(false)} />
           <div className="more-panel" role="menu" aria-label="More">
             <div className="more-panel__who">
-              <span className="site-avatar site-avatar--lg" aria-hidden="true">
-                {initials(user.displayName)}
+              <span className="site-avatar site-avatar--lg site-avatar--rich" aria-hidden="true">
+                <Avatar name={user.displayName} avatar={avatar} size={44} />
               </span>
               <span className="more-panel__who-text">
                 <strong title={user.displayName}>{user.displayName}</strong>

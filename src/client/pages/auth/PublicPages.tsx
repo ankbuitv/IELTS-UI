@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react
 import { useAuth } from '../../context/AuthContext';
 import { BrandLogo, BrandMark } from '../../components/BrandLogo';
 import { Icon, type IconName } from '../../components/Icon';
+import { Mascot } from '../../components/learn/Mascot';
 import { Button, Field, Notice, PasswordInput, TextInput } from '../../components/ui';
 import { api, describeError } from '../../lib/api';
 
@@ -96,6 +97,19 @@ const FAQ: Array<{ q: string; a: string }> = [
     a: 'Yes. Every page is built for phones, tablets and computers. For a full paper a larger screen is more comfortable, and Speaking asks for microphone permission the first time.',
   },
 ];
+
+/**
+ * The hero's creature.
+ *
+ * It wears the brand coat — the same red as the mark in the header — because this
+ * is the front door and everything on it is the site's own colour. On the
+ * practice pages the same drawing appears in navy with a book (see
+ * `PracticePage`); inside a lesson it cycles through the whole flock. One shape,
+ * three jobs.
+ */
+function HeroMascot() {
+  return <Mascot mood="wave" size={138} variant="brand" className="stage__mascot" name="Bơ" />;
+}
 
 /** The exam screen, as a picture: top bar with the timer, passage on the left, questions on the right. */
 function MockExam() {
@@ -199,7 +213,11 @@ function MockJudges() {
 
 function HeroStage() {
   return (
-    <div className="stage" aria-hidden="true">
+    // The holder is the grid child so the creature can hang *outside* the mock
+    // exam cards: `.stage` clips its overflow, and a mascot inside it would come
+    // out with its feet cut off.
+    <div className="stage-holder">
+      <div className="stage" aria-hidden="true">
       <span className="stage__bars">
         <i />
         <i />
@@ -213,6 +231,8 @@ function HeroStage() {
       <MockExam />
       <MockJudges />
       <MockBand />
+      </div>
+      <HeroMascot />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
 } from '@shared/learn';
 import { api, describeError, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
+import { Icon } from '../../components/Icon';
 import { Badge, Button, Card, EmptyState, Field, Loading, Notice, Select, Stat, TextInput, useToast } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
 
@@ -302,7 +303,13 @@ export function AdminLearnPage() {
                           </Button>
                         ) : null}
                         <Button size="sm" variant="ghost" onClick={() => void setVideoFor(lesson.id, lesson.videoUrl ?? '')}>
-                          {lesson.videoUrl ? 'Video ✓' : 'Video'}
+                          {lesson.videoUrl ? (
+                    <>
+                      <Icon name="check" size={12} strokeWidth={3} /> Video
+                    </>
+                  ) : (
+                    'Video'
+                  )}
                         </Button>
                       </div>
                     </td>

@@ -1,5 +1,6 @@
 import { api, queryString } from './api';
 import type { LeaderboardResponse, LeaderboardScope, LeaderboardWindow } from '@shared/leaderboard';
+import type { AvatarState } from '@shared/avatar';
 import type { ShopItemKey, ShopState } from '@shared/shop';
 import type {
   LessonCompletionResult,
@@ -71,7 +72,24 @@ export const learnApi = {
   useItem: (key: ShopItemKey) =>
     api.post<{ state: ShopState; applied: boolean; detail: string }>('/api/learn/items/use', { key }),
 
+  // ------------------------------------------------------------------ hearts
+  /** What the "Out of hearts" screen offers: the price, the balance, the bag. */
+  heartOptions: () =>
+    api.get<{ price: number; coins: number; held: number; practiceSize: number; hearts: number }>('/api/learn/hearts/options'),
+  /**
+   * Buys a refill outright, at the shelf price, without putting an item in the
+   * bag first: the learner is standing on a lost lesson and should not have to
+   * leave it to spend coins.
+   */
+  buyHeartRefill: () => api.post<{ state: ShopState; spent: number; hearts: number }>('/api/learn/hearts/refill', {}),
+
   // ---------------------------------------------------------- leaderboards
   leaderboard: (scope: LeaderboardScope, window: LeaderboardWindow) =>
     api.get<LeaderboardResponse>(`/api/learn/leaderboard${queryString({ scope, window, day: localDay() })}`),
+
+  // ------------------------------------------------------------------ avatar
+  avatar: () => api.get<{ avatar: AvatarState; accept: string; maxBytes: number }>('/api/auth/avatar'),
+  setAvatarPreset: (preset: string) => api.post<{ avatar: AvatarState }>('/api/auth/avatar', { preset }),
+  uploadAvatar: (form: FormData) => api.upload<{ avatar: AvatarState }>('/api/auth/avatar', form),
+  clearAvatar: () => api.delete<{ avatar: AvatarState }>('/api/auth/avatar'),
 };

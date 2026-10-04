@@ -9,6 +9,7 @@ import { AttemptList, newestFirst } from '../../components/AttemptList';
 import { Icon } from '../../components/Icon';
 import { BandEstimatesPanel } from '../../components/BandEstimates';
 import { LearnStrip } from '../../components/learn/LearnStrip';
+import { Mascot } from '../../components/learn/Mascot';
 import {
   BAND_DISCLAIMER,
   formatBand,
@@ -81,6 +82,11 @@ export function StudentDashboardPage() {
           <i />
           <i />
           <i />
+        </span>
+        {/* The brand coat, on the page a learner lands on: the same red as the
+            mark in the top bar, waving hello. */}
+        <span className="dash-hero__mascot" aria-hidden="true">
+          <Mascot mood={data.totals.submitted === 0 ? 'think' : 'wave'} size={112} variant="brand" />
         </span>
         <div className="dash-hero__text">
           <p className="dash-hero__kicker">{greeting()}</p>

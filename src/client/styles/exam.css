@@ -147,12 +147,24 @@ body.exam-active {
 }
 .exam-parts::-webkit-scrollbar { display: none; }
 .exam-part {
-  flex: none; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px;
+  position: relative; flex: none; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px 0 14px;
   border: 1px solid var(--ink-200); border-radius: var(--radius-sm); background: var(--paper); cursor: pointer;
   font-family: inherit; font-size: 0.76rem; font-weight: 620; color: var(--ink-600); white-space: nowrap;
   transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease), color var(--speed) var(--ease);
 }
-.exam-part:hover { border-color: var(--brand-300); color: var(--brand-700); }
+/* The part's own skill colour, as a stripe down its left edge.
+   A full mock has four parts in a row that otherwise differ only by their
+   label, and "which paper am I in?" is the question a candidate asks most —
+   so the answer is painted where the eye already is. The stripe survives the
+   three states below, because it is answering a different question from them
+   (which paper, not where you are in it). */
+.exam-part::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  background: var(--skill-fill, var(--ink-300)); transition: background var(--speed) var(--ease);
+}
+.exam-part:hover { border-color: var(--skill-border, var(--brand-300)); color: var(--ink-900); background: var(--skill-soft, var(--brand-50)); }
+.exam-part.is-current::before { background: rgba(255, 255, 255, 0.9); }
 .exam-part__count { font-size: 0.68rem; font-weight: 700; color: var(--ink-400); font-variant-numeric: tabular-nums; }
 .exam-part.is-current { background: var(--brand-600); border-color: var(--brand-600); color: var(--on-brand); }
 .exam-part.is-current .exam-part__count { color: var(--on-brand); opacity: 0.85; }

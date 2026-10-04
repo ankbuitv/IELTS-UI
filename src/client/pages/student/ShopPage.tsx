@@ -88,7 +88,7 @@ export function ShopPage() {
   return (
     <div className="shop">
       <header className="shop__hero">
-        <Mascot mood="wave" size={132} />
+        <Mascot mood="wave" size={132} variant="sunset" accessory="cap" />
         <div className="shop__hero-text">
           <p className="shop__kicker">Learn shop</p>
           <h1>Spend what you earned</h1>
@@ -108,7 +108,7 @@ export function ShopPage() {
           <span>coins</span>
           {boost.active ? (
             <em className="shop__boost">
-              ⚡ Double XP · {boost.minutesLeft}m left
+              <Icon name="bolt" size={13} filled /> Double XP · {boost.minutesLeft}m left
             </em>
           ) : (
             <Link className="shop__boost shop__boost--off" to="/learn">

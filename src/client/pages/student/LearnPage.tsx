@@ -16,8 +16,9 @@ import {
 } from '@shared/learn';
 import type { LeaderboardResponse } from '@shared/leaderboard';
 import { boostState } from '@shared/shop';
+import { useAuth } from '../../context/AuthContext';
 import { useAsync } from '../../hooks/useAsync';
-import { Icon, type IconName } from '../../components/Icon';
+import { Icon, Medal, type IconName } from '../../components/Icon';
 import { Stars } from '../../components/learn/Stars';
 import { Mascot, type MascotMood } from '../../components/learn/Mascot';
 import { Confetti, StreakPulse } from '../../components/learn/Effects';
@@ -42,6 +43,9 @@ type PathLesson = CatalogueUnit['lessons'][number];
 
 const WAVE = [0, 38, 64, 38, 0, -38, -64, -38];
 
+/** Where the staff-only translation note remembers being dismissed. */
+const TRANSLATION_NOTE_KEY = 'aieo.learn-translation-note';
+
 /**
  * Learn: the daily path.
  *
@@ -59,6 +63,7 @@ const WAVE = [0, 38, 64, 38, 0, -38, -64, -38];
 export function LearnPage() {
   const toast = useToast();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const overview = useAsync<LearnOverview>(() => learnApi.overview(), []);
   const [band, setBand] = useState<LearnBand | null>(null);
   const catalogue = useAsync<CatalogueResponse>(() => learnApi.catalogue(band ?? undefined), [band]);
@@ -101,6 +106,24 @@ export function LearnPage() {
 
   const data = overview.data;
   const today = localDay();
+
+  /** Staff see one extra note here; learners never do. */
+  const staff = user?.role === 'TEACHER' || user?.role === 'ADMIN';
+  const [translationNoteDismissed, setTranslationNoteDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(TRANSLATION_NOTE_KEY) === 'dismissed';
+    } catch {
+      return false;
+    }
+  });
+  const dismissTranslationNote = () => {
+    setTranslationNoteDismissed(true);
+    try {
+      localStorage.setItem(TRANSLATION_NOTE_KEY, 'dismissed');
+    } catch {
+      // Private mode: the note simply comes back next visit.
+    }
+  };
 
   // Today's words appear by themselves the first time the path is opened each day.
   useEffect(() => {
@@ -255,11 +278,28 @@ export function LearnPage() {
 
   return (
     <div className="learn">
+      {staff && !translationNoteDismissed ? (
+        <Notice tone="info" title="Sentence translation needs a provider">
+          Inside a lesson, the answer panel offers a Vietnamese rendering of the whole sentence. That call goes to an
+          AI provider, so if none is switched on the learner sees a quiet note — “Chưa dịch được cả câu” — and still
+          gets the word's own meaning, which comes from the lesson content and never depends on a provider. Turn one on
+          in <b>Admin → AI</b> to translate whole sentences; the first translation of a sentence is cached for every
+          learner after it.
+          <div className="row learn__note-actions">
+            <Link className="btn btn--sm btn--primary" to="/admin/ai">
+              <Icon name="sparkle" size={13} /> Open Admin → AI
+            </Link>
+            <Button size="sm" variant="ghost" onClick={dismissTranslationNote}>
+              Don't show this again
+            </Button>
+          </div>
+        </Notice>
+      ) : null}
       <header className="arena">
         <Confetti burst={celebrate} pieces={36} />
         <div className="arena__mascot">
           {streakHot ? <StreakPulse burst={1} /> : null}
-          <Mascot mood={mood} size={172} />
+          <Mascot mood={mood} size={172} variant="brand" accessory={goalDone ? 'medal' : 'none'} />
         </div>
         <div className="arena__text">
           <p className="arena__kicker">
@@ -392,7 +432,9 @@ export function LearnPage() {
               <ol className="mini-board">
                 {boardTop.map((row) => (
                   <li key={row.rank} className={row.isMe ? 'is-me' : ''}>
-                    <span className="mini-board__rank">{['🥇', '🥈', '🥉'][row.rank - 1] ?? row.rank}</span>
+                    <span className="mini-board__rank">
+                      {row.rank <= 3 ? <Medal rank={row.rank as 1 | 2 | 3} size={18} /> : row.rank}
+                    </span>
                     <b>{row.name}</b>
                     <span>{row.valueLabel}</span>
                   </li>
@@ -658,7 +700,9 @@ export function LearnPage() {
                             <span>{lesson.blurb}</span>
                             <em className="node-kind">{LESSON_KIND_LABELS[lesson.kind]}</em>
                             {lesson.legendary ? (
-                              <em className="node-kind" style={{ color: '#b8860b', fontWeight: 700 }}>★ Legendary</em>
+                              <em className="node-kind node-kind--legendary">
+                                <Icon name="star" size={11} filled /> Legendary
+                              </em>
                             ) : null}
                           </div>
                           {open ? (

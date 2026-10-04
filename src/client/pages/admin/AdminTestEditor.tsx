@@ -303,7 +303,7 @@ export function AdminTestEditorPage() {
       <div className="page-head">
         <div>
           <Link to="/admin/tests" className="small">
-            ← All tests
+            <Icon name="arrowLeft" size={14} /> All tests
           </Link>
           <h1>{test.title}</h1>
           <p className="page-head__meta">
@@ -1173,7 +1173,7 @@ function VersionEditorBody({
                       setDraft({ ...draft, sections: moveItem(draft.sections, sectionIndex, -1) })
                     }
                   >
-                    ↑
+                    <Icon name="arrowUp" size={15} strokeWidth={2.4} />
                   </Button>
                   <Button
                     size="sm"
@@ -1185,7 +1185,7 @@ function VersionEditorBody({
                       setDraft({ ...draft, sections: moveItem(draft.sections, sectionIndex, 1) })
                     }
                   >
-                    ↓
+                    <Icon name="arrowDown" size={15} strokeWidth={2.4} />
                   </Button>
                   <Button
                     size="sm"
@@ -1851,10 +1851,10 @@ function GroupEditor({
           {onMove ? (
             <>
               <Button size="sm" variant="ghost" disabled={readOnly} title="Move group up" aria-label="Move group up" onClick={() => onMove(-1)}>
-                ↑
+                <Icon name="arrowUp" size={15} strokeWidth={2.4} />
               </Button>
               <Button size="sm" variant="ghost" disabled={readOnly} title="Move group down" aria-label="Move group down" onClick={() => onMove(1)}>
-                ↓
+                <Icon name="arrowDown" size={15} strokeWidth={2.4} />
               </Button>
             </>
           ) : null}

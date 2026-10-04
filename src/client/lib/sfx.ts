@@ -130,6 +130,8 @@ export const SFX_NAMES = [
   'heartLost',
   'outOfHearts',
   'combo',
+  'comboTier',
+  'heal',
   'match',
   'reveal',
   'hint',
@@ -157,6 +159,8 @@ export const SFX_LIBRARY: Array<{ name: SfxName; label: string; when: string }> 
   { name: 'match', label: 'Match', when: 'A pair clicks together' },
   { name: 'correct', label: 'Correct', when: 'A right answer' },
   { name: 'combo', label: 'Combo', when: 'Right answers in a row' },
+  { name: 'comboTier', label: 'Combo milestone', when: 'Five, ten, fifteen in a row' },
+  { name: 'heal', label: 'Hearts back', when: 'A refill or a practice drill' },
   { name: 'almost', label: 'Almost', when: 'Right, but a slip' },
   { name: 'wrong', label: 'Wrong', when: 'A wrong answer' },
   { name: 'heartLost', label: 'Heart lost', when: 'One heart fewer' },
@@ -233,6 +237,32 @@ function playSound(name: SfxName, level = 1): void {
       ]);
       break;
     }
+    case 'comboTier':
+      // The milestone: the pentatonic ladder climbed all at once, with a shine
+      // on top. Louder and longer than `combo` because it happens five times a
+      // lesson at most, and the learner should look up for it.
+      notes([
+        [523.25, { duration: 0.1, type: 'square', gain: 0.035 }],
+        [659.25, { delay: 0.07, duration: 0.1, type: 'square', gain: 0.035 }],
+        [783.99, { delay: 0.14, duration: 0.1, type: 'square', gain: 0.035 }],
+        [1046.5, { delay: 0.21, duration: 0.12, type: 'triangle', gain: 0.05 }],
+        [1318.51, { delay: 0.3, duration: 0.16, type: 'triangle', gain: 0.05 }],
+        [1567.98, { delay: 0.4, duration: 0.5, type: 'sine', gain: 0.045 }],
+        [2093, { delay: 0.44, duration: 0.55, type: 'sine', gain: 0.02 }],
+      ]);
+      noise({ delay: 0.3, duration: 0.6, gain: 0.02, from: 2200, to: 6400, q: 0.5 });
+      break;
+    case 'heal':
+      // Hearts coming back: a warm rise, no percussion, because it happens on a
+      // screen the learner just lost on and must not sound like a reward.
+      notes([
+        [392, { duration: 0.18, type: 'sine', gain: 0.05 }],
+        [523.25, { delay: 0.12, duration: 0.2, type: 'sine', gain: 0.05 }],
+        [659.25, { delay: 0.24, duration: 0.24, type: 'triangle', gain: 0.045 }],
+        [783.99, { delay: 0.38, duration: 0.4, type: 'triangle', gain: 0.04 }],
+      ]);
+      tone(196, { duration: 0.5, type: 'sine', gain: 0.03, to: 392 });
+      break;
     case 'match':
       notes([
         [1318.51, { duration: 0.3, type: 'triangle', gain: 0.05 }],

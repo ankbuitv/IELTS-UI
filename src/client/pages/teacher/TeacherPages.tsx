@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
+import { Icon } from '../../components/Icon';
 import {
   Badge,
   Button,
@@ -246,7 +247,7 @@ export function ClassroomPage() {
       <div className="page-head">
         <div>
           <Link to="/teacher" className="small">
-            ← All classrooms
+            <Icon name="arrowLeft" size={14} /> All classrooms
           </Link>
           <h1>{data.classroom.name}</h1>
           <p className="page-head__meta">
@@ -896,7 +897,7 @@ export function AssignmentPage() {
       <div className="page-head">
         <div>
           <Link to={`/teacher/classrooms/${data.classroomId}`} className="small">
-            ← {data.classroomName}
+            <Icon name="arrowLeft" size={14} /> {data.classroomName}
           </Link>
           <h1>{data.title}</h1>
           <p className="page-head__meta">

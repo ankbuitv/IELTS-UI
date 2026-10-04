@@ -303,7 +303,17 @@ export function useExamSession(attemptId: string): ExamSessionApi {
   const logIntegrity = useCallback(
     (type: IntegrityEventType, metadata?: Record<string, unknown>) => {
       integrityQueue.current.push({ type, ...(metadata ? { metadata } : {}) });
-      if (type === 'TAB_HIDDEN' || type === 'FULLSCREEN_EXIT' || type === 'COPY_ATTEMPT' || type === 'PASTE_ATTEMPT') {
+      // Flushed at once rather than waiting for the interval: these are the
+      // events a teacher will want a timestamp for, and an inspector that is
+      // closed again would otherwise look like it never opened.
+      if (
+        type === 'TAB_HIDDEN' ||
+        type === 'FULLSCREEN_EXIT' ||
+        type === 'COPY_ATTEMPT' ||
+        type === 'PASTE_ATTEMPT' ||
+        type === 'INSPECTOR_OPEN' ||
+        type === 'INSPECTOR_CLOSED'
+      ) {
         void flushIntegrity();
       }
     },

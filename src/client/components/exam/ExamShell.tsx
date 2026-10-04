@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { CandidateQuestion, CandidateSection } from '@shared/question-types';
 import type { AttemptSectionState } from '@shared/candidate';
 import { DEFAULT_SECTION_POLICY, type SectionPolicy } from '@shared/sections';
-import { Button, Modal } from '../ui';
+import { Button, Modal, skillClass } from '../ui';
 import { Icon, type IconName } from '../Icon';
 import { PassagePane } from './PassagePane';
 import { AudioPlayer } from './AudioPlayer';
@@ -24,8 +24,13 @@ import { useInputLockdown } from '../../hooks/useInputLockdown';
 export function ExamShell({ session, onFinished }: { session: ExamSessionApi; onFinished: () => void }) {
   // The exam owns the viewport: only its panes scroll (see exam.css).
   useExamViewportLock();
-  // Discourage the right-click menu and open-devtools shortcuts during the exam.
-  useInputLockdown();
+  // The exam's input surface: shortcuts, the right-click menu, drag-to-copy, and
+  // a measurement of whether a debugger is attached. An open inspector covers the
+  // page until it is closed and is written to the integrity log as an observable
+  // event — never as a counted strike, because an extension can trip it too.
+  useInputLockdown({
+    onInspectorChange: (open) => session.logIntegrity(open ? 'INSPECTOR_OPEN' : 'INSPECTOR_CLOSED', { source: 'lockdown-probe' }),
+  });
 
   const { state } = session;
   const toast = useToast();
@@ -508,7 +513,18 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
                   key={section.id}
                   type="button"
                   role="tab"
-                  className={['exam-part', current ? 'is-current' : '', done ? 'is-done' : '', !open ? 'is-locked' : ''].filter(Boolean).join(' ')}
+                  // The part's own skill colour, as a stripe on the chip: in a
+                  // full mock the four parts otherwise read as one grey row, and
+                  // "which paper am I in?" is the question a candidate asks most.
+                  className={[
+                    'exam-part',
+                    skillClass(section.skill),
+                    current ? 'is-current' : '',
+                    done ? 'is-done' : '',
+                    !open ? 'is-locked' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                   onClick={() => switchToSection(section.id)}
                   aria-selected={current}
                   title={open ? section.title || section.label : 'This part is not open yet'}
