@@ -3,6 +3,10 @@
    ========================================================================== */
 
 /* ------------------------------------------------------------------- path */
+/* `min-width: 0` throughout: this page has grids inside grids, and the default
+   `auto` minimum lets a wide child (a scrollable word list, a long word, a
+   nowrap label) push every ancestor wider than the screen. */
+.learn, .learn__stats, .learn__grid, .learn__path, .learn__today, .learn-card, .learn-card > * { min-width: 0; }
 .learn { display: flex; flex-direction: column; gap: 18px; }
 .learn__stats { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr); gap: 16px; }
 .learn-stat {
@@ -262,11 +266,15 @@
 
 /* ------------------------------------------------------------- responsive */
 @media (max-width: 960px) {
-  .learn__grid { grid-template-columns: 1fr; }
+  /* `minmax(0, 1fr)` and not `1fr`: the today column contains a horizontally
+     scrolling word list, and a plain `1fr` track sizes itself to that list's
+     min-content — which is what pushed the whole page sideways on a phone. */
+  .learn__grid { grid-template-columns: minmax(0, 1fr); }
   /* Phones: today's words scroll sideways and review / level sit side by side, so the path is never far below the fold. */
-  .learn__today { grid-column: 1; grid-row: 1; position: static; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .learn__today { grid-column: 1; grid-row: 1; position: static; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; min-width: 0; }
+  .learn__today > * { min-width: 0; }
   .learn__today > .learn-card:first-child { grid-column: 1 / -1; }
-  .learn__today .daily-words { flex-direction: row; overflow-x: auto; gap: 8px; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+  .learn__today .daily-words { flex-direction: row; overflow-x: auto; gap: 8px; padding-bottom: 4px; -webkit-overflow-scrolling: touch; min-width: 0; }
   .learn__today .daily-words li { flex: none; min-width: 160px; border: 1px solid var(--ink-200); border-radius: var(--radius); padding: 10px 12px; }
   .learn__today .daily-words li:first-child { border-top: 1px solid var(--ink-200); padding-top: 10px; }
   .learn__path { grid-column: 1; grid-row: 2; }
@@ -347,6 +355,7 @@
 /* ---------------------------------------------------------------- arena hero */
 .arena {
   position: relative; overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 22px; align-items: center;
+  min-width: 0;
   padding: 22px 26px; border-radius: var(--radius-xl); color: #fff;
   background: linear-gradient(135deg, #0f4c3a 0%, #14805c 45%, #1f9d63 100%);
   box-shadow: 0 6px 0 #0a3a2c;
@@ -367,7 +376,7 @@
 .arena__actions .btn:not(.btn--primary) { background: rgba(255, 255, 255, 0.16); color: #fff; backdrop-filter: blur(2px); }
 .arena__actions .btn:not(.btn--primary):hover { background: rgba(255, 255, 255, 0.26); }
 .arena__xp { margin-left: 6px; font-size: 0.72rem; font-weight: 800; opacity: 0.85; }
-.arena__meta { display: grid; grid-template-columns: repeat(2, minmax(96px, 1fr)); gap: 10px; align-content: center; }
+.arena__meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-content: center; min-width: 0; }
 .arena__stat {
   display: grid; justify-items: center; gap: 1px; padding: 10px 14px; border: 0; font-family: inherit; cursor: default;
   background: rgba(255, 255, 255, 0.13); border-radius: var(--radius-lg); color: #fff; text-align: center;
@@ -398,7 +407,7 @@
 
 /* ------------------------------------------------------------------- quests */
 .quests { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.quests li { display: grid; gap: 4px; }
+.quests li { display: grid; gap: 4px; min-width: 0; }
 .quests__row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .quests__row b { font-size: 0.9rem; font-weight: 700; color: var(--ink-900); }
 .quests li.is-done .quests__row b { color: var(--success); text-decoration: line-through; text-decoration-thickness: 1px; }
@@ -412,6 +421,7 @@
 .mini-board li { display: flex; align-items: baseline; gap: 8px; padding: 6px 8px; border-radius: var(--radius); background: var(--paper-muted); }
 .mini-board li.is-me { background: var(--sun-soft); outline: 1px solid var(--sun-border); }
 .mini-board__rank { width: 22px; text-align: center; font-weight: 800; }
+.mini-board li > * { min-width: 0; }
 .mini-board b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.88rem; color: var(--ink-900); }
 .mini-board span:last-child { font-size: 0.78rem; color: var(--ink-600); font-variant-numeric: tabular-nums; }
 
@@ -641,8 +651,11 @@
   .arena__actions { justify-content: center; }
   .arena__meta { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
   .arena__week > span { width: 34px; }
-  .shop__hero { justify-items: center; text-align: center; }
-  .shop__earn { text-align: left; }
+  /* One column on a phone: with the mascot beside it the text column was about
+     170px wide and read as a stack of broken lines. */
+  .shop__hero { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; }
+  .shop__hero p, .shop__earn { text-align: left; }
+  .shop__balance { grid-column: auto; justify-self: stretch; justify-items: center; }
   .board__hero { flex-direction: column; text-align: center; }
   .board__controls { justify-content: center; }
   .lesson__feedback--quiet { flex-direction: column; align-items: flex-start; }

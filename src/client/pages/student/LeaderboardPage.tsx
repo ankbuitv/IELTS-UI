@@ -142,7 +142,9 @@ export function LeaderboardPage() {
                     {data.total} learners are on this board — the list shows the first {LEADERBOARD_LIMIT}.
                   </span>
                 ) : (
-                  <span className="muted tiny">{data.total} learners on this board.</span>
+                  <span className="muted tiny">
+                    {data.total === 1 ? 'You are the only one on this board so far.' : `${data.total} learners on this board.`}
+                  </span>
                 )}
                 <Button size="sm" variant="ghost" onClick={() => void board.reload()}>
                   <Icon name="rotate" size={13} /> Refresh
