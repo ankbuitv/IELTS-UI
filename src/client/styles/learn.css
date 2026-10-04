@@ -844,7 +844,9 @@
 .site-avatar--rich .avatar { width: 100%; height: 100%; }
 .site-avatar--lg.site-avatar--rich { background: none; }
 
-.avatar-picker { display: flex; flex-direction: column; gap: 14px; }
+/* `relative` because the file input inside is absolutely positioned: without a
+   positioned ancestor it would resolve against the viewport instead. */
+.avatar-picker { position: relative; display: flex; flex-direction: column; gap: 14px; }
 .avatar-picker__now { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .avatar-picker__meta { display: grid; gap: 3px; min-width: 0; }
 .avatar-picker__meta > b { font-size: 1.05rem; color: var(--ink-950); }
