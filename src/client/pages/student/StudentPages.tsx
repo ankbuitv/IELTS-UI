@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiRequestError, api, describeError, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
-import { useInputLockdown } from '../../hooks/useInputLockdown';
 import {
   Badge,
   Button,
@@ -529,7 +528,8 @@ export function AttemptResultPage() {
   const { attemptId = '' } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  useInputLockdown();
+  // Right-click and the developer tools are refused by the shell that renders
+  // this page (AppShell), so the result screen does not mount its own copy.
   const [restarting, setRestarting] = useState<string | null>(null);
   const { data, loading, error, reload } = useAsync<AttemptResultPayload>(
     () => api.get(`/api/attempts/${attemptId}/result`),

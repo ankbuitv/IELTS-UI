@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { boostState } from '@shared/shop';
 import { useAuth } from '../context/AuthContext';
@@ -7,8 +7,9 @@ import { BrandLogo } from './BrandLogo';
 import { DisplayMenu } from './DisplayMenu';
 import { Icon, type IconName } from './Icon';
 import { SiteFooter } from './SiteFooter';
-import { Button, Loading } from './ui';
+import { Button, Loading, useToast } from './ui';
 import { initials } from '../lib/format';
+import { BLOCKED_MESSAGE, useInputLockdown } from '../hooks/useInputLockdown';
 
 /**
  * Application shell.
@@ -17,6 +18,11 @@ import { initials } from '../lib/format';
  * 960px), and one "More" panel that is a dropdown on a wide screen and a bottom sheet on a
  * phone. The navy footer carries the brand, the links and the standing disclaimer, so there is
  * no banner on every page.
+ *
+ * It is also where the signed-in surfaces refuse casual inspection: every page behind a
+ * session — the path, a lesson, the notebook, the result of an attempt — blocks the
+ * right-click menu and the developer-tool shortcuts. The public marketing pages are left
+ * alone (a visitor may want to open a link in a new tab, and there is nothing to hide there).
  */
 interface NavItem {
   to: string;
@@ -88,9 +94,23 @@ export function AppShell() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const toast = useToast();
   const [panelOpen, setPanelOpen] = useState(false);
   const [coins, setCoins] = useState<number | null>(null);
   const [boosted, setBoosted] = useState(false);
+  // The notice is a hint, not a nag: after three of them the blocking continues
+  // silently, because a learner leaning on a held key does not need a queue of
+  // identical toasts.
+  const notices = useRef(0);
+
+  useInputLockdown({
+    enabled: Boolean(user),
+    onBlocked: (kind) => {
+      if (notices.current >= 3) return;
+      notices.current += 1;
+      toast.push(BLOCKED_MESSAGE[kind], 'warning');
+    },
+  });
 
   // The coin balance belongs to the whole shell, not to the shop page: it is the
   // thing that makes "spend it or lose the habit" visible while the learner is

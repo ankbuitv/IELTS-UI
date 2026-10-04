@@ -23,11 +23,12 @@ import { canSpeak, getPreferredVoiceURI, isServerVoice, listEnglishVoices, listS
 import { learnApi } from '../../lib/learn-api';
 import type { TranslationResult } from '@shared/learn';
 import { Icon } from '../Icon';
-import { Button } from '../ui';
+import { Button, useToast } from '../ui';
 import { Stars } from './Stars';
 import { Mascot, reactionTo, type MascotMood } from './Mascot';
-import { Confetti, ComboBadge, FloatingAward, ScreenFlash } from './Effects';
+import { ComboBadge, ComboMilestone, Confetti, FloatingAward, ScreenFlash, comboMilestone } from './Effects';
 import { LookupHint, LookupProvider, LookupText } from './LookupText';
+import { BLOCKED_MESSAGE, useInputLockdown } from '../../hooks/useInputLockdown';
 
 /**
  * The lesson player.
@@ -169,6 +170,7 @@ export function LessonPlayer({
   videoUrl?: string;
   legendary?: boolean;
 }) {
+  const toast = useToast();
   const [queue, setQueue] = useState<Exercise[]>(exercises);
   const [index, setIndex] = useState(0);
   const [hearts, setHearts] = useState(MAX_HEARTS);
@@ -187,12 +189,24 @@ export function LessonPlayer({
   const [combo, setCombo] = useState(0);
   const [bestCombo, setBestCombo] = useState(0);
   const [confetti, setConfetti] = useState(0);
+  const [milestone, setMilestone] = useState<{ burst: number; combo: number }>({ burst: 0, combo: 0 });
   const [flash, setFlash] = useState<{ burst: number; tone: 'good' | 'bad' | 'goal' | 'level' }>({ burst: 0, tone: 'good' });
   const [award, setAward] = useState<{ burst: number; amount: number; tone: 'xp' | 'coin' | 'heart' }>({ burst: 0, amount: 0, tone: 'xp' });
   const [clock, setClock] = useState(0);
   const retried = useRef(new Set<string>());
   // The exercise component reports its current answer here; `check` reads it.
   const submit = useRef<(() => { correct: boolean; almost?: boolean } | null) | null>(null);
+  // A lesson is a full-screen surface of its own (it sits outside the app shell
+  // route), so it carries the same refusal of right-click and developer tools —
+  // once explained per lesson, then silently, because the answering is the point.
+  const explained = useRef(false);
+  useInputLockdown({
+    onBlocked: (kind) => {
+      if (explained.current) return;
+      explained.current = true;
+      toast.push(BLOCKED_MESSAGE[kind], 'warning');
+    },
+  });
   const finished = Math.min(Object.keys(outcomes).length, exercises.length);
   const total = exercises.length;
   const current = queue[index];
@@ -275,21 +289,43 @@ export function LessonPlayer({
     }
 
     if (outcome.correct) {
+      // First-try answers extend the run; a run of five is a different event
+      // from a run of four, so it gets its own fanfare, its own banner and its
+      // own confetti — the badge in the footer is the quiet, ongoing version of
+      // the same fact.
+      const nextCombo = firstAttempt ? combo + 1 : combo;
+      const milestone = firstAttempt ? comboMilestone(nextCombo) : null;
+
       if (outcome.almost) {
         sfx.play('almost');
-      } else if (firstAttempt && combo + 1 >= 2) {
-        sfx.play('combo', combo + 1);
+      } else if (milestone) {
+        sfx.play('milestone', milestone.tier);
+      } else if (firstAttempt && nextCombo >= 2) {
+        sfx.play('combo', nextCombo);
       } else {
         sfx.correct();
       }
+
       if (firstAttempt) {
-        const nextCombo = combo + 1;
         setCombo(nextCombo);
         setBestCombo((best) => Math.max(best, nextCombo));
         setAward({ burst: Date.now(), amount: 1, tone: 'xp' });
-        if (nextCombo >= 3) celebrate('good', nextCombo % 3 === 0 ? 24 : 0);
+        if (milestone) {
+          // The banner carries its own confetti (see `ComboMilestone`), so this
+          // only washes the screen in the tier's colour underneath it.
+          // `burst` is a counter, not a timestamp: the banner is keyed by it, and
+          // two runs of five must never share a key — a repeated key would reuse
+          // the element and its already-finished animation instead of replaying
+          // it (which is exactly what a frozen clock does in a test).
+          setMilestone((previous) => ({ burst: previous.burst + 1, combo: nextCombo }));
+          celebrate(milestone.tier >= 3 ? 'level' : 'goal');
+        } else if (nextCombo >= 3) {
+          celebrate('good');
+        }
       }
-      celebrate('good');
+      // A milestone has already set the flash and the confetti; the plain wash
+      // would only overwrite the colour it chose.
+      if (!milestone) celebrate('good');
       setVerdict(outcome);
       setPhase('feedback');
       window.setTimeout(() => sfx.play('reveal'), 220);
@@ -504,6 +540,7 @@ export function LessonPlayer({
     <LookupProvider enabled={!legendary}>
       <div className={`lesson lesson--${phase}`}>
         <ScreenFlash burst={flash.burst} tone={flash.tone} />
+        <ComboMilestone burst={milestone.burst} combo={milestone.combo} />
         <header className="lesson__top">
           <button type="button" className="lesson__close" onClick={onExit} aria-label="Leave the lesson">
             <Icon name="close" size={20} />

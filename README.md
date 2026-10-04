@@ -45,6 +45,13 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
   cannot stop OS-level switching (Alt+Tab, another device), so the lock counts,
   blocks on return and says so on screen. Copy/paste, blur and fullscreen exits
   are recorded as observable events and are not proof of misconduct.
+- **Right-click and developer tools are refused** behind a session: in the exam
+  itself, in the full-screen lesson player and on every page of the app shell
+  (`useInputLockdown`). F12, Ctrl/⌘+Shift+I/J/C/K/E/S, Ctrl/⌘+U/S/P and the
+  macOS ⌘⌥ spellings are swallowed and the reader is told why in one line; the
+  public marketing pages are left alone. This is a deterrent, not a boundary —
+  the browser menu and another device are always available, which is why the
+  server-side events above are what a teacher actually reads.
 
 **Question engine**
 
@@ -118,13 +125,14 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
   SVG creature with seven moods — it hops on a right answer, droops when one is
   wrong, thinks while a question waits, waves when a streak needs topping up and
   sleeps when the day is done. Every mood is legible at 56 px and at 190 px.
-- **One sound per event**: 25 synthesised effects in `src/client/lib/sfx.ts`
-  (tap, correct, combo, almost, wrong, heart lost, out of hearts, hint, reveal,
-  coin, buy, boost, freeze, streak, daily goal, level up, lesson start,
-  complete, perfect, fail, unlock, error, whoosh, match, select) — no audio
-  files, quiet, short, and a soundboard in the shop to hear them all. Alongside
-  them: confetti, floating XP/heart/coin numbers, combo badges and a reaction
-  flash, all switched off under `prefers-reduced-motion`.
+- **One sound per event**: 26 synthesised effects in `src/client/lib/sfx.ts`
+  (tap, correct, combo, milestone, almost, wrong, heart lost, out of hearts,
+  hint, reveal, coin, buy, boost, freeze, streak, daily goal, level up, lesson
+  start, complete, perfect, fail, unlock, error, whoosh, match, select) — no
+  audio files, quiet, short, and a soundboard in the shop to hear them all.
+  Alongside them: confetti, floating XP/heart/coin numbers, combo badges, a
+  milestone banner every five right answers in a row (gold, then red, then
+  violet) and a reaction flash, all switched off under `prefers-reduced-motion`.
 - **Coins, daily quests and a shop** (`/learn/shop`): lessons, reviews and
   quests pay coins; coins buy a hint, a heart refill, 30 minutes of **double XP**
   or a **streak freeze** that carries a streak across one missed day. Every coin
@@ -436,7 +444,7 @@ full-mock flows. The recorded output of a green run is in
 ## Documentation
 
 - [`docs/LEARN-GAMIFICATION.md`](docs/LEARN-GAMIFICATION.md) — the mascot, the
-  25 synthesised sound effects, coins and quests, the shop (hint, heart refill,
+  26 synthesised sound effects, coins and quests, the shop (hint, heart refill,
   double XP, streak freeze), the two leaderboards, sentence translation and
   tap-to-look-up, with the schema, endpoints and rate limits.
 - [`docs/UI-REFRESH.md`](docs/UI-REFRESH.md) — the exam-style redesign that

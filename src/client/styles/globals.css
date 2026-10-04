@@ -150,6 +150,16 @@
 
 html, body { height: 100%; }
 
+/* Horizontal panning on a phone is never what the reader wants, and one
+   unbreakable string (a long word, a nowrap heading, a wide table that forgot
+   its wrapper) used to be enough to make the whole page scrollable sideways —
+   which on mobile reads as "the app is cut off". Every surface that *should*
+   scroll sideways opts in with its own `overflow-x: auto` (tables, tab strips,
+   the word chips on the learn page); `clip` keeps this net from becoming a
+   scroll container, so sticky positioning inside a page keeps working.
+   `overflow-x: hidden` is the fallback for an engine that does not know `clip`. */
+html { overflow-x: hidden; overflow-x: clip; }
+
 body {
   margin: 0;
   background: var(--canvas);

@@ -19,7 +19,7 @@ import { SFX_LIBRARY, SFX_NAMES, sfx } from '../../src/client/lib/sfx';
 
 describe('sound library', () => {
   it('has one gallery entry per effect, each name once', () => {
-    expect(SFX_NAMES).toHaveLength(25);
+    expect(SFX_NAMES).toHaveLength(26);
     expect(SFX_LIBRARY).toHaveLength(SFX_NAMES.length);
     const catalogued = SFX_LIBRARY.map((entry) => entry.name);
     expect(new Set(catalogued).size).toBe(SFX_NAMES.length);

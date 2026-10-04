@@ -19,16 +19,25 @@ import type { ExamSessionApi } from './useExamSession';
 import { ExamDictionary } from './ExamDictionary';
 import { TabLockOverlay } from './TabLockOverlay';
 import { useExamViewportLock } from './useExamViewport';
-import { useInputLockdown } from '../../hooks/useInputLockdown';
+import { BLOCKED_MESSAGE, useInputLockdown } from '../../hooks/useInputLockdown';
 
 export function ExamShell({ session, onFinished }: { session: ExamSessionApi; onFinished: () => void }) {
   // The exam owns the viewport: only its panes scroll (see exam.css).
   useExamViewportLock();
-  // Discourage the right-click menu and open-devtools shortcuts during the exam.
-  useInputLockdown();
 
   const { state } = session;
   const toast = useToast();
+
+  // Right-click and the developer-tool shortcuts are refused for the whole
+  // exam, in every mode. What is *recorded* stays the session's business
+  // (`useExamSession` logs CONTEXT_MENU_ATTEMPT when the policy disallows it),
+  // which is why this hook only prevents the default and never stops
+  // propagation — the learner gets a one-line explanation and the teacher gets
+  // the event.
+  useInputLockdown({
+    onBlocked: (kind) => toast.push(BLOCKED_MESSAGE[kind], 'warning'),
+  });
+
   const navigate = useNavigate();
   /** Phone-sized: one pane at a time, switched with Passage | Questions. */
   const compact = useMediaQuery('(max-width: 719px)');

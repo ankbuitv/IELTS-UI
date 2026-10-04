@@ -35,7 +35,7 @@ review player describe the same verdicts the same way.
 ## Sound: one effect per event
 
 `src/client/lib/sfx.ts` is a small WebAudio synth — no audio files, nothing to
-download — with **25 named effects**, each distinct in pitch, shape and texture:
+download — with **26 named effects**, each distinct in pitch, shape and texture:
 
 | Event | Sound | Event | Sound |
 |---|---|---|---|
@@ -44,6 +44,7 @@ download — with **25 named effects**, each distinct in pitch, shape and textur
 | a pair matching | `match` | double XP switched on | `boost` |
 | a right answer | `correct` | a freeze spent | `freeze` |
 | right answers in a row | `combo` (climbs a pentatonic ladder) | the streak growing | `streak` |
+| five in a row, then every five | `milestone` (a longer arpeggio per tier) | | |
 | right, with a slip | `almost` | daily goal reached | `dailyGoal` |
 | a wrong answer | `wrong` | a new band opening | `levelUp` |
 | a heart lost | `heartLost` | a lesson opening | `lessonStart` |
@@ -66,12 +67,27 @@ point of them.
 ## Effects
 
 `src/client/components/learn/Effects.tsx`: `Confetti` (28 pieces for a combo, 60
-for a lesson, 120 for a perfect one), `FloatingAward` (the "+1 XP", "−1 heart",
+for a lesson, 120 for a perfect one, 68/96/124 for a milestone tier),
+`FloatingAward` (the "+1 XP", "−1 heart",
 "+N coins" that rises from the footer), `ComboBadge` ("×3 in a row"), `ScreenFlash`
 (a green, red, gold or violet wash), and `StreakPulse` (a ring out of the flame).
 They are `aria-hidden`, keyed by a burst number so the same effect can fire twice,
 and switched off under `prefers-reduced-motion` — colour and number still carry
 the meaning.
+
+**Milestones.** A run of five first-try answers is not just a bigger badge, so it
+gets its own banner: `comboMilestone(combo)` (a pure function, unit-tested) says
+which run counts and what tier it is, and `ComboMilestone` draws it — Bơ in its
+`wow` mood, the count, one line of encouragement, its own fall of confetti
+underneath and two rings pushing out from behind the card, in the middle of the
+lesson for 2.6 s (the banner fades itself out with one keyframe; no JS timer).
+Three tiers, each a different colour, a longer `milestone` arpeggio and more
+confetti: gold at **×5** (68 pieces), brand red at **×10** (96), violet from
+**×15** upwards and every five after that (124). `burst` is a counter, not a
+clock — two runs of five must never share a React key, or the second banner
+would reuse the first one's finished animation. The old rule is unchanged
+underneath: `ComboBadge` still appears at three and grows with the run, and a
+wrong answer puts the counter back to zero.
 
 ## Coins, quests and the shop
 
