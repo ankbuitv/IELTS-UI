@@ -21,10 +21,15 @@ import {
   setLearnBand,
 } from '../services/learn-service';
 import { getCatalogue, getLessonPlay } from '../services/learn-catalogue-service';
+import { getShopState, purchaseItem, useItem } from '../services/learn-shop-service';
+import { getLeaderboard } from '../services/learn-leaderboard-service';
+import { translateSentence } from '../services/learn-translate-service';
 import { auditPlan, getPlan, rebuildPlan, setPlanItemStatus } from '../services/learn-plan-service';
 import { buildPersonalLesson, latestPersonalLesson } from '../services/learn-generation-service';
 import { lookupWord } from '../services/dictionary-service';
 import { DAY_PATTERN, isLearnBand, type LearnBand, type PlanItemStatus } from '../../shared/learn';
+import { isShopItemKey, type ShopItemKey } from '../../shared/shop';
+import { isLeaderboardScope, isLeaderboardWindow, type LeaderboardScope, type LeaderboardWindow } from '../../shared/leaderboard';
 
 /**
  * Learn path and dictionary API. Everything is scoped to the signed-in user.
@@ -209,6 +214,89 @@ learnRouter.post('/personal-lesson', async (c) => {
   const band = await getLearnBand(c.env, user.id);
   const lesson = await buildPersonalLesson(c.env, user.id, band);
   return c.json({ ...lesson, day });
+});
+
+// ----------------------------------------------------------- shop and coins
+/** The shelf: the catalogue, the prices and what this learner holds. */
+learnRouter.get('/shop', async (c) => {
+  const user = currentUser(c);
+  return c.json(await getShopState(c.env, user.id));
+});
+
+/**
+ * Buys an item with coins.
+ *
+ * Rate limited generously rather than tightly: a learner buying three hints in
+ * a row is normal, and each call is one conditional UPDATE. Nothing here trusts
+ * a price or a balance from the client — it sends a key and the server prices it.
+ */
+learnRouter.post('/shop/buy', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({ key: z.string().min(1).max(32), quantity: z.number().int().min(1).max(5).default(1) }),
+  );
+  if (!isShopItemKey(body.key)) throw ApiError.validation('That item is not in the shop.');
+  await enforceRateLimit(
+    c.env,
+    { bucket: `learn-shop:${user.id}`, windowSeconds: 3600, limit: 60 },
+    'That is a lot of shopping in one hour. Take a lesson first.',
+  );
+  return c.json(await purchaseItem(c.env, user.id, body.key as ShopItemKey, body.quantity));
+});
+
+/** Spends one item: a heart refill mid-lesson, a hint, or the double-XP switch. */
+learnRouter.post('/items/use', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ key: z.string().min(1).max(32) }));
+  if (!isShopItemKey(body.key)) throw ApiError.validation('That item is not in the shop.');
+  await enforceRateLimit(
+    c.env,
+    { bucket: `learn-items:${user.id}`, windowSeconds: 3600, limit: 90 },
+    'You have used a lot of items this hour. Try again in a little while.',
+  );
+  return c.json(await useItem(c.env, user.id, body.key as ShopItemKey));
+});
+
+// ------------------------------------------------------------- leaderboards
+/** One board, week or all time, with the reader's own row. */
+learnRouter.get('/leaderboard', async (c) => {
+  const user = currentUser(c);
+  const query = parseQuery(
+    c,
+    z.object({
+      scope: z.string().default('learn'),
+      window: z.string().default('week'),
+      day: daySchema,
+    }),
+  );
+  if (!isLeaderboardScope(query.scope)) throw ApiError.validation('That leaderboard does not exist.');
+  if (!isLeaderboardWindow(query.window)) throw ApiError.validation('Choose this week or all time.');
+  return c.json(
+    await getLeaderboard(c.env, user.id, query.scope as LeaderboardScope, query.window as LeaderboardWindow, query.day),
+  );
+});
+
+// ---------------------------------------------------------------- translation
+/**
+ * Vietnamese for one English sentence, cached.
+ *
+ * Cheap enough to call automatically after every answer; the cache means the
+ * second learner to meet a sentence pays nothing. A provider that is down
+ * answers with `available: false` rather than an error, because the sentence on
+ * screen is the answer and this is only the gloss.
+ */
+learnRouter.post('/translate', async (c) => {
+  const user = currentUser(c);
+  const body = await parseBody(c, z.object({ text: z.string().trim().min(1).max(400) }));
+  await enforceRateLimit(
+    c.env,
+    { bucket: `learn-translate:${user.id}`, windowSeconds: 3600, limit: 240 },
+    'That is a lot of sentences in one hour. Try again in a little while.',
+  );
+  return c.json(await translateSentence(c.env, body.text));
 });
 
 // ----------------------------------------------------- generated practice audio

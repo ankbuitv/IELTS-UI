@@ -66,7 +66,15 @@ export type IconName =
   | 'bubble'
   | 'checkCircle'
   | 'bolt'
-  | 'eye';
+  | 'eye'
+  | 'coin'
+  | 'trophy'
+  | 'cart'
+  | 'snowflake'
+  | 'bulb'
+  | 'crown'
+  | 'shieldCheck'
+  | 'hourglass';
 
 const PATHS: Record<IconName, ReactElement> = {
   grid: (
@@ -358,6 +366,66 @@ const PATHS: Record<IconName, ReactElement> = {
     <>
       <path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12z" />
       <circle cx="12" cy="12" r="2.8" />
+    </>
+  ),
+  coin: (
+    <>
+      <circle cx="12" cy="12" r="8.4" />
+      <path d="M12 7.4v9.2" />
+      <path d="M14.6 9.4c-.8-.7-4.3-1.1-4.3.9 0 1.9 4.3 1 4.3 2.9 0 2-3.5 1.6-4.3.9" />
+    </>
+  ),
+  trophy: (
+    <>
+      <path d="M7.5 4.6h9v4.2a4.5 4.5 0 0 1-9 0z" />
+      <path d="M7.5 6H5a2.2 2.2 0 0 0 2.4 3.4" />
+      <path d="M16.5 6H19a2.2 2.2 0 0 1-2.4 3.4" />
+      <path d="M12 13.3v3.6" />
+      <path d="M8.6 20h6.8l-.7-3.1H9.3z" />
+    </>
+  ),
+  cart: (
+    <>
+      <path d="M3.4 4.6h2.2l2.3 9.6h9.2" />
+      <path d="M6.6 7.4h12.9l-1.6 5.4H7.9" />
+      <circle cx="9.4" cy="18.6" r="1.5" />
+      <circle cx="16.6" cy="18.6" r="1.5" />
+    </>
+  ),
+  snowflake: (
+    <>
+      <path d="M12 3v18" />
+      <path d="M4.2 7.5l15.6 9" />
+      <path d="M19.8 7.5l-15.6 9" />
+      <path d="M12 6.6l-2-2M12 6.6l2-2" />
+      <path d="M12 17.4l-2 2M12 17.4l2 2" />
+    </>
+  ),
+  bulb: (
+    <>
+      <path d="M9.2 17.4h5.6" />
+      <path d="M10 20.4h4" />
+      <path d="M12 3.6a5.6 5.6 0 0 1 3.4 10.1c-.6.5-.9 1.1-.9 1.8v1H9.5v-1c0-.7-.3-1.3-.9-1.8A5.6 5.6 0 0 1 12 3.6z" />
+    </>
+  ),
+  crown: (
+    <>
+      <path d="M4 17.6l-1-9.2 5.2 3.4L12 5.4l3.8 6.4 5.2-3.4-1 9.2z" />
+      <path d="M4.6 20.6h14.8" />
+    </>
+  ),
+  shieldCheck: (
+    <>
+      <path d="M12 3.4l7 2.7v5.4c0 4.2-2.9 7.6-7 9.1-4.1-1.5-7-4.9-7-9.1V6.1z" />
+      <path d="M8.8 12.1l2.2 2.2 4.2-4.4" />
+    </>
+  ),
+  hourglass: (
+    <>
+      <path d="M8 3.6h8" />
+      <path d="M8 20.4h8" />
+      <path d="M8.6 3.6c0 3.2 3.4 4.9 3.4 8.4s-3.4 5.2-3.4 8.4" />
+      <path d="M15.4 3.6c0 3.2-3.4 4.9-3.4 8.4s3.4 5.2 3.4 8.4" />
     </>
   ),
   list: (

@@ -7,6 +7,7 @@ import { buildVocabMessages } from '../ai/coach-prompts';
 import { levelHintForUser } from './ai-marking-service';
 import { saveAiVocabulary, updateVocabularyEntry, type SuggestedWord } from './vocabulary-service';
 import { getLessonForCompletion, wordPool } from './learn-catalogue-service';
+import { coinStatements, questCounters, readQuests, readWallet, settleQuests } from './learn-shop-service';
 import { WORD_BANK } from '../../shared/learn-content';
 import { seededRandom, shuffle } from '../../shared/learn-engine';
 import {
@@ -15,7 +16,6 @@ import {
   bandForEstimate,
   isPlausibleDay,
   lessonXp,
-  nextStreak,
   starsFor,
   type DailyWordsResult,
   type LearnBand,
@@ -25,8 +25,16 @@ import {
   type LessonCompletionInput,
   type LessonCompletionResult,
   type LessonWord,
+  type ReviewCompletionResult,
   type ReviewResultInput,
 } from '../../shared/learn';
+import {
+  DAILY_LOGIN_COINS,
+  applyBoost,
+  coinsForLesson,
+  coinsForReview,
+  streakWithFreeze,
+} from '../../shared/shop';
 
 /**
  * Learn path service.
@@ -47,6 +55,8 @@ interface ProfileRow {
   start_band: number | null;
   band_source: string;
   last_words_day: string | null;
+  coins: number;
+  xp_boost_until: string;
 }
 
 const DAILY_WORD_COUNT = 5;
@@ -62,7 +72,8 @@ async function ensureProfile(env: Env, userId: string): Promise<ProfileRow> {
     .bind(userId, now, now)
     .run();
   const row = await env.DB.prepare(
-    `SELECT user_id, xp, streak, best_streak, last_active_day, daily_goal_xp, start_band, band_source, last_words_day
+    `SELECT user_id, xp, streak, best_streak, last_active_day, daily_goal_xp, start_band, band_source, last_words_day,
+            coins, xp_boost_until
        FROM learn_profiles WHERE user_id = ?`,
   )
     .bind(userId)
@@ -105,6 +116,7 @@ async function xpOnDay(env: Env, userId: string, day: string): Promise<number> {
 
 async function toProfile(env: Env, userId: string, row: ProfileRow, day: string): Promise<LearnProfile> {
   const placement = await resolveBand(env, userId, row);
+  const wallet = await readWallet(env, userId);
   return {
     xp: row.xp,
     streak: row.streak,
@@ -115,7 +127,15 @@ async function toProfile(env: Env, userId: string, row: ProfileRow, day: string)
     band: placement.band,
     bandSource: placement.source,
     startBand: placement.estimate,
+    coins: wallet.coins,
+    xpBoostUntil: wallet.xpBoostUntil,
+    inventory: wallet.inventory,
   };
+}
+
+/** Whole days between two calendar days; 1 means "yesterday". */
+function dayGap(from: string, to: string): number {
+  return Math.floor((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
 
 function shiftDay(day: string, offset: number): string {
@@ -161,7 +181,23 @@ export async function getLearnOverview(env: Env, userId: string, dayInput: strin
     return { day: key, xp: byDay.get(key) ?? 0 };
   });
 
-  return { profile, progress, dueWords: due?.due ?? 0, dailyWordsDone: row.last_words_day === day, week };
+  // Quests are settled on read as well as on completion: a learner who finishes
+  // a lesson, closes the tab before the finish screen loads and comes back the
+  // next morning should still have been paid for yesterday's work.
+  const counters = await questCounters(env, userId, day, profile.todayXp, profile.dailyGoalXp);
+  const settled = await settleQuests(env, userId, day, counters);
+  const quests = await readQuests(env, userId, day, counters);
+  const withCoins = settled.coins > 0 ? await toProfile(env, userId, await ensureProfile(env, userId), day) : profile;
+
+  return {
+    profile: withCoins,
+    progress,
+    dueWords: due?.due ?? 0,
+    dailyWordsDone: row.last_words_day === day,
+    week,
+    quests,
+    coinsFromQuests: settled.coins,
+  };
 }
 
 /** Places the learner on a rung of the ladder, overriding any estimate. */
@@ -179,7 +215,37 @@ export async function setDailyGoal(env: Env, userId: string, goalXp: number): Pr
     .run();
 }
 
-/** Adds XP to the log and the profile, and advances the streak. */
+/** Everything one award changed, so a caller can report it without re-reading. */
+interface AwardOutcome {
+  streak: number;
+  streakIncreased: boolean;
+  goalReached: boolean;
+  /** XP after any running boost. */
+  xp: number;
+  boosted: boolean;
+  /** A streak freeze was spent to carry the streak across one missed day. */
+  freezeUsed: boolean;
+  /** Coins paid by this award (the lesson or review, plus the first-of-the-day bonus). */
+  coins: number;
+  /** XP on the learner's day after this award. */
+  todayXp: number;
+}
+
+/**
+ * Adds XP to the log and the profile, advances the streak and pays coins.
+ *
+ * Three rules meet here, and they all have to agree with the client's copy in
+ * `shared/shop.ts`:
+ *
+ *   * a running double-XP item multiplies the award, and the multiplier is
+ *     applied to the number the lesson computed — never to the learner's total;
+ *   * a streak that would break because exactly one day was missed survives if
+ *     the learner holds a freeze, which is spent in the same request (the
+ *     conditional decrement is what decides it, so two requests cannot spend
+ *     one freeze);
+ *   * the first award of a day pays a small login bonus, which is why opening
+ *     Learn on a rest day is not wasted.
+ */
 async function award(
   env: Env,
   userId: string,
@@ -187,17 +253,41 @@ async function award(
   xp: number,
   day: string,
   source: string,
-): Promise<{ streak: number; streakIncreased: boolean; goalReached: boolean }> {
+  coins: number,
+): Promise<AwardOutcome> {
   const before = await xpOnDay(env, userId, day);
-  const streak = nextStreak({ streak: row.streak, lastDay: row.last_active_day }, day);
-  const lastDay = row.last_active_day && row.last_active_day > day ? row.last_active_day : day;
   const now = nowIso();
+  const boost = applyBoost(xp, row.xp_boost_until);
+
+  const firstToday = row.last_active_day !== day;
+  const missedOneDay =
+    firstToday && row.last_active_day !== null && dayGap(row.last_active_day, day) === 2;
+  let freezeUsed = false;
+  if (missedOneDay) {
+    const spent = await env.DB.prepare(
+      `UPDATE learn_inventory SET quantity = quantity - 1, updated_at = ?
+        WHERE user_id = ? AND item_key = 'streak_freeze' AND quantity > 0`,
+    )
+      .bind(now, userId)
+      .run();
+    freezeUsed = (spent.meta?.changes ?? 0) > 0;
+  }
+  const { streak } = streakWithFreeze(
+    { streak: row.streak, lastDay: row.last_active_day },
+    day,
+    freezeUsed ? 1 : 0,
+  );
+
+  const lastDay = row.last_active_day && row.last_active_day > day ? row.last_active_day : day;
+  const bonus = firstToday ? DAILY_LOGIN_COINS : 0;
+  const paid = coins + bonus;
+
   await env.DB.batch([
     env.DB.prepare('INSERT INTO learn_xp_log (id, user_id, day, xp, source, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(
       newId('xp'),
       userId,
       day,
-      xp,
+      boost.xp,
       source,
       now,
     ),
@@ -205,12 +295,19 @@ async function award(
       `UPDATE learn_profiles
           SET xp = xp + ?, streak = ?, best_streak = MAX(best_streak, ?), last_active_day = ?, updated_at = ?
         WHERE user_id = ?`,
-    ).bind(xp, streak, streak, lastDay, now, userId),
+    ).bind(boost.xp, streak, streak, lastDay, now, userId),
+    ...(paid > 0 ? coinStatements(env, { userId, day, delta: paid, reason: source, now }) : []),
   ]);
+
   return {
     streak,
     streakIncreased: streak > row.streak,
-    goalReached: before < row.daily_goal_xp && before + xp >= row.daily_goal_xp,
+    goalReached: before < row.daily_goal_xp && before + boost.xp >= row.daily_goal_xp,
+    xp: boost.xp,
+    boosted: boost.boosted,
+    freezeUsed,
+    coins: paid,
+    todayXp: before + boost.xp,
   };
 }
 
@@ -251,7 +348,14 @@ export async function completeLesson(env: Env, userId: string, input: LessonComp
     .bind(newId('ld'), userId, lesson.id, stars, accuracy, xp, now)
     .run();
 
-  const awarded = await award(env, userId, row, xp, day, `lesson:${lesson.id}`);
+  const coins = coinsForLesson({ correct, total, completionsBefore: existing?.completions ?? 0 });
+  const awarded = await award(env, userId, row, xp, day, `lesson:${lesson.id}`, coins);
+
+  // Daily quests are settled here as well as on the overview, so the finish
+  // screen can name the quest it just completed instead of the learner finding
+  // the coins later with no explanation.
+  const counters = await questCounters(env, userId, day, awarded.todayXp, row.daily_goal_xp);
+  const settled = await settleQuests(env, userId, day, counters);
 
   // Missed words go to the notebook so they come back for review. Only words
   // this lesson actually teaches are accepted, so a crafted request cannot use
@@ -278,14 +382,18 @@ export async function completeLesson(env: Env, userId: string, input: LessonComp
 
   const fresh = await ensureProfile(env, userId);
   return {
-    xpGained: xp,
+    xpGained: awarded.xp,
+    boosted: awarded.boosted,
+    coinsGained: awarded.coins + settled.coins,
     stars,
     newBest: !existing || stars > existing.stars,
     firstCompletion: !existing,
     wordsSaved,
     streak: awarded.streak,
     streakIncreased: awarded.streakIncreased,
+    freezeUsed: awarded.freezeUsed,
     goalReached: awarded.goalReached,
+    questsClaimed: settled.claimed,
     profile: await toProfile(env, userId, fresh, day),
     progress: {
       stars: Math.max(stars, existing?.stars ?? 0),
@@ -295,11 +403,7 @@ export async function completeLesson(env: Env, userId: string, input: LessonComp
   };
 }
 
-export async function completeReview(
-  env: Env,
-  userId: string,
-  input: ReviewResultInput,
-): Promise<{ xpGained: number; reviewed: number; profile: LearnProfile; streak: number; streakIncreased: boolean; goalReached: boolean }> {
+export async function completeReview(env: Env, userId: string, input: ReviewResultInput): Promise<ReviewCompletionResult> {
   const day = requireDay(input.day);
   const results = input.results.slice(0, MAX_EXERCISES);
   let reviewed = 0;
@@ -315,9 +419,21 @@ export async function completeReview(
   const row = await ensureProfile(env, userId);
   const allRight = results.every((result) => result.correct);
   const xp = reviewed * XP_REVIEW_PER_WORD + (allRight ? 5 : 0);
-  const awarded = await award(env, userId, row, xp, day, 'review');
+  const awarded = await award(env, userId, row, xp, day, 'review', coinsForReview(reviewed, allRight));
+  const counters = await questCounters(env, userId, day, awarded.todayXp, row.daily_goal_xp);
+  const settled = await settleQuests(env, userId, day, counters);
   const fresh = await ensureProfile(env, userId);
-  return { xpGained: xp, reviewed, profile: await toProfile(env, userId, fresh, day), ...awarded };
+  return {
+    xpGained: awarded.xp,
+    boosted: awarded.boosted,
+    coinsGained: awarded.coins + settled.coins,
+    reviewed,
+    streak: awarded.streak,
+    streakIncreased: awarded.streakIncreased,
+    goalReached: awarded.goalReached,
+    questsClaimed: settled.claimed,
+    profile: await toProfile(env, userId, fresh, day),
+  };
 }
 
 interface NotebookRow {

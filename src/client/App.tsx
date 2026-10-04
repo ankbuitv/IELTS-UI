@@ -16,6 +16,8 @@ import { StudentDashboardPage } from './pages/student/Dashboard';
 import { VocabularyPage } from './pages/student/VocabularyPage';
 import { LearnPage } from './pages/student/LearnPage';
 import { PlanPage } from './pages/student/PlanPage';
+import { ShopPage } from './pages/student/ShopPage';
+import { LeaderboardPage } from './pages/student/LeaderboardPage';
 import { LessonPage, ReviewPage } from './pages/student/LessonPages';
 import { DictionaryPage } from './pages/student/DictionaryPage';
 import { SpeakingPage } from './pages/student/SpeakingPage';
@@ -163,6 +165,22 @@ export function App() {
           element={
             <RequireAuth>
               <PlanPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="learn/shop"
+          element={
+            <RequireAuth>
+              <ShopPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="learn/leaderboard"
+          element={
+            <RequireAuth>
+              <LeaderboardPage />
             </RequireAuth>
           }
         />

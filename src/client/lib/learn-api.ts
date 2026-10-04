@@ -1,12 +1,15 @@
 import { api, queryString } from './api';
+import type { LeaderboardResponse, LeaderboardScope, LeaderboardWindow } from '@shared/leaderboard';
+import type { ShopItemKey, ShopState } from '@shared/shop';
 import type {
+  LessonCompletionResult,
+  ReviewCompletionResult,
+  TranslationResult,
   CatalogueResponse,
   DailyWordsResult,
   DictionaryEntry,
   LearnBand,
   LearnOverview,
-  LearnProfile,
-  LessonCompletionResult,
   LessonPlayPayload,
   LessonWord,
   PlanItemStatus,
@@ -31,15 +34,6 @@ export interface ReviewWord {
   level: number | null;
 }
 
-export interface ReviewCompletion {
-  xpGained: number;
-  reviewed: number;
-  profile: LearnProfile;
-  streak: number;
-  streakIncreased: boolean;
-  goalReached: boolean;
-}
-
 export const learnApi = {
   overview: () => api.get<LearnOverview>(`/api/learn/overview${queryString({ day: localDay() })}`),
   /** The path: every band summarised plus the lessons of one band. */
@@ -53,7 +47,7 @@ export const learnApi = {
   /** The due words plus the wrong-option pool for them, both from the catalogue. */
   reviewWords: () => api.get<{ words: ReviewWord[]; pool: LessonWord[] }>('/api/learn/review'),
   completeReview: (results: Array<{ id: string; correct: boolean }>) =>
-    api.post<ReviewCompletion>('/api/learn/review/complete', { results, day: localDay() }),
+    api.post<ReviewCompletionResult>('/api/learn/review/complete', { results, day: localDay() }),
   setBand: (band: LearnBand) => api.put<{ ok: true }>('/api/learn/band', { band }),
   setGoal: (goalXp: number) => api.put<{ ok: true }>('/api/learn/goal', { goalXp }),
   /** The active study plan, or null when the learner has not built one. */
@@ -67,4 +61,17 @@ export const learnApi = {
   ),
   buildPersonalLesson: () => api.post<{ lessonId: string; title: string }>('/api/learn/personal-lesson', { day: localDay() }),
   lookup: (term: string) => api.get<{ entry: DictionaryEntry }>(`/api/dictionary/lookup${queryString({ term })}`),
+  /** Vietnamese for one sentence, cached server-side; never fails on screen. */
+  translate: (text: string) => api.post<TranslationResult>('/api/learn/translate', { text }),
+
+  // ------------------------------------------------------------------ shop
+  shop: () => api.get<ShopState>('/api/learn/shop'),
+  buy: (key: ShopItemKey, quantity = 1) =>
+    api.post<{ state: ShopState; spent: number; owned: number }>('/api/learn/shop/buy', { key, quantity }),
+  useItem: (key: ShopItemKey) =>
+    api.post<{ state: ShopState; applied: boolean; detail: string }>('/api/learn/items/use', { key }),
+
+  // ---------------------------------------------------------- leaderboards
+  leaderboard: (scope: LeaderboardScope, window: LeaderboardWindow) =>
+    api.get<LeaderboardResponse>(`/api/learn/leaderboard${queryString({ scope, window, day: localDay() })}`),
 };

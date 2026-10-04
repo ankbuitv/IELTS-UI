@@ -7,7 +7,9 @@
  *
  *   1. ensures the bootstrap administrator exists,
  *   2. creates a TEACHER and a STUDENT account (idempotent),
- *   3. publishes the original sample tests that ship as DRAFT in seed/seed.sql.
+ *   3. plays two Learn lessons as the demo student, on a profile that has never
+ *      been used, so the path shows progress and the shop has coins in it,
+ *   4. publishes the original sample tests that ship as DRAFT in seed/seed.sql.
  *
  * It talks to the running Worker over HTTP, so it uses exactly the same code
  * paths (hashing, validation, publishing) a human would. It never touches a
@@ -60,6 +62,13 @@ function createClient() {
 
 const log = (...args) => console.log(...args);
 
+/** The learner's own calendar day (`YYYY-MM-DD`), the same shape the app sends. */
+function today() {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 async function ensureAccount(client, account, { registerPath = '/api/auth/register', register = true } = {}) {
   if (register) {
     const payload = {
@@ -105,6 +114,49 @@ async function ensureTeacher(admin, account) {
   });
   if (created.status === 201) return { created: true, promoted: false, role: account.role };
   return { created: false, promoted: false, error: created.body };
+}
+
+/**
+ * Two lessons finished, so the demo does not open on an empty wallet: the path
+ * shows a first step taken, and the shop's cheapest items are affordable.
+ *
+ * Guarded by "the profile has never earned XP", which keeps the script
+ * idempotent — a second run must not mint coins — and it reports what it did
+ * rather than failing the whole provisioning run if the Learn API is unhappy.
+ */
+async function seedHeadStart(student) {
+  const overview = await student.get(`/api/learn/overview?day=${today()}`);
+  const profile = overview.body?.profile;
+  if (!profile) return { skipped: `overview unavailable (${overview.status})` };
+  if (profile.xp > 0) return { skipped: 'profile already in use', coins: profile.coins ?? 0 };
+
+  const catalogue = await student.get('/api/learn/catalogue');
+  const lessons = (catalogue.body?.selected?.units ?? []).flatMap((unit) => unit.lessons).slice(0, 2);
+  if (lessons.length === 0) return { skipped: 'no lessons in the catalogue' };
+
+  let coins = profile.coins ?? 0;
+  let done = 0;
+  for (const lesson of lessons) {
+    const detail = await student.get(`/api/learn/lessons/${encodeURIComponent(lesson.id)}`);
+    const words = detail.body?.lesson?.payload?.words?.length ?? 0;
+    // A vocabulary lesson plans roughly two questions per word (choose, fill,
+    // match, listen, type, order — the plan itself lives in the lesson engine
+    // the browser runs). The Worker validates the shape of a result, not the
+    // engine's private plan, and a demo profile has earned a perfect run.
+    const total = Math.min(12, Math.max(4, words * 2));
+    if (words === 0) continue;
+    const result = await student.post('/api/learn/lessons/complete', {
+      lessonId: lesson.id,
+      correct: total,
+      total,
+      mistakes: [],
+      day: today(),
+    });
+    if (result.status !== 200) return { skipped: `lesson ${lesson.id} could not be completed (${result.status})`, coins, done };
+    coins += result.body?.coinsGained ?? 0;
+    done += 1;
+  }
+  return { coins, done };
 }
 
 async function main() {
@@ -153,7 +205,17 @@ async function main() {
     log(`  ! student  ${ACCOUNTS.student.email} could not be prepared: ${JSON.stringify(studentAccount.body)}`);
   }
 
-  // 4. Publish the sample content so /practice is not empty.
+  // 4. A head start for the demo learner, so /learn/shop has something to spend.
+  if (studentAccount.body?.user) {
+    const head = await seedHeadStart(student);
+    if (head.skipped) {
+      log(`  · student  head start skipped (${head.skipped})`);
+    } else {
+      log(`  ✓ student  head start: ${head.done} lessons, ${head.coins} coins, streak 1`);
+    }
+  }
+
+  // 5. Publish the sample content so /practice is not empty.
   const tests = await admin.get('/api/admin/tests');
   const list = tests.body?.tests ?? [];
   let published = 0;
