@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { ALLOWED_AVATAR_EXTENSIONS, MAX_AVATAR_BYTES, sniffAvatarBytes, validateAvatarFilename, validateAvatarMime } from '@shared/avatar';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiRequestError, api, describeError, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
-import { useInputLockdown } from '../../hooks/useInputLockdown';
 import {
   Badge,
   Button,
@@ -178,13 +178,38 @@ export function PracticePage() {
   if (error) return <Notice tone="danger">{error}</Notice>;
 
   return (
-    <div className="stack">
-      <div className="page-head">
-        <div>
+    <div className="stack practice-page">
+      <section className="practice-hero">
+        <div className="practice-hero__main">
+          <p className="practice-hero__kicker">Official IELTS Practice</p>
           <h1>Practice tests</h1>
-          <p className="page-head__meta">Published and frozen by an administrator, newest first. A version never changes underneath you.</p>
+          <p className="practice-hero__sub">
+            Timed Reading, Listening and Writing papers plus AI-marked Speaking drills. Pick a skill below or sit a full paper in Exam mode.
+          </p>
+          <div className="practice-hero__stats" aria-label="Catalogue summary">
+            <span>
+              <Icon name="layers" size={14} />
+              <b>{all.length}</b> published {all.length === 1 ? 'paper' : 'papers'}
+            </span>
+            <span>
+              <Icon name="sparkle" size={14} />
+              Instant band estimate &amp; AI writing feedback
+            </span>
+          </div>
         </div>
-      </div>
+        <div className="practice-hero__mode">
+          <div className="practice-mode-card">
+            <div className="practice-mode-card__top">
+              <Icon name={strict ? 'shieldCheck' : 'book'} size={18} />
+              <div>
+                <b>{strict ? 'Exam mode' : 'Practice mode'}</b>
+                <small>{strict ? 'Fullscreen + strict focus lock' : 'Flexible timing & instant review'}</small>
+              </div>
+            </div>
+            <Checkbox checked={strict} onChange={setStrict} label="Switch on strict exam mode" />
+          </div>
+        </div>
+      </section>
 
       <div className="skill-tiles" role="group" aria-label="Filter by paper">
         {SKILL_TILES.filter((tile) => tile.type !== 'FULL_MOCK' || (counts.FULL_MOCK ?? 0) > 0).map((tile) => {
@@ -204,7 +229,7 @@ export function PracticePage() {
               </span>
               <span className="skill-tile__text">
                 <b>{tile.label}</b>
-                <small>{count === 0 ? 'None published yet' : `${count} test${count === 1 ? '' : 's'}`}</small>
+                <small>{count === 0 ? 'None yet' : `${count} test${count === 1 ? '' : 's'}`}</small>
               </span>
             </button>
           );
@@ -215,24 +240,24 @@ export function PracticePage() {
           </span>
           <span className="skill-tile__text">
             <b>Speaking</b>
-            <small>Record and get feedback</small>
+            <small>Record &amp; AI score</small>
           </span>
           <Icon name="arrowRight" size={16} strokeWidth={2.2} className="skill-tile__go" />
         </Link>
       </div>
 
-      <div className="toolbar toolbar--end">
-        <div className="toolbar__end">
-          <label className="search">
-            <Icon name="search" size={15} />
-            <input
-              type="search"
-              value={search}
-              placeholder="Search tests"
-              aria-label="Search tests"
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </label>
+      <div className="practice-toolbar">
+        <label className="search practice-toolbar__search">
+          <Icon name="search" size={15} />
+          <input
+            type="search"
+            value={search}
+            placeholder="Search by title or topic…"
+            aria-label="Search tests"
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+        <div className="practice-toolbar__controls">
           <select value={sort} aria-label="Sort tests" onChange={(event) => setSort(event.target.value as SortKey)}>
             {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
               <option key={key} value={key}>
@@ -240,9 +265,6 @@ export function PracticePage() {
               </option>
             ))}
           </select>
-          <span title="Exam mode also blocks copy and paste and records fullscreen exits for your teacher. The tab lock (three strikes, then the attempt is submitted) applies in every mode.">
-            <Checkbox checked={strict} onChange={setStrict} label="Exam mode" />
-          </span>
         </div>
       </div>
 
@@ -529,7 +551,8 @@ export function AttemptResultPage() {
   const { attemptId = '' } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  useInputLockdown();
+  // Right-click and the developer tools are refused by the shell that renders
+  // this page (AppShell), so the result screen does not mount its own copy.
   const [restarting, setRestarting] = useState<string | null>(null);
   const { data, loading, error, reload } = useAsync<AttemptResultPayload>(
     () => api.get(`/api/attempts/${attemptId}/result`),
@@ -705,6 +728,32 @@ function JoinByCode() {
   );
 }
 
+function profileInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).slice(0, 2);
+  return parts.map((part) => part[0]?.toUpperCase() ?? '').join('') || '?';
+}
+
+function fileToBase64(file: File): Promise<{ base64: string; bytes: Uint8Array }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read the selected file.'));
+    reader.onload = () => {
+      const buffer = reader.result;
+      if (!(buffer instanceof ArrayBuffer)) {
+        reject(new Error('Could not read the selected file.'));
+        return;
+      }
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      }
+      resolve({ base64: btoa(binary), bytes });
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 export function ProfilePage() {
   const { user, refresh } = useAuth();
   const toast = useToast();
@@ -712,7 +761,71 @@ export function ProfilePage() {
   const [targetBand, setTargetBand] = useState('');
   const [passwords, setPasswords] = useState({ current: '', next: '' });
   const [busy, setBusy] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
   const [tabs, setTabs] = useState<'profile' | 'security'>('profile');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const onPickAvatar = async (file: File | null) => {
+    if (!file) return;
+    setAvatarError(null);
+    const nameCheck = validateAvatarFilename(file.name);
+    if (!nameCheck.ok) {
+      setAvatarError(nameCheck.reason);
+      toast.push(nameCheck.reason, 'error');
+      return;
+    }
+    const mimeCheck = validateAvatarMime(file.type, nameCheck.extension);
+    if (!mimeCheck.ok) {
+      setAvatarError(mimeCheck.reason);
+      toast.push(mimeCheck.reason, 'error');
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      const msg = 'Avatar must be 2 MB or smaller.';
+      setAvatarError(msg);
+      toast.push(msg, 'error');
+      return;
+    }
+    setAvatarBusy(true);
+    try {
+      const { base64, bytes } = await fileToBase64(file);
+      const sniff = sniffAvatarBytes(bytes, nameCheck.extension);
+      if (!sniff.ok) {
+        setAvatarError(sniff.reason);
+        toast.push(sniff.reason, 'error');
+        return;
+      }
+      await api.post('/api/auth/avatar', {
+        filename: file.name,
+        mime: sniff.mime,
+        dataBase64: base64,
+      });
+      await refresh();
+      toast.push('Avatar updated.', 'success');
+    } catch (uploadError) {
+      const msg = describeError(uploadError);
+      setAvatarError(msg);
+      toast.push(msg, 'error');
+    } finally {
+      setAvatarBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const onRemoveAvatar = async () => {
+    setAvatarError(null);
+    setAvatarBusy(true);
+    try {
+      await api.delete('/api/auth/avatar');
+      await refresh();
+      toast.push('Avatar removed.', 'success');
+    } catch (removeError) {
+      toast.push(describeError(removeError), 'error');
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
 
   return (
     <div className="stack">
@@ -728,6 +841,52 @@ export function ProfilePage() {
 
       {tabs === 'profile' ? (
         <Card title="Profile details" hint={user?.email}>
+          <div className="avatar-picker">
+            <div className="avatar-picker__preview" aria-label="Your avatar">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user.displayName} />
+              ) : (
+                <span>{profileInitials(user?.displayName || 'U')}</span>
+              )}
+            </div>
+            <div className="avatar-picker__body">
+              <div className="avatar-picker__title">Avatar</div>
+              <p className="muted small">
+                Accepted formats: {ALLOWED_AVATAR_EXTENSIONS.map((ext) => `.${ext}`).join(', ')} (up to 2 MB). Double extensions such as <code>.php.jpg</code> are blocked.
+              </p>
+              <div className="avatar-picker__actions">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
+                  style={{ display: 'none' }}
+                  aria-label="Upload avatar image"
+                  onChange={(event) => void onPickAvatar(event.target.files?.[0] ?? null)}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  loading={avatarBusy}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Icon name="upload" size={14} />
+                  {user?.avatarUrl ? 'Change avatar' : 'Upload avatar'}
+                </Button>
+                {user?.avatarUrl ? (
+                  <Button type="button" size="sm" variant="ghost" disabled={avatarBusy} onClick={() => void onRemoveAvatar()}>
+                    <Icon name="trash" size={14} />
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+              {avatarError ? (
+                <p className="avatar-picker__error" role="alert">
+                  {avatarError}
+                </p>
+              ) : null}
+            </div>
+          </div>
           <Field label="Display name" required>
             {(id) => <TextInput id={id} value={displayName} onChange={(event) => setDisplayName(event.target.value)} />}
           </Field>

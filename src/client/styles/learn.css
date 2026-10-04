@@ -32,11 +32,20 @@
 
 .learn__grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 22px; align-items: start; }
 .learn__path { grid-column: 1; grid-row: 1; min-width: 0; display: flex; flex-direction: column; gap: 26px; }
-.learn__today { grid-column: 2; grid-row: 1; position: sticky; top: calc(var(--topbar-height) + 16px); display: flex; flex-direction: column; gap: 14px; }
+/* `min-width: 0` matters more than it looks: without it the cards' intrinsic
+   width (a nowrap heading, a quest label, the word list) becomes the grid's
+   floor, and on a phone the whole page grew to 1237 px and could not be read. */
+.learn__today { grid-column: 2; grid-row: 1; position: sticky; top: calc(var(--topbar-height) + 16px); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 
-.learn-card { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
-.learn-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.learn-card__head h2 { margin: 0; white-space: nowrap; font-size: 1rem; font-weight: 800; color: var(--ink-950); letter-spacing: -0.01em; }
+.learn-card { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+/* The head wraps instead of squeezing: in the two-column phone layout a card is
+   only ~170 px wide, and a title that shrinks to nothing (the alternative) reads
+   as a broken card. The title keeps a minimum, the controls drop to their own
+   line when they do not fit. */
+.learn-card__head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
+.learn-card__head h2 { margin: 0; flex: 1 1 auto; min-width: 9ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1rem; font-weight: 800; color: var(--ink-950); letter-spacing: -0.01em; }
+.learn-card__head > :last-child { flex: none; max-width: 100%; }
+.learn-card__head .row { flex-wrap: wrap; justify-content: flex-end; }
 .learn-card__count { min-width: 24px; padding: 0 7px; border-radius: 99px; background: var(--brand-600); color: #fff; font-size: 0.78rem; font-weight: 800; text-align: center; line-height: 24px; }
 .learn-card__link { display: inline-flex; align-items: center; gap: 5px; font-size: 0.86rem; font-weight: 700; color: var(--brand-700); }
 .learn-card p { margin: 0; }
@@ -45,7 +54,16 @@
 .daily-words { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .daily-words li { padding: 9px 0; border-top: 1px solid var(--ink-100); display: flex; flex-direction: column; gap: 2px; }
 .daily-words li:first-child { border-top: 0; padding-top: 2px; }
-.daily-words__top { display: flex; align-items: center; gap: 8px; }
+/* One line per word: the term, its part of speech, and the two round buttons.
+   On a phone the card (and its side-scrolling chips) is ~160 px wide, so the
+   term is the part that gives way — `min-width: 0` + ellipsis — and the buttons
+   never shrink. Without this the row overflowed the chip and the second button
+   was left outside it, invisible. */
+.daily-words__top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.daily-words__top .daily-words__term { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-words__top .muted { flex: none; }
+.daily-words__top .vocab-item__speak { flex: none; }
+.daily-words__top .vocab-item__speak:first-of-type { margin-left: auto; }
 .daily-words__top b { color: var(--ink-950); font-size: 1rem; font-weight: 700; }
 .daily-words__vi { font-size: 0.86rem; color: var(--ink-600); }
 
@@ -262,16 +280,25 @@
 
 /* ------------------------------------------------------------- responsive */
 @media (max-width: 960px) {
-  .learn__grid { grid-template-columns: 1fr; }
-  /* Phones: today's words scroll sideways and review / level sit side by side, so the path is never far below the fold. */
-  .learn__today { grid-column: 1; grid-row: 1; position: static; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .learn__grid { grid-template-columns: minmax(0, 1fr); }
+  /* Phones: today's words scroll sideways and review / level sit side by side, so the path is never far below the fold.
+     `minmax(0, 1fr)` (not `1fr`) on every track of every grid in this page: a plain
+     `fr` track cannot shrink below the widest word/heading inside it. */
+  .learn__today { grid-column: 1; grid-row: 1; position: static; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
   .learn__today > .learn-card:first-child { grid-column: 1 / -1; }
   .learn__today .daily-words { flex-direction: row; overflow-x: auto; gap: 8px; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
-  .learn__today .daily-words li { flex: none; min-width: 160px; border: 1px solid var(--ink-200); border-radius: var(--radius); padding: 10px 12px; }
+  /* One chip per swipe, exactly as wide as the strip: a 160 px chip inside a
+     158 px card used to put the last button of the row just outside the card,
+     where it could not be seen or tapped. */
+  .learn__today .daily-words li { flex: none; width: 100%; min-width: 0; border: 1px solid var(--ink-200); border-radius: var(--radius); padding: 10px 12px; }
   .learn__today .daily-words li:first-child { border-top: 1px solid var(--ink-200); padding-top: 10px; }
   .learn__path { grid-column: 1; grid-row: 2; }
 }
 @media (max-width: 720px) {
+  /* One card per row on a phone: a two-column side panel is ~170 px wide, which
+     truncated a word to "c…" and a classmate to "Demo Stu…" — the cards are
+     worth more than the 300 px of page height the second column saved. */
+  .learn__today { grid-template-columns: minmax(0, 1fr); }
   .learn__stats { grid-template-columns: 1fr 1fr; }
   .learn-stat--goal { grid-column: 1 / -1; }
   .node-row { padding-left: calc(50% - 92px + var(--offset, 0px) * 0.5); }
@@ -483,6 +510,60 @@
 .fx-streak { position: absolute; inset: -10px; border-radius: 50%; border: 3px solid var(--sun-400); animation: fx-ring 900ms ease-out forwards; pointer-events: none; }
 @keyframes fx-ring { from { transform: scale(0.5); opacity: 0.9; } to { transform: scale(1.5); opacity: 0; } }
 
+/* A run of five right answers, ten, fifteen and every five after that: a banner
+   over the lesson that outranks the badge in the footer. Three tiers, each with
+   its own colour — gold, brand red, violet — and a bigger fall of confetti and
+   ring behind it (the confetti is the caller's, so the two always agree). The
+   whole thing lives for 2.6 s and then fades itself out: no timers in JS. */
+.fx-milestone {
+  position: fixed; inset: 0; z-index: 72; display: grid; place-items: center;
+  pointer-events: none; overflow: hidden; animation: fx-milestone-out 2600ms ease-out forwards;
+}
+.fx-milestone--t1 { --fx-milestone: var(--sun-500); --fx-milestone-deep: var(--sun-600); --fx-milestone-soft: var(--sun-soft); --fx-milestone-ink: var(--sun-ink); }
+.fx-milestone--t2 { --fx-milestone: var(--brand-500); --fx-milestone-deep: var(--brand-600); --fx-milestone-soft: var(--brand-50); --fx-milestone-ink: var(--brand-800); }
+.fx-milestone--t3 { --fx-milestone: var(--violet); --fx-milestone-deep: #5a338f; --fx-milestone-soft: var(--violet-soft); --fx-milestone-ink: #4a2a7a; }
+
+.fx-milestone__ring {
+  position: absolute; width: min(360px, 84vw); aspect-ratio: 1; border-radius: 50%;
+  border: 4px solid var(--fx-milestone, var(--sun-500)); opacity: 0;
+  animation: fx-milestone-ring 1100ms ease-out forwards;
+}
+.fx-milestone__ring--late { animation-delay: 220ms; border-width: 2px; }
+
+.fx-milestone__card {
+  position: relative; z-index: 6; /* above the banner's own confetti (z-index 4) */
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  width: min(440px, calc(100vw - 32px)); padding: 14px 22px 16px; text-align: center;
+  background: var(--paper); color: var(--ink-950);
+  border: 3px solid var(--fx-milestone, var(--sun-500)); border-radius: 24px;
+  box-shadow: 0 22px 44px -20px rgba(14, 26, 43, 0.5), 0 6px 0 var(--fx-milestone-deep, var(--sun-600));
+  animation: fx-milestone-pop 560ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.fx-milestone__mascot { display: block; margin-bottom: -6px; }
+.fx-milestone__title {
+  padding: 3px 12px; border-radius: 99px;
+  background: var(--fx-milestone-soft, var(--sun-soft)); color: var(--fx-milestone-ink, var(--sun-ink));
+  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+}
+.fx-milestone__count {
+  font-size: clamp(1.9rem, 8vw, 2.5rem); font-weight: 800; line-height: 1.05;
+  letter-spacing: -0.03em; font-variant-numeric: tabular-nums;
+  color: var(--fx-milestone-ink, var(--sun-ink));
+}
+.fx-milestone__count em { font-style: normal; font-size: 0.9rem; font-weight: 700; letter-spacing: 0; }
+.fx-milestone__note { font-size: 0.84rem; line-height: 1.4; color: var(--ink-600); text-wrap: balance; }
+
+@keyframes fx-milestone-pop {
+  0% { opacity: 0; transform: translateY(16px) scale(0.7); }
+  60% { opacity: 1; transform: translateY(0) scale(1.05); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes fx-milestone-ring {
+  0% { opacity: 0.7; transform: scale(0.32); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+@keyframes fx-milestone-out { 0%, 82% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+
 /* ------------------------------------------------------- tap-to-look-up */
 .lookup-text { display: inline; }
 .lookup-word { display: inline; padding: 0 1px; margin: 0; border: 0; background: none; font: inherit; color: inherit; text-align: inherit; cursor: pointer; border-radius: 4px; border-bottom: 2px dotted rgba(20, 35, 58, 0.22); }
@@ -659,8 +740,24 @@
 /* Motion is decoration here; colour and number still carry the meaning. */
 @media (prefers-reduced-motion: reduce) {
   .mascot__art, .mascot__sparkles, .mascot__tear, .mascot__mark--zzz, .fx-confetti i, .fx-float, .fx-flash, .fx-combo, .fx-streak,
-  .arena__stat.is-hot svg, .node-start {
+  .fx-milestone__card, .arena__stat.is-hot svg, .node-start {
     animation: none !important;
   }
-  .fx-confetti { display: none; }
+  .fx-confetti, .fx-milestone__ring { display: none; }
+  /* The banner still has to leave: its fade-out is the one animation kept, so a
+     learner who asked for less motion is told about the run and not left with a
+     card sitting over the question. */
 }
+
+
+/* Top-three rank mark (SVG, never an emoji so no device renders a tofu box). */
+.medal { display: inline-grid; place-items: center; line-height: 1; vertical-align: middle; }
+.medal--1 { color: #d99100; filter: drop-shadow(0 1px 0 rgba(217, 145, 0, 0.25)); }
+.medal--2 { color: #64748b; }
+.medal--3 { color: #b45309; }
+.podium__avatar, .board__avatar { overflow: hidden; }
+.podium__avatar img, .board__avatar img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }
+.lesson__coins { display: inline-flex; align-items: center; gap: 4px; }
+.lesson__coins svg { color: var(--sun-600, #b8860b); flex: none; }
+.lesson__boost { display: inline-flex; align-items: center; gap: 3px; }
+.fx-float { display: inline-flex; align-items: center; gap: 4px; }

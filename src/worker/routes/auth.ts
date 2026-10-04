@@ -20,6 +20,10 @@ import { recordAudit } from '../lib/audit';
 import { currentUser } from '../middleware/auth';
 import { parseBody } from '../lib/validate';
 import { loadPlatformSettings } from '../lib/settings';
+import { newId, nowIso } from '../lib/ids';
+import { base64ToBytes, deleteBlob, getBlob, putBlob } from '../services/blob-store';
+import { avatarUrlFor } from '../services/auth-service';
+import { MAX_AVATAR_BYTES, sniffAvatarBytes, validateAvatarFilename, validateAvatarMime } from '../../shared/avatar';
 import { resolveSession } from '../services/auth-service';
 import { getSessionToken } from '../lib/http';
 
@@ -166,7 +170,7 @@ router.patch('/profile', async (c) => {
   );
   await updateProfile(c.env, user.id, body);
   const updated = await c.env.DB.prepare(
-    `SELECT u.id, u.email, u.role, u.status, u.created_at, u.last_login_at, p.display_name
+    `SELECT u.id, u.email, u.role, u.status, u.created_at, u.last_login_at, p.display_name, p.avatar_asset_id
        FROM users u LEFT JOIN user_profiles p ON p.user_id = u.id WHERE u.id = ?`,
   )
     .bind(user.id)
@@ -178,6 +182,7 @@ router.patch('/profile', async (c) => {
       created_at: string;
       last_login_at: string | null;
       display_name: string | null;
+      avatar_asset_id: string | null;
     }>();
   return c.json({
     user: updated
@@ -191,6 +196,131 @@ router.patch('/profile', async (c) => {
           locked_until: null,
         })
       : user,
+  });
+});
+
+
+router.post('/avatar', async (c) => {
+  assertSameOrigin(c);
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      filename: z.string().min(1).max(200),
+      mime: z.string().max(100).optional(),
+      dataBase64: z.string().min(8).max(Math.ceil((MAX_AVATAR_BYTES * 4) / 3) + 2048),
+    }),
+  );
+
+  const nameCheck = validateAvatarFilename(body.filename);
+  if (!nameCheck.ok) throw ApiError.validation(nameCheck.reason);
+
+  const mimeCheck = validateAvatarMime(body.mime, nameCheck.extension);
+  if (!mimeCheck.ok) throw ApiError.validation(mimeCheck.reason);
+
+  const payload = body.dataBase64.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
+  if (!/^[A-Za-z0-9+/=_-]+$/.test(payload)) {
+    throw ApiError.validation('Invalid image encoding.');
+  }
+
+  let bytes: Uint8Array;
+  try {
+    bytes = base64ToBytes(payload);
+  } catch {
+    throw ApiError.validation('Invalid image data.');
+  }
+
+  const sniff = sniffAvatarBytes(bytes, nameCheck.extension);
+  if (!sniff.ok) throw ApiError.validation(sniff.reason);
+
+  const prev = await c.env.DB.prepare('SELECT avatar_asset_id FROM user_profiles WHERE user_id = ?')
+    .bind(user.id)
+    .first<{ avatar_asset_id: string | null }>();
+
+  const assetId = newId('ast');
+  const timestamp = nowIso();
+
+  await c.env.DB.prepare(
+    `INSERT INTO assets (id, kind, storage_kind, external_url, filename, mime, size_bytes, alt_text,
+                         visibility, uploaded_by, created_at, updated_at)
+     VALUES (?, 'IMAGE', 'OBJECT_STORAGE', NULL, ?, ?, ?, 'Avatar', 'PRIVATE', ?, ?, ?)`,
+  )
+    .bind(assetId, nameCheck.sanitizedFilename, sniff.mime, bytes.byteLength, user.id, timestamp, timestamp)
+    .run();
+
+  await putBlob(c.env, 'asset_blobs', 'asset_id', assetId, payload, {
+    mime: sniff.mime,
+    bytes: bytes.byteLength,
+  });
+
+  await c.env.DB.prepare(
+    `INSERT INTO user_profiles (user_id, display_name, avatar_asset_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (user_id) DO UPDATE SET avatar_asset_id = excluded.avatar_asset_id, updated_at = excluded.updated_at`,
+  )
+    .bind(user.id, user.displayName, assetId, timestamp, timestamp)
+    .run();
+
+  const previousId = (prev?.avatar_asset_id ?? '').trim();
+  if (previousId && previousId !== assetId) {
+    await deleteBlob(c.env, 'asset_blobs', 'asset_id', previousId);
+    await c.env.DB.prepare('DELETE FROM assets WHERE id = ? AND uploaded_by = ?').bind(previousId, user.id).run();
+  }
+
+  const avatarUrl = avatarUrlFor(user.id, assetId);
+  return c.json({ avatarUrl, user: { ...user, avatarUrl } });
+});
+
+router.delete('/avatar', async (c) => {
+  assertSameOrigin(c);
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+
+  const prev = await c.env.DB.prepare('SELECT avatar_asset_id FROM user_profiles WHERE user_id = ?')
+    .bind(user.id)
+    .first<{ avatar_asset_id: string | null }>();
+  const previousId = (prev?.avatar_asset_id ?? '').trim();
+
+  await c.env.DB.prepare('UPDATE user_profiles SET avatar_asset_id = ?, updated_at = ? WHERE user_id = ?')
+    .bind('', nowIso(), user.id)
+    .run();
+
+  if (previousId) {
+    await deleteBlob(c.env, 'asset_blobs', 'asset_id', previousId);
+    await c.env.DB.prepare('DELETE FROM assets WHERE id = ? AND uploaded_by = ?').bind(previousId, user.id).run();
+  }
+
+  return c.json({ avatarUrl: null, user: { ...user, avatarUrl: null } });
+});
+
+router.get('/avatar/:userId', async (c) => {
+  const targetUserId = c.req.param('userId');
+  const row = await c.env.DB.prepare(
+    `SELECT p.avatar_asset_id AS asset_id, a.mime AS mime
+       FROM user_profiles p
+       JOIN assets a ON a.id = p.avatar_asset_id
+      WHERE p.user_id = ? AND p.avatar_asset_id != ''`,
+  )
+    .bind(targetUserId)
+    .first<{ asset_id: string; mime: string }>();
+
+  if (!row) throw ApiError.notFound('Avatar not found.');
+  const stored = await getBlob(c.env, 'asset_blobs', 'asset_id', row.asset_id);
+  if (!stored) throw ApiError.notFound('Avatar not found.');
+
+  const bytes = base64ToBytes(stored.base64);
+  const mime = row.mime || stored.mime || 'image/png';
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      'content-type': mime,
+      'content-length': String(bytes.byteLength),
+      'cache-control': 'private, max-age=3600',
+      'x-content-type-options': 'nosniff',
+      // Prevents any script execution if a user opens an SVG avatar URL directly.
+      'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+    },
   });
 });
 

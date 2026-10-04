@@ -66,6 +66,7 @@ export interface ApiUser {
   role: Role;
   status: string;
   displayName: string;
+  avatarUrl?: string | null;
   createdAt: string;
   lastLoginAt: string | null;
 }

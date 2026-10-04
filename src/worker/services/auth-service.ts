@@ -65,19 +65,25 @@ interface UserRow {
   failed_login_count: number;
   locked_until: string | null;
   display_name: string | null;
+  avatar_asset_id?: string | null;
 }
 
 async function findUserByEmail(env: Env, email: string): Promise<UserRow | null> {
   return env.DB.prepare(
     `SELECT u.id, u.email, u.role, u.status, u.password_hash, u.password_salt, u.password_iterations,
             u.password_algo, u.created_at, u.last_login_at, u.failed_login_count, u.locked_until,
-            p.display_name
+            p.display_name, p.avatar_asset_id
        FROM users u
        LEFT JOIN user_profiles p ON p.user_id = u.id
       WHERE u.email = ?`,
   )
     .bind(email)
     .first<UserRow>();
+}
+
+export function avatarUrlFor(userId: string, assetId: string | null | undefined): string | null {
+  const clean = (assetId ?? '').trim();
+  return clean ? `/api/auth/avatar/${encodeURIComponent(userId)}?v=${encodeURIComponent(clean)}` : null;
 }
 
 export function toAuthUser(row: UserRow): AuthUser {
@@ -89,6 +95,7 @@ export function toAuthUser(row: UserRow): AuthUser {
     displayName: row.display_name ?? row.email.split('@')[0] ?? 'User',
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at,
+    avatarUrl: avatarUrlFor(row.id, row.avatar_asset_id),
   };
 }
 
@@ -255,7 +262,7 @@ export async function resolveSession(env: Env, token: string): Promise<ResolvedS
   const id = await hashSessionToken(token, env.SESSION_SECRET ?? 'dev-pepper');
   const row = await env.DB.prepare(
     `SELECT s.id AS session_id, s.csrf_token, s.expires_at, s.revoked_at,
-            u.id, u.email, u.role, u.status, u.created_at, u.last_login_at, p.display_name
+            u.id, u.email, u.role, u.status, u.created_at, u.last_login_at, p.display_name, p.avatar_asset_id
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        LEFT JOIN user_profiles p ON p.user_id = u.id
@@ -274,6 +281,7 @@ export async function resolveSession(env: Env, token: string): Promise<ResolvedS
       created_at: string;
       last_login_at: string | null;
       display_name: string | null;
+      avatar_asset_id: string | null;
     }>();
 
   if (!row) return null;
@@ -290,6 +298,7 @@ export async function resolveSession(env: Env, token: string): Promise<ResolvedS
       displayName: row.display_name ?? row.email,
       createdAt: row.created_at,
       lastLoginAt: row.last_login_at,
+      avatarUrl: avatarUrlFor(row.id, row.avatar_asset_id),
     },
     session: {
       id: row.session_id,

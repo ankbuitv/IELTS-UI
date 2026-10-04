@@ -3,8 +3,9 @@
  *
  * One sound per event, and no two events share one: a tap is a click, a right
  * answer is a rising third, a wrong one is a falling buzz, a lost heart is a
- * thud, a combo climbs a pentatonic ladder, and finishing a lesson is a
- * different fanfare from finishing a perfect one. The point of the variety is
+ * thud, a combo climbs a pentatonic ladder, a milestone run of five (or ten, or
+ * fifteen) lands a longer arpeggio the further the run has climbed, and
+ * finishing a lesson is a different fanfare from finishing a perfect one. The point of the variety is
  * that the learner stops reading the screen to know how it went — the sound
  * carries the verdict on its own.
  *
@@ -130,6 +131,7 @@ export const SFX_NAMES = [
   'heartLost',
   'outOfHearts',
   'combo',
+  'milestone',
   'match',
   'reveal',
   'hint',
@@ -157,6 +159,7 @@ export const SFX_LIBRARY: Array<{ name: SfxName; label: string; when: string }> 
   { name: 'match', label: 'Match', when: 'A pair clicks together' },
   { name: 'correct', label: 'Correct', when: 'A right answer' },
   { name: 'combo', label: 'Combo', when: 'Right answers in a row' },
+  { name: 'milestone', label: 'Milestone', when: 'Five in a row, then every five after that' },
   { name: 'almost', label: 'Almost', when: 'Right, but a slip' },
   { name: 'wrong', label: 'Wrong', when: 'A wrong answer' },
   { name: 'heartLost', label: 'Heart lost', when: 'One heart fewer' },
@@ -231,6 +234,19 @@ function playSound(name: SfxName, level = 1): void {
         [frequency, { duration: 0.07, type: 'square', gain: 0.03 }],
         [frequency * 1.5, { delay: 0.06, duration: 0.11, type: 'sine', gain: 0.05 }],
       ]);
+      break;
+    }
+    case 'milestone': {
+      // A bigger climb per tier: five in a row is a run, fifteen is a habit.
+      const ladder = [523.25, 659.25, 783.99, 1046.5, 1318.51, 1567.98];
+      const steps = level >= 3 ? 6 : level >= 2 ? 5 : 4;
+      const climb: Array<[number, ToneOptions]> = ladder.slice(0, steps).map((frequency, index) => [
+        frequency,
+        { delay: index * 0.07, duration: 0.16 + index * 0.02, type: 'triangle', gain: 0.05 - index * 0.004 },
+      ]);
+      notes(climb);
+      tone(261.63, { duration: 0.34, type: 'sine', gain: 0.05, to: 392 });
+      noise({ delay: steps * 0.07, duration: 0.35 + level * 0.12, gain: 0.012 + level * 0.006, from: 2200, to: 5400 + level * 900, q: 0.5 });
       break;
     }
     case 'match':
