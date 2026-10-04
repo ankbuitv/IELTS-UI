@@ -234,7 +234,7 @@ export function AppShell() {
                   aria-expanded={panelOpen}
                   onClick={() => setPanelOpen((open) => !open)}
                 >
-                  {initials(user.displayName)}
+                  {user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : initials(user.displayName)}
                 </button>
               </>
             ) : (
@@ -283,7 +283,7 @@ export function AppShell() {
           <div className="more-panel" role="menu" aria-label="More">
             <div className="more-panel__who">
               <span className="site-avatar site-avatar--lg" aria-hidden="true">
-                {initials(user.displayName)}
+                {user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : initials(user.displayName)}
               </span>
               <span className="more-panel__who-text">
                 <strong title={user.displayName}>{user.displayName}</strong>

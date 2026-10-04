@@ -8,6 +8,7 @@ export interface AuthUser {
   displayName: string;
   createdAt: string;
   lastLoginAt: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface AuthSession {

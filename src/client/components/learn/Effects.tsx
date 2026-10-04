@@ -13,6 +13,7 @@
  * effect twice in a row restarts the animation instead of being ignored.
  */
 import { useMemo } from 'react';
+import { Icon } from '../Icon';
 import { Mascot } from './Mascot';
 
 const CONFETTI_COLOURS = ['#e23a41', '#ffc53d', '#2f9e5f', '#3f7bff', '#a45cf0', '#ff8fa3'];
@@ -85,10 +86,10 @@ export function FloatingAward({
   tone?: 'xp' | 'coin' | 'heart';
 }) {
   if (amount === 0) return null;
-  const glyph = tone === 'coin' ? '🪙' : tone === 'heart' ? (amount > 0 ? '❤️' : '💔') : '⚡';
+  const iconName = tone === 'coin' ? 'coin' : tone === 'heart' ? 'heart' : 'bolt';
   return (
     <span key={burst} className={`fx-float fx-float--${tone}`} aria-hidden="true">
-      {glyph} {amount > 0 ? '+' : ''}
+      <Icon name={iconName} size={14} filled={tone === 'heart' ? amount > 0 : tone === 'xp'} /> {amount > 0 ? '+' : ''}
       {amount} {suffix}
     </span>
   );

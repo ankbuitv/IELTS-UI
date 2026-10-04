@@ -327,6 +327,22 @@ export function Stat({
   );
 }
 
+/**
+ * A top-three rank mark.
+ *
+ * Drawn (gold / silver / bronze), never an emoji: a laptop without an emoji font
+ * showed an empty box where the medal should be, which is worse than no medal at
+ * all. Ranks below three keep the plain number the board already used.
+ */
+export function MedalMark({ rank, size = 20 }: { rank: number; size?: number }) {
+  if (rank < 1 || rank > 3) return null;
+  return (
+    <span className={`medal medal--${rank}`} role="img" aria-label={`Rank ${rank}`}>
+      <Icon name="medal" size={size} />
+    </span>
+  );
+}
+
 /** The icon that stands for a skill or test type, so lists can be scanned by shape and colour. */
 export function skillIcon(type: string): IconName {
   switch (type) {
@@ -433,7 +449,14 @@ export function Notice({
   title?: ReactNode;
   children?: ReactNode;
 }) {
-  const icon = tone === 'danger' ? '!' : tone === 'warning' ? '!' : tone === 'success' ? <Icon name="check" size={12} strokeWidth={3.4} /> : 'i';
+  const icon =
+    tone === 'danger' || tone === 'warning' ? (
+      <Icon name="alert" size={13} strokeWidth={2.5} />
+    ) : tone === 'success' ? (
+      <Icon name="check" size={12} strokeWidth={3.4} />
+    ) : (
+      <Icon name="info" size={13} strokeWidth={2.5} />
+    );
   return (
     <div className={`notice notice--${tone}`} role={tone === 'danger' ? 'alert' : undefined}>
       <span className="notice__icon" aria-hidden="true">

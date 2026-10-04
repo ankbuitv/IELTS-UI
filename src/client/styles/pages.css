@@ -315,3 +315,72 @@ a.skill-tile:hover .skill-tile__go { color: var(--skill); }
   .report-tiles { min-width: 0; width: 100%; }
   .aimark { padding: 16px; }
 }
+
+
+/* --------------------------------------------------- practice hero & bar */
+.practice-hero {
+  position: relative; overflow: hidden;
+  display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.9fr); gap: 20px; align-items: center;
+  padding: 24px 26px; border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, #0f1c31 0%, #172b4a 60%, #1f3760 100%);
+  color: #fff; box-shadow: var(--shadow-sm);
+}
+.practice-hero__kicker {
+  margin: 0 0 4px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--sun-400);
+}
+.practice-hero h1 { color: #fff; margin: 0 0 6px; font-size: 1.75rem; letter-spacing: -0.025em; }
+.practice-hero__sub { margin: 0 0 14px; color: #cbd5e8; font-size: 0.92rem; line-height: 1.5; max-width: 58ch; }
+.practice-hero__stats { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 0.8rem; color: #e2e8f4; }
+.practice-hero__stats span {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 11px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09); border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.practice-hero__stats svg { color: var(--sun-400); flex: none; }
+.practice-mode-card {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px; border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.practice-mode-card__top { display: flex; align-items: center; gap: 10px; }
+.practice-mode-card__top svg { color: var(--sun-400); flex: none; }
+.practice-mode-card__top b { display: block; font-size: 0.92rem; color: #fff; }
+.practice-mode-card__top small { display: block; font-size: 0.76rem; color: #c7d2e6; }
+.practice-mode-card .checkbox { color: #eef2fa; font-size: 0.84rem; font-weight: 600; }
+
+.practice-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+}
+.practice-toolbar__search { flex: 1 1 220px; min-width: 0; }
+.practice-toolbar__controls { display: flex; align-items: center; gap: 10px; flex: none; }
+
+/* --------------------------------------------------------- avatar picker */
+.avatar-picker {
+  display: flex; align-items: center; gap: 16px; padding: 14px 16px; margin-bottom: 14px;
+  background: var(--paper-muted); border: 1px solid var(--ink-200); border-radius: var(--radius-lg);
+  flex-wrap: wrap;
+}
+.avatar-picker__preview {
+  width: 68px; height: 68px; border-radius: 50%; flex: none; overflow: hidden;
+  display: grid; place-items: center; font-size: 1.25rem; font-weight: 800;
+  background: var(--solid); color: var(--on-solid);
+  box-shadow: 0 0 0 3px var(--paper), 0 0 0 5px var(--ink-200);
+}
+.avatar-picker__preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-picker__body { flex: 1 1 210px; min-width: 0; display: grid; gap: 4px; }
+.avatar-picker__title { font-weight: 800; color: var(--ink-950); font-size: 0.95rem; }
+.avatar-picker__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.avatar-picker__error { margin: 4px 0 0; font-size: 0.82rem; font-weight: 600; color: var(--danger); }
+
+@media (max-width: 760px) {
+  .practice-hero { grid-template-columns: 1fr; padding: 18px 18px; gap: 14px; }
+  .practice-hero h1 { font-size: 1.45rem; }
+  .skill-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .skill-tiles > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .practice-toolbar { flex-direction: column; align-items: stretch; }
+  .practice-toolbar__search { flex: none; width: 100%; }
+  .practice-toolbar__controls { width: 100%; }
+  .practice-toolbar__controls select { width: 100%; }
+}

@@ -566,3 +566,19 @@ export function scoreLesson(outcomes: ReadonlyArray<{ terms: string[]; firstTryC
   }
   return { correct, total: outcomes.length, mistakes: [...mistakes] };
 }
+
+/**
+ * Builds the short, heart-free practice round shown when a learner runs out of
+ * hearts and chooses to earn all five back instead of spending coins.
+ */
+export function buildHeartRecoveryExercises(exercises: readonly Exercise[], round = 0): Exercise[] {
+  if (exercises.length === 0) return [];
+  const limit = Math.min(5, exercises.length);
+  const start = exercises.length > 1 ? (round * 2) % exercises.length : 0;
+  const picked: Exercise[] = [];
+  for (let i = 0; i < exercises.length && picked.length < limit; i += 1) {
+    const item = exercises[(start + i) % exercises.length]!;
+    picked.push({ ...item, id: `${item.id}:practice:${round}:${i}` });
+  }
+  return picked;
+}

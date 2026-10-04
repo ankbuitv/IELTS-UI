@@ -40,6 +40,8 @@ export interface LeaderboardRow {
   valueLabel: string;
   /** A second fact about the row: the streak, or the best band. */
   secondary: string;
+  /** Optional uploaded avatar URL; falls back to initials when null. */
+  avatarUrl?: string | null;
 }
 
 export interface LeaderboardResponse {

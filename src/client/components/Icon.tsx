@@ -61,6 +61,7 @@ export type IconName =
   | 'home'
   | 'flame'
   | 'star'
+  | 'medal'
   | 'volume'
   | 'graduation'
   | 'bubble'
@@ -340,6 +341,17 @@ const PATHS: Record<IconName, ReactElement> = {
     <path d="M13.1 2.2C13.6 6 16 7.6 17.4 10c1 1.7 1.3 3.2 1.3 4.6 0 3.5-2.9 6.4-6.7 6.4S5.3 18.1 5.3 14.6c0-2.1.9-3.8 2.2-5.1.2 1.7 1 2.8 2.3 3.2-.5-4 .6-8 3.3-10.5z" />
   ),
   star: <path d="M12 3.4l2.7 5.5 6 .9-4.4 4.2 1 6L12 17.2 6.7 20l1-6L3.3 9.8l6-.9z" />,
+  // A medal on its ribbon: the rank mark on a leaderboard. It is drawn here
+  // rather than left as the emoji (🥇), because an emoji with no font on the
+  // device renders as an empty box — which is exactly what a learner saw on
+  // the board. (Icon set: original strokes, no third-party artwork.)
+  medal: (
+    <g>
+      <path d="M9.2 3.1 6.4 9.6M14.8 3.1l2.8 6.5" />
+      <circle cx="12" cy="15" r="5.3" />
+      <path d="m12 12.5 1.1 2.2 2.4.4-1.7 1.7.4 2.4-2.2-1.2-2.2 1.2.4-2.4-1.7-1.7 2.4-.4z" fill="currentColor" stroke="none" />
+    </g>
+  ),
   volume: (
     <>
       <path d="M4 9.6h3.3L12 5.6v12.8l-4.7-4H4z" />

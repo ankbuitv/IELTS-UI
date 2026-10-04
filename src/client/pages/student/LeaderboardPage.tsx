@@ -24,7 +24,7 @@ import {
   type LeaderboardWindow,
 } from '@shared/leaderboard';
 import { Icon } from '../../components/Icon';
-import { Button, Loading, Notice } from '../../components/ui';
+import { Button, Loading, MedalMark, Notice } from '../../components/ui';
 import { Mascot } from '../../components/learn/Mascot';
 import { useAsync } from '../../hooks/useAsync';
 import { learnApi } from '../../lib/learn-api';
@@ -45,12 +45,12 @@ function initialsOf(name: string): string {
 }
 
 function Row({ row, scope }: { row: LeaderboardRow; scope: LeaderboardScope }) {
-  const medal = row.rank <= 3 ? ['🥇', '🥈', '🥉'][row.rank - 1] : null;
+  const top = row.rank <= 3;
   return (
-    <li className={`board__row${row.isMe ? ' is-me' : ''}${row.rank <= 3 ? ' is-top' : ''}`}>
-      <span className="board__rank">{medal ?? row.rank}</span>
+    <li className={`board__row${row.isMe ? ' is-me' : ''}${top ? ' is-top' : ''}`}>
+      <span className="board__rank">{top ? <MedalMark rank={row.rank} size={22} /> : row.rank}</span>
       <span className={`board__avatar board__avatar--${scope}`} aria-hidden="true">
-        {initialsOf(row.name)}
+        {row.avatarUrl ? <img src={row.avatarUrl} alt="" /> : initialsOf(row.name)}
       </span>
       <span className="board__who">
         <b>
@@ -166,11 +166,11 @@ export function LeaderboardPage() {
             <ol className="board__podium" aria-label="Top three">
               {[podium[1]!, podium[0]!, podium[2]!].map((row) => (
                 <li key={row.rank} className={`podium podium--${row.rank}`}>
-                  <span className="podium__medal" aria-hidden="true">
-                    {['🥇', '🥈', '🥉'][row.rank - 1]}
+                  <span className="podium__medal">
+                    <MedalMark rank={row.rank} size={30} />
                   </span>
                   <span className="podium__avatar" aria-hidden="true">
-                    {initialsOf(row.name)}
+                    {row.avatarUrl ? <img src={row.avatarUrl} alt="" /> : initialsOf(row.name)}
                   </span>
                   <b>{row.name}</b>
                   <span className="podium__value">{row.valueLabel}</span>

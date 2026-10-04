@@ -105,7 +105,7 @@ describe('shop catalogue', () => {
   });
 
   it('keeps the consumables coherent with what the lesson does with them', () => {
-    expect(HEART_REFILL_AMOUNT).toBe(3);
+    expect(HEART_REFILL_AMOUNT).toBe(5);
     // A hint must leave at least one wrong option beside the answer, or the
     // question would be decided by the hint rather than by the learner.
     expect(HINT_REMOVES_OPTIONS).toBeLessThan(3);

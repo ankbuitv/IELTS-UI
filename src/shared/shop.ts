@@ -11,7 +11,7 @@
  *
  *   streak_freeze  keeps a streak alive across one missed day
  *   xp_boost       doubles every XP award for a short window
- *   heart_refill   gives the lesson three more hearts after a wipe-out
+ *   heart_refill   refills all five hearts after a wipe-out
  *   hint           removes two wrong options (or reveals a letter)
  *
  * Prices are cheapest-first on purpose: a hint and a refill are everyday help,
@@ -68,8 +68,8 @@ export const SHOP_ITEMS: readonly ShopItemDef[] = [
   {
     key: 'heart_refill',
     name: 'Heart refill',
-    tagline: 'Back to three hearts, keep going',
-    detail: 'Use it on the “Out of hearts” screen and the lesson continues where you left off.',
+    tagline: 'All five hearts back, keep going',
+    detail: 'Use it on the “Out of hearts” screen (or buy one right there with coins) and the lesson continues with a full set of five hearts.',
     price: 20,
     maxOwned: 5,
     tone: 'rose',
@@ -106,7 +106,7 @@ export function doubleXpMinutes(): number {
 export const XP_BOOST_MULTIPLIER = 2;
 
 /** Hearts a refill hands back. */
-export const HEART_REFILL_AMOUNT = 3;
+export const HEART_REFILL_AMOUNT = 5;
 /** Wrong options a hint removes (leaving two: the answer and one decoy). */
 export const HINT_REMOVES_OPTIONS = 2;
 

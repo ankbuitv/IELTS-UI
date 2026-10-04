@@ -22,7 +22,7 @@ import { Stars } from '../../components/learn/Stars';
 import { Mascot, type MascotMood } from '../../components/learn/Mascot';
 import { Confetti, StreakPulse } from '../../components/learn/Effects';
 import { DictionaryPanel } from '../../components/learn/DictionaryPanel';
-import { Button, Loading, Modal, Notice, useToast } from '../../components/ui';
+import { Button, Loading, MedalMark, Modal, Notice, useToast } from '../../components/ui';
 import { describeError } from '../../lib/api';
 import { learnApi, localDay } from '../../lib/learn-api';
 import { canSpeak, speak } from '../../lib/speech';
@@ -392,7 +392,7 @@ export function LearnPage() {
               <ol className="mini-board">
                 {boardTop.map((row) => (
                   <li key={row.rank} className={row.isMe ? 'is-me' : ''}>
-                    <span className="mini-board__rank">{['🥇', '🥈', '🥉'][row.rank - 1] ?? row.rank}</span>
+                    <span className="mini-board__rank">{row.rank <= 3 ? <MedalMark rank={row.rank} /> : row.rank}</span>
                     <b>{row.name}</b>
                     <span>{row.valueLabel}</span>
                   </li>
@@ -658,7 +658,7 @@ export function LearnPage() {
                             <span>{lesson.blurb}</span>
                             <em className="node-kind">{LESSON_KIND_LABELS[lesson.kind]}</em>
                             {lesson.legendary ? (
-                              <em className="node-kind" style={{ color: '#b8860b', fontWeight: 700 }}>★ Legendary</em>
+                              <em className="node-kind" style={{ color: '#b8860b', fontWeight: 700 }}><Icon name="star" size={11} filled /> Legendary</em>
                             ) : null}
                           </div>
                           {open ? (

@@ -108,7 +108,7 @@ export function ShopPage() {
           <span>coins</span>
           {boost.active ? (
             <em className="shop__boost">
-              ⚡ Double XP · {boost.minutesLeft}m left
+              <Icon name="bolt" size={14} filled /> Double XP · {boost.minutesLeft}m left
             </em>
           ) : (
             <Link className="shop__boost shop__boost--off" to="/learn">
