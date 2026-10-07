@@ -120,6 +120,44 @@ export async function purchaseItem(
   }
 
   const now = nowIso();
+  if (item.cosmetic) {
+    // The conditional wallet update and the dependent writes share one D1
+    // transaction. This closes the double-tap race for one-off cosmetics: only
+    // the request that wins the ownership check can debit coins or insert an order.
+    const orderId = newId('order');
+    const coinId = newId('coin');
+    const results = await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE learn_profiles SET coins = coins - ?, updated_at = ?
+          WHERE user_id = ? AND coins >= ?
+            AND NOT EXISTS (
+              SELECT 1 FROM learn_inventory
+               WHERE user_id = ? AND item_key = ? AND quantity + ? > ?
+            )`,
+      ).bind(total, now, userId, total, userId, key, count, item.maxOwned),
+      env.DB.prepare(
+        `INSERT INTO learn_shop_orders (id, user_id, item_key, quantity, unit_price, coins_spent, balance_after, created_at)
+         SELECT ?, ?, ?, ?, ?, ?, coins, ? FROM learn_profiles WHERE user_id = ? AND changes() > 0`,
+      ).bind(orderId, userId, key, count, item.price, total, now, userId),
+      env.DB.prepare(
+        `INSERT OR IGNORE INTO learn_inventory (user_id, item_key, quantity, updated_at)
+         SELECT ?, ?, ?, ? WHERE changes() > 0`,
+      ).bind(userId, key, count, now),
+      env.DB.prepare(
+        `INSERT INTO learn_coin_log (id, user_id, day, delta, reason, created_at)
+         SELECT ?, ?, '', ?, ?, ? WHERE changes() > 0`,
+      ).bind(coinId, userId, -total, `shop:${key}`, now),
+    ]);
+    if ((results[0]?.meta?.changes ?? 0) === 0) {
+      const latest = await readWallet(env, userId);
+      if ((latest.inventory[key] ?? 0) >= item.maxOwned) {
+        throw ApiError.validation(`You already hold the maximum of ${item.maxOwned} ${item.name}.`);
+      }
+      throw ApiError.validation('Your balance changed while buying. Check the shelf and try again.');
+    }
+    return { state: await getShopState(env, userId), spent: total, owned: owned + count };
+  }
+
   const debit = await env.DB.prepare(
     'UPDATE learn_profiles SET coins = coins - ?, updated_at = ? WHERE user_id = ? AND coins >= ?',
   )

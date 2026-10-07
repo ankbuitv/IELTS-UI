@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 54   Indexes: 68
+-- Tables: 55   Indexes: 69
 -- =============================================================================
 
 -- table: users
@@ -827,6 +827,19 @@ CREATE TABLE IF NOT EXISTS learn_daily_lessons (
   UNIQUE (user_id, day, band, lesson_id)
 );
 
+-- table: ai_adjudications
+CREATE TABLE IF NOT EXISTS ai_adjudications (
+  entity_type        TEXT NOT NULL CHECK (entity_type IN ('WRITING', 'SPEAKING')),
+  entity_id          TEXT NOT NULL,
+  band               REAL,
+  criteria_json      TEXT NOT NULL DEFAULT '[]',
+  rationale          TEXT NOT NULL DEFAULT '',
+  criterion_keys_json TEXT NOT NULL DEFAULT '[]',
+  overall_reviewed   INTEGER NOT NULL DEFAULT 0 CHECK (overall_reviewed IN (0, 1)),
+  created_at         TEXT NOT NULL,
+  PRIMARY KEY (entity_type, entity_id)
+);
+
 -- index: idx_users_role
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 
@@ -1030,3 +1043,6 @@ CREATE INDEX IF NOT EXISTS idx_friendships_requested_by ON friendships (requeste
 
 -- index: idx_learn_daily_lessons_user_day
 CREATE INDEX IF NOT EXISTS idx_learn_daily_lessons_user_day ON learn_daily_lessons (user_id, day, band, slot);
+
+-- index: idx_ai_adjudications_entity
+CREATE INDEX IF NOT EXISTS idx_ai_adjudications_entity ON ai_adjudications (entity_type, entity_id);

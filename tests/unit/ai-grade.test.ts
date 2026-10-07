@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { describeAiFailure } from '../../src/worker/ai/failure';
 import { ApiError } from '../../src/worker/lib/errors';
-import { canonicalCriterionKey, combineOpinions, normaliseGrade, roundHalf } from '../../src/worker/services/ai-marking-service';
+import { canonicalCriterionKey, combineOpinions, normaliseGrade, roundHalf, unhelpfulBandAdvice, unsupportedQuotedEvidence } from '../../src/worker/services/ai-marking-service';
 import { AI_NOT_CONFIGURED_MESSAGE } from '../../src/worker/ai/judges';
 import type { JudgeOpinion } from '../../src/shared/judges';
 
@@ -54,6 +54,26 @@ describe('normaliseGrade', () => {
     expect(grade.corrections[0]).toMatchObject({ isActualError: false, category: 'STYLE', confidence: 0.7 });
   });
 
+  it('demotes low-confidence corrections and drops originals not found verbatim in the response', () => {
+    const grade = normaliseGrade(
+      {
+        criteria: WRITING.map((key) => ({ key, band: 6, comment: '' })),
+        corrections: [
+          { original: 'peoples is', suggestion: 'people are', reason: 'agreement', isActualError: true, confidence: 0.42 },
+          { original: 'invented phrase', suggestion: 'clear phrase', reason: 'word choice', confidence: 0.99 },
+          { original: 'clear idea', suggestion: 'a clear idea', reason: 'article', confidence: 0.95 },
+        ],
+      },
+      'p',
+      'm',
+      WRITING,
+      'peoples is unclear, but it is a clear idea.',
+    );
+    expect(grade.corrections).toHaveLength(2);
+    expect(grade.corrections[0]).toMatchObject({ original: 'peoples is', isActualError: false, confidence: 0.42 });
+    expect(grade.corrections[1]?.original).toBe('clear idea');
+  });
+
   it('accepts criteria as an object keyed by the model’s own labels', () => {
     const grade = normaliseGrade(
       {
@@ -99,7 +119,7 @@ describe('normaliseGrade', () => {
     const grade = normaliseGrade(
       {
         overallBand: 5.5,
-        criteria: [],
+        criteria: WRITING.map((key) => ({ key, band: 5.5, comment: '' })),
         feedback: 'x',
         strengths: [{ text: 'Good opening' }, 'Clear stance', { nothing: 1 }],
         improvements: 'Use more linking words',
@@ -112,11 +132,13 @@ describe('normaliseGrade', () => {
     expect(grade.improvements).toEqual(['Use more linking words']);
   });
 
-  it('derives the overall band when the model omits it, and blends it when both exist', () => {
+  it('derives each judge’s overall only from its criterion bands, with quarter-band ties rounded up', () => {
     const criteria = WRITING.map((key) => ({ key, band: 6, comment: '' }));
     expect(normaliseGrade({ criteria }, 'p', 'm', WRITING).band).toBe(6);
-    // Reported 8 but every criterion says 6: the overall is pulled back to the evidence.
-    expect(normaliseGrade({ overallBand: 8, criteria }, 'p', 'm', WRITING).band).toBe(7);
+    // A conflicting reported overall is ignored: the four criterion bands are the source of truth.
+    expect(normaliseGrade({ overallBand: 8, criteria }, 'p', 'm', WRITING).band).toBe(6);
+    const quarterTie = WRITING.map((key, index) => ({ key, band: index === 0 ? 7 : 6, comment: '' }));
+    expect(normaliseGrade({ criteria: quarterTie }, 'p', 'm', WRITING).band).toBe(6.5);
   });
 
   it('refuses to store a score when no band can be found anywhere', () => {
@@ -143,11 +165,36 @@ describe('normaliseGrade', () => {
     expect(grade.band).toBe(6);
   });
 
-  it('clamps bands to 0-9 in half-band steps', () => {
-    const grade = normaliseGrade({ overallBand: 11.2, criteria: [{ key: 'TASK_ACHIEVEMENT', band: 6.3 }] }, 'p', 'm', WRITING);
-    expect(grade.band).toBe(9);
+  it('clamps criterion bands to 0-9 in half-band steps before deriving the overall', () => {
+    const criteria = WRITING.map((key, index) => ({ key, band: index === 0 ? 6.3 : 11.2, comment: '' }));
+    const grade = normaliseGrade({ overallBand: 1, criteria }, 'p', 'm', WRITING);
+    expect(grade.band).toBe(8.5);
     expect(grade.criteria[0]!.band).toBe(6.5);
+    expect(grade.criteria[1]!.band).toBe(9);
     expect(roundHalf(6.24)).toBe(6);
+  });
+});
+
+describe('marking quality guards', () => {
+  const criterion = { key: 'TASK_ACHIEVEMENT', label: 'Task achievement', band: 6, comment: 'The phrase “clear idea” is relevant.' };
+
+  it('checks quoted candidate evidence as an exact, case-sensitive substring', () => {
+    const grade = {
+      feedback: 'You clearly state a “clear idea”.',
+      criteria: [criterion],
+      strengths: [],
+      improvements: [],
+      notes: [],
+      corrections: [{ original: 'clear idea', suggestion: 'a clear idea', reason: 'article' }],
+    };
+    expect(unsupportedQuotedEvidence(grade, 'This is a clear idea.')).toEqual([]);
+    expect(unsupportedQuotedEvidence(grade, 'This is a clear opinion.')).toEqual(['clear idea']);
+  });
+
+  it('filters advice that treats research citations or fancy vocabulary as a band booster', () => {
+    expect(unhelpfulBandAdvice('Add statistics from a named study to strengthen the essay.')).toBe(true);
+    expect(unhelpfulBandAdvice('Use more sophisticated vocabulary to sound academic.')).toBe(true);
+    expect(unhelpfulBandAdvice('Develop the example by explaining how it supports your point.')).toBe(false);
   });
 });
 
@@ -245,12 +292,25 @@ describe('combineOpinions (the two-judge panel)', () => {
     expect(wide.spread).toBe(1.5);
   });
 
-  it('leads with Judge01\'s summary and merges the lists without repeating anything', () => {
+  it('synthesizes a neutral panel summary and merges lists without presenting Judge01 as consensus', () => {
     const view = combineOpinions([opinion('Judge02', 6), opinion('Judge01', 6.5)], WRITING, [], at);
-    expect(view.feedback).toBe('Judge01 feedback');
-    expect(view.feedbackVi).toBe('Judge01 tiếng Việt');
+    expect(view.feedback).toMatch(/Panel summary:.*average to 6.5/);
+    expect(view.feedback).not.toBe('Judge01 feedback');
+    expect(view.feedbackVi).toMatch(/Tóm tắt hội đồng/);
     expect(view.strengths).toEqual(['Clear position']);
     expect(view.corrections).toHaveLength(1);
+    expect(view.criterionSplits).toEqual([]);
+  });
+
+  it('flags a criterion split at 1.5 bands while keeping the overall panel mean', () => {
+    const first = opinion('Judge01', 6.5);
+    const second = opinion('Judge02', 6);
+    first.criteria[0]!.band = 7.5;
+    second.criteria[0]!.band = 6;
+    const view = combineOpinions([first, second], WRITING, [], at);
+    expect(view.criterionSplits).toEqual(['TASK_ACHIEVEMENT']);
+    expect(view.criteria[0]?.band).toBe(7);
+    expect(view.band).toBe(6.5);
   });
 
   it('is PARTIAL when a judge was unavailable and then uses the one band it has', () => {

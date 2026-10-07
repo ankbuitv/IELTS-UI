@@ -17,7 +17,7 @@ import { setWritingScore } from './marking-service';
 import { saveAiVocabulary } from './vocabulary-service';
 import { WRITING_CRITERIA, SPEAKING_CRITERIA } from '../../shared/ai-rubric';
 import { clampBand, meanBand, roundHalfBand } from '../../shared/bands';
-import { JUDGE_SPLIT_THRESHOLD } from '../../shared/judges';
+import { JUDGE_CRITERION_SPLIT_THRESHOLD, JUDGE_SPLIT_THRESHOLD, judgesAgree } from '../../shared/judges';
 import type {
   AiMarkView,
   JudgeCorrection,
@@ -114,6 +114,9 @@ const GRADE_SCHEMA = {
           original: { type: 'string' },
           suggestion: { type: 'string' },
           reason: { type: 'string' },
+          isActualError: { type: 'boolean' },
+          category: { type: 'string' },
+          confidence: { type: 'number' },
         },
       },
     },
@@ -136,6 +139,76 @@ const GRADE_SCHEMA = {
   },
 } as const;
 
+interface MarkingRequest {
+  judge: Judge;
+  messages: Array<{ role: 'system' | 'user'; content: string }>;
+  expectedKeys: string[];
+  sourceText: string;
+  schemaName: string;
+}
+
+/**
+ * Runs one scoring request, then independently checks that quoted evidence is
+ * present in the response. A bad quote gets one focused regeneration; if the
+ * second answer still invents evidence, it is rejected rather than shown.
+ */
+async function requestValidatedGrade(env: Env, input: MarkingRequest): Promise<AiGradeResult> {
+  const ask = (messages: MarkingRequest['messages']) =>
+    withJudgeRetry(() =>
+      completeJson<RawGrade>(env, {
+        providerId: input.judge.providerId,
+        ...(input.judge.model ? { model: input.judge.model } : {}),
+        messages,
+        temperature: 0.2,
+        maxTokens: AI_MARKING_MAX_TOKENS,
+        timeoutMs: AI_MARKING_TIMEOUT_MS,
+        reasoningEffort: 'medium',
+        jsonSchema: { name: input.schemaName, schema: GRADE_SCHEMA as unknown as Record<string, unknown> },
+      }),
+    );
+
+  const first = await ask(input.messages);
+  let grade = normaliseGrade(first.data, first.provider.id, first.provider.model, input.expectedKeys, input.sourceText);
+  let unsupported = unsupportedQuotedEvidence(grade, input.sourceText);
+  if (unsupported.length === 0) return grade;
+
+  const retryMessages: MarkingRequest['messages'] = [
+    ...input.messages,
+    {
+      role: 'user',
+      content: `QUALITY-CONTROL RETRY: Your previous feedback included quoted wording that does not occur verbatim in the candidate response. The unsupported quote(s) were: ${unsupported.map((quote) => `“${quote}”`).join(', ')}. Re-evaluate the same response. Keep quotation marks only around exact substrings copied from it; otherwise paraphrase without quotes or omit the claim. Return the same JSON shape only.`,
+    },
+  ];
+  const second = await ask(retryMessages);
+  grade = normaliseGrade(second.data, second.provider.id, second.provider.model, input.expectedKeys, input.sourceText);
+  unsupported = unsupportedQuotedEvidence(grade, input.sourceText);
+  if (unsupported.length > 0) {
+    throw new ApiError('AI_UNAVAILABLE', 'The judge returned feedback with a quotation that was not found in the response. Please try marking again.');
+  }
+  return grade;
+}
+
+/** Exact, case-sensitive substring validation: quoted evidence must be verbatim. */
+export function unsupportedQuotedEvidence(grade: Pick<AiGradeResult, 'feedback' | 'criteria' | 'strengths' | 'improvements' | 'notes' | 'corrections'>, sourceText: string): string[] {
+  const narrative = [
+    grade.feedback,
+    ...grade.criteria.map((criterion) => criterion.comment),
+    ...grade.strengths,
+    ...grade.improvements,
+    ...grade.notes,
+    ...grade.corrections.map((correction) => correction.original),
+  ];
+  const unsupported = new Set<string>();
+  const quote = /“([^”]+)”|"([^"]+)"/g;
+  for (const text of narrative) {
+    for (const match of text.matchAll(quote)) {
+      const phrase = (match[1] ?? match[2] ?? '').trim();
+      if (phrase && !sourceText.includes(phrase)) unsupported.add(phrase);
+    }
+  }
+  return [...unsupported];
+}
+
 export interface WritingGradeInput extends WritingPromptInput {
   judge: Judge;
 }
@@ -145,19 +218,13 @@ export async function gradeWriting(env: Env, input: WritingGradeInput): Promise<
   if (!input.responseText.trim()) {
     throw new ApiError('VALIDATION_FAILED', 'There is nothing to mark yet: the response is empty.');
   }
-  const { data, provider } = await withJudgeRetry(() =>
-    completeJson<RawGrade>(env, {
-      providerId: input.judge.providerId,
-      ...(input.judge.model ? { model: input.judge.model } : {}),
-      messages: buildWritingMessages(input),
-      temperature: 0.2,
-      maxTokens: AI_MARKING_MAX_TOKENS,
-      timeoutMs: AI_MARKING_TIMEOUT_MS,
-      reasoningEffort: 'medium',
-      jsonSchema: { name: 'ielts_writing_feedback', schema: GRADE_SCHEMA as unknown as Record<string, unknown> },
-    }),
-  );
-  return normaliseGrade(data, provider.id, provider.model, WRITING_CRITERIA.map((criterion) => criterion.key));
+  return requestValidatedGrade(env, {
+    judge: input.judge,
+    messages: buildWritingMessages(input),
+    expectedKeys: WRITING_CRITERIA.map((criterion) => criterion.key),
+    sourceText: input.responseText,
+    schemaName: 'ielts_writing_feedback',
+  });
 }
 
 export interface AdjudicationGradeInput {
@@ -174,19 +241,13 @@ export interface AdjudicationGradeInput {
  * more, so it is never the cost of an agreed mark.
  */
 export async function gradeAdjudication(env: Env, input: AdjudicationGradeInput): Promise<AiGradeResult> {
-  const { data, provider } = await withJudgeRetry(() =>
-    completeJson<RawGrade>(env, {
-      providerId: input.judge.providerId,
-      ...(input.judge.model ? { model: input.judge.model } : {}),
-      messages: buildAdjudicationMessages(input),
-      temperature: 0.1,
-      maxTokens: AI_MARKING_MAX_TOKENS,
-      timeoutMs: AI_MARKING_TIMEOUT_MS,
-      reasoningEffort: 'medium',
-      jsonSchema: { name: 'ielts_writing_feedback', schema: GRADE_SCHEMA as unknown as Record<string, unknown> },
-    }),
-  );
-  return normaliseGrade(data, provider.id, provider.model, WRITING_CRITERIA.map((criterion) => criterion.key));
+  return requestValidatedGrade(env, {
+    judge: input.judge,
+    messages: buildAdjudicationMessages(input),
+    expectedKeys: WRITING_CRITERIA.map((criterion) => criterion.key),
+    sourceText: input.responseText,
+    schemaName: 'ielts_writing_feedback',
+  });
 }
 
 export interface SpeakingGradeInput extends SpeakingPromptInput {
@@ -201,19 +262,14 @@ export async function gradeSpeaking(env: Env, input: SpeakingGradeInput): Promis
       'There is no transcript to mark. Record with the browser transcript enabled, or type what you said.',
     );
   }
-  const { data, provider } = await withJudgeRetry(() =>
-    completeJson<RawGrade>(env, {
-      providerId: input.judge.providerId,
-      ...(input.judge.model ? { model: input.judge.model } : {}),
-      messages: buildSpeakingMessages(input),
-      temperature: 0.2,
-      maxTokens: AI_MARKING_MAX_TOKENS,
-      timeoutMs: AI_MARKING_TIMEOUT_MS,
-      reasoningEffort: 'medium',
-      jsonSchema: { name: 'ielts_speaking_feedback', schema: GRADE_SCHEMA as unknown as Record<string, unknown> },
-    }),
-  );
-  const grade = normaliseGrade(data, provider.id, provider.model, SPEAKING_CRITERIA.map((criterion) => criterion.key));
+  const sourceText = input.parts.map((part) => part.transcript).filter(Boolean).join('\n');
+  const grade = await requestValidatedGrade(env, {
+    judge: input.judge,
+    messages: buildSpeakingMessages(input),
+    expectedKeys: SPEAKING_CRITERIA.map((criterion) => criterion.key),
+    sourceText,
+    schemaName: 'ielts_speaking_feedback',
+  });
   return {
     ...grade,
     notes: [
@@ -254,10 +310,13 @@ function dedupe<T>(items: T[], keyOf: (item: T) => string, limit: number): T[] {
   return out;
 }
 
+const CRITERION_ADJUDICATION_THRESHOLD = JUDGE_CRITERION_SPLIT_THRESHOLD;
+
 /**
- * Combines the judges into one verdict: the mean of their bands (and, per
- * criterion, the mean of theirs), each rounded to the nearest half band. Judges
- * are ordered Judge01 first, so the lead summary is Judge01's whenever it exists.
+ * Combines two independently derived judge overalls and criterion scores. Each
+ * mean is rounded to the nearest 0.5, with exact quarter-band ties rounded up.
+ * The synthesized summary reports panel agreement/disagreement instead of
+ * presenting Judge01's narrative as if it were consensus.
  */
 export function combineOpinions(
   opinions: JudgeOpinion[],
@@ -266,29 +325,61 @@ export function combineOpinions(
   createdAt: string,
 ): AiMarkView {
   const ordered = [...opinions].sort((a, b) => a.judge.localeCompare(b.judge));
+  const criterionScoreRows = new Map<string, number[]>();
   const criteria: JudgeCriterion[] = expectedKeys.map((key) => {
     const rows = ordered.map((opinion) => opinion.criteria.find((criterion) => criterion.key === key)).filter(Boolean) as JudgeCriterion[];
-    const band = meanBand(rows.map((row) => row.band));
+    const scores = rows.map((row) => row.band).filter((band): band is number => band !== null);
+    criterionScoreRows.set(key, scores);
+    const comments = rows.map((row) => row.comment).filter((comment) => comment && comment !== 'Not commented on.');
+    const band = meanBand(scores);
+    const comment = comments.length < 2 || comments.every((value) => value === comments[0])
+      ? comments[0] ?? rows[0]?.comment ?? ''
+      : 'The judges gave different evidence for this criterion. Open each judge’s assessment to compare their reasoning.';
     return {
       key,
       label: rows[0]?.label ?? key.replace(/_/g, ' ').toLowerCase(),
       band,
-      comment: rows.find((row) => row.comment && row.comment !== 'Not commented on.')?.comment ?? rows[0]?.comment ?? '',
+      comment,
     };
   });
   const bands = ordered.map((opinion) => opinion.band).filter((band): band is number => band !== null);
+  const band = meanBand(bands);
+  const criterionSplits = expectedKeys.filter((key) => {
+    const scores = criterionScoreRows.get(key) ?? [];
+    return scores.length >= 2 && Math.max(...scores) - Math.min(...scores) >= CRITERION_ADJUDICATION_THRESHOLD;
+  });
+  const bestAgreement = criteria.filter((criterion) => (criterionScoreRows.get(criterion.key)?.length ?? 0) >= 2)
+    .sort((a, b) => Math.abs((criterionScoreRows.get(a.key)?.[0] ?? 0) - (criterionScoreRows.get(a.key)?.[1] ?? 0))
+      - Math.abs((criterionScoreRows.get(b.key)?.[0] ?? 0) - (criterionScoreRows.get(b.key)?.[1] ?? 0)))[0];
+  const largestSplit = criteria.filter((criterion) => (criterionScoreRows.get(criterion.key)?.length ?? 0) >= 2)
+    .sort((a, b) => Math.abs((criterionScoreRows.get(b.key)?.[0] ?? 0) - (criterionScoreRows.get(b.key)?.[1] ?? 0))
+      - Math.abs((criterionScoreRows.get(a.key)?.[0] ?? 0) - (criterionScoreRows.get(a.key)?.[1] ?? 0)))[0];
+
+  let feedback = ordered.find((opinion) => opinion.feedback)?.feedback ?? '';
+  let feedbackVi = ordered.find((opinion) => opinion.feedbackVi)?.feedbackVi ?? '';
+  if (ordered.length >= 2) {
+    const overallText = band === null ? 'unavailable' : band.toFixed(1);
+    const agreementText = bestAgreement ? `They are closest on ${bestAgreement.label}` : 'There is no shared criterion score';
+    const splitText = largestSplit ? `and differ most on ${largestSplit.label}` : '';
+    feedback = `Panel summary: the judges’ independently criterion-derived overall bands average to ${overallText}. ${agreementText} ${splitText}. See each judge’s assessment for their individual evidence and recommendations.`
+      .replace(/\s+\./g, '.')
+      .replace(/\.\s+\./g, '.');
+    feedbackVi = `Tóm tắt hội đồng: điểm tổng thể do từng giám khảo tự tính từ các tiêu chí có trung bình là ${overallText}. ${bestAgreement ? `Hai đánh giá gần nhau nhất ở tiêu chí ${bestAgreement.label}` : 'Không có tiêu chí chung được chấm'}${largestSplit ? ` và khác biệt nhiều nhất ở ${largestSplit.label}` : ''}. Xem phần đánh giá riêng của từng giám khảo để đọc bằng chứng và đề xuất.`;
+  }
+
   return {
     status: unavailable.length > 0 ? 'PARTIAL' : 'DONE',
-    band: meanBand(bands),
+    band,
     criteria,
-    feedback: ordered.find((opinion) => opinion.feedback)?.feedback ?? '',
-    feedbackVi: ordered.find((opinion) => opinion.feedbackVi)?.feedbackVi ?? '',
+    feedback,
+    feedbackVi,
     strengths: dedupe(ordered.flatMap((opinion) => opinion.strengths), (text) => text, 6),
-    improvements: dedupe(ordered.flatMap((opinion) => opinion.improvements), (text) => text, 6),
+    improvements: dedupe(ordered.flatMap((opinion) => opinion.improvements).filter((text) => !unhelpfulBandAdvice(text)), (text) => text, 6),
     corrections: dedupe(ordered.flatMap((opinion) => opinion.corrections), (item) => item.original, 10),
     notes: dedupe(ordered.flatMap((opinion) => opinion.notes), (text) => text, 6),
     judges: ordered,
     spread: bands.length >= 2 ? roundHalfBand(Math.max(...bands) - Math.min(...bands)) : null,
+    criterionSplits,
     unavailable,
     createdAt,
   };
@@ -353,11 +444,19 @@ function readCriteria(raw: unknown): Array<{ key: string; band: number | null; c
   return result;
 }
 
+const citationOrFancyVocabularyAdvice = /(?:\b(?:add|include|insert|cite|reference|mention|support)\b.{0,90}\b(?:statistics?|research|stud(?:y|ies)|citations?|academic source|harvard)\b|\b(?:statistics?|research reference|academic citations?|named studies|higher[- ]level academic collocations|fancier synonyms|more sophisticated vocabulary|advanced synonyms)\b)/i;
+
+/** Keep feedback focused on rubric-aligned improvements, not citation or fancy-word myths. */
+export function unhelpfulBandAdvice(text: string): boolean {
+  return citationOrFancyVocabularyAdvice.test(text);
+}
+
 export function normaliseGrade(
   raw: RawGrade,
   providerId: string,
   providerModel: string,
   expectedKeys: string[],
+  sourceText = '',
 ): AiGradeResult {
   const byKey = new Map<string, { band: number | null; comment: string }>();
   for (const item of readCriteria(pick(raw, 'criteria', 'criteriaScores', 'criteria_scores', 'scores', 'bands', 'rubric'))) {
@@ -378,16 +477,20 @@ export function normaliseGrade(
     };
   });
 
-  // The overall band is derived from the available criteria, not trusted blindly.
+  // A judge's total follows its own criterion scores; a reported overallBand is
+  // never blended with a second, opaque estimate. Speaking pronunciation is
+  // intentionally excluded because a transcript cannot establish it.
   const available = criteria.filter((criterion) => criterion.band !== null).map((criterion) => criterion.band as number);
-  const derived = available.length > 0 ? roundHalf(available.reduce((sum, band) => sum + band, 0) / available.length) : null;
-  const reported = toBand(pick(raw, 'overallBand', 'overall_band', 'overall', 'overallScore', 'overall_score', 'band', 'score'));
-  const band = reported !== null && available.length >= 2 ? roundHalf((reported + (derived ?? reported)) / 2) : (reported ?? derived);
+  const assessedKeys = expectedKeys.filter((key) => key !== 'PRONUNCIATION');
+  const band = meanBand(available);
   if (band === null) {
     throw new ApiError(
       'AI_UNAVAILABLE',
       'The judge answered without a usable band score, so nothing was saved. Please try again.',
     );
+  }
+  if (available.length < assessedKeys.length) {
+    throw new ApiError('AI_UNAVAILABLE', 'The judge did not score every assessed criterion, so nothing was saved. Please try again.');
   }
 
   const feedbackRaw = pick(raw, 'feedback', 'Feedback', 'summary', 'overallFeedback', 'overall_feedback', 'comment', 'comments');
@@ -399,7 +502,8 @@ export function normaliseGrade(
     feedback: firstString(feedbackRaw) ?? 'No summary was returned by the judge.',
     feedbackVi: firstString(pick(raw, 'feedbackVi', 'feedback_vi', 'vietnamese', 'tiengViet', 'summaryVi')) ?? '',
     strengths: toStringArray(pick(raw, 'strengths', 'positives', 'whatWentWell')),
-    improvements: toStringArray(pick(raw, 'improvements', 'weaknesses', 'areasForImprovement', 'areas_for_improvement', 'tips')),
+    improvements: toStringArray(pick(raw, 'improvements', 'weaknesses', 'areasForImprovement', 'areas_for_improvement', 'tips'))
+      .filter((text) => !unhelpfulBandAdvice(text)),
     corrections: Array.isArray(correctionsRaw)
       ? correctionsRaw
           .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
@@ -413,12 +517,16 @@ export function normaliseGrade(
               suggestion: String(pick(item, 'suggestion', 'corrected', 'correction', 'better', 'improved', 'fix', 'after') ?? '').slice(0, 500),
               reason: String(pick(item, 'reason', 'explanation', 'why', 'note') ?? '').slice(0, 500),
               // Absent (older scores or a model that ignored the field) counts as a genuine error.
-              isActualError: typeof isActualErrorRaw === 'boolean' ? isActualErrorRaw : true,
+              isActualError: Number.isFinite(confidence) && confidence < 0.7
+                ? false
+                : typeof isActualErrorRaw === 'boolean'
+                  ? isActualErrorRaw
+                  : true,
               category: String(pick(item, 'category', 'type', 'kind') ?? '').slice(0, 40) || undefined,
               confidence: Number.isFinite(confidence) ? confidence : undefined,
             };
           })
-          .filter((item) => item.original && item.suggestion)
+          .filter((item) => item.original && item.suggestion && (!sourceText || sourceText.includes(item.original)))
       : [],
     vocabulary: readVocabulary(pick(raw, 'vocabulary', 'vocab', 'words', 'suggestedVocabulary')),
     notes: toStringArray(pick(raw, 'notes', 'caveats')),
@@ -609,6 +717,96 @@ async function loadLatestOpinions(
   return result;
 }
 
+interface StoredAdjudication {
+  band: number | null;
+  criteria: JudgeCriterion[];
+  rationale: string;
+  criterionKeys: string[];
+  overallReviewed: boolean;
+  createdAt: string;
+}
+
+async function loadWritingAdjudications(env: Env, ids: string[]): Promise<Map<string, StoredAdjudication>> {
+  const result = new Map<string, StoredAdjudication>();
+  for (let offset = 0; offset < ids.length; offset += 40) {
+    const chunk = ids.slice(offset, offset + 40);
+    const rows = await env.DB.prepare(
+      `SELECT entity_id, band, criteria_json, rationale, criterion_keys_json, overall_reviewed, created_at
+         FROM ai_adjudications WHERE entity_type = 'WRITING' AND entity_id IN (${chunk.map(() => '?').join(', ')})`,
+    )
+      .bind(...chunk)
+      .all<{
+        entity_id: string;
+        band: number | null;
+        criteria_json: string;
+        rationale: string;
+        criterion_keys_json: string;
+        overall_reviewed: number;
+        created_at: string;
+      }>()
+      .catch((error: unknown) => {
+        console.warn('ai_adjudications_unreadable', error instanceof Error ? error.message : error);
+        return { results: [] };
+      });
+    for (const row of rows.results ?? []) {
+      const criteria = safeParse(row.criteria_json);
+      const keys = safeParse(row.criterion_keys_json);
+      result.set(row.entity_id, {
+        band: row.band,
+        criteria: Array.isArray(criteria) ? criteria as JudgeCriterion[] : [],
+        rationale: row.rationale ?? '',
+        criterionKeys: Array.isArray(keys) ? keys.filter((key): key is string => typeof key === 'string') : [],
+        overallReviewed: row.overall_reviewed === 1,
+        createdAt: row.created_at,
+      });
+    }
+  }
+  return result;
+}
+
+function applyStoredAdjudication(view: AiMarkView, stored: StoredAdjudication): AiMarkView {
+  const flagged = new Set(stored.criterionKeys);
+  const adjudicatedCriteria = new Map(stored.criteria.map((criterion) => [criterion.key, criterion]));
+  return {
+    ...view,
+    band: stored.overallReviewed ? stored.band : view.band,
+    criteria: view.criteria.map((criterion) => flagged.has(criterion.key) && adjudicatedCriteria.has(criterion.key)
+      ? adjudicatedCriteria.get(criterion.key)!
+      : criterion),
+    adjudication: {
+      band: stored.band,
+      rationale: stored.rationale,
+      criteria: stored.criterionKeys,
+      overall: stored.overallReviewed,
+    },
+  };
+}
+
+async function saveWritingAdjudication(
+  env: Env,
+  entityId: string,
+  grade: AiGradeResult,
+  criterionKeys: string[],
+  overallReviewed: boolean,
+  createdAt: string,
+): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO ai_adjudications (entity_type, entity_id, band, criteria_json, rationale,
+                                   criterion_keys_json, overall_reviewed, created_at)
+     VALUES ('WRITING', ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(entity_type, entity_id) DO UPDATE SET band = excluded.band,
+       criteria_json = excluded.criteria_json, rationale = excluded.rationale,
+       criterion_keys_json = excluded.criterion_keys_json,
+       overall_reviewed = excluded.overall_reviewed, created_at = excluded.created_at`,
+  )
+    .bind(entityId, grade.band, JSON.stringify(grade.criteria), grade.feedback, JSON.stringify(criterionKeys), overallReviewed ? 1 : 0, createdAt)
+    .run();
+}
+
+async function clearWritingAdjudication(env: Env, entityId: string): Promise<void> {
+  await env.DB.prepare("DELETE FROM ai_adjudications WHERE entity_type = 'WRITING' AND entity_id = ?").bind(entityId).run();
+}
+
 /** Who should be on the panel right now (empty when AI is not configured). */
 async function plannedPanel(env: Env): Promise<JudgeLabel[]> {
   try {
@@ -626,19 +824,25 @@ function viewFromOpinions(
   entityType: EntityType,
   byJudge: Map<JudgeLabel, { opinion: JudgeOpinion; createdAt: string }>,
   planned: JudgeLabel[],
+  adjudication?: StoredAdjudication,
 ): AiMarkView {
   const entries = [...byJudge.values()];
   const missing = planned.filter((label) => !byJudge.has(label));
   const createdAt = entries.map((entry) => entry.createdAt).sort().at(-1) ?? nowIso();
-  return combineOpinions(entries.map((entry) => entry.opinion), criterionKeys(entityType), missing, createdAt);
+  const view = combineOpinions(entries.map((entry) => entry.opinion), criterionKeys(entityType), missing, createdAt);
+  return adjudication ? applyStoredAdjudication(view, adjudication) : view;
 }
 
 /** The panel's stored verdict for each of the given Writing submissions. */
 export async function loadWritingMarks(env: Env, submissionIds: string[]): Promise<Map<string, AiMarkView>> {
   const views = new Map<string, AiMarkView>();
   if (submissionIds.length === 0) return views;
-  const [opinions, planned] = await Promise.all([loadLatestOpinions(env, 'WRITING', submissionIds), plannedPanel(env)]);
-  for (const [id, byJudge] of opinions) views.set(id, viewFromOpinions('WRITING', byJudge, planned));
+  const [opinions, planned, adjudications] = await Promise.all([
+    loadLatestOpinions(env, 'WRITING', submissionIds),
+    plannedPanel(env),
+    loadWritingAdjudications(env, submissionIds),
+  ]);
+  for (const [id, byJudge] of opinions) views.set(id, viewFromOpinions('WRITING', byJudge, planned, adjudications.get(id)));
   return views;
 }
 
@@ -808,9 +1012,19 @@ export async function markWritingSubmission(
     }
 
     let view = viewFromOpinions('WRITING', answers, panel.map((judge) => judge.label));
+    if (asked.length === 0) {
+      const stored = (await loadWritingAdjudications(env, [submissionId])).get(submissionId);
+      if (stored) view = applyStoredAdjudication(view, stored);
+    } else {
+      await clearWritingAdjudication(env, submissionId).catch((error: unknown) => {
+        console.warn('ai_adjudication_clear_failed', error instanceof Error ? error.message : error);
+      });
+    }
 
-    // A split of a band or more is settled by a third examiner, not by averaging.
-    if (view.spread !== null && view.spread >= JUDGE_SPLIT_THRESHOLD && answers.size >= 2 && panel[0]) {
+    const overallSplit = view.spread !== null && view.spread >= JUDGE_SPLIT_THRESHOLD;
+    // A third examiner reviews either a 1.0+ overall split or any criterion
+    // split of 1.5+. Criterion-only reviews do not silently replace the overall.
+    if (!view.adjudication && !judgesAgree(view) && answers.size >= 2 && panel[0]) {
       try {
         const opinions: AdjudicationOpinion[] = [...answers.values()].map((answer) => ({
           judge: answer.opinion.judge,
@@ -825,12 +1039,24 @@ export async function markWritingSubmission(
           responseText: submission.response_text,
           opinions,
         });
+        const adjudicatedByKey = new Map(adjudicated.criteria.map((criterion) => [criterion.key, criterion]));
+        const flagged = new Set(view.criterionSplits);
         view = {
           ...view,
-          band: adjudicated.band,
-          criteria: adjudicated.criteria.length > 0 ? adjudicated.criteria : view.criteria,
-          adjudication: { band: adjudicated.band, rationale: adjudicated.feedback },
+          band: overallSplit ? adjudicated.band : view.band,
+          criteria: view.criteria.map((criterion) => flagged.has(criterion.key) && adjudicatedByKey.has(criterion.key)
+            ? adjudicatedByKey.get(criterion.key)!
+            : criterion),
+          adjudication: {
+            band: adjudicated.band,
+            rationale: adjudicated.feedback,
+            criteria: view.criterionSplits,
+            overall: overallSplit,
+          },
         };
+        await saveWritingAdjudication(env, submissionId, adjudicated, view.criterionSplits, overallSplit, nowIso()).catch((error: unknown) => {
+          console.warn('ai_adjudication_save_failed', error instanceof Error ? error.message : error);
+        });
       } catch {
         // Adjudication is best-effort: if the tie-breaker is unavailable, the panel mean stands.
       }

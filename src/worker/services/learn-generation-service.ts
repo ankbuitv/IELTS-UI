@@ -6,7 +6,7 @@ import { completeJson } from '../ai/providers';
 import { describeAiFailure } from '../ai/failure';
 import { AI_NOT_CONFIGURED_MESSAGE } from '../ai/judges';
 import { buildLessonGenerationMessages, buildPersonalLessonMessages } from '../ai/learn-prompts';
-import { normaliseLessonPayload } from '../../shared/lesson-payload';
+import { lessonItemCount, normaliseLessonPayload } from '../../shared/lesson-payload';
 import {
   type LearnBand,
   type LessonKind,
@@ -55,15 +55,21 @@ function lessonFailure(error: unknown, task: 'lesson-generate' | 'personal-lesso
  * request and never a broken lesson.
  */
 
-/** How many lessons one provider call is asked for. Bigger batches truncate. */
-const MAX_LESSONS_PER_CALL = 4;
-/** Items the prompt asks for, per kind. */
+/** Vocab is compact enough to batch; 30-question lesson types are generated one at a time. */
+const MAX_LESSONS_PER_CALL: Record<LessonKind, number> = {
+  VOCAB: 6,
+  PARAPHRASE: 1,
+  READING: 1,
+  WRITING: 1,
+  SPEAKING: 1,
+};
+/** Content items per generated lesson; six vocabulary words expand to about thirty exercises in the player. */
 const ITEMS_PER_LESSON: Record<LessonKind, number> = {
   VOCAB: 6,
-  PARAPHRASE: 4,
-  READING: 4,
-  WRITING: 6,
-  SPEAKING: 6,
+  PARAPHRASE: 30,
+  READING: 30,
+  WRITING: 30,
+  SPEAKING: 30,
 };
 
 export interface GenerateLessonsInput {
@@ -109,23 +115,31 @@ async function existingAtBand(
 
 /** Turns one raw generated lesson into a payload of the requested kind. */
 function payloadFromRaw(kind: LessonKind, raw: Record<string, unknown>): LessonPayload | null {
-  switch (kind) {
-    case 'VOCAB':
-      return normaliseLessonPayload(kind, { words: raw.words });
-    case 'PARAPHRASE':
-    case 'WRITING':
-    case 'SPEAKING':
-      return normaliseLessonPayload(kind, { items: raw.items });
-    case 'READING':
-      return normaliseLessonPayload(kind, { passage: raw.passage, questions: raw.questions });
-    default:
-      return null;
-  }
+  const payload = (() => {
+    switch (kind) {
+      case 'VOCAB':
+        return normaliseLessonPayload(kind, { words: raw.words });
+      case 'PARAPHRASE':
+      case 'SPEAKING':
+        return normaliseLessonPayload(kind, { items: raw.items });
+      case 'WRITING':
+        return normaliseLessonPayload(kind, { taskPrompt: raw.taskPrompt, taskType: raw.taskType, items: raw.items });
+      case 'READING':
+        return normaliseLessonPayload(kind, { passage: raw.passage, questions: raw.questions });
+      default:
+        return null;
+    }
+  })();
+  if (!payload) return null;
+  if (kind === 'VOCAB') return payload.kind === 'VOCAB' && payload.words.length >= 6 ? payload : null;
+  if (lessonItemCount(payload) < ITEMS_PER_LESSON[kind]) return null;
+  if (kind === 'WRITING' && (payload.kind !== 'WRITING' || !payload.taskPrompt || !payload.taskType)) return null;
+  return payload;
 }
 
 export async function generateLessons(env: Env, input: GenerateLessonsInput): Promise<GenerateLessonsResult> {
   await ensureCatalogue(env);
-  const count = Math.min(MAX_LESSONS_PER_CALL, Math.max(1, Math.floor(input.count)));
+  const count = Math.min(MAX_LESSONS_PER_CALL[input.kind], Math.max(1, Math.floor(input.count)));
   const avoid = await existingAtBand(env, input.band);
 
   let data: { lessons?: unknown[] };
@@ -141,8 +155,8 @@ export async function generateLessons(env: Env, input: GenerateLessonsInput): Pr
         avoidTerms: avoid.terms,
       }),
       temperature: 0.8,
-      maxTokens: 6_000,
-      timeoutMs: 60_000,
+      maxTokens: input.kind === 'VOCAB' ? 8_000 : 20_000,
+      timeoutMs: 90_000,
       reasoningEffort: 'medium',
     });
     data = result.data ?? {};

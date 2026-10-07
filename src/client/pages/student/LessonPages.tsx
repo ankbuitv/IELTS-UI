@@ -100,6 +100,8 @@ export function LessonPage() {
       exercises={exercises}
       videoUrl={lesson.videoUrl}
       legendary={lesson.legendary}
+      taskPrompt={lesson.payload.kind === 'WRITING' ? lesson.payload.taskPrompt : undefined}
+      taskType={lesson.payload.kind === 'WRITING' ? lesson.payload.taskType : undefined}
       onExit={() => navigate(returnTo)}
       onFinish={finish}
       onRestart={restart}

@@ -38,7 +38,7 @@ import {
   updateGamificationIdentity,
 } from '../services/learn-social-service';
 import { lookupWord } from '../services/dictionary-service';
-import { DAY_PATTERN, isLearnBand, type LearnBand, type PlanItemStatus } from '../../shared/learn';
+import { DAY_PATTERN, isLearnBand, isPlausibleDay, type LearnBand, type PlanItemStatus } from '../../shared/learn';
 import { isShopItemKey, type ShopItemKey } from '../../shared/shop';
 import { isLeaderboardScope, isLeaderboardWindow, type LeaderboardScope, type LeaderboardWindow } from '../../shared/leaderboard';
 
@@ -129,6 +129,7 @@ learnRouter.post('/everyday', async (c) => {
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const body = await parseBody(c, z.object({ band: z.number().min(4).max(8), day: daySchema }));
   if (!isLearnBand(body.band)) throw ApiError.validation('Choose a band from 4.0 to 8.0 in half bands.');
+  if (!isPlausibleDay(body.day)) throw ApiError.validation('That calendar day is not valid.');
   await enforceRateLimit(
     c.env,
     { bucket: `learn-everyday:${user.id}:${body.band}`, windowSeconds: 3600, limit: 60 },

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { JUDGE_SPLIT_THRESHOLD, type AiMarkView, type JudgeLabel, type JudgeOpinion } from '@shared/judges';
+import { JUDGE_SPLIT_THRESHOLD, judgesAgree, type AiMarkView, type JudgeLabel, type JudgeOpinion } from '@shared/judges';
 import { Badge, Tabs } from './ui';
 import { Icon } from './Icon';
 import { formatBand } from '../lib/format';
@@ -25,7 +25,8 @@ export function AiMarkPanel({ mark, heading }: { mark: AiMarkView; heading?: str
   const improvements = opinion ? opinion.improvements : mark.improvements;
   const corrections = opinion ? opinion.corrections : mark.corrections;
   const notes = opinion ? opinion.notes : mark.notes;
-  const split = mark.spread !== null && mark.spread >= JUDGE_SPLIT_THRESHOLD;
+  const overallSplit = mark.spread !== null && mark.spread >= JUDGE_SPLIT_THRESHOLD;
+  const split = !judgesAgree(mark);
   const bandShown = opinion ? opinion.band : mark.band;
 
   const judgeBand = (key: string, label: JudgeLabel): number | null => {
@@ -43,16 +44,22 @@ export function AiMarkPanel({ mark, heading }: { mark: AiMarkView; heading?: str
         <div className="aimark__who">
           <strong>{heading ?? 'AI marking'}</strong>
           <span>
-            {mark.adjudication
-              ? 'The judges split, so a third examiner reviewed the response and both opinions to settle this band.'
-              : mark.judges.length >= 2
-                ? 'Judge01 and Judge02 marked this independently. The band is their average.'
-                : mark.unavailable.length > 0
-                  ? `Marked by ${mark.judges[0]?.judge ?? 'one judge'}. ${mark.unavailable.join(' and ')} could not answer this time.`
-                  : `Marked by ${mark.judges[0]?.judge ?? 'the judge'}.`}
+            {mark.adjudication?.overall
+              ? `A third examiner adjudicated the overall band${mark.adjudication.criteria?.length ? ' and flagged criteria' : ''}.`
+              : mark.adjudication?.criteria?.length
+                ? `A third examiner reviewed ${mark.adjudication.criteria.length} flagged criterion split${mark.adjudication.criteria.length === 1 ? '' : 's'}; the consensus overall remains the judges’ mean.`
+                : mark.judges.length >= 2
+                  ? 'Each judge’s overall is derived from their own criterion scores; the consensus is the mean of those judge overalls, rounded to the nearest half band.'
+                  : mark.unavailable.length > 0
+                    ? `Marked by ${mark.judges[0]?.judge ?? 'one judge'}. ${mark.unavailable.join(' and ')} could not answer this time.`
+                    : `Marked by ${mark.judges[0]?.judge ?? 'the judge'}.`}
           </span>
           {split ? (
-            <Badge tone="warning">The judges differ by {mark.spread?.toFixed(1)} bands: read both opinions</Badge>
+            <Badge tone="warning">
+              {overallSplit
+                ? `Overall scores differ by ${mark.spread?.toFixed(1)} bands: read both opinions`
+                : `Criteria differ by 1.5+ bands: ${mark.criterionSplits.map((key) => mark.criteria.find((criterion) => criterion.key === key)?.label ?? key).join(', ')}`}
+            </Badge>
           ) : null}
           {mark.status === 'PARTIAL' ? <Badge tone="warning">Partial result</Badge> : null}
         </div>
@@ -91,6 +98,9 @@ export function AiMarkPanel({ mark, heading }: { mark: AiMarkView; heading?: str
       </div>
 
       {feedback ? <p className="aimark__feedback">{feedback}</p> : null}
+      {view === 'CONSENSUS' && mark.adjudication?.rationale ? (
+        <p className="aimark__feedback"><strong>Third examiner:</strong> {mark.adjudication.rationale}</p>
+      ) : null}
       {feedbackVi ? (
         <p className="aimark__vi" lang="vi">
           <span>Tóm tắt</span>

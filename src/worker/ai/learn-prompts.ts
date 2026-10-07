@@ -56,7 +56,7 @@ const CONTRACTS: Record<LessonKind, { contract: string; kindRules: string }> = {
   },
   PARAPHRASE: {
     kindRules: `PARAPHRASE RULES
-- Four items per lesson. Each item is one sentence and three wrong restatements.
+- Each item is one original sentence and three wrong restatements; produce the exact item count requested in OUTPUT.
 - "answer" must keep the meaning of "original" while changing the wording (different verb, different structure, or a nominalisation).
 - Include natural Vietnamese translations in "originalVi" and "answerVi" so the source and correct restatement are clear.
 - Each of the three "distractors" must look plausible but change the meaning in ONE specific way: the opposite, a stronger or weaker claim, or a different subject or time. Never a grammar error.
@@ -65,28 +65,29 @@ const CONTRACTS: Record<LessonKind, { contract: string; kindRules: string }> = {
   },
   READING: {
     kindRules: `READING RULES
-- Two lessons per call at most. Each lesson is one original passage of 90 to 130 words, on an academic or semi-academic topic, with four questions.
+- Each lesson is one original passage of about 450 to 650 words, on an academic or semi-academic topic, with exactly the number of questions requested in OUTPUT. This should be a short reading drill, not a full-length test.
 - Every question must be answerable from the passage alone, and only from the passage.
 - The four "options" must be the same kind of thing (all noun phrases, or all full clauses) and similar in length.
 - "answer" is the zero-based index of the correct option.
 - "evidence" quotes the exact words from the passage that support the answer; "evidenceVi" translates those words naturally into Vietnamese.
-- Mix question types across the four: one main idea, one detail, one inference, one meaning-of-a-word-or-phrase.`,
+- Mix question types: main idea, detail, inference, and meaning-of-a-word-or-phrase.`,
     contract: `{"lessons":[{"title":"...","blurb":"...","passage":"...","questions":[{"stem":"...","options":["...","...","...","..."],"answer":0,"evidence":"...","evidenceVi":"..."}]}]}`,
   },
   WRITING: {
     kindRules: `WRITING RULES
-- Six items per lesson. Each item trains one sentence of Task 1 or Task 2 language.
-- "instruction" is Vietnamese and is a concrete, answerable task: give a specific context or idea and directly ask the learner to express it in one complete English sentence. It may name the structure to use (for example, "Dùng although để nối hai ý: xe buýt rẻ hơn nhưng thường đông hơn.").
-- Never use a topic label or vague task such as "Write about education"; include enough facts or meaning that one clear model sentence is possible.
-- "model" is the English sentence they are aiming at, at most 20 words, natural and grammatical.
-- "modelVi" is a natural Vietnamese translation of the complete model sentence.
-- "hint" names the key word or structure in at most 6 words.
-- The model sentence must be something a candidate could really write in an essay, not a textbook example about apples.`,
-    contract: `{"lessons":[{"title":"...","blurb":"...","items":[{"instruction":"...","model":"...","modelVi":"...","hint":"..."}]}]}`,
+- Include a real, original IELTS-style Task 1 or Task 2 prompt in "taskPrompt" and state "taskType" as "TASK_1" or "TASK_2".
+- Produce exactly the number of sentence exercises requested in OUTPUT. Each item practises a useful sentence-level skill for answering that task (overview, comparison, position, reason, example, concession, or conclusion).
+- "instruction" is Vietnamese and tells the learner what to write; it may name a structure without giving away the full model.
+- "model" is one natural, grammatical English sentence of at most 24 words that could genuinely appear in an IELTS response; "modelVi" translates it naturally into Vietnamese.
+- "hint" names the key idea or structure in at most 8 words.
+- Task 1 must be self-contained because no chart image is attached: include every relevant category, unit, time period and figure directly in "taskPrompt" as concise prose or an inline text table. Label invented values as fictional practice data; never ask the learner to make up missing figures.
+- For a process or map prompt, describe each stage or before/after change completely in "taskPrompt". For Task 2, write a concrete, original question with all required parts.
+- Do not request citations, external research or unsupported statistics as a way to raise the IELTS score.`,
+    contract: `{"lessons":[{"title":"...","blurb":"...","taskType":"TASK_1|TASK_2","taskPrompt":"...","items":[{"instruction":"...","model":"...","modelVi":"...","hint":"..."}]}]}`,
   },
   SPEAKING: {
     kindRules: `SPEAKING RULES
-- Six items per lesson, all from one Part 1, Part 2 or Part 3 theme. Say which in the lesson blurb.
+- Produce exactly the number of items requested in OUTPUT, all from one Part 1, Part 2 or Part 3 theme. Say which in the lesson blurb.
 - "question" is what an examiner would actually ask, word for word.
 - "cue" lists in at most 12 words what a good answer covers.
 - "sample" is a model spoken answer of 35 to 60 words: natural, with the connectives and hedging of real speech, not a written paragraph.
@@ -108,7 +109,8 @@ ${SHARED_RULES}
 ${spec.kindRules}
 
 OUTPUT
-${input.count} lessons in the "lessons" array, each with the number of items the rules above require.
+${input.count} lessons in the "lessons" array.
+${input.kind === 'VOCAB' ? 'Each vocabulary lesson must contain exactly 6 words; the player turns these into about 30 varied exercises.' : `Every lesson must contain exactly ${input.items} playable items (${input.items} questions/prompts). Do not stop early or return examples.`}
 Output ONLY this JSON object:
 ${spec.contract}`,
     },
@@ -147,14 +149,15 @@ export function buildEverydayLessonMessages(input: EverydayLessonGenerationInput
 ${SHARED_RULES}
 
 DAILY LESSON RULES
-- Create exactly six original lessons, one for each numbered request, with six playable items each.
-- Use the requested kind exactly. All lessons should be practical IELTS English, not obscure vocabulary drills.
+- Create exactly six original lessons, one for each numbered request, using the requested kind exactly.
+- VOCAB is the exception: provide exactly six distinct target words with useful Vietnamese glosses and natural example sentences. The player builds 30 varied recall exercises from those six words.
+- Every PARAPHRASE, READING, WRITING and SPEAKING lesson must contain exactly 30 playable items. Do not stop early or return sample subsets.
+- All lessons should be practical IELTS English at the requested band, not obscure drills. Give each a short, distinctive title and one-sentence blurb. Do not repeat a topic or target phrase inside the batch.
 - VOCAB payload: {"words":[{"term":"...","pos":"noun|verb|adjective|adverb|phrase","meaning":"...","vi":"...","example":"...","exampleVi":"..."}]}. Each sentence contains its term exactly once.
-- PARAPHRASE payload: {"items":[{"original":"...","originalVi":"...","answer":"...","answerVi":"...","distractors":["...","...","..."],"note":"..."}]}. The answer keeps the meaning; each distractor changes one specific detail.
-- READING payload: {"passage":"...","questions":[{"stem":"...","options":["...","...","...","..."],"answer":0,"evidence":"exact words from the passage","evidenceVi":"..."}]}. Use one original passage of 100–140 words and six answerable questions.
-- WRITING payload: {"items":[{"instruction":"Vietnamese task instruction","model":"...","modelVi":"...","hint":"..."}]}. Each instruction must be a real question/task asking the learner to produce a sentence, not a topic label.
-- SPEAKING payload: {"items":[{"question":"...","cue":"...","sample":"...","sampleVi":"..."}]}. Each question must be a natural examiner-style question.
-- Give each lesson a short, distinctive title and a one-sentence blurb. Never repeat a topic or target phrase inside the batch.
+- PARAPHRASE payload: {"items":[{"original":"...","originalVi":"...","answer":"...","answerVi":"...","distractors":["...","...","..."],"note":"..."}]}. Make exactly 30 items; the answer keeps the meaning and each distractor changes one specific detail.
+- READING payload: {"passage":"...","questions":[{"stem":"...","options":["...","...","...","..."],"answer":0,"evidence":"exact words from the passage","evidenceVi":"..."}]}. Use one original passage of 450 to 650 words and exactly 30 answerable questions. Evidence must be copied verbatim from the passage.
+- WRITING payload: {"taskType":"TASK_1|TASK_2","taskPrompt":"...","items":[{"instruction":"Vietnamese task instruction","model":"...","modelVi":"...","hint":"..."}]}. Include a full, original IELTS Writing task prompt and exactly 30 sentence exercises that practise answering it. For Task 1 include every category, unit, time period and figure directly in the prompt; label invented values as fictional practice data. For maps or processes, describe all stages or changes. For Task 2, include all parts of a complete essay question. Each instruction must be a specific task, not a topic label. Never require citations, external research or invented statistics.
+- SPEAKING payload: {"items":[{"question":"...","cue":"...","sample":"...","sampleVi":"..."}]}. Make exactly 30 natural examiner-style questions with concise cues and spoken model answers.
 - Output ONLY this JSON object, no markdown:
 {"lessons":[{"title":"...","blurb":"...","kind":"VOCAB|PARAPHRASE|READING|WRITING|SPEAKING","payload":{}}]}`,
     },

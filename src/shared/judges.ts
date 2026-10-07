@@ -76,19 +76,24 @@ export interface AiMarkView {
   judges: JudgeOpinion[];
   /** Highest minus lowest judge band (null with fewer than two bands). */
   spread: number | null;
+  /** Criteria whose independent judge scores differ by at least 1.5 bands. */
+  criterionSplits: string[];
   /**
-   * Set when the judges split by a band or more and a third examiner settled the
-   * final band. `band` above is then the adjudicated band, not the plain mean.
+   * Set when a third examiner reviewed an overall and/or criterion split.
+   * `band` is replaced only when the overall split triggered adjudication.
    */
-  adjudication?: { band: number | null; rationale: string } | null;
+  adjudication?: { band: number | null; rationale: string; criteria?: string[]; overall?: boolean } | null;
   /** Judges that could not answer, by label. */
   unavailable: JudgeLabel[];
   createdAt: string;
 }
 
-/** Judges whose bands differ by this much or more are flagged as "split". */
+/** Judge overall bands this far apart or more trigger adjudication. */
 export const JUDGE_SPLIT_THRESHOLD = 1;
+/** Any individual criterion split this far apart or more also triggers adjudication. */
+export const JUDGE_CRITERION_SPLIT_THRESHOLD = 1.5;
 
-export function judgesAgree(view: Pick<AiMarkView, 'spread'>): boolean {
-  return view.spread === null || view.spread < JUDGE_SPLIT_THRESHOLD;
+export function judgesAgree(view: { spread: number | null; criterionSplits?: string[] }): boolean {
+  return (view.spread === null || view.spread < JUDGE_SPLIT_THRESHOLD)
+    && (view.criterionSplits?.length ?? 0) === 0;
 }

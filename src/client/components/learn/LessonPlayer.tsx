@@ -161,6 +161,8 @@ export function LessonPlayer({
   videoUrl,
   legendary,
   closingQuote,
+  taskPrompt,
+  taskType,
 }: {
   title: string;
   exercises: Exercise[];
@@ -170,6 +172,9 @@ export function LessonPlayer({
   videoUrl?: string;
   legendary?: boolean;
   closingQuote?: string;
+  /** Full IELTS-style writing task that the sentence drills practise. */
+  taskPrompt?: string;
+  taskType?: 'TASK_1' | 'TASK_2';
 }) {
   const [queue, setQueue] = useState<Exercise[]>(exercises);
   const [index, setIndex] = useState(0);
@@ -556,6 +561,12 @@ export function LessonPlayer({
         </header>
 
         <main className="lesson__main">
+          {taskPrompt ? (
+            <section className="lesson__task-prompt" aria-label="IELTS writing task prompt">
+              <p>IELTS Writing {taskType === 'TASK_1' ? 'Task 1' : 'Task 2'}</p>
+              <blockquote>{taskPrompt}</blockquote>
+            </section>
+          ) : null}
           {legendary ? (
             <p className="lesson__retry" style={{ color: '#b8860b', fontWeight: 700 }}>★ Legendary — harder set. Look-ups are off; answer from memory.</p>
           ) : null}

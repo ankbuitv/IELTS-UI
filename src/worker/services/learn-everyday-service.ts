@@ -91,7 +91,7 @@ async function generateSet(env: Env, userId: string, band: LearnBand, day: strin
     const result = await completeJson<{ lessons?: RawEverydayLesson[] }>(env, {
       messages: buildEverydayLessonMessages({ band, kinds, topics, day }),
       temperature: 0.85,
-      maxTokens: 12_000,
+      maxTokens: 20_000,
       timeoutMs: 90_000,
       reasoningEffort: 'medium',
     });
@@ -119,7 +119,12 @@ async function generateSet(env: Env, userId: string, band: LearnBand, day: strin
     const expectedKind = kinds[slot]!;
     const title = typeof raw.title === 'string' ? raw.title.trim().slice(0, 120) : '';
     const payload = kind === expectedKind ? normaliseLessonPayload(kind, raw.payload) : null;
-    if (!kind || !payload || !title || titles.has(title.toLowerCase())) {
+    const validSize = payload && (kind === 'VOCAB'
+      ? payload.kind === 'VOCAB' && payload.words.length === 6
+      : lessonItemCount(payload) === 30);
+    const validWritingTask = kind !== 'WRITING'
+      || (payload?.kind === 'WRITING' && Boolean(payload.taskPrompt) && Boolean(payload.taskType));
+    if (!kind || !payload || !validSize || !validWritingTask || !title || titles.has(title.toLowerCase())) {
       throw new ApiError('AI_UNAVAILABLE', 'One of today’s generated lessons could not be checked. Nothing was published; try again shortly.');
     }
     titles.add(title.toLowerCase());
