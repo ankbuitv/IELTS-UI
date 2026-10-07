@@ -39,7 +39,7 @@ const MAIN_NAV: NavItem[] = [
 const MORE_NAV: NavItem[] = [
   { to: '/learn/shop', label: 'Shop', icon: 'cart' },
   { to: '/learn/leaderboard', label: 'Leaderboards', icon: 'trophy' },
-  { to: '/friends', label: 'Friends', icon: 'users' },
+  { to: '/learn/friends', label: 'Friends', icon: 'users' },
   { to: '/learn/plan', label: 'Study plan', icon: 'calendar' },
   { to: '/speaking', label: 'Speaking', icon: 'mic' },
   { to: '/analytics', label: 'My progress', icon: 'chart' },

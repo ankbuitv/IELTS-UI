@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildLessonGenerationMessages } from '../../src/worker/ai/learn-prompts';
+import { buildEverydayLessonMessages, buildLessonGenerationMessages } from '../../src/worker/ai/learn-prompts';
 
 describe('lesson generation contracts', () => {
   const base = {
@@ -33,6 +33,19 @@ describe('lesson generation contracts', () => {
     const system = buildLessonGenerationMessages({ ...base, kind: 'SPEAKING' })[0]!.content;
     expect(system).toContain('exactly 30 playable items');
     expect(system).toContain('35 to 60 words');
-    expect(system).toContain('Never ask about the learner\'s income');
+    expect(system).toContain("Never ask about the learner's income");
+  });
+
+  it('asks Everyday Lessons for six gated lessons of about 30 questions', () => {
+    const system = buildEverydayLessonMessages({
+      band: 6.5,
+      kinds: ['VOCAB', 'VOCAB', 'PARAPHRASE', 'READING', 'WRITING', 'SPEAKING'],
+      topics: ['travel', 'work', 'study', 'home', 'health', 'food'],
+      day: '2026-10-07',
+    })[0]!.content;
+    expect(system).toContain('exactly 30 playable items');
+    expect(system).toContain('"taskPrompt"');
+    expect(system).toContain('450 to 650 words');
+    expect(system).toContain('Never require citations');
   });
 });

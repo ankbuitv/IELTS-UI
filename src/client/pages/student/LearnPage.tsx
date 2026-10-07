@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   LEARN_BANDS,
   LEARN_BAND_LABELS,
@@ -20,6 +20,7 @@ import { useAsync } from '../../hooks/useAsync';
 import { Icon, type IconName } from '../../components/Icon';
 import { Stars } from '../../components/learn/Stars';
 import { Mascot, type MascotMood } from '../../components/learn/Mascot';
+import { PlayerAvatar, playerNameClass } from '../../components/learn/PlayerAvatar';
 import { Confetti, StreakPulse } from '../../components/learn/Effects';
 import { DictionaryPanel } from '../../components/learn/DictionaryPanel';
 import { Button, Loading, Modal, Notice, useToast } from '../../components/ui';
@@ -41,6 +42,37 @@ function weekdayInitial(day: string): string {
 type PathLesson = CatalogueUnit['lessons'][number];
 
 const WAVE = [0, 38, 64, 38, 0, -38, -64, -38];
+const LEARN_BAND_STORAGE_KEY = 'aieo.learn-band';
+const LEARN_COMPACT_QUERY = '(max-width: 1080px), (pointer: coarse)';
+
+/** Give touch-sized layouts their own Learn composition, and follow rotation/resizing. */
+function useCompactLearnLayout(): boolean {
+  const [compact, setCompact] = useState(() =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia(LEARN_COMPACT_QUERY).matches
+      : false,
+  );
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia(LEARN_COMPACT_QUERY);
+    const update = (event: MediaQueryListEvent) => setCompact(event.matches);
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', update);
+      return () => query.removeEventListener('change', update);
+    }
+    query.addListener(update);
+    return () => query.removeListener(update);
+  }, []);
+
+  return compact;
+}
+
+function parseLearnBand(value: string | null): LearnBand | null {
+  if (!value) return null;
+  const band = Number(value);
+  return LEARN_BANDS.find((candidate) => candidate === band) ?? null;
+}
 
 /**
  * Learn: the daily path.
@@ -59,15 +91,22 @@ const WAVE = [0, 38, 64, 38, 0, -38, -64, -38];
 export function LearnPage() {
   const toast = useToast();
   const navigate = useNavigate();
+  const compactLayout = useCompactLearnLayout();
+  const [searchParams] = useSearchParams();
   const overview = useAsync<LearnOverview>(() => learnApi.overview(), []);
-  const [band, setBand] = useState<LearnBand | null>(null);
+  const [band, setBand] = useState<LearnBand | null>(() => {
+    const fromUrl = parseLearnBand(searchParams.get('band'));
+    if (fromUrl !== null) return fromUrl;
+    try {
+      return parseLearnBand(localStorage.getItem(LEARN_BAND_STORAGE_KEY));
+    } catch {
+      return null;
+    }
+  });
   const catalogue = useAsync<CatalogueResponse>(() => learnApi.catalogue(band ?? undefined), [band]);
   const board = useAsync<LeaderboardResponse>(() => learnApi.leaderboard('learn', 'week'), []);
   const [daily, setDaily] = useState<DailyWordsResult | null>(null);
   const [dailyBusy, setDailyBusy] = useState(false);
-  const [everydayStatus, setEverydayStatus] = useState<'idle' | 'loading' | 'generating' | 'ready' | 'error'>('idle');
-  const [everydayError, setEverydayError] = useState<string | null>(null);
-  const requestedEveryday = useRef(new Set<string>());
   const [planBusy, setPlanBusy] = useState(false);
   const [openLesson, setOpenLesson] = useState<string | null>(null);
   const [lookup, setLookup] = useState<string | null>(null);
@@ -160,58 +199,26 @@ export function LearnPage() {
   const progress = data?.progress ?? {};
 
   const bands = useMemo(() => catalogue.data?.bands ?? [], [catalogue.data]);
-  const reloadCatalogue = catalogue.reload;
   const selectedBand = catalogue.data?.selected.band ?? null;
   const selectedLabel = catalogue.data?.selected.label ?? '';
 
-  // The six shared daily lessons are generated once for a band/day and appended
-  // after the curriculum, where the existing sequential unlock rules gate them.
   useEffect(() => {
     if (selectedBand === null) return;
-    const key = `${today}:${selectedBand.toFixed(1)}`;
-    if (requestedEveryday.current.has(key)) return;
-    requestedEveryday.current.add(key);
-    let cancelled = false;
-    let retryTimer: number | undefined;
-    setEverydayStatus('loading');
-    setEverydayError(null);
-    const loadPack = async () => {
-      try {
-        const result = await learnApi.everydayLessons(selectedBand);
-        if (cancelled) return;
-        if (result.status === 'READY') {
-          setEverydayStatus('ready');
-          await reloadCatalogue();
-          return;
-        }
-        setEverydayStatus('generating');
-        retryTimer = window.setTimeout(() => {
-          void learnApi.everydayLessons(selectedBand).then(async (retried) => {
-            if (cancelled) return;
-            if (retried.status === 'READY') {
-              setEverydayStatus('ready');
-              await reloadCatalogue();
-            }
-          }).catch((cause) => {
-            if (!cancelled) {
-              setEverydayStatus('error');
-              setEverydayError(describeError(cause));
-            }
-          });
-        }, 4_000);
-      } catch (cause) {
-        if (!cancelled) {
-          setEverydayStatus('error');
-          setEverydayError(describeError(cause));
-        }
-      }
-    };
-    void loadPack();
-    return () => {
-      cancelled = true;
-      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
-    };
-  }, [selectedBand, today, reloadCatalogue]);
+    try {
+      localStorage.setItem(LEARN_BAND_STORAGE_KEY, String(selectedBand));
+    } catch {
+      // The server preference still works when storage is unavailable.
+    }
+  }, [selectedBand]);
+
+  const rememberBand = (next: LearnBand) => {
+    setBand(next);
+    try {
+      localStorage.setItem(LEARN_BAND_STORAGE_KEY, String(next));
+    } catch {
+      // The selection stays active for this page even in private mode.
+    }
+  };
 
   // A band is finished when every lesson in it has been done at least once.
   const completeBands = useMemo(
@@ -259,7 +266,7 @@ export function LearnPage() {
     try {
       await learnApi.setBand(next);
       setBandOpenModal(false);
-      setBand(next);
+      rememberBand(next);
       await overview.reload();
       sfx.play('unlock');
       toast.push(`Band set to ${next.toFixed(1)} · ${LEARN_BAND_LABELS[next]}.`, 'success');
@@ -279,7 +286,8 @@ export function LearnPage() {
 
   const startLesson = (lessonId: string) => {
     sfx.play('lessonStart');
-    navigate(`/learn/lesson/${lessonId}`);
+    const returnTo = `/learn?band=${encodeURIComponent(String(selectedBand ?? profile?.band ?? 5))}`;
+    navigate(`/learn/lesson/${encodeURIComponent(lessonId)}?returnTo=${encodeURIComponent(returnTo)}`);
   };
 
   if (overview.loading && !data) return <Loading label="Loading your path…" />;
@@ -306,478 +314,546 @@ export function LearnPage() {
   const streakHot = alive && profile.streak > 0 && activeToday;
   const boardTop = board.data?.rows.slice(0, 3) ?? [];
 
-  return (
-    <div className="learn">
-      <header className="arena">
-        <Confetti burst={celebrate} pieces={36} />
-        <div className="arena__mascot">
-          {streakHot ? <StreakPulse burst={1} /> : null}
-          <Mascot mood={mood} size={172} />
-        </div>
-        <div className="arena__text">
-          <p className="arena__kicker">
-            <Icon name="target" size={13} /> Band {profile.band.toFixed(1)} · {LEARN_BAND_LABELS[profile.band]}
-          </p>
-          <h1>
-            {goalDone
-              ? 'Goal reached — the rest is a bonus.'
-              : activeToday && profile.streak > 0
-                ? `${profile.streak} day${profile.streak === 1 ? '' : 's'} in a row. Keep it going.`
-                : nextLesson
-                  ? `Next up: ${nextLesson.title}`
-                  : 'Your path is waiting.'}
-          </h1>
-          <p className="arena__line">
-            {boost.active
-              ? `Double XP is running — ${boost.minutesLeft} minutes left to cash in.`
-              : goalDone
-                ? 'Every extra answer today is worth XP and coins towards the shop.'
-                : `${Math.max(0, profile.dailyGoalXp - profile.todayXp)} XP left to hit today's goal of ${profile.dailyGoalXp}.`}
-          </p>
-          <div className="arena__actions">
-            {nextLesson ? (
-              <Button variant="primary" size="lg" onClick={() => startLesson(nextLesson.id)}>
-                <Icon name="play" size={15} filled />
-                {nextLesson.title}
-                <span className="arena__xp">+XP</span>
-              </Button>
-            ) : null}
-            <Button size="lg" onClick={() => navigate('/learn/shop')}>
-              <Icon name="cart" size={15} /> Shop
-            </Button>
-            <Button size="lg" onClick={() => navigate('/learn/leaderboard')}>
-              <Icon name="trophy" size={15} /> Leaderboard
-            </Button>
-          </div>
-        </div>
-        <div className="arena__meta">
-          <div className={`arena__stat arena__stat--fire${alive && profile.streak > 0 ? ' is-hot' : ''}`}>
-            <Icon name="flame" size={22} filled />
-            <b>{alive ? profile.streak : 0}</b>
-            <span>day streak</span>
-          </div>
-          <div className="arena__stat arena__stat--xp">
-            <Icon name="bolt" size={22} filled />
-            <b>{profile.xp.toLocaleString('en')}</b>
-            <span>total XP</span>
-          </div>
-          <button type="button" className="arena__stat arena__stat--coin" onClick={() => navigate('/learn/shop')}>
-            <Icon name="coin" size={22} />
-            <b>{profile.coins.toLocaleString('en')}</b>
-            <span>coins · spend</span>
-          </button>
-          <div className={`arena__goal${goalDone ? ' arena__goal--complete' : ''}`}>
-            {goalDone ? (
-              <span className="arena__goal-check" role="img" aria-label={`Daily goal complete; ${Math.max(0, profile.todayXp - profile.dailyGoalXp)} bonus XP earned`}>
-                <Icon name="check" size={22} strokeWidth={3.2} />
-              </span>
-            ) : (
-              <svg viewBox="0 0 42 42" className="arena__ring" role="img" aria-label={`Daily goal ${goalPercent}% complete`}>
-                <circle cx="21" cy="21" r="17" className="arena__ring-track" />
-                <circle
-                  cx="21"
-                  cy="21"
-                  r="17"
-                  className="arena__ring-fill"
-                  strokeDasharray={`${(goalPercent / 100) * 106.8} 106.8`}
-                />
-              </svg>
-            )}
-            <div>
-              <b>{goalDone ? 'Goal complete' : `${profile.todayXp}/${profile.dailyGoalXp}`}</b>
-              <span>{goalDone ? `+${Math.max(0, profile.todayXp - profile.dailyGoalXp)} bonus XP` : 'today’s XP'}</span>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <section className="arena__week" aria-label="Your last seven days">
-        {data.week.map((item) => (
-          <span key={item.day} className={item.day === today ? 'is-today' : ''} title={`${item.day}: ${item.xp} XP`}>
-            <span className="arena__week-bar">
-              <i style={{ height: `${Math.max(12, Math.round((item.xp / maxWeek) * 100))}%` }} className={item.xp > 0 ? 'on' : ''} />
-            </span>
-            <small>{weekdayInitial(item.day)}</small>
-            <em>{item.xp}</em>
-          </span>
-        ))}
-        <p className="arena__week-note muted small">
-          {doneCount} of {totalLessons} lessons finished · {questsDone}/{data.quests.length} quests today
-        </p>
+  const todayPanels = (
+    <aside className="learn__today" aria-label="Today">
+      <section className="card learn-card quests-card">
+        <header className="learn-card__head">
+          <h2>Today’s quests</h2>
+          <span className="learn-card__count">{questsDone}/{data.quests.length}</span>
+        </header>
+        <ul className="quests">
+          {data.quests.map((quest) => {
+            const percent = Math.min(100, Math.round((quest.progress / Math.max(1, quest.target)) * 100));
+            return (
+              <li key={quest.key} className={quest.claimed ? 'is-done' : ''}>
+                <div className="quests__row">
+                  <b>{quest.label}</b>
+                  <span className="quests__coins">
+                    <Icon name="coin" size={12} /> {quest.coins}
+                  </span>
+                </div>
+                <div className="quests__bar">
+                  <i style={{ width: `${percent}%` }} />
+                </div>
+                <span className="quests__state tiny muted">
+                  {quest.claimed ? 'Paid' : `${quest.progress}/${quest.target}`}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       </section>
 
-      <div className="learn__grid">
-        <aside className="learn__today" aria-label="Today">
-          <section className="card learn-card quests-card">
-            <header className="learn-card__head">
-              <h2>Today’s quests</h2>
-              <span className="learn-card__count">{questsDone}/{data.quests.length}</span>
-            </header>
-            <ul className="quests">
-              {data.quests.map((quest) => {
-                const percent = Math.min(100, Math.round((quest.progress / Math.max(1, quest.target)) * 100));
+      <section className="card learn-card">
+        <header className="learn-card__head">
+          <h2>Ranking</h2>
+          <Link className="learn-card__link" to="/learn/leaderboard">
+            All <Icon name="arrowRight" size={13} />
+          </Link>
+        </header>
+        {boardTop.length === 0 ? (
+          <p className="muted small">Finish a lesson this week and your name goes on the board.</p>
+        ) : (
+          <ol className="mini-board">
+            {boardTop.map((row) => (
+              <li key={row.userId} className={row.isMe ? 'is-me' : ''}>
+                <span className="mini-board__rank">{['🥇', '🥈', '🥉'][row.rank - 1] ?? row.rank}</span>
+                <Link className="mini-board__person" to={`/learn/profile/${encodeURIComponent(row.userId)}`}>
+                  <PlayerAvatar avatarId={row.avatarId} name={row.name} size={27} effect={row.profileEffect} />
+                  <b className={playerNameClass(row.nameEffect)}><i className={`presence-dot${row.online ? ' is-online' : ''}`} />{row.name}</b>
+                </Link>
+                <span>{row.valueLabel}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+        {board.data?.me ? (
+          <p className="muted tiny">
+            You are <b>#{board.data.me.rank}</b> this week with {board.data.me.valueLabel}.
+          </p>
+        ) : null}
+      </section>
+
+      <section className="card learn-card">
+        <header className="learn-card__head">
+          <h2>Study plan</h2>
+          <Link className="learn-card__link" to="/learn/plan">
+            Open <Icon name="arrowRight" size={13} />
+          </Link>
+        </header>
+        <p className="muted small">A dated route from your current band to the one you want, built from your recent test scores.</p>
+        <Button size="sm" block loading={planBusy} onClick={() => void makeRevisionLesson(navigate, setPlanBusy, toast.push, selectedBand ?? profile.band)}>
+          <Icon name="sparkle" size={13} />
+          Lesson from my mistakes
+        </Button>
+      </section>
+
+      <section className="card learn-card">
+        <header className="learn-card__head">
+          <h2>Today’s words</h2>
+          <div className="row">
+            <Button size="sm" variant="ghost" onClick={() => setHideKnown((value) => !value)}>
+              <Icon name="eye" size={13} />
+              {hideKnown ? 'Showing all' : 'Hide known'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => void moreWords()} loading={dailyBusy}>
+              <Icon name="plus" size={13} />5 more
+            </Button>
+          </div>
+        </header>
+        {dailyBusy && !daily ? (
+          <p className="muted small">Choosing words for your band…</p>
+        ) : daily && daily.words.length > 0 ? (
+          <ul className="daily-words">
+            {daily.words
+              .filter((word) => !hideKnown || !knownWords.has(word.term))
+              .slice(0, 6)
+              .map((word) => {
+                const isKnown = knownWords.has(word.term);
                 return (
-                  <li key={quest.key} className={quest.claimed ? 'is-done' : ''}>
-                    <div className="quests__row">
-                      <b>{quest.label}</b>
-                      <span className="quests__coins">
-                        <Icon name="coin" size={12} /> {quest.coins}
-                      </span>
+                  <li key={word.id} style={isKnown ? { opacity: 0.5 } : undefined}>
+                    <div className="daily-words__top">
+                      <button
+                        type="button"
+                        className="daily-words__term"
+                        onClick={() => {
+                          sfx.play('select');
+                          setLookup(word.term);
+                        }}
+                        title={`Look up “${word.term}”`}
+                      >
+                        {word.term}
+                      </button>
+                      {word.pos ? <span className="muted tiny">{word.pos}</span> : null}
+                      {canSpeak() ? (
+                        <button
+                          type="button"
+                          className="vocab-item__speak"
+                          onClick={() => {
+                            sfx.play('select');
+                            speak(word.term);
+                          }}
+                          aria-label={`Hear “${word.term}”`}
+                        >
+                          <Icon name="play" size={10} />
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="vocab-item__speak"
+                        onClick={() => toggleKnown(word.term)}
+                        aria-label={isKnown ? `Mark “${word.term}” as still learning` : `Mark “${word.term}” as known`}
+                        title={isKnown ? 'Still learning' : 'I know this'}
+                      >
+                        <Icon name={isKnown ? 'rotate' : 'check'} size={10} />
+                      </button>
                     </div>
-                    <div className="quests__bar">
-                      <i style={{ width: `${percent}%` }} />
-                    </div>
-                    <span className="quests__state tiny muted">
-                      {quest.claimed ? 'Paid' : `${quest.progress}/${quest.target}`}
-                    </span>
+                    <span className="daily-words__meaning">{word.meaning}</span>
+                    {word.meaningVi ? <span className="daily-words__vi" lang="vi">VI · {word.meaningVi}</span> : null}
                   </li>
                 );
               })}
-            </ul>
-          </section>
+          </ul>
+        ) : (
+          <p className="muted small">New words are added here each day. They are saved to your notebook automatically.</p>
+        )}
+        <Link className="learn-card__link" to="/vocabulary">
+          Open notebook <Icon name="arrowRight" size={13} />
+        </Link>
+      </section>
 
-          <section className="card learn-card">
-            <header className="learn-card__head">
-              <h2>Ranking</h2>
-              <Link className="learn-card__link" to="/learn/leaderboard">
-                All <Icon name="arrowRight" size={13} />
-              </Link>
-            </header>
-            {boardTop.length === 0 ? (
-              <p className="muted small">Finish a lesson this week and your name goes on the board.</p>
-            ) : (
-              <ol className="mini-board">
-                {boardTop.map((row) => (
-                  <li key={row.rank} className={row.isMe ? 'is-me' : ''}>
-                    <span className="mini-board__rank">{['🥇', '🥈', '🥉'][row.rank - 1] ?? row.rank}</span>
-                    <b>{row.name}</b>
-                    <span>{row.valueLabel}</span>
-                  </li>
-                ))}
-              </ol>
-            )}
-            {board.data?.me ? (
-              <p className="muted tiny">
-                You are <b>#{board.data.me.rank}</b> this week with {board.data.me.valueLabel}.
-              </p>
-            ) : null}
-          </section>
+      <section className="card learn-card">
+        <header className="learn-card__head">
+          <h2>Review</h2>
+          {data.dueWords > 0 ? <span className="learn-card__count">{data.dueWords}</span> : null}
+        </header>
+        <p className="muted small">
+          {data.dueWords > 0
+            ? `${data.dueWords} word${data.dueWords === 1 ? ' is' : 's are'} due. A short review keeps them from fading.`
+            : 'Nothing is due. Words you save will come back here on a schedule.'}
+        </p>
+        <Button
+          variant="primary"
+          block
+          disabled={data.dueWords === 0}
+          onClick={() => {
+            sfx.play('lessonStart');
+            navigate(`/learn/review?returnTo=${encodeURIComponent(`/learn?band=${selectedBand ?? profile.band}`)}`);
+          }}
+        >
+          Start review
+        </Button>
+      </section>
 
-          <section className="card learn-card">
-            <header className="learn-card__head">
-              <h2>Study plan</h2>
-              <Link className="learn-card__link" to="/learn/plan">
-                Open <Icon name="arrowRight" size={13} />
-              </Link>
-            </header>
-            <p className="muted small">A dated route from your current band to the one you want, built from your recent test scores.</p>
-            <Button size="sm" block loading={planBusy} onClick={() => void makeRevisionLesson(navigate, setPlanBusy, toast.push)}>
-              <Icon name="sparkle" size={13} />
-              Lesson from my mistakes
-            </Button>
-          </section>
+      <section className="card learn-card">
+        <header className="learn-card__head">
+          <h2>Your band</h2>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              sfx.play('select');
+              setBandOpenModal(true);
+            }}
+          >
+            Change
+          </Button>
+        </header>
+        <p className="learn-level">
+          <b>
+            {profile.band.toFixed(1)} · {LEARN_BAND_LABELS[profile.band]}
+          </b>
+          <span className="muted small">
+            {profile.bandSource === 'CHOSEN'
+              ? 'Chosen by you.'
+              : profile.bandSource === 'ESTIMATED'
+                ? `Picked from your recent test bands (about ${profile.startBand?.toFixed(1)}).`
+                : 'A starting point. Take a practice test or change it yourself.'}
+          </span>
+        </p>
+        <p className="muted tiny">
+          {doneCount} of {totalLessons} lessons finished.
+        </p>
+      </section>
+    </aside>
+  );
 
-          <section className="card learn-card">
-            <header className="learn-card__head">
-              <h2>Today’s words</h2>
-              <div className="row">
-                <Button size="sm" variant="ghost" onClick={() => setHideKnown((value) => !value)}>
-                  <Icon name="eye" size={13} />
-                  {hideKnown ? 'Showing all' : 'Hide known'}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => void moreWords()} loading={dailyBusy}>
-                  <Icon name="plus" size={13} />5 more
-                </Button>
-              </div>
-            </header>
-            {dailyBusy && !daily ? (
-              <p className="muted small">Choosing words for your band…</p>
-            ) : daily && daily.words.length > 0 ? (
-              <ul className="daily-words">
-                {daily.words
-                  .filter((word) => !hideKnown || !knownWords.has(word.term))
-                  .slice(0, 6)
-                  .map((word) => {
-                    const isKnown = knownWords.has(word.term);
-                    return (
-                      <li key={word.id} style={isKnown ? { opacity: 0.5 } : undefined}>
-                        <div className="daily-words__top">
-                          <button
-                            type="button"
-                            className="daily-words__term"
-                            onClick={() => {
-                              sfx.play('select');
-                              setLookup(word.term);
-                            }}
-                            title={`Look up “${word.term}”`}
-                          >
-                            {word.term}
-                          </button>
-                          {word.pos ? <span className="muted tiny">{word.pos}</span> : null}
-                          {canSpeak() ? (
-                            <button
-                              type="button"
-                              className="vocab-item__speak"
-                              onClick={() => {
-                                sfx.play('select');
-                                speak(word.term);
-                              }}
-                              aria-label={`Hear “${word.term}”`}
-                            >
-                              <Icon name="play" size={10} />
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="vocab-item__speak"
-                            onClick={() => toggleKnown(word.term)}
-                            aria-label={isKnown ? `Mark “${word.term}” as still learning` : `Mark “${word.term}” as known`}
-                            title={isKnown ? 'Still learning' : 'I know this'}
-                          >
-                            <Icon name={isKnown ? 'rotate' : 'check'} size={10} />
-                          </button>
-                        </div>
-                        <span className="daily-words__vi">{word.meaningVi || word.meaning}</span>
-                      </li>
-                    );
-                  })}
-              </ul>
-            ) : (
-              <p className="muted small">New words are added here each day. They are saved to your notebook automatically.</p>
-            )}
-            <Link className="learn-card__link" to="/vocabulary">
-              Open notebook <Icon name="arrowRight" size={13} />
-            </Link>
-          </section>
-
-          <section className="card learn-card">
-            <header className="learn-card__head">
-              <h2>Review</h2>
-              {data.dueWords > 0 ? <span className="learn-card__count">{data.dueWords}</span> : null}
-            </header>
-            <p className="muted small">
-              {data.dueWords > 0
-                ? `${data.dueWords} word${data.dueWords === 1 ? ' is' : 's are'} due. A short review keeps them from fading.`
-                : 'Nothing is due. Words you save will come back here on a schedule.'}
-            </p>
-            <Button
-              variant="primary"
-              block
-              disabled={data.dueWords === 0}
+  const lessonPath = (
+    <section id="learn-path" className="learn__path" aria-label="Lesson path">
+      <nav className="band-strip" aria-label="Choose a band">
+        {bands.map((item) => {
+          const on = item.band === selectedBand;
+          const empty = item.lessonCount === 0;
+          const finished = item.lessonCount > 0 && item.completedCount >= item.lessonCount;
+          return (
+            <button
+              key={item.band}
+              type="button"
+              className={`band-chip${on ? ' is-on' : ''}${empty ? ' is-empty' : ''}${finished ? ' is-done' : ''}`}
               onClick={() => {
-                sfx.play('lessonStart');
-                navigate('/learn/review');
+                sfx.play('select');
+                rememberBand(item.band);
+                setOpenLesson(null);
               }}
+              aria-current={on ? 'true' : undefined}
+              title={LEARN_BAND_LABELS[item.band]}
             >
-              Start review
-            </Button>
-          </section>
+              <b>{item.band.toFixed(1)}</b>
+              <span>{empty ? 'no lessons yet' : `${item.completedCount}/${item.lessonCount}`}</span>
+            </button>
+          );
+        })}
+      </nav>
 
-          <section className="card learn-card">
-            <header className="learn-card__head">
-              <h2>Your band</h2>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  sfx.play('select');
-                  setBandOpenModal(true);
-                }}
-              >
-                Change
-              </Button>
-            </header>
-            <p className="learn-level">
-              <b>
-                {profile.band.toFixed(1)} · {LEARN_BAND_LABELS[profile.band]}
-              </b>
-              <span className="muted small">
-                {profile.bandSource === 'CHOSEN'
-                  ? 'Chosen by you.'
-                  : profile.bandSource === 'ESTIMATED'
-                    ? `Picked from your recent test bands (about ${profile.startBand?.toFixed(1)}).`
-                    : 'A starting point. Take a practice test or change it yourself.'}
-              </span>
-            </p>
-            <p className="muted tiny">
-              {doneCount} of {totalLessons} lessons finished.
-            </p>
-          </section>
-        </aside>
+      {catalogue.loading && !catalogue.data ? <Loading label="Loading the path…" /> : null}
+      {catalogue.error && !catalogue.data ? (
+        <Notice tone="danger" title="The path could not be loaded">
+          {catalogue.error}
+        </Notice>
+      ) : null}
 
-        <section className="learn__path" aria-label="Lesson path">
-          <nav className="band-strip" aria-label="Choose a band">
-            {bands.map((item) => {
-              const on = item.band === selectedBand;
-              const recommended = item.band === profile.band && profile.bandSource !== 'CHOSEN';
-              const empty = item.lessonCount === 0;
-              const finished = item.lessonCount > 0 && item.completedCount >= item.lessonCount;
-              return (
-                <button
-                  key={item.band}
-                  type="button"
-                  className={`band-chip${on ? ' is-on' : ''}${empty ? ' is-empty' : ''}${finished ? ' is-done' : ''}`}
-                  onClick={() => {
-                    sfx.play('select');
-                    setOpenLesson(null);
-                    void chooseBand(item.band);
-                  }}
-                  aria-current={on ? 'true' : undefined}
-                  aria-label={`Band ${item.band.toFixed(1)} · ${LEARN_BAND_LABELS[item.band]} · ${on ? 'Selected' : recommended ? 'Recommended' : 'Available'}`}
-                  title={`${LEARN_BAND_LABELS[item.band]} · ${on ? 'Selected' : recommended ? 'Recommended' : 'Available'}`}
-                >
-                  <b>{item.band.toFixed(1)}</b>
-                  <span>{empty ? 'no lessons yet' : `${item.completedCount}/${item.lessonCount}`}</span>
-                  <small>{on ? 'Selected' : recommended ? 'Recommended' : 'Available'}</small>
-                </button>
-              );
-            })}
-          </nav>
-          <p className="band-strip__legend muted tiny">
-            {profile.bandSource === 'CHOSEN' ? 'Selected is your saved choice.' : 'Recommended is based on your starting estimate.'}
-            {' '}Other bands are available; choosing one saves it for next time.
-          </p>
-          <details className="learn__legend">
-            <summary>What do the ticks and stars mean?</summary>
-            <p><b>Tick:</b> you finished that lesson at least once. <b>Stars:</b> your best first-try accuracy — one for finishing, two from 70%, and three from 90%. Stars show mastery; they do not lock the next lesson.</p>
-          </details>
-
-          {everydayStatus === 'loading' ? <p className="muted small learn__everyday-status" role="status">Preparing today’s six AI-generated lessons for band {selectedBand?.toFixed(1)}…</p> : null}
-          {everydayStatus === 'generating' ? <p className="muted small learn__everyday-status" role="status">Today’s lessons are being prepared. They will appear at the end of this band’s path.</p> : null}
-          {everydayStatus === 'error' ? <p className="muted small learn__everyday-status" role="status">Today’s AI lessons are unavailable right now; your curriculum path is still ready. {everydayError}</p> : null}
-          {catalogue.loading && !catalogue.data ? <Loading label="Loading the path…" /> : null}
-          {catalogue.error && !catalogue.data ? (
-            <Notice tone="danger" title="The path could not be loaded">
-              {catalogue.error}
-            </Notice>
-          ) : null}
-
-          {!isOpen ? (
-            <div className="unit unit--locked">
+      {!isOpen ? (
+        <div className="unit unit--locked">
+          <header className="unit__head">
+            <div>
+              <p className="unit__kicker">
+                Band {selectedBand?.toFixed(1)} · {selectedLabel}
+              </p>
+              <h2>
+                <Icon name="lock" size={15} strokeWidth={2.4} /> Locked
+              </h2>
+              <p>
+                Finish band {blockingBand?.toFixed(1)} to open this band, or set your own band to jump straight here.
+              </p>
+            </div>
+          </header>
+          <Button variant="primary" onClick={() => setBandOpenModal(true)}>
+            Change your band
+          </Button>
+        </div>
+      ) : (
+        catalogue.data?.selected.units.map((unit, unitIndex) => {
+          const lessons = path.filter((lesson) => lesson.unitKey === unit.unitKey);
+          const finished = lessons.filter((lesson) => (progress[lesson.id]?.completions ?? 0) > 0).length;
+          const unitDone = lessons.length > 0 && finished === lessons.length;
+          const unitLocked = lessons.length > 0 && lessons.every((lesson) => stateOf(lesson, path.indexOf(lesson)) === 'locked');
+          return (
+            <div key={unit.unitKey} className={`unit unit--c${unitIndex % 4}${unitLocked ? ' unit--locked' : ''}`}>
               <header className="unit__head">
                 <div>
-                  <p className="unit__kicker">
-                    Band {selectedBand?.toFixed(1)} · {selectedLabel}
-                  </p>
-                  <h2>
-                    <Icon name="lock" size={15} strokeWidth={2.4} /> Locked
-                  </h2>
-                  <p>
-                    Finish band {blockingBand?.toFixed(1)} to open this band, or set your own band to jump straight here.
-                  </p>
+                  <p className="unit__kicker">Band {selectedBand?.toFixed(1)}</p>
+                  <h2>{unit.title}</h2>
+                  <p>{unit.blurb}</p>
                 </div>
+                {unitDone ? (
+                  <span className="unit__done">
+                    <Icon name="check" size={14} strokeWidth={3} /> Complete
+                  </span>
+                ) : (
+                  <span className="unit__count">
+                    {unitLocked ? <Icon name="lock" size={13} strokeWidth={2.4} /> : null}
+                    {finished}/{lessons.length}
+                  </span>
+                )}
               </header>
-              <Button variant="primary" onClick={() => setBandOpenModal(true)}>
-                Change your band
-              </Button>
-            </div>
-          ) : (
-            catalogue.data?.selected.units.map((unit, unitIndex) => {
-              const lessons = path.filter((lesson) => lesson.unitKey === unit.unitKey);
-              const finished = lessons.filter((lesson) => (progress[lesson.id]?.completions ?? 0) > 0).length;
-              const unitDone = lessons.length > 0 && finished === lessons.length;
-              const unitLocked = lessons.length > 0 && lessons.every((lesson) => stateOf(lesson, path.indexOf(lesson)) === 'locked');
-              return (
-                <div key={unit.unitKey} className={`unit unit--c${unitIndex % 4}${unitLocked ? ' unit--locked' : ''}`}>
-                  <header className="unit__head">
-                    <div>
-                      <p className="unit__kicker">Band {selectedBand?.toFixed(1)}</p>
-                      <h2>{unit.title}</h2>
-                      <p>{unit.blurb}</p>
-                    </div>
-                    {unitDone ? (
-                      <span className="unit__done">
-                        <Icon name="check" size={14} strokeWidth={3} /> Complete
-                      </span>
-                    ) : (
-                      <span className="unit__count">
-                        {unitLocked ? <Icon name="lock" size={13} strokeWidth={2.4} /> : null}
-                        {finished}/{lessons.length}
-                      </span>
-                    )}
-                  </header>
-                  <ol className="unit__nodes">
-                    {lessons.map((lesson) => {
-                      const index = path.indexOf(lesson);
-                      const state = stateOf(lesson, index);
-                      const item = progress[lesson.id];
-                      const offset = WAVE[index % WAVE.length]!;
-                      const open = openLesson === lesson.id;
-                      const icon: IconName = state === 'done' ? 'check' : state === 'locked' ? 'lock' : 'play';
-                      const previous = path[index - 1];
-                      return (
-                        <li
-                          key={lesson.id}
-                          className={`node-row${state === 'locked' ? ' node-row--locked' : ''}`}
-                          style={{ '--offset': `${offset}px` } as React.CSSProperties}
+              <ol className="unit__nodes">
+                {lessons.map((lesson) => {
+                  const index = path.indexOf(lesson);
+                  const state = stateOf(lesson, index);
+                  const item = progress[lesson.id];
+                  const offset = WAVE[index % WAVE.length]!;
+                  const open = openLesson === lesson.id;
+                  const icon: IconName = state === 'done' ? 'check' : state === 'locked' ? 'lock' : 'play';
+                  const previous = path[index - 1];
+                  return (
+                    <li
+                      key={lesson.id}
+                      className={`node-row${state === 'locked' ? ' node-row--locked' : ''}`}
+                      style={{ '--offset': `${offset}px` } as React.CSSProperties}
+                    >
+                      <div className="node-wrap">
+                        {state === 'current' ? <span className="node-start">Start</span> : null}
+                        <button
+                          type="button"
+                          className={`node node--${state}`}
+                          aria-expanded={open}
+                          aria-label={`${lesson.title}, ${state === 'locked' ? 'locked' : state === 'done' ? 'finished' : 'available'}`}
+                          onClick={() => openNode(lesson, state !== 'locked')}
                         >
-                          <div className="node-wrap">
-                            {state === 'current' ? <span className="node-start">Start</span> : null}
-                            <button
-                              type="button"
-                              className={`node node--${state}`}
-                              aria-expanded={open}
-                              aria-label={`${lesson.title}, ${state === 'locked' ? 'locked' : state === 'done' ? 'finished' : 'available'}`}
-                              onClick={() => openNode(lesson, state !== 'locked')}
-                            >
-                              <Icon name={icon} size={28} strokeWidth={state === 'done' ? 3.2 : 2.2} filled={state === 'current'} />
-                            </button>
-                            {item && item.completions > 0 ? <Stars value={item.stars} size={13} /> : null}
-                          </div>
-                          <div className="node-label">
-                            <b>{lesson.title}</b>
-                            <span>{lesson.blurb}</span>
-                            <em className="node-kind">{LESSON_KIND_LABELS[lesson.kind]}</em>
-                            {lesson.legendary ? (
-                              <em className="node-kind" style={{ color: '#b8860b', fontWeight: 700 }}>★ Legendary</em>
-                            ) : null}
-                          </div>
-                          {open ? (
-                            <div className="node-pop" role="dialog" aria-label={lesson.title}>
-                              <h3>{lesson.title}</h3>
-                              <p className="muted small">{lesson.blurb}</p>
-                              <p className="node-pop__words">{lesson.preview}</p>
-                              {state === 'locked' ? (
-                                <p className="small">Finish {previous?.title ?? 'the previous lesson'} to unlock this lesson.</p>
-                              ) : (
-                                <Button variant="primary" block onClick={() => startLesson(lesson.id)}>
-                                  {state === 'done' ? 'Practise again' : 'Start lesson'}
-                                  <span className="node-pop__xp">+{item?.completions ? '~22' : '~40'} XP</span>
-                                </Button>
-                              )}
-                            </div>
-                          ) : null}
-                        </li>
-                      );
-                    })}
-                  </ol>
-                </div>
-              );
-            })
-          )}
+                          <Icon name={icon} size={28} strokeWidth={state === 'done' ? 3.2 : 2.2} filled={state === 'current'} />
+                        </button>
+                        {item && item.completions > 0 ? <Stars value={item.stars} size={13} /> : null}
+                      </div>
+                      <div className="node-label">
+                        <b>{lesson.title}</b>
+                        <span>{lesson.blurb}</span>
+                        <em className="node-kind">{LESSON_KIND_LABELS[lesson.kind]}</em>
+                        {lesson.legendary ? (
+                          <em className="node-kind" style={{ color: '#b8860b', fontWeight: 700 }}>★ Legendary</em>
+                        ) : null}
+                      </div>
+                      {open ? (
+                        <div className="node-pop" role="dialog" aria-label={lesson.title}>
+                          <h3>{lesson.title}</h3>
+                          <p className="muted small">{lesson.blurb}</p>
+                          <p className="node-pop__words">{lesson.preview}</p>
+                          {state === 'locked' ? (
+                            <p className="small">Finish {previous?.title ?? 'the previous lesson'} to unlock this lesson.</p>
+                          ) : (
+                            <Button variant="primary" block onClick={() => startLesson(lesson.id)}>
+                              {state === 'done' ? 'Practise again' : 'Start lesson'}
+                              <span className="node-pop__xp">+{item?.completions ? '~7' : '~20'} XP</span>
+                            </Button>
+                          )}
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          );
+        })
+      )}
 
-          {isOpen && path.length > 0 ? (
-            <p className="learn__end">
-              {doneCount >= totalLessons
-                ? 'You have finished every lesson. New lessons are added over time.'
-                : 'More lessons are added at every band over time.'}
-            </p>
-          ) : null}
-        </section>
-      </div>
+      {isOpen && path.length > 0 ? (
+        <p className="learn__end">
+          {doneCount >= totalLessons
+            ? 'You have finished every lesson. New lessons are added over time.'
+            : 'More lessons are added at every band over time.'}
+        </p>
+      ) : null}
+    </section>
+  );
+
+  return (
+    <div className={`learn ${compactLayout ? 'learn--compact' : 'learn--desktop'}`}>
+      {compactLayout ? (
+        <>
+          <header className="learn-compact__hero">
+            <Confetti burst={celebrate} pieces={36} />
+            <div className="learn-compact__top">
+              <div className="learn-compact__intro">
+                <p className="learn-compact__kicker"><Icon name="target" size={13} /> Band {profile.band.toFixed(1)} · {LEARN_BAND_LABELS[profile.band]}</p>
+                <h1>{goalDone ? 'Daily goal reached' : activeToday && profile.streak > 0 ? `${profile.streak}-day streak` : nextLesson ? 'Ready for your next lesson?' : 'Your path is ready'}</h1>
+                <p>{boost.active ? `Double XP is active for ${boost.minutesLeft} more minutes.` : goalDone ? 'Every extra answer today earns XP and coins.' : `${Math.max(0, profile.dailyGoalXp - profile.todayXp)} XP to today’s goal.`}</p>
+              </div>
+              <div className="learn-compact__mascot">
+                {streakHot ? <StreakPulse burst={1} /> : null}
+                <Mascot mood={mood} size={76} />
+              </div>
+            </div>
+
+            <div className="learn-compact__stats" aria-label="Your Learn stats">
+              <div className={`learn-compact__stat${alive && profile.streak > 0 ? ' is-hot' : ''}`}>
+                <Icon name="flame" size={17} filled />
+                <b>{alive ? profile.streak : 0}</b>
+                <span>day streak</span>
+              </div>
+              <div className="learn-compact__stat">
+                <Icon name="bolt" size={17} filled />
+                <b>{profile.xp.toLocaleString('en')}</b>
+                <span>total XP</span>
+              </div>
+              <button type="button" className="learn-compact__stat learn-compact__stat--coin" onClick={() => navigate('/learn/shop')} aria-label={`${profile.coins} coins; open shop`}>
+                <Icon name="coin" size={17} />
+                <b>{profile.coins.toLocaleString('en')}</b>
+                <span>coins · shop</span>
+              </button>
+            </div>
+
+            <div className="learn-compact__goal">
+              <div className="learn-compact__goal-label">
+                <b>Today’s goal</b>
+                <span>{profile.todayXp} / {profile.dailyGoalXp} XP · {goalPercent}%</span>
+              </div>
+              <div className="learn-compact__goal-bar" role="progressbar" aria-label="Daily XP goal" aria-valuemin={0} aria-valuemax={100} aria-valuenow={goalPercent}>
+                <i style={{ width: `${goalPercent}%` }} />
+              </div>
+            </div>
+
+            {nextLesson ? (
+              <Button variant="primary" size="lg" block className="learn-compact__continue" onClick={() => startLesson(nextLesson.id)}>
+                <Icon name="play" size={16} filled />
+                <span className="learn-compact__continue-copy"><b>Continue learning</b><small>{nextLesson.title}</small></span>
+                <Icon name="arrowRight" size={17} />
+              </Button>
+            ) : (
+              <Button variant="primary" size="lg" block className="learn-compact__continue" onClick={() => navigate(`/learn/everyday?band=${selectedBand ?? profile.band}`)}>
+                <Icon name="sparkle" size={16} />
+                <span className="learn-compact__continue-copy"><b>Explore today’s lessons</b><small>Your next set is ready in Everyday Lessons</small></span>
+                <Icon name="arrowRight" size={17} />
+              </Button>
+            )}
+
+            <nav className="learn-compact__shortcuts" aria-label="Learn shortcuts">
+              <Link to={`/learn/everyday?band=${selectedBand ?? profile.band}`}><Icon name="sparkle" size={17} /><span>Daily</span></Link>
+              <Link to="/learn/friends"><Icon name="users" size={17} /><span>Friends</span></Link>
+              <Link to="/learn/leaderboard"><Icon name="trophy" size={17} /><span>Board</span></Link>
+              <Link to="/learn/shop"><Icon name="cart" size={17} /><span>Shop</span></Link>
+              <Link to="/learn/profile"><Icon name="user" size={17} /><span>Profile</span></Link>
+            </nav>
+          </header>
+
+          <section className="learn-compact__week card" aria-label="Your last seven days">
+            <header className="learn-compact__section-head">
+              <div><h2>This week</h2><p className="muted small">{doneCount} of {totalLessons} lessons finished</p></div>
+              <span>{questsDone}/{data.quests.length}<small> quests</small></span>
+            </header>
+            <div className="learn-compact__week-grid">
+              {data.week.map((item) => (
+                <div key={item.day} className={`learn-compact__day${item.day === today ? ' is-today' : ''}`} title={`${item.day}: ${item.xp} XP`}>
+                  <div className="learn-compact__day-bar"><i style={{ height: `${Math.max(12, Math.round((item.xp / maxWeek) * 100))}%` }} className={item.xp > 0 ? 'on' : ''} /></div>
+                  <small>{weekdayInitial(item.day)}</small>
+                  <b>{item.xp}</b>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="learn-compact__path-shell" aria-label="Lesson path">
+            <header className="learn-compact__section-head">
+              <div><p className="eyebrow">Your personalized path</p><h2>Learn by band</h2></div>
+              <Button size="sm" variant="ghost" onClick={() => setBandOpenModal(true)}>Change band</Button>
+            </header>
+            {lessonPath}
+          </section>
+
+          <details className="learn-compact__extras">
+            <summary>
+              <span><b>More for today</b><small>Quests, ranking, words and review</small></span>
+              <em>{questsDone}/{data.quests.length}</em>
+              <Icon name="chevronDown" size={18} />
+            </summary>
+            {todayPanels}
+          </details>
+        </>
+      ) : (
+        <>
+          <header className="arena">
+            <Confetti burst={celebrate} pieces={36} />
+            <div className="arena__mascot">
+              {streakHot ? <StreakPulse burst={1} /> : null}
+              <Mascot mood={mood} size={172} />
+            </div>
+            <div className="arena__text">
+              <p className="arena__kicker">
+                <Icon name="target" size={13} /> Band {profile.band.toFixed(1)} · {LEARN_BAND_LABELS[profile.band]}
+              </p>
+              <h1>
+                {goalDone
+                  ? 'Goal reached — the rest is a bonus.'
+                  : activeToday && profile.streak > 0
+                    ? `${profile.streak} day${profile.streak === 1 ? '' : 's'} in a row. Keep it going.`
+                    : nextLesson
+                      ? `Next up: ${nextLesson.title}`
+                      : 'Your path is waiting.'}
+              </h1>
+              <p className="arena__line">
+                {boost.active
+                  ? `Double XP is running — ${boost.minutesLeft} minutes left to cash in.`
+                  : goalDone
+                    ? 'Every extra answer today is worth XP and coins towards the shop.'
+                    : `${Math.max(0, profile.dailyGoalXp - profile.todayXp)} XP left to hit today's goal of ${profile.dailyGoalXp}.`}
+              </p>
+              <div className="arena__actions">
+                {nextLesson ? (
+                  <Button variant="primary" size="lg" onClick={() => startLesson(nextLesson.id)}>
+                    <Icon name="play" size={15} filled />
+                    {nextLesson.title}
+                    <span className="arena__xp">+XP</span>
+                  </Button>
+                ) : null}
+                <Button size="lg" onClick={() => navigate('/learn/shop')}><Icon name="cart" size={15} /> Shop</Button>
+                <Button size="lg" onClick={() => navigate('/learn/leaderboard')}><Icon name="trophy" size={15} /> Leaderboard</Button>
+                <Button size="lg" onClick={() => navigate(`/learn/everyday?band=${selectedBand ?? profile.band}`)}><Icon name="sparkle" size={15} /> Everyday Lessons</Button>
+                <Button size="lg" onClick={() => navigate('/learn/friends')}><Icon name="users" size={15} /> Friends</Button>
+                <Button size="lg" onClick={() => navigate('/learn/profile')}><Icon name="user" size={15} /> Profile</Button>
+              </div>
+            </div>
+            <div className="arena__meta">
+              <div className={`arena__stat arena__stat--fire${alive && profile.streak > 0 ? ' is-hot' : ''}`}>
+                <Icon name="flame" size={22} filled /><b>{alive ? profile.streak : 0}</b><span>day streak</span>
+              </div>
+              <div className="arena__stat arena__stat--xp">
+                <Icon name="bolt" size={22} filled /><b>{profile.xp.toLocaleString('en')}</b><span>total XP</span>
+              </div>
+              <button type="button" className="arena__stat arena__stat--coin" onClick={() => navigate('/learn/shop')}>
+                <Icon name="coin" size={22} /><b>{profile.coins.toLocaleString('en')}</b><span>coins · spend</span>
+              </button>
+              <div className="arena__goal">
+                <svg viewBox="0 0 42 42" className="arena__ring" role="img" aria-label={`Daily goal ${goalPercent}%`}>
+                  <circle cx="21" cy="21" r="17" className="arena__ring-track" />
+                  <circle cx="21" cy="21" r="17" className="arena__ring-fill" strokeDasharray={`${(goalPercent / 100) * 106.8} 106.8`} />
+                </svg>
+                <div><b>{profile.todayXp}/{profile.dailyGoalXp}</b><span>today’s XP</span></div>
+              </div>
+            </div>
+          </header>
+
+          <section className="arena__week" aria-label="Your last seven days">
+            {data.week.map((item) => (
+              <span key={item.day} className={item.day === today ? 'is-today' : ''} title={`${item.day}: ${item.xp} XP`}>
+                <span className="arena__week-bar"><i style={{ height: `${Math.max(12, Math.round((item.xp / maxWeek) * 100))}%` }} className={item.xp > 0 ? 'on' : ''} /></span>
+                <small>{weekdayInitial(item.day)}</small><em>{item.xp}</em>
+              </span>
+            ))}
+            <p className="arena__week-note muted small">{doneCount} of {totalLessons} lessons finished · {questsDone}/{data.quests.length} quests today</p>
+          </section>
+
+          <div className="learn__grid">
+            {todayPanels}
+            {lessonPath}
+          </div>
+        </>
+      )}
 
       <Modal open={bandOpenModal} onClose={() => setBandOpenModal(false)} title="Choose your band">
         <p className="muted small">The path opens at the band you pick, and the AI pitches your daily words to it.</p>
         <div className="level-choices">
           {LEARN_BANDS.map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={`level-choice${profile.band === item ? ' is-on' : ''}`}
-              onClick={() => void chooseBand(item)}
-            >
-              <b>{item.toFixed(1)}</b>
-              <span>{LEARN_BAND_LABELS[item]}</span>
+            <button key={item} type="button" className={`level-choice${profile.band === item ? ' is-on' : ''}`} onClick={() => void chooseBand(item)}>
+              <b>{item.toFixed(1)}</b><span>{LEARN_BAND_LABELS[item]}</span>
             </button>
           ))}
         </div>
@@ -801,11 +877,13 @@ async function makeRevisionLesson(
   navigate: (to: string) => void,
   setBusy: (busy: boolean) => void,
   push: (message: string, tone?: 'success' | 'info' | 'warning' | 'error') => void,
+  band: LearnBand,
 ) {
   setBusy(true);
   try {
     const response = await learnApi.buildPersonalLesson();
-    navigate(`/learn/lesson/${response.lessonId}`);
+    const returnTo = `/learn?band=${encodeURIComponent(String(band))}`;
+    navigate(`/learn/lesson/${encodeURIComponent(response.lessonId)}?returnTo=${encodeURIComponent(returnTo)}`);
   } catch (cause) {
     push(cause instanceof Error ? cause.message : 'That revision lesson could not be built.', 'error');
   } finally {

@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_ai_adjudications.sql, 0019_learn_everyday_batches.sql, 0020_social_profiles_and_friends.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 55   Indexes: 70
+-- Tables: 55   Indexes: 69
 -- =============================================================================
 
 -- table: users
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   locale       TEXT NOT NULL DEFAULT 'en',
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
-, avatar_key TEXT NOT NULL DEFAULT 'bo', banner_key TEXT NOT NULL DEFAULT 'default', username_color TEXT NOT NULL DEFAULT 'default', profile_effect TEXT NOT NULL DEFAULT 'none');
+, avatar_id TEXT NOT NULL DEFAULT 'bo', name_effect TEXT NOT NULL DEFAULT 'default', profile_effect TEXT NOT NULL DEFAULT 'none');
 
 -- table: sessions
 CREATE TABLE IF NOT EXISTS sessions (
@@ -801,6 +801,32 @@ CREATE TABLE IF NOT EXISTS learn_translations (
   created_at TEXT NOT NULL
 );
 
+-- table: friendships
+CREATE TABLE IF NOT EXISTS friendships (
+  user_low_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  user_high_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  requested_by TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  status       TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED')),
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL,
+  PRIMARY KEY (user_low_id, user_high_id),
+  CHECK (user_low_id < user_high_id),
+  CHECK (requested_by = user_low_id OR requested_by = user_high_id)
+);
+
+-- table: learn_daily_lessons
+CREATE TABLE IF NOT EXISTS learn_daily_lessons (
+  user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  day        TEXT NOT NULL,
+  band       REAL NOT NULL,
+  slot       INTEGER NOT NULL CHECK (slot BETWEEN 0 AND 5),
+  lesson_id  TEXT NOT NULL REFERENCES learn_lessons (id) ON DELETE CASCADE,
+  quote      TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, day, band, slot),
+  UNIQUE (user_id, day, band, lesson_id)
+);
+
 -- table: ai_adjudications
 CREATE TABLE IF NOT EXISTS ai_adjudications (
   entity_type        TEXT NOT NULL CHECK (entity_type IN ('WRITING', 'SPEAKING')),
@@ -812,29 +838,6 @@ CREATE TABLE IF NOT EXISTS ai_adjudications (
   overall_reviewed   INTEGER NOT NULL DEFAULT 0 CHECK (overall_reviewed IN (0, 1)),
   created_at         TEXT NOT NULL,
   PRIMARY KEY (entity_type, entity_id)
-);
-
--- table: learn_daily_lesson_batches
-CREATE TABLE IF NOT EXISTS learn_daily_lesson_batches (
-  band        REAL NOT NULL,
-  day         TEXT NOT NULL,
-  status      TEXT NOT NULL CHECK (status IN ('GENERATING', 'READY', 'FAILED')),
-  lesson_count INTEGER NOT NULL DEFAULT 0,
-  created_at  TEXT NOT NULL,
-  updated_at  TEXT NOT NULL,
-  PRIMARY KEY (band, day)
-);
-
--- table: friend_requests
-CREATE TABLE IF NOT EXISTS friend_requests (
-  id           TEXT PRIMARY KEY,
-  requester_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  recipient_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  status       TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'DECLINED')),
-  created_at   TEXT NOT NULL,
-  updated_at   TEXT NOT NULL,
-  CHECK (requester_id <> recipient_id),
-  UNIQUE (requester_id, recipient_id)
 );
 
 -- index: idx_users_role
@@ -1035,14 +1038,11 @@ CREATE INDEX IF NOT EXISTS idx_learn_orders_user ON learn_shop_orders (user_id, 
 -- index: idx_learn_coin_user
 CREATE INDEX IF NOT EXISTS idx_learn_coin_user ON learn_coin_log (user_id, day);
 
+-- index: idx_friendships_requested_by
+CREATE INDEX IF NOT EXISTS idx_friendships_requested_by ON friendships (requested_by, status, updated_at);
+
+-- index: idx_learn_daily_lessons_user_day
+CREATE INDEX IF NOT EXISTS idx_learn_daily_lessons_user_day ON learn_daily_lessons (user_id, day, band, slot);
+
 -- index: idx_ai_adjudications_entity
 CREATE INDEX IF NOT EXISTS idx_ai_adjudications_entity ON ai_adjudications (entity_type, entity_id);
-
--- index: idx_learn_daily_batches_day
-CREATE INDEX IF NOT EXISTS idx_learn_daily_batches_day ON learn_daily_lesson_batches (day, status);
-
--- index: idx_friend_requests_recipient
-CREATE INDEX IF NOT EXISTS idx_friend_requests_recipient ON friend_requests (recipient_id, status, created_at);
-
--- index: idx_friend_requests_requester
-CREATE INDEX IF NOT EXISTS idx_friend_requests_requester ON friend_requests (requester_id, status, created_at);

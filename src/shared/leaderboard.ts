@@ -11,7 +11,8 @@
  * include the reader's own row (with its rank) even when it falls outside the
  * list, because a board you cannot find yourself on is only a scoreboard.
  *
- * Nothing here identifies anybody beyond a display name: no email, no id.
+ * Public rows include an opaque in-app profile id, display identity and public
+ * progress only; email addresses and authentication details never leave the Worker.
  */
 
 export const LEADERBOARD_SCOPES = ['learn', 'practice'] as const;
@@ -30,18 +31,20 @@ export function isLeaderboardWindow(value: unknown): value is LeaderboardWindow 
 
 export interface LeaderboardRow {
   rank: number;
-  /** Opaque account key used only to open its public learning profile. */
+  /** Opaque account id, used only to open the in-app public player card. */
   userId: string;
   /** A display name, or "Learner" when the account has none. */
   name: string;
+  /** Account role is shown as a small staff badge when an admin joins the board. */
+  role: 'STUDENT' | 'ADMIN';
   /** The name is a shortened form for the row (initials are drawn client-side). */
   isMe: boolean;
-  avatarKey: 'bo' | 'muc' | 'sen';
-  usernameColor: 'default' | 'sunset' | 'ocean';
-  profileEffect: 'none' | 'glow';
+  avatarId: import('./gamification').AvatarId;
+  nameEffect: import('./gamification').NameEffect;
+  profileEffect: import('./gamification').ProfileEffect;
   online: boolean;
   level: number;
-  badges: string[];
+  badgeIds: string[];
   /** The number the board is ranked on (XP, or submitted attempts). */
   value: number;
   /** Ready-to-render value, so the two boards read the same everywhere. */
@@ -65,7 +68,7 @@ export interface LeaderboardResponse {
 }
 
 /** How many rows a board sends. */
-export const LEADERBOARD_LIMIT = 100;
+export const LEADERBOARD_LIMIT = 50;
 
 export function formatXp(value: number): string {
   return `${value.toLocaleString('en')} XP`;

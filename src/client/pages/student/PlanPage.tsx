@@ -241,9 +241,9 @@ function PlanItemRow({
 }) {
   const target =
     item.kind === 'LESSON' && item.lessonId
-      ? `/learn/lesson/${item.lessonId}?returnTo=%2Flearn%2Fplan`
+      ? `/learn/lesson/${encodeURIComponent(item.lessonId)}?returnTo=${encodeURIComponent('/learn/plan')}&planItem=${encodeURIComponent(item.id)}`
       : item.kind === 'REVIEW'
-        ? '/learn/review'
+        ? `/learn/review?returnTo=${encodeURIComponent('/learn/plan')}&planItem=${encodeURIComponent(item.id)}`
         : item.kind === 'MOCK_TEST'
           ? '/practice'
           : null;

@@ -133,7 +133,7 @@ export function ShopPage() {
             <p className="shop-card__detail">{item.detail}</p>
             <div className="shop-card__meta">
               <Badge tone={item.owned > 0 ? 'success' : 'neutral'}>
-                {item.owned > 0 ? (item.category === 'cosmetic' ? 'Unlocked' : `${item.owned} in your bag`) : 'Not owned'}
+                {item.owned > 0 ? `${item.owned} in your bag` : 'Not owned'}
               </Badge>
               {item.owned >= item.maxOwned ? <Badge tone="warning">Max</Badge> : null}
             </div>
@@ -148,18 +148,16 @@ export function ShopPage() {
                 loading={busyKey === item.key}
                 onClick={() => void buy(item)}
               >
-                {!item.canBuyMore ? (item.category === 'cosmetic' ? 'Unlocked' : 'At the cap') : item.affordable ? 'Buy' : `Need ${item.price - state.coins} more`}
+                {!item.canBuyMore ? 'At the cap' : item.affordable ? 'Buy' : `Need ${item.price - state.coins} more`}
               </Button>
             </div>
-            {item.category === 'cosmetic' && item.owned > 0 ? (
-              <Link className="shop-card__equip" to="/profile">Customize profile <Icon name="arrowRight" size={13} /></Link>
-            ) : null}
             {item.manual && item.owned > 0 ? (
               <Button size="sm" variant="secondary" block loading={busyKey === item.key} onClick={() => void switchOn(item)}>
                 <Icon name={item.key === 'xp_boost' ? 'bolt' : 'play'} size={13} />
                 {item.key === 'xp_boost' ? 'Switch on now' : 'Use now'}
               </Button>
             ) : null}
+            {item.cosmetic ? <Link className="shop-card__profile-link" to="/learn/profile">Equip on your profile <Icon name="arrowRight" size={13} /></Link> : null}
           </article>
         ))}
       </section>

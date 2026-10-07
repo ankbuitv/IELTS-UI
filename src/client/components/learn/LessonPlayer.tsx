@@ -84,30 +84,6 @@ function embeddableVideo(url: string): string | null {
  */
 const TRANSLATIONS = new Map<string, TranslationResult>();
 
-const LESSON_COMPLETION_QUOTES = [
-  'Small steps still move the horizon.',
-  'A clear sentence is progress you can build on.',
-  'Today’s practice becomes tomorrow’s confidence.',
-  'Mistakes are notes for your next attempt.',
-  'Keep the meaning clear; let the words grow naturally.',
-  'One more question is one more chance to understand.',
-] as const;
-let fallbackQuoteCursor = 0;
-
-function nextLessonCompletionQuote(): string {
-  try {
-    const key = 'aieo.learn-completion-quote';
-    const previous = Number.parseInt(localStorage.getItem(key) ?? '-1', 10);
-    const next = Number.isFinite(previous) ? (previous + 1) % LESSON_COMPLETION_QUOTES.length : 0;
-    localStorage.setItem(key, String(next));
-    return LESSON_COMPLETION_QUOTES[next]!;
-  } catch {
-    const quote = LESSON_COMPLETION_QUOTES[fallbackQuoteCursor % LESSON_COMPLETION_QUOTES.length]!;
-    fallbackQuoteCursor += 1;
-    return quote;
-  }
-}
-
 function useSentenceTranslation(sentence: string, active: boolean): TranslationResult | null {
   const key = sentence.trim().toLowerCase();
   const [entry, setEntry] = useState<{ key: string; value: TranslationResult } | null>(() => {
@@ -184,6 +160,7 @@ export function LessonPlayer({
   onRestart,
   videoUrl,
   legendary,
+  closingQuote,
   taskPrompt,
   taskType,
 }: {
@@ -194,7 +171,8 @@ export function LessonPlayer({
   onRestart: () => void;
   videoUrl?: string;
   legendary?: boolean;
-  /** The full IELTS-style task that the writing sentence drills practise. */
+  closingQuote?: string;
+  /** Full IELTS-style writing task that the sentence drills practise. */
   taskPrompt?: string;
   taskType?: 'TASK_1' | 'TASK_2';
 }) {
@@ -206,7 +184,6 @@ export function LessonPlayer({
   const [verdict, setVerdict] = useState<{ correct: boolean; almost?: boolean } | null>(null);
   const [answered, setAnswered] = useState(false);
   const [result, setResult] = useState<LessonFinish | null>(null);
-  const [completionQuote, setCompletionQuote] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
@@ -275,7 +252,6 @@ export function LessonPlayer({
       try {
         const response = await onFinish(score);
         setResult(response);
-        setCompletionQuote(nextLessonCompletionQuote());
         setPhase('done');
         const perfect = score.total > 0 && score.correct === score.total;
         sfx.play(perfect ? 'perfect' : 'complete');
@@ -421,7 +397,7 @@ export function LessonPlayer({
       <div className="lesson lesson--failed">
         <ScreenFlash burst={flash.burst} tone={flash.tone} />
         <div className="lesson__end">
-          <Mascot creature={current ? mascotForQuestion(current.id) : 'bo'} mood="sad" size={168} message="That is all five hearts. Nothing is lost — the words will come round again." tone="bad" />
+          <Mascot mood="sad" size={168} message="That is all five hearts. Nothing is lost — the words will come round again." tone="bad" />
           <h1>Out of hearts</h1>
           <p className="muted">
             You ran out of tries on “{title}”. Your XP and coins so far are kept, and the words you missed will come back in your review.
@@ -462,7 +438,6 @@ export function LessonPlayer({
         <ScreenFlash burst={flash.burst} tone={flash.tone} />
         <div className="lesson__end">
           <Mascot
-            creature={current ? mascotForQuestion(current.id) : 'bo'}
             mood={perfect ? 'wow' : 'happy'}
             size={196}
             message={
@@ -474,7 +449,6 @@ export function LessonPlayer({
           />
           <h1>{perfect ? 'Perfect lesson' : 'Lesson complete'}</h1>
           <p className="muted">{title}</p>
-          {completionQuote ? <blockquote className="lesson__quote">“{completionQuote}”</blockquote> : null}
           <dl className="lesson__stats">
             <div>
               <dt>XP</dt>
@@ -504,6 +478,7 @@ export function LessonPlayer({
               </div>
             ) : null}
           </dl>
+          {closingQuote ? <blockquote className="lesson__quote">“{closingQuote}”</blockquote> : null}
           {result?.lines.map((line) => (
             <p key={line} className="lesson__line">
               {line}
@@ -621,11 +596,10 @@ export function LessonPlayer({
                 }}
                 onAnswered={setAnswered}
               />
-              {phase === 'answering' ? <AnswerSupport exercise={current} /> : null}
               <div className="lesson__mascot">
                 <Mascot
-                  creature={mascotForQuestion(current.id)}
-                  mood={phase === 'feedback' ? reaction.mood : isRetry ? 'think' : 'idle'}
+                  character={mascotForQuestion(current.id)}
+                  mood={phase === 'feedback' ? reaction.mood : isRetry ? 'think' : index % 7 === 3 ? 'fly' : 'idle'}
                   size={92}
                   message={phase === 'feedback' ? reaction.message : isRetry ? 'This one again — you know it now.' : undefined}
                   tone={reaction.tone}
@@ -701,43 +675,9 @@ export function LessonPlayer({
  * When no provider answers, the word's gloss is still shown — it is the part
  * that a learner can always have — with a quiet note rather than an error.
  */
-function AnswerSupport({ exercise }: { exercise: Exercise }) {
-  const shouldShow = exercise.kind === 'choose' || exercise.kind === 'fill' || exercise.kind === 'paraphrase';
-  const sentence = exercise.kind === 'paraphrase'
-    ? exercise.prompt
-    : exercise.kind === 'choose' || exercise.kind === 'fill'
-      ? exercise.explain.example
-      : '';
-  const translation = useSentenceTranslation(sentence, shouldShow && Boolean(sentence));
-  if (!shouldShow) return null;
-
-  return (
-    <aside className="lesson__answer-help" aria-label="Learning support while answering">
-      <strong>{exercise.kind === 'paraphrase' ? 'Understand the original sentence' : 'Quick help'}</strong>
-      {exercise.kind === 'fill' ? (
-        <>
-          <p><b>Meaning:</b> {exercise.explain.meaning}</p>
-          {exercise.explain.vi ? <p lang="vi"><b>Tiếng Việt:</b> {exercise.explain.vi}</p> : null}
-          <p className="lesson__answer-help-tip">The options above are your word bank. Use the definition and sentence context to choose.</p>
-        </>
-      ) : exercise.kind === 'choose' ? (
-        <>
-          {exercise.explain.vi ? <p lang="vi"><b>Nghĩa tiếng Việt:</b> {exercise.explain.vi}</p> : null}
-          <p className="lesson__answer-help-tip">Think about how the word is used in the example before choosing its English meaning.</p>
-        </>
-      ) : null}
-      {sentence ? (
-        <p className="lesson__answer-help-translation" lang="vi">
-          <b>Vietnamese translation:</b>{' '}
-          {translation?.available ? translation.vi : translation === null ? <em>translating…</em> : <em className="muted">Not available right now.</em>}
-        </p>
-      ) : null}
-    </aside>
-  );
-}
-
 function FeedbackTranslation({ sentence, explain }: { sentence: string; explain: Exercise['explain'] }) {
-  const translation = useSentenceTranslation(sentence, Boolean(sentence));
+  const storedTranslation = explain.sentenceVi?.trim() ?? '';
+  const translation = useSentenceTranslation(sentence, Boolean(sentence) && !storedTranslation);
   const hasWord = Boolean(explain.term && explain.meaning);
 
   return (
@@ -745,12 +685,11 @@ function FeedbackTranslation({ sentence, explain }: { sentence: string; explain:
       {sentence ? (
         <p className={`lesson__vi${translation?.available ? '' : ' lesson__vi--empty'}`}>
           <span className="lesson__vi-label">Nghĩa cả câu</span>
-          {translation === null ? <em className="lesson__vi-loading">translating…</em> : null}
-          {translation?.available ? <span lang="vi">{translation.vi}</span> : null}
-          {translation && !translation.available ? (
-            <em className="muted">
-              The translation service is off, so here is the new word. Turn on a provider in Admin → AI to translate whole sentences.
-            </em>
+          {translation === null && !storedTranslation ? <em className="lesson__vi-loading">translating…</em> : null}
+          {storedTranslation ? <span lang="vi">{storedTranslation}</span> : null}
+          {!storedTranslation && translation?.available ? <span lang="vi">{translation.vi}</span> : null}
+          {!storedTranslation && translation && !translation.available ? (
+            <em className="muted">A Vietnamese sentence translation is not available for this item yet.</em>
           ) : null}
         </p>
       ) : null}
@@ -880,7 +819,7 @@ function OptionExercise({ exercise, disabled, hinted, verdict, registerSubmit, o
       ) : null}
       {exercise.kind === 'fill' ? (
         <>
-          <p className="lesson__kicker">Complete the sentence · choose from the word bank</p>
+          <p className="lesson__kicker">Complete the sentence</p>
           <h1 className="lesson__prompt lesson__prompt--sentence">
             <LookupText as="span" text={exercise.sentence} />
           </h1>
@@ -939,7 +878,7 @@ function OptionExercise({ exercise, disabled, hinted, verdict, registerSubmit, o
           ) : null}
         </>
       ) : null}
-      <div className="lesson__options" role="radiogroup" aria-label={exercise.kind === 'fill' ? 'Word bank' : 'Answer options'}>
+      <div className="lesson__options" role="radiogroup">
         {options.map((option, optionIndex) => {
           const gone = eliminated.has(optionIndex);
           const state =
@@ -1165,6 +1104,7 @@ function ParaphraseExerciseView({ exercise, disabled, hinted, verdict, registerS
       <h1 className="lesson__prompt lesson__prompt--sentence">
         <LookupText as="span" text={exercise.prompt} />
       </h1>
+      {exercise.promptVi ? <p className="lesson__prompt-vi" lang="vi">{exercise.promptVi}</p> : null}
       <div className="lesson__options" role="radiogroup">
         {exercise.options.map((option, index) => {
           const gone = eliminated.has(index);

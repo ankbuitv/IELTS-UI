@@ -1,6 +1,6 @@
 import type { Env } from '../env';
 import { ApiError, type ErrorCode } from '../lib/errors';
-import { nowIso, parseJson } from '../lib/ids';
+import { parseJson } from '../lib/ids';
 import { recordAudit } from '../lib/audit';
 import { completeJson } from '../ai/providers';
 import { describeAiFailure } from '../ai/failure';
@@ -91,13 +91,6 @@ export interface GenerateLessonsResult {
   titles: string[];
   /** One line per lesson that could not be used, so a partial batch is explainable. */
   rejected: string[];
-}
-
-export interface EverydayLessonsResult {
-  status: 'READY' | 'GENERATING';
-  lessonCount: number;
-  day: string;
-  band: LearnBand;
 }
 
 /** Titles and vocabulary already at a band, so a batch does not repeat itself. */
@@ -219,93 +212,6 @@ export async function generateLessons(env: Env, input: GenerateLessonsInput): Pr
 
   if (created.length === 0) throw new ApiError('AI_UNAVAILABLE', 'None of the generated lessons could be used.');
   return { created: created.length, titles: created, rejected };
-}
-
-/**
- * Lazily creates today's six shared, AI-written vocabulary lessons for a band.
- * They are appended after that band's existing catalogue positions, so the
- * same server-side unlock sequence gates every daily pack and users cannot skip
- * a lesson by going straight to its URL.
- */
-export async function ensureEverydayLessons(env: Env, band: LearnBand, day: string): Promise<EverydayLessonsResult> {
-  await ensureCatalogue(env);
-  const unitKey = `everyday-${day}-${band.toFixed(1)}`;
-  const now = nowIso();
-  const countExisting = async () => {
-    const row = await env.DB.prepare(
-      "SELECT COUNT(*) AS total FROM learn_lessons WHERE band = ? AND unit_key = ? AND owner_id IS NULL AND status != 'ARCHIVED'",
-    )
-      .bind(band, unitKey)
-      .first<{ total: number }>();
-    return row?.total ?? 0;
-  };
-  let lessonCount = await countExisting();
-  if (lessonCount >= 6) {
-    await env.DB.prepare(
-      "INSERT INTO learn_daily_lesson_batches (band, day, status, lesson_count, created_at, updated_at) VALUES (?, ?, 'READY', ?, ?, ?) ON CONFLICT (band, day) DO UPDATE SET status = 'READY', lesson_count = excluded.lesson_count, updated_at = excluded.updated_at",
-    )
-      .bind(band, day, lessonCount, now, now)
-      .run();
-    return { status: 'READY', lessonCount, day, band };
-  }
-
-  const inserted = await env.DB.prepare(
-    "INSERT OR IGNORE INTO learn_daily_lesson_batches (band, day, status, lesson_count, created_at, updated_at) VALUES (?, ?, 'GENERATING', ?, ?, ?)",
-  )
-    .bind(band, day, lessonCount, now, now)
-    .run();
-  let ownsGeneration = (inserted.meta?.changes ?? 0) > 0;
-
-  if (!ownsGeneration) {
-    const batch = await env.DB.prepare(
-      'SELECT status, updated_at FROM learn_daily_lesson_batches WHERE band = ? AND day = ?',
-    )
-      .bind(band, day)
-      .first<{ status: string; updated_at: string }>();
-    if (batch?.status === 'READY') return { status: 'READY', lessonCount, day, band };
-
-    const staleBefore = new Date(Date.now() - 180_000).toISOString();
-    const retry = await env.DB.prepare(
-      `UPDATE learn_daily_lesson_batches SET status = 'GENERATING', lesson_count = ?, updated_at = ?
-        WHERE band = ? AND day = ? AND (status = 'FAILED' OR (status = 'GENERATING' AND updated_at < ?))`,
-    )
-      .bind(lessonCount, now, band, day, staleBefore)
-      .run();
-    ownsGeneration = (retry.meta?.changes ?? 0) > 0;
-    if (!ownsGeneration) return { status: 'GENERATING', lessonCount, day, band };
-  }
-
-  try {
-    lessonCount = await countExisting();
-    if (lessonCount < 6) {
-      await generateLessons(env, {
-        band,
-        kind: 'VOCAB',
-        count: 6 - lessonCount,
-        unitKey,
-        unitTitle: 'Everyday Lessons',
-        unitBlurb: 'A fresh set of original vocabulary practice, unlocked one lesson at a time.',
-        publish: true,
-        actorUserId: null,
-      });
-      lessonCount = await countExisting();
-    }
-    if (lessonCount < 6) throw new ApiError('AI_UNAVAILABLE', 'The daily lesson set was incomplete and will be retried.');
-    await env.DB.prepare(
-      "UPDATE learn_daily_lesson_batches SET status = 'READY', lesson_count = ?, updated_at = ? WHERE band = ? AND day = ?",
-    )
-      .bind(lessonCount, nowIso(), band, day)
-      .run();
-    return { status: 'READY', lessonCount, day, band };
-  } catch (error) {
-    await env.DB.prepare(
-      "UPDATE learn_daily_lesson_batches SET status = 'FAILED', lesson_count = ?, updated_at = ? WHERE band = ? AND day = ?",
-    )
-      .bind(await countExisting(), nowIso(), band, day)
-      .run()
-      .catch(() => undefined);
-    throw error;
-  }
 }
 
 interface NotebookWord {

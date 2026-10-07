@@ -208,6 +208,8 @@ export interface LessonWord {
   vi: string;
   /** A sentence that contains `term` exactly as written (a fill-in-the-blank needs it). */
   example: string;
+  /** Optional human-quality Vietnamese rendering of the example sentence. */
+  exampleVi?: string;
 }
 
 /**
@@ -246,6 +248,9 @@ export interface ParaphraseItem {
   distractors: string[];
   /** Why the answer is right and the others are not. */
   note: string;
+  /** Optional translations so the explanation still teaches without a live AI provider. */
+  originalVi?: string;
+  answerVi?: string;
 }
 
 export interface ReadingQuestion {
@@ -255,6 +260,8 @@ export interface ReadingQuestion {
   answer: number;
   /** The line of the passage the answer comes from. */
   evidence: string;
+  /** Optional Vietnamese translation of the evidence. */
+  evidenceVi?: string;
 }
 
 export interface WritingItem {
@@ -264,6 +271,8 @@ export interface WritingItem {
   model: string;
   /** A short hint: the key word or structure. */
   hint: string;
+  /** Optional Vietnamese translation of the model sentence. */
+  modelVi?: string;
 }
 
 export interface SpeakingItem {
@@ -273,6 +282,8 @@ export interface SpeakingItem {
   cue: string;
   /** A model answer to compare with. */
   sample: string;
+  /** Optional Vietnamese translation of the sample answer. */
+  sampleVi?: string;
 }
 
 /**
@@ -355,6 +366,48 @@ export interface CatalogueResponse {
   /** Full lesson bodies for the requested band only, so the payload stays small. */
   selected: { band: LearnBand; label: string; units: CatalogueUnit[] };
 }
+
+/** One private AI-generated lesson in today's ordered Everyday Lessons set. */
+export interface EverydayLessonView {
+  id: string;
+  band: LearnBand;
+  slot: number;
+  title: string;
+  blurb: string;
+  kind: LessonKind;
+  questionCount: number;
+  quote: string;
+  completed: boolean;
+  unlocked: boolean;
+}
+
+export interface EverydayLessonsResponse {
+  day: string;
+  band: LearnBand;
+  lessons: EverydayLessonView[];
+}
+
+/** Original end-of-lesson lines, rotated so today's six endings never repeat. */
+export const EVERYDAY_QUOTES = [
+  'A little practice today makes tomorrow feel easier.',
+  'One clear answer is progress you can keep.',
+  'You do not need to be perfect to move forward.',
+  'Small steps still take you somewhere new.',
+  'The words you practise today are tools for tomorrow.',
+  'A steady learner gets further than a rushed one.',
+  'Every attempt teaches you something useful.',
+  'Keep going; confidence grows through use.',
+  'A new phrase is a new way to share an idea.',
+  'Your effort is adding up, even when it feels quiet.',
+  'Mistakes are clues about what to practise next.',
+  'Make one more sentence, and make it your own.',
+  'Curiosity is a good place to begin.',
+  'Consistency turns practice into progress.',
+  'You are building skill one decision at a time.',
+  'Take what you learned here into your next conversation.',
+  'A thoughtful answer is stronger than a fancy one.',
+  'Today’s practice belongs to your future self.',
+] as const;
 
 /** Everything the player needs to build one lesson's exercises. */
 export interface LessonPlayPayload {

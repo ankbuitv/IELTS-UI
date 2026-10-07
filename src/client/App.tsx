@@ -18,7 +18,8 @@ import { LearnPage } from './pages/student/LearnPage';
 import { PlanPage } from './pages/student/PlanPage';
 import { ShopPage } from './pages/student/ShopPage';
 import { LeaderboardPage } from './pages/student/LeaderboardPage';
-import { FriendsPage, PublicProfilePage } from './pages/student/SocialPages';
+import { EverydayLessonsPage } from './pages/student/EverydayLessonsPage';
+import { FriendPage, PublicPlayerProfilePage } from './pages/student/SocialPages';
 import { LessonPage, ReviewPage } from './pages/student/LessonPages';
 import { DictionaryPage } from './pages/student/DictionaryPage';
 import { SpeakingPage } from './pages/student/SpeakingPage';
@@ -186,6 +187,38 @@ export function App() {
           }
         />
         <Route
+          path="learn/everyday"
+          element={
+            <RequireAuth roles={['STUDENT', 'ADMIN']}>
+              <EverydayLessonsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="learn/friends"
+          element={
+            <RequireAuth roles={['STUDENT', 'ADMIN']}>
+              <FriendPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="learn/profile"
+          element={
+            <RequireAuth roles={['STUDENT', 'ADMIN']}>
+              <PublicPlayerProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="learn/profile/:userId"
+          element={
+            <RequireAuth roles={['STUDENT', 'ADMIN']}>
+              <PublicPlayerProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="vocabulary"
           element={
             <RequireAuth>
@@ -206,22 +239,6 @@ export function App() {
           element={
             <RequireAuth>
               <ProfilePage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="profiles/:profileId"
-          element={
-            <RequireAuth>
-              <PublicProfilePage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="friends"
-          element={
-            <RequireAuth>
-              <FriendsPage />
             </RequireAuth>
           }
         />

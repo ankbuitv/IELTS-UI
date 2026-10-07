@@ -13,34 +13,28 @@
  *   xp_boost       doubles every XP award for a short window
  *   heart_refill   gives the lesson three more hearts after a wipe-out
  *   hint           removes two wrong options (or reveals a letter)
- *   cosmetics      permanent profile colours, banners and effects, bought with coins
  *
- * XP cannot be spent. Appearance items are optional, have a one-per-account
- * cap, and never change a score, lesson, or leaderboard rank.
+ * Prices are cheapest-first on purpose: a hint and a refill are everyday help,
+ * a freeze is insurance against losing weeks of work, and it should hurt a
+ * little to buy.
  */
 
 export const SHOP_ITEM_KEYS = [
-  'streak_freeze', 'xp_boost', 'heart_refill', 'hint',
-  'cosmetic_username_sunset', 'cosmetic_username_ocean', 'cosmetic_profile_glow',
-  'cosmetic_banner_sakura', 'cosmetic_banner_midnight',
+  'streak_freeze',
+  'xp_boost',
+  'heart_refill',
+  'hint',
+  'cosmetic_name_gold',
+  'cosmetic_name_nebula',
+  'cosmetic_profile_glow',
+  'cosmetic_profile_sparkle',
 ] as const;
 export type ShopItemKey = (typeof SHOP_ITEM_KEYS)[number];
-export const COSMETIC_ITEM_KEYS = [
-  'cosmetic_username_sunset', 'cosmetic_username_ocean', 'cosmetic_profile_glow',
-  'cosmetic_banner_sakura', 'cosmetic_banner_midnight',
-] as const satisfies readonly ShopItemKey[];
-export type CosmeticItemKey = (typeof COSMETIC_ITEM_KEYS)[number];
-
-export function isCosmeticItemKey(value: unknown): value is CosmeticItemKey {
-  return typeof value === 'string' && (COSMETIC_ITEM_KEYS as readonly string[]).includes(value);
-}
 
 export type ShopItemTone = 'ice' | 'sun' | 'rose' | 'violet';
-export type ShopItemCategory = 'consumable' | 'cosmetic';
 
 export interface ShopItemDef {
   key: ShopItemKey;
-  category: ShopItemCategory;
   name: string;
   /** One line for the shelf. */
   tagline: string;
@@ -57,12 +51,13 @@ export interface ShopItemDef {
    * missing a day — so the shop only sells them, it never uses them.
    */
   manual: boolean;
+  /** Cosmetics stay owned and are equipped from the learner profile. */
+  cosmetic?: boolean;
 }
 
 export const SHOP_ITEMS: readonly ShopItemDef[] = [
   {
     key: 'streak_freeze',
-    category: 'consumable',
     name: 'Streak freeze',
     tagline: 'A day off without losing your streak',
     detail: 'If you miss a day, one freeze is used automatically and your streak carries on as if you had practised.',
@@ -73,7 +68,6 @@ export const SHOP_ITEMS: readonly ShopItemDef[] = [
   },
   {
     key: 'xp_boost',
-    category: 'consumable',
     name: 'Double XP',
     tagline: `${doubleXpMinutes()} minutes of double XP`,
     detail: `Every lesson and review pays twice the XP for ${doubleXpMinutes()} minutes after you switch it on.`,
@@ -84,7 +78,6 @@ export const SHOP_ITEMS: readonly ShopItemDef[] = [
   },
   {
     key: 'heart_refill',
-    category: 'consumable',
     name: 'Heart refill',
     tagline: 'Back to three hearts, keep going',
     detail: 'Use it on the “Out of hearts” screen and the lesson continues where you left off.',
@@ -95,7 +88,6 @@ export const SHOP_ITEMS: readonly ShopItemDef[] = [
   },
   {
     key: 'hint',
-    category: 'consumable',
     name: 'Hint',
     tagline: 'Halve the choices',
     detail: 'Press the hint button in a lesson: an option question loses two wrong answers, and a typed answer is started for you. One hint, one question.',
@@ -105,59 +97,48 @@ export const SHOP_ITEMS: readonly ShopItemDef[] = [
     manual: false,
   },
   {
-    key: 'cosmetic_username_sunset',
-    category: 'cosmetic',
-    name: 'Sunset username',
-    tagline: 'A warm colour for your name',
-    detail: 'Unlocks the sunset username colour. Equip it from your profile; it is cosmetic only.',
-    price: 75,
+    key: 'cosmetic_name_gold',
+    name: 'Golden name',
+    tagline: 'Wear a little gold on the board',
+    detail: 'Unlock the gold name treatment for your profile and leaderboard card. Equip it from Profile after buying.',
+    price: 80,
     maxOwned: 1,
     tone: 'sun',
     manual: false,
+    cosmetic: true,
   },
   {
-    key: 'cosmetic_username_ocean',
-    category: 'cosmetic',
-    name: 'Ocean username',
-    tagline: 'A cool colour for your name',
-    detail: 'Unlocks the ocean username colour. Equip it from your profile; it is cosmetic only.',
-    price: 75,
-    maxOwned: 1,
-    tone: 'ice',
-    manual: false,
-  },
-  {
-    key: 'cosmetic_profile_glow',
-    category: 'cosmetic',
-    name: 'Profile glow',
-    tagline: 'A soft halo around your profile',
-    detail: 'Unlocks a gentle profile glow shown on your public profile and leaderboard rows.',
+    key: 'cosmetic_name_nebula',
+    name: 'Nebula name',
+    tagline: 'A colourful name gradient',
+    detail: 'Unlock the nebula gradient for your display name on your profile and the leaderboard.',
     price: 100,
     maxOwned: 1,
     tone: 'violet',
     manual: false,
+    cosmetic: true,
   },
   {
-    key: 'cosmetic_banner_sakura',
-    category: 'cosmetic',
-    name: 'Sakura banner',
-    tagline: 'Blossom-coloured profile cover',
-    detail: 'Unlocks the sakura cover banner for your profile.',
+    key: 'cosmetic_profile_glow',
+    name: 'Profile aura',
+    tagline: 'A soft animated profile glow',
+    detail: 'Unlock a colourful aura around your avatar and profile card. Equip it from Profile after buying.',
+    price: 100,
+    maxOwned: 1,
+    tone: 'ice',
+    manual: false,
+    cosmetic: true,
+  },
+  {
+    key: 'cosmetic_profile_sparkle',
+    name: 'Starlight frame',
+    tagline: 'A bright frame with a little shimmer',
+    detail: 'Unlock a starry profile frame for your avatar and profile card. Equip it from Profile after buying.',
     price: 100,
     maxOwned: 1,
     tone: 'rose',
     manual: false,
-  },
-  {
-    key: 'cosmetic_banner_midnight',
-    category: 'cosmetic',
-    name: 'Midnight banner',
-    tagline: 'A deep, starry profile cover',
-    detail: 'Unlocks the midnight cover banner for your profile.',
-    price: 100,
-    maxOwned: 1,
-    tone: 'violet',
-    manual: false,
+    cosmetic: true,
   },
 ];
 

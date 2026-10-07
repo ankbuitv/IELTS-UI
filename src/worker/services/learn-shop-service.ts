@@ -120,7 +120,7 @@ export async function purchaseItem(
   }
 
   const now = nowIso();
-  if (item.category === 'cosmetic') {
+  if (item.cosmetic) {
     // The conditional wallet update and the dependent writes share one D1
     // transaction. This closes the double-tap race for one-off cosmetics: only
     // the request that wins the ownership check can debit coins or insert an order.
@@ -197,9 +197,7 @@ export async function useItem(
   key: ShopItemKey,
 ): Promise<{ state: ShopState; applied: boolean; detail: string }> {
   const item = shopItem(key);
-  if (item.category === 'cosmetic') {
-    throw ApiError.validation('Profile cosmetics are permanent. Equip or remove them from your profile instead of using them here.');
-  }
+  if (item.cosmetic) throw ApiError.validation('Cosmetics are permanent unlocks. Equip them from your player profile.');
   const now = nowIso();
   const spent = await env.DB.prepare(
     'UPDATE learn_inventory SET quantity = quantity - 1, updated_at = ? WHERE user_id = ? AND item_key = ? AND quantity > 0',

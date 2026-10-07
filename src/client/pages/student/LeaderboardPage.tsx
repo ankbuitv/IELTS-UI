@@ -11,8 +11,8 @@
  * outside the fifty rows the board sends. A board you cannot find yourself on
  * is only a scoreboard; this is meant to be a race.
  *
- * Names are display names only. Nothing on this page identifies an account
- * beyond what its owner chose to be called.
+ * The board shows privacy-safe player-card details and links to the in-app
+ * profile. Email addresses and authentication details are never shown.
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -26,6 +26,7 @@ import {
 import { Icon } from '../../components/Icon';
 import { Button, Loading, Notice } from '../../components/ui';
 import { Mascot } from '../../components/learn/Mascot';
+import { PlayerAvatar, badgeName, playerNameClass } from '../../components/learn/PlayerAvatar';
 import { useAsync } from '../../hooks/useAsync';
 import { learnApi } from '../../lib/learn-api';
 
@@ -39,35 +40,23 @@ const WINDOWS: Array<{ id: LeaderboardWindow; label: string }> = [
   { id: 'all', label: 'All time' },
 ];
 
-const AVATAR_GLYPHS: Record<LeaderboardRow['avatarKey'], string> = { bo: '🌱', muc: '🪼', sen: '🌸' };
-
-function Avatar({ avatarKey, size = 36 }: { avatarKey: LeaderboardRow['avatarKey']; size?: number }) {
-  return (
-    <span className={`board__avatar-illustration board__avatar-illustration--${avatarKey}`} style={{ width: size, height: size }} aria-hidden="true">
-      {AVATAR_GLYPHS[avatarKey]}
-    </span>
-  );
-}
-
-function Row({ row, scope }: { row: LeaderboardRow; scope: LeaderboardScope }) {
+function Row({ row }: { row: LeaderboardRow }) {
   const medal = row.rank <= 3 ? ['🥇', '🥈', '🥉'][row.rank - 1] : null;
   return (
     <li className={`board__row${row.isMe ? ' is-me' : ''}${row.rank <= 3 ? ' is-top' : ''}`}>
       <span className="board__rank">{medal ?? row.rank}</span>
-      <span className={`board__avatar board__avatar--${scope}${row.profileEffect === 'glow' ? ' board__avatar--glow' : ''}`}>
-        <Avatar avatarKey={row.avatarKey} />
-      </span>
-      <span className="board__who">
-        <b>
-          <Link className={`board__profile-link board__name--${row.usernameColor}`} to={`/profiles/${encodeURIComponent(row.userId)}`}>
+      <Link className="board__profile-link" to={`/learn/profile/${encodeURIComponent(row.userId)}`} aria-label={`Open ${row.name}’s profile`}>
+        <PlayerAvatar avatarId={row.avatarId} name={row.name} effect={row.profileEffect} />
+        <span className="board__who">
+          <b className={playerNameClass(row.nameEffect)}>
             {row.name}
-          </Link>
-          {row.isMe ? <em className="board__you">you</em> : null}
-          <span className={`board__presence ${row.online ? 'is-online' : 'is-offline'}`} aria-label={row.online ? 'Online' : 'Offline'} title={row.online ? 'Online now' : 'Offline'} />
-        </b>
-        <span>{row.secondary} · Level {row.level}</span>
-        {row.badges.length > 0 ? <span className="board__badges">{row.badges.join(' · ')}</span> : null}
-      </span>
+            {row.isMe ? <em className="board__you">you</em> : null}
+            {row.role === 'ADMIN' ? <em className="board__role">Admin</em> : null}
+          </b>
+          <span><i className={`presence-dot${row.online ? ' is-online' : ''}`} aria-hidden="true" />{row.online ? 'Online' : 'Offline'} · Lv. {row.level} · {row.secondary}</span>
+        </span>
+      </Link>
+      {row.badgeIds[0] ? <span className="board__badge" title={badgeName(row.badgeIds[0])}>✦ {badgeName(row.badgeIds[0])}</span> : null}
       <span className="board__value">{row.valueLabel}</span>
     </li>
   );
@@ -89,7 +78,7 @@ export function LeaderboardPage() {
           <p className="board__kicker">Leaderboards</p>
           <h1>{scope === 'learn' ? 'Who is putting the work in' : 'Who is sitting the tests'}</h1>
           <p className="muted">
-            {SCOPES.find((item) => item.id === scope)?.blurb} {window === 'week' ? 'Since Monday.' : 'Since the beginning.'} Students and admin accounts are included; presence is based on activity in the last five minutes.
+            {SCOPES.find((item) => item.id === scope)?.blurb} {window === 'week' ? 'Since Monday.' : 'Since the beginning.'}
           </p>
         </div>
       </header>
@@ -148,10 +137,10 @@ export function LeaderboardPage() {
               <div className="board__me-hint">
                 {data.total > LEADERBOARD_LIMIT ? (
                   <span className="muted tiny">
-                    {data.total} learners are on this board — the list shows the first {LEADERBOARD_LIMIT}.
+                    {data.total} players are on this board — the list shows the first {LEADERBOARD_LIMIT}.
                   </span>
                 ) : (
-                  <span className="muted tiny">{data.total} learners on this board.</span>
+                  <span className="muted tiny">{data.total} players on this board.</span>
                 )}
                 <Button size="sm" variant="ghost" onClick={() => void board.reload()}>
                   <Icon name="rotate" size={13} /> Refresh
@@ -178,16 +167,14 @@ export function LeaderboardPage() {
                   <span className="podium__medal" aria-hidden="true">
                     {['🥇', '🥈', '🥉'][row.rank - 1]}
                   </span>
-                  <span className={`podium__avatar${row.profileEffect === 'glow' ? ' podium__avatar--glow' : ''}`}>
-                    <Avatar avatarKey={row.avatarKey} size={54} />
-                  </span>
-                  <b className={`board__name--${row.usernameColor}`}>
-                    <Link to={`/profiles/${encodeURIComponent(row.userId)}`}>{row.name}</Link>
-                  </b>
-                  <span className={`podium__presence ${row.online ? 'is-online' : 'is-offline'}`}>{row.online ? 'Online' : 'Offline'} · Level {row.level}</span>
-                  {row.badges[0] ? <span className="podium__badge">{row.badges[0]}</span> : null}
+                  <PlayerAvatar avatarId={row.avatarId} name={row.name} size={58} effect={row.profileEffect} />
+                  <Link className={`podium__name ${playerNameClass(row.nameEffect)}`} to={`/learn/profile/${encodeURIComponent(row.userId)}`}>
+                    {row.name}
+                  </Link>
+                  <span className="podium__level">Lv. {row.level}{row.role === 'ADMIN' ? ' · Admin' : ''}</span>
                   <span className="podium__value">{row.valueLabel}</span>
-                  <span className="podium__secondary">{row.secondary}</span>
+                  {row.badgeIds[0] ? <span className="podium__badge">✦ {badgeName(row.badgeIds[0])}</span> : null}
+                  <span className="podium__secondary"><i className={`presence-dot${row.online ? ' is-online' : ''}`} /> {row.online ? 'Online' : 'Offline'} · {row.secondary}</span>
                 </li>
               ))}
             </ol>
@@ -196,7 +183,7 @@ export function LeaderboardPage() {
           {data.rows.length > 0 ? (
             <ol className="board__list">
               {data.rows.map((row) => (
-                <Row key={`${row.rank}-${row.name}`} row={row} scope={scope} />
+                <Row key={`${row.rank}-${row.userId}`} row={row} />
               ))}
             </ol>
           ) : (

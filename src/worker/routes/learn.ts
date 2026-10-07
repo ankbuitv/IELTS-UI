@@ -25,7 +25,18 @@ import { getShopState, purchaseItem, useItem } from '../services/learn-shop-serv
 import { getLeaderboard } from '../services/learn-leaderboard-service';
 import { translateSentence } from '../services/learn-translate-service';
 import { auditPlan, getPlan, rebuildPlan, setPlanItemStatus } from '../services/learn-plan-service';
-import { buildPersonalLesson, ensureEverydayLessons, latestPersonalLesson } from '../services/learn-generation-service';
+import { buildPersonalLesson, latestPersonalLesson } from '../services/learn-generation-service';
+import { getEverydayLessons } from '../services/learn-everyday-service';
+import {
+  acceptFriendRequest,
+  getFriendOverview,
+  getGamificationProfile,
+  getPublicPlayerProfile,
+  removeFriend,
+  searchPlayers,
+  sendFriendRequest,
+  updateGamificationIdentity,
+} from '../services/learn-social-service';
 import { lookupWord } from '../services/dictionary-service';
 import { DAY_PATTERN, isLearnBand, isPlausibleDay, type LearnBand, type PlanItemStatus } from '../../shared/learn';
 import { isShopItemKey, type ShopItemKey } from '../../shared/shop';
@@ -44,10 +55,87 @@ learnRouter.use('*', async (c, next) => {
 
 const daySchema = z.string().regex(DAY_PATTERN);
 
+// -------------------------------------------------- player profiles / friends
+learnRouter.get('/profile', async (c) => {
+  const user = currentUser(c);
+  return c.json({ profile: await getGamificationProfile(c.env, user.id) });
+});
+
+learnRouter.patch('/profile', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      avatarId: z.string().max(32).optional(),
+      nameEffect: z.string().max(32).optional(),
+      profileEffect: z.string().max(32).optional(),
+    }).refine((value) => Object.keys(value).length > 0, 'Choose at least one profile setting to save.'),
+  );
+  return c.json({ profile: await updateGamificationIdentity(c.env, user.id, body) });
+});
+
+learnRouter.get('/profiles/:userId', async (c) => {
+  const user = currentUser(c);
+  return c.json({ profile: await getPublicPlayerProfile(c.env, user.id, c.req.param('userId')) });
+});
+
+learnRouter.get('/friends', async (c) => {
+  const user = currentUser(c);
+  return c.json(await getFriendOverview(c.env, user.id));
+});
+
+learnRouter.get('/people/search', async (c) => {
+  const user = currentUser(c);
+  const { q } = parseQuery(c, z.object({ q: z.string().trim().max(60).default('') }));
+  await enforceRateLimit(
+    c.env,
+    { bucket: `learn-people-search:${user.id}`, windowSeconds: 3600, limit: 120 },
+    'You have searched for people several times. Try again in a little while.',
+  );
+  return c.json({ results: await searchPlayers(c.env, user.id, q) });
+});
+
+learnRouter.post('/friends/:userId', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  await sendFriendRequest(c.env, user.id, c.req.param('userId'));
+  return c.json({ ok: true });
+});
+
+learnRouter.post('/friends/:userId/accept', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  await acceptFriendRequest(c.env, user.id, c.req.param('userId'));
+  return c.json({ ok: true });
+});
+
+learnRouter.delete('/friends/:userId', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  await removeFriend(c.env, user.id, c.req.param('userId'));
+  return c.json({ ok: true });
+});
+
 learnRouter.get('/overview', async (c) => {
   const user = currentUser(c);
   const { day } = parseQuery(c, z.object({ day: daySchema }));
   return c.json(await getLearnOverview(c.env, user.id, day));
+});
+
+/** Generates (once) six private, ordered lessons for this learner and band. */
+learnRouter.post('/everyday', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ band: z.number().min(4).max(8), day: daySchema }));
+  if (!isLearnBand(body.band)) throw ApiError.validation('Choose a band from 4.0 to 8.0 in half bands.');
+  if (!isPlausibleDay(body.day)) throw ApiError.validation('That calendar day is not valid.');
+  await enforceRateLimit(
+    c.env,
+    { bucket: `learn-everyday:${user.id}:${body.band}`, windowSeconds: 3600, limit: 60 },
+    'You have opened Everyday Lessons many times. Try again in a little while.',
+  );
+  return c.json(await getEverydayLessons(c.env, user.id, body.band as LearnBand, body.day));
 });
 
 /**
@@ -63,21 +151,6 @@ learnRouter.get('/catalogue', async (c) => {
     throw ApiError.validation('Choose a band between 4.0 and 8.0.');
   }
   return c.json(await getCatalogue(c.env, user.id, (band ?? null) as LearnBand | null));
-});
-
-/** Creates today's shared six-lesson pack on first use of a band. */
-learnRouter.post('/everyday-lessons', async (c) => {
-  const user = currentUser(c);
-  assertCsrf(c, c.get('session')?.csrfToken ?? null);
-  const body = await parseBody(c, z.object({ band: z.number().min(4).max(8), day: daySchema }));
-  if (!isLearnBand(body.band)) throw ApiError.validation('Choose a band from 4.0 to 8.0 in half bands.');
-  if (!isPlausibleDay(body.day)) throw ApiError.validation('That calendar day is not valid.');
-  await enforceRateLimit(
-    c.env,
-    { bucket: `learn-everyday:${user.id}`, windowSeconds: 3600, limit: 18 },
-    'The daily lesson packs are being requested too often. Please try again in a little while.',
-  );
-  return c.json(await ensureEverydayLessons(c.env, body.band, body.day));
 });
 
 /** One lesson with the words the exercise engine needs to build it. */
