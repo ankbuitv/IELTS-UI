@@ -18,6 +18,7 @@ import { LearnPage } from './pages/student/LearnPage';
 import { PlanPage } from './pages/student/PlanPage';
 import { ShopPage } from './pages/student/ShopPage';
 import { LeaderboardPage } from './pages/student/LeaderboardPage';
+import { FriendsPage, PublicProfilePage } from './pages/student/SocialPages';
 import { LessonPage, ReviewPage } from './pages/student/LessonPages';
 import { DictionaryPage } from './pages/student/DictionaryPage';
 import { SpeakingPage } from './pages/student/SpeakingPage';
@@ -205,6 +206,22 @@ export function App() {
           element={
             <RequireAuth>
               <ProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="profiles/:profileId"
+          element={
+            <RequireAuth>
+              <PublicProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="friends"
+          element={
+            <RequireAuth>
+              <FriendsPage />
             </RequireAuth>
           }
         />

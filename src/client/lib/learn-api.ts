@@ -39,6 +39,12 @@ export const learnApi = {
   /** The path: every band summarised plus the lessons of one band. */
   catalogue: (band?: LearnBand) =>
     api.get<CatalogueResponse>(`/api/learn/catalogue${queryString(band === undefined ? {} : { band })}`),
+  /** Ensure the six AI-generated lessons for the selected band and local day exist. */
+  everydayLessons: (band: LearnBand) =>
+    api.post<{ status: 'READY' | 'GENERATING'; lessonCount: number; day: string; band: LearnBand }>('/api/learn/everyday-lessons', {
+      band,
+      day: localDay(),
+    }),
   /** One lesson with the words the exercise engine builds it from. */
   lesson: (lessonId: string) => api.get<{ lesson: LessonPlayPayload }>(`/api/learn/lessons/${encodeURIComponent(lessonId)}`),
   dailyWords: (extra = false) => api.post<DailyWordsResult>('/api/learn/daily-words', { day: localDay(), ...(extra ? { extra: true } : {}) }),

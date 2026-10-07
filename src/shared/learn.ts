@@ -299,6 +299,9 @@ export interface ReadingPayload {
 }
 export interface WritingPayload {
   kind: 'WRITING';
+  /** An original, complete IELTS-style task prompt shown before the sentence drills. */
+  taskPrompt?: string;
+  taskType?: 'TASK_1' | 'TASK_2';
   items: WritingItem[];
 }
 export interface SpeakingPayload {

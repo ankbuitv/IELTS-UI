@@ -30,10 +30,18 @@ export function isLeaderboardWindow(value: unknown): value is LeaderboardWindow 
 
 export interface LeaderboardRow {
   rank: number;
+  /** Opaque account key used only to open its public learning profile. */
+  userId: string;
   /** A display name, or "Learner" when the account has none. */
   name: string;
   /** The name is a shortened form for the row (initials are drawn client-side). */
   isMe: boolean;
+  avatarKey: 'bo' | 'muc' | 'sen';
+  usernameColor: 'default' | 'sunset' | 'ocean';
+  profileEffect: 'none' | 'glow';
+  online: boolean;
+  level: number;
+  badges: string[];
   /** The number the board is ranked on (XP, or submitted attempts). */
   value: number;
   /** Ready-to-render value, so the two boards read the same everywhere. */
@@ -57,7 +65,7 @@ export interface LeaderboardResponse {
 }
 
 /** How many rows a board sends. */
-export const LEADERBOARD_LIMIT = 50;
+export const LEADERBOARD_LIMIT = 100;
 
 export function formatXp(value: number): string {
   return `${value.toLocaleString('en')} XP`;

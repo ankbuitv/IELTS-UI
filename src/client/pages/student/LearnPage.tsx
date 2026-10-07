@@ -65,6 +65,9 @@ export function LearnPage() {
   const board = useAsync<LeaderboardResponse>(() => learnApi.leaderboard('learn', 'week'), []);
   const [daily, setDaily] = useState<DailyWordsResult | null>(null);
   const [dailyBusy, setDailyBusy] = useState(false);
+  const [everydayStatus, setEverydayStatus] = useState<'idle' | 'loading' | 'generating' | 'ready' | 'error'>('idle');
+  const [everydayError, setEverydayError] = useState<string | null>(null);
+  const requestedEveryday = useRef(new Set<string>());
   const [planBusy, setPlanBusy] = useState(false);
   const [openLesson, setOpenLesson] = useState<string | null>(null);
   const [lookup, setLookup] = useState<string | null>(null);
@@ -157,8 +160,58 @@ export function LearnPage() {
   const progress = data?.progress ?? {};
 
   const bands = useMemo(() => catalogue.data?.bands ?? [], [catalogue.data]);
+  const reloadCatalogue = catalogue.reload;
   const selectedBand = catalogue.data?.selected.band ?? null;
   const selectedLabel = catalogue.data?.selected.label ?? '';
+
+  // The six shared daily lessons are generated once for a band/day and appended
+  // after the curriculum, where the existing sequential unlock rules gate them.
+  useEffect(() => {
+    if (selectedBand === null) return;
+    const key = `${today}:${selectedBand.toFixed(1)}`;
+    if (requestedEveryday.current.has(key)) return;
+    requestedEveryday.current.add(key);
+    let cancelled = false;
+    let retryTimer: number | undefined;
+    setEverydayStatus('loading');
+    setEverydayError(null);
+    const loadPack = async () => {
+      try {
+        const result = await learnApi.everydayLessons(selectedBand);
+        if (cancelled) return;
+        if (result.status === 'READY') {
+          setEverydayStatus('ready');
+          await reloadCatalogue();
+          return;
+        }
+        setEverydayStatus('generating');
+        retryTimer = window.setTimeout(() => {
+          void learnApi.everydayLessons(selectedBand).then(async (retried) => {
+            if (cancelled) return;
+            if (retried.status === 'READY') {
+              setEverydayStatus('ready');
+              await reloadCatalogue();
+            }
+          }).catch((cause) => {
+            if (!cancelled) {
+              setEverydayStatus('error');
+              setEverydayError(describeError(cause));
+            }
+          });
+        }, 4_000);
+      } catch (cause) {
+        if (!cancelled) {
+          setEverydayStatus('error');
+          setEverydayError(describeError(cause));
+        }
+      }
+    };
+    void loadPack();
+    return () => {
+      cancelled = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+    };
+  }, [selectedBand, today, reloadCatalogue]);
 
   // A band is finished when every lesson in it has been done at least once.
   const completeBands = useMemo(
@@ -313,22 +366,26 @@ export function LearnPage() {
             <b>{profile.coins.toLocaleString('en')}</b>
             <span>coins · spend</span>
           </button>
-          <div className="arena__goal">
-            <svg viewBox="0 0 42 42" className="arena__ring" role="img" aria-label={`Daily goal ${goalPercent}%`}>
-              <circle cx="21" cy="21" r="17" className="arena__ring-track" />
-              <circle
-                cx="21"
-                cy="21"
-                r="17"
-                className="arena__ring-fill"
-                strokeDasharray={`${(goalPercent / 100) * 106.8} 106.8`}
-              />
-            </svg>
+          <div className={`arena__goal${goalDone ? ' arena__goal--complete' : ''}`}>
+            {goalDone ? (
+              <span className="arena__goal-check" role="img" aria-label={`Daily goal complete; ${Math.max(0, profile.todayXp - profile.dailyGoalXp)} bonus XP earned`}>
+                <Icon name="check" size={22} strokeWidth={3.2} />
+              </span>
+            ) : (
+              <svg viewBox="0 0 42 42" className="arena__ring" role="img" aria-label={`Daily goal ${goalPercent}% complete`}>
+                <circle cx="21" cy="21" r="17" className="arena__ring-track" />
+                <circle
+                  cx="21"
+                  cy="21"
+                  r="17"
+                  className="arena__ring-fill"
+                  strokeDasharray={`${(goalPercent / 100) * 106.8} 106.8`}
+                />
+              </svg>
+            )}
             <div>
-              <b>
-                {profile.todayXp}/{profile.dailyGoalXp}
-              </b>
-              <span>today’s XP</span>
+              <b>{goalDone ? 'Goal complete' : `${profile.todayXp}/${profile.dailyGoalXp}`}</b>
+              <span>{goalDone ? `+${Math.max(0, profile.todayXp - profile.dailyGoalXp)} bonus XP` : 'today’s XP'}</span>
             </div>
           </div>
         </div>
@@ -552,6 +609,7 @@ export function LearnPage() {
           <nav className="band-strip" aria-label="Choose a band">
             {bands.map((item) => {
               const on = item.band === selectedBand;
+              const recommended = item.band === profile.band && profile.bandSource !== 'CHOSEN';
               const empty = item.lessonCount === 0;
               const finished = item.lessonCount > 0 && item.completedCount >= item.lessonCount;
               return (
@@ -561,19 +619,32 @@ export function LearnPage() {
                   className={`band-chip${on ? ' is-on' : ''}${empty ? ' is-empty' : ''}${finished ? ' is-done' : ''}`}
                   onClick={() => {
                     sfx.play('select');
-                    setBand(item.band);
                     setOpenLesson(null);
+                    void chooseBand(item.band);
                   }}
                   aria-current={on ? 'true' : undefined}
-                  title={LEARN_BAND_LABELS[item.band]}
+                  aria-label={`Band ${item.band.toFixed(1)} · ${LEARN_BAND_LABELS[item.band]} · ${on ? 'Selected' : recommended ? 'Recommended' : 'Available'}`}
+                  title={`${LEARN_BAND_LABELS[item.band]} · ${on ? 'Selected' : recommended ? 'Recommended' : 'Available'}`}
                 >
                   <b>{item.band.toFixed(1)}</b>
                   <span>{empty ? 'no lessons yet' : `${item.completedCount}/${item.lessonCount}`}</span>
+                  <small>{on ? 'Selected' : recommended ? 'Recommended' : 'Available'}</small>
                 </button>
               );
             })}
           </nav>
+          <p className="band-strip__legend muted tiny">
+            {profile.bandSource === 'CHOSEN' ? 'Selected is your saved choice.' : 'Recommended is based on your starting estimate.'}
+            {' '}Other bands are available; choosing one saves it for next time.
+          </p>
+          <details className="learn__legend">
+            <summary>What do the ticks and stars mean?</summary>
+            <p><b>Tick:</b> you finished that lesson at least once. <b>Stars:</b> your best first-try accuracy — one for finishing, two from 70%, and three from 90%. Stars show mastery; they do not lock the next lesson.</p>
+          </details>
 
+          {everydayStatus === 'loading' ? <p className="muted small learn__everyday-status" role="status">Preparing today’s six AI-generated lessons for band {selectedBand?.toFixed(1)}…</p> : null}
+          {everydayStatus === 'generating' ? <p className="muted small learn__everyday-status" role="status">Today’s lessons are being prepared. They will appear at the end of this band’s path.</p> : null}
+          {everydayStatus === 'error' ? <p className="muted small learn__everyday-status" role="status">Today’s AI lessons are unavailable right now; your curriculum path is still ready. {everydayError}</p> : null}
           {catalogue.loading && !catalogue.data ? <Loading label="Loading the path…" /> : null}
           {catalogue.error && !catalogue.data ? (
             <Notice tone="danger" title="The path could not be loaded">
@@ -671,7 +742,7 @@ export function LearnPage() {
                               ) : (
                                 <Button variant="primary" block onClick={() => startLesson(lesson.id)}>
                                   {state === 'done' ? 'Practise again' : 'Start lesson'}
-                                  <span className="node-pop__xp">+{item?.completions ? '~7' : '~20'} XP</span>
+                                  <span className="node-pop__xp">+{item?.completions ? '~22' : '~40'} XP</span>
                                 </Button>
                               )}
                             </div>

@@ -60,6 +60,8 @@
 .band-chip:hover { border-color: var(--ink-500); transform: translateY(-1px); }
 .band-chip b { font-size: 1.02rem; font-weight: 800; line-height: 1.1; color: var(--ink-950); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .band-chip span { font-size: 0.7rem; font-weight: 700; color: var(--ink-500); }
+.band-chip small { font-size: 0.62rem; font-weight: 800; color: var(--brand-700); text-transform: uppercase; letter-spacing: 0.03em; }
+.band-strip__legend { margin: 0; }
 .band-chip.is-on { border-color: var(--brand-600); background: var(--brand-50); box-shadow: 0 2px 0 var(--brand-600); }
 .band-chip.is-on b { color: var(--brand-700); }
 .band-chip.is-done span { color: var(--teal-700, #0b7d70); }
@@ -381,6 +383,9 @@
 .arena__goal { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: rgba(255, 255, 255, 0.13); border-radius: var(--radius-lg); grid-column: 1 / -1; }
 .arena__goal b { display: block; font-size: 1.2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .arena__goal span { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255, 255, 255, 0.8); }
+.arena__goal--complete { background: rgba(35, 160, 114, 0.2); outline: 1px solid rgba(153, 255, 216, 0.4); }
+.arena__goal-check { display: grid; place-items: center; width: 46px; height: 46px; flex: none; border-radius: 50%; color: #064d38; background: var(--sun-400); }
+.arena__goal-check[role="img"] { font-size: 0; }
 .arena__ring { width: 46px; height: 46px; flex: none; transform: rotate(-90deg); }
 .arena__ring-track { fill: none; stroke: rgba(255, 255, 255, 0.24); stroke-width: 4; }
 .arena__ring-fill { fill: none; stroke: var(--sun-400); stroke-width: 4; stroke-linecap: round; transition: stroke-dasharray 400ms var(--ease); }
@@ -420,22 +425,38 @@
 
 /* ------------------------------------------------------------------ mascot */
 .mascot { display: inline-flex; align-items: center; gap: 12px; }
-.mascot__art { width: var(--mascot-size, 120px); height: var(--mascot-size, 120px); overflow: visible; }
+.mascot__tap { position: relative; display: grid; flex: 0 0 var(--mascot-size, 120px); place-items: center; width: var(--mascot-size, 120px); height: var(--mascot-size, 120px); padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; touch-action: manipulation; }
+.mascot__tap:hover { background: color-mix(in srgb, var(--brand-100) 44%, transparent); }
+.mascot__tap:focus-visible { outline: 3px solid var(--brand-500); outline-offset: 2px; }
+.mascot__art { display: block; width: var(--mascot-size, 120px); height: var(--mascot-size, 120px); overflow: visible; }
 .mascot__art .mascot__body { transform-origin: 60px 96px; }
-.mascot--idle .mascot__art { animation: mascot-breathe 3.4s ease-in-out infinite; }
+.mascot--idle .mascot__art { animation: mascot-hover 4s ease-in-out infinite; }
 .mascot--happy .mascot__art { animation: mascot-hop 620ms cubic-bezier(0.34, 1.56, 0.64, 1); }
 .mascot--sad .mascot__art { animation: mascot-droop 700ms ease-out forwards; }
 .mascot--wow .mascot__art { animation: mascot-shake 520ms ease-out; }
 .mascot--think .mascot__art { animation: mascot-sway 2.6s ease-in-out infinite; }
 .mascot--wave .mascot__wing--right { transform-origin: 100px 72px; animation: mascot-wave 1.1s ease-in-out infinite; }
+.mascot--wave .mascot__leaves path:last-child { transform-origin: 88px 74px; animation: mascot-wave 1.1s ease-in-out infinite; }
 .mascot--sleep .mascot__art { animation: mascot-breathe 5s ease-in-out infinite; }
 .mascot--sleep .mascot__mark--zzz { animation: mascot-zzz 2.4s ease-in-out infinite; }
+.mascot--idle .mascot__pupils { animation: mascot-glance 6.2s ease-in-out infinite; }
+.mascot--idle.mascot--muc .mascot__tentacles path { animation: mascot-tentacle 2.1s ease-in-out infinite alternate; transform-origin: 60px 80px; }
+.mascot--idle.mascot--muc .mascot__tentacles path:nth-child(even) { animation-delay: -1s; }
+.mascot--idle.mascot--sen .mascot__petals { transform-origin: 60px 43px; animation: mascot-petal 3.2s ease-in-out infinite; }
 .mascot__sparkles { animation: mascot-sparkle 900ms ease-out; transform-origin: 60px 60px; }
 .mascot--sad .mascot__tear { animation: mascot-tear 1.6s ease-in forwards; }
 .mascot__shadow { transition: transform 200ms var(--ease); }
 .mascot--happy .mascot__shadow { animation: mascot-shadow 620ms ease-out; }
+.mascot .mascot__art--boop { animation: mascot-boop 560ms cubic-bezier(0.2, 1.4, 0.5, 1); }
+.mascot__tap-spark { position: absolute; z-index: 1; inset: 10%; border: 2px solid rgba(255, 196, 61, 0.78); border-radius: 50%; pointer-events: none; animation: mascot-tap-ring 520ms ease-out forwards; }
 
 @keyframes mascot-breathe { 0%, 100% { transform: translateY(0) scaleY(1); } 50% { transform: translateY(-2px) scaleY(1.015); } }
+@keyframes mascot-hover { 0%, 100% { transform: translateY(0) rotate(0); } 35% { transform: translateY(-4px) rotate(-1deg); } 68% { transform: translateY(-1px) rotate(1deg); } }
+@keyframes mascot-glance { 0%, 27%, 34%, 76%, 82%, 100% { transform: translateX(0); } 30%, 79% { transform: translateX(-2px); } }
+@keyframes mascot-tentacle { from { transform: rotate(-3deg); } to { transform: rotate(4deg); } }
+@keyframes mascot-petal { 0%, 100% { transform: rotate(-2deg) scale(1); } 50% { transform: rotate(2deg) scale(1.035); } }
+@keyframes mascot-boop { 0% { transform: scale(1) rotate(0); } 24% { transform: scale(0.82) rotate(-7deg); } 58% { transform: scale(1.12) rotate(5deg); } 82% { transform: scale(0.97) rotate(-2deg); } 100% { transform: scale(1) rotate(0); } }
+@keyframes mascot-tap-ring { 0% { opacity: 0; transform: scale(0.72); } 25% { opacity: 0.8; } 100% { opacity: 0; transform: scale(1.16); } }
 @keyframes mascot-hop { 0% { transform: translateY(0) scale(1); } 35% { transform: translateY(-14px) scale(1.05, 0.96); } 70% { transform: translateY(0) scale(0.97, 1.04); } 100% { transform: translateY(0) scale(1); } }
 @keyframes mascot-droop { 0% { transform: translateY(0) rotate(0); } 40% { transform: translateY(6px) rotate(-5deg) scaleY(0.97); } 100% { transform: translateY(4px) rotate(-3deg) scaleY(0.97); } }
 @keyframes mascot-shake { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-6deg) scale(1.04); } 45% { transform: rotate(6deg) scale(1.06); } 70% { transform: rotate(-3deg); } }
@@ -505,9 +526,17 @@
 /* ------------------------------------------- lesson player: new furniture */
 .lesson__coins { font-size: 0.82rem; font-weight: 800; color: var(--sun-700); white-space: nowrap; }
 .lesson__boost { font-size: 0.76rem; font-weight: 800; color: #7a4a00; background: var(--sun-soft); border: 1px solid var(--sun-border); padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.lesson__task-prompt { margin: 0 0 16px; padding: 12px 16px; border-left: 4px solid var(--brand-600); border-radius: 0 var(--radius-lg) var(--radius-lg) 0; background: var(--brand-50); }
+.lesson__task-prompt p { margin: 0 0 5px; color: var(--brand-700); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.lesson__task-prompt blockquote { margin: 0; color: var(--ink-900); font-size: 0.88rem; line-height: 1.5; }
 .lesson__hint { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-family: inherit; font-size: 0.78rem; font-weight: 700; color: #5a35b8; background: #f3ecff; border: 1px solid #d9c8ff; border-radius: 99px; cursor: pointer; }
 .lesson__hint:disabled { opacity: 0.5; cursor: not-allowed; }
 .lesson__mascot { display: flex; justify-content: center; margin-top: 18px; }
+.lesson__answer-help { display: grid; gap: 4px; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--info-border); border-radius: var(--radius-lg); background: var(--info-soft); color: var(--ink-800); font-size: 0.86rem; line-height: 1.45; }
+.lesson__answer-help strong { color: #174696; font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.lesson__answer-help p { margin: 0; }
+.lesson__answer-help-tip { color: var(--ink-600); font-size: 0.8rem; }
+.lesson__answer-help-translation { color: #174696; }
 .lesson__feedback-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .lesson__sentence { margin: 6px 0 0; font-size: 0.98rem; line-height: 1.55; color: var(--ink-900); }
 .lesson__pairs { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 3px; font-size: 0.9rem; }
@@ -523,6 +552,7 @@
 .lesson__feedback--quiet { flex-direction: row; align-items: center; gap: 12px; }
 .lesson__foot-actions { position: relative; display: flex; align-items: center; gap: 10px; }
 .lesson__boost-tag { font-style: normal; margin-left: 6px; font-size: 0.8rem; font-weight: 800; color: var(--sun-700); }
+.lesson__quote { max-width: 40ch; margin: 10px auto; padding: 10px 14px; border-radius: var(--radius-lg); background: var(--sun-soft); color: var(--sun-700); font-weight: 700; line-height: 1.45; }
 .lesson__end-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 14px; }
 .lesson__option.is-eliminated { opacity: 0.42; text-decoration: line-through; }
 .lesson__option.is-hinted { border-color: #7a4fe0; box-shadow: 0 0 0 3px #efe7ff; }
@@ -599,9 +629,15 @@
 .podium--3 { border-color: #e8cbb0; }
 .podium__medal { position: absolute; top: -18px; font-size: 1.7rem; }
 .podium--1 .podium__medal { top: -26px; font-size: 2.1rem; }
-.podium__avatar { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--brand-600); color: #fff; font-weight: 800; }
-.podium--1 .podium__avatar { width: 58px; height: 58px; background: var(--sun-500); color: #4a2d00; }
+.podium__avatar { display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; background: var(--brand-50); }
+.podium--1 .podium__avatar { width: 58px; height: 58px; background: var(--sun-soft); }
 .podium b { font-size: 0.92rem; color: var(--ink-950); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.podium b a { color: inherit; text-decoration: none; }
+.podium b a:hover { text-decoration: underline; }
+.podium__presence { font-size: 0.7rem; font-weight: 700; }
+.podium__presence.is-online { color: #12815b; }
+.podium__presence.is-offline { color: var(--ink-500); }
+.podium__badge { padding: 2px 7px; border-radius: 99px; background: var(--sun-soft); color: var(--sun-700); font-size: 0.66rem; font-weight: 800; }
 .podium__value { font-size: 0.86rem; font-weight: 800; color: var(--brand-700); }
 .podium__secondary { font-size: 0.74rem; color: var(--ink-500); }
 .board__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -612,9 +648,22 @@
 .board__avatar { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--ink-100); color: var(--ink-800); font-size: 0.82rem; font-weight: 800; }
 .board__avatar--practice { background: #efe7ff; color: #5a35b8; }
 .board__avatar--learn { background: var(--success-soft); color: #0b5c42; }
+.board__avatar--glow, .podium__avatar--glow { box-shadow: 0 0 0 2px var(--paper), 0 0 0 5px #b18cff, 0 0 16px rgba(122, 79, 224, 0.5); }
+.board__avatar-illustration { display: grid; place-items: center; max-width: 100%; max-height: 100%; border-radius: 50%; font-size: 1.35rem; }
+.board__avatar-illustration--bo { background: #e7f8ee; }
+.board__avatar-illustration--muc { background: #f0e8ff; }
+.board__avatar-illustration--sen { background: #fff0e9; }
+.podium__avatar .board__avatar-illustration { font-size: 1.8rem; }
 .board__who { flex: 1; min-width: 0; display: grid; gap: 1px; }
 .board__who b { display: flex; align-items: center; gap: 8px; font-size: 0.94rem; color: var(--ink-950); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board__profile-link { min-width: 0; overflow: hidden; color: inherit; text-overflow: ellipsis; text-decoration: none; }
+.board__profile-link:hover { text-decoration: underline; }
+.board__name--sunset { color: #b34f12 !important; }
+.board__name--ocean { color: #087a91 !important; }
+.board__presence { flex: none; width: 9px; height: 9px; border-radius: 50%; background: #9aa6b2; box-shadow: 0 0 0 2px var(--paper); }
+.board__presence.is-online { background: #20a879; box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px rgba(32, 168, 121, 0.18); }
 .board__who span { font-size: 0.78rem; color: var(--ink-500); }
+.board__who .board__badges { font-size: 0.67rem; color: var(--sun-700); font-weight: 700; }
 .board__you { font-style: normal; padding: 1px 7px; border-radius: 99px; background: var(--brand-50); border: 1px solid var(--brand-200); color: var(--brand-700); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
 .board__value { font-weight: 800; color: var(--ink-900); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
@@ -658,7 +707,7 @@
 
 /* Motion is decoration here; colour and number still carry the meaning. */
 @media (prefers-reduced-motion: reduce) {
-  .mascot__art, .mascot__sparkles, .mascot__tear, .mascot__mark--zzz, .fx-confetti i, .fx-float, .fx-flash, .fx-combo, .fx-streak,
+  .mascot__art, .mascot__sparkles, .mascot__tear, .mascot__mark--zzz, .mascot__pupils, .mascot__tentacles path, .mascot__petals, .mascot__tap-spark, .fx-confetti i, .fx-float, .fx-flash, .fx-combo, .fx-streak,
   .arena__stat.is-hot svg, .node-start {
     animation: none !important;
   }

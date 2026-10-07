@@ -303,8 +303,8 @@ export interface BuildLessonOptions {
 }
 
 /**
- * A lesson of about ten exercises. Recognition comes first (choose, match),
- * then recall (fill, listen, type, order), so each word is met more than once.
+ * A substantial practice set: about thirty short exercises, cycling through
+ * recognition, sentence context, listening, typed recall and word order.
  */
 export function buildLesson(words: readonly LearnWord[], seed: string, options: BuildLessonOptions = {}): Exercise[] {
   const random = seededRandom(seed);
@@ -329,14 +329,22 @@ export function buildLesson(words: readonly LearnWord[], seed: string, options: 
   let counter = 0;
   const nextId = (kind: string) => `${seed}:${kind}:${counter++}`;
 
-  for (let i = 0; i < Math.min(n, 4); i += 1) push(buildChoose(at(i), pool, random, nextId('choose')));
-  push(buildMatch(shuffle(order, random), random, nextId('match')));
-  for (let i = 2; i < 5; i += 1) push(buildFill(at(i), pool, random, nextId('fill')) ?? buildChoose(at(i), pool, random, nextId('choose')));
-  push(buildListen(at(n - 1), pool, random, nextId('listen')));
-  push(buildType(at(0), nextId('type')));
-  if (n > 2) push(buildType(at(n - 2), nextId('type')));
-  const orderable = order.find((word) => buildOrder(word, () => 0.5, 'probe'));
-  if (orderable) push(buildOrder(orderable, random, nextId('order')));
+  // Keep one matching round for variety, then give every target word repeated
+  // retrieval practice in five different formats. If the stored set has fewer
+  // than six words, the words cycle rather than making the lesson feel over at
+  // question twelve. A malformed example falls back to a fresh recognition item.
+  const match = buildMatch(shuffle(order, random), random, nextId('match'));
+  push(match);
+  const remaining = 30 - (match ? 1 : 0);
+  for (let index = 0; index < remaining; index += 1) {
+    const word = at(Math.floor(index / 5));
+    const kind = index % 5;
+    if (kind === 0) push(buildChoose(word, pool, random, nextId('choose')));
+    else if (kind === 1) push(buildFill(word, pool, random, nextId('fill')) ?? buildChoose(word, pool, random, nextId('choose')));
+    else if (kind === 2) push(buildListen(word, pool, random, nextId('listen')));
+    else if (kind === 3) push(buildType(word, nextId('type')));
+    else push(buildOrder(word, random, nextId('order')) ?? buildFill(word, pool, random, nextId('fill')) ?? buildChoose(word, pool, random, nextId('choose')));
+  }
   return exercises;
 }
 

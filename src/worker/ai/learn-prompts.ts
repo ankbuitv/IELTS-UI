@@ -55,7 +55,7 @@ const CONTRACTS: Record<LessonKind, { contract: string; kindRules: string }> = {
   },
   PARAPHRASE: {
     kindRules: `PARAPHRASE RULES
-- Four items per lesson. Each item is one sentence and three wrong restatements.
+- Each item is one original sentence and three wrong restatements; produce the exact item count requested in OUTPUT.
 - "answer" must keep the meaning of "original" while changing the wording (different verb, different structure, or a nominalisation).
 - Each of the three "distractors" must look plausible but change the meaning in ONE specific way: the opposite, a stronger or weaker claim, or a different subject or time. Never a grammar error.
 - "note" says in one sentence why the answer holds and what the distractors got wrong.`,
@@ -63,7 +63,7 @@ const CONTRACTS: Record<LessonKind, { contract: string; kindRules: string }> = {
   },
   READING: {
     kindRules: `READING RULES
-- Two lessons per call at most. Each lesson is one original passage of 90 to 130 words, on an academic or semi-academic topic, with four questions.
+- Each lesson is one original passage of about 450 to 650 words, on an academic or semi-academic topic, with exactly the number of questions requested in OUTPUT. This should be a short reading drill, not a full-length test.
 - Every question must be answerable from the passage alone, and only from the passage.
 - The four "options" must be the same kind of thing (all noun phrases, or all full clauses) and similar in length.
 - "answer" is the zero-based index of the correct option.
@@ -73,16 +73,19 @@ const CONTRACTS: Record<LessonKind, { contract: string; kindRules: string }> = {
   },
   WRITING: {
     kindRules: `WRITING RULES
-- Six items per lesson. Each item trains one sentence of Task 1 or Task 2 language.
-- "instruction" is Vietnamese: it tells the learner what to say, and may name the structure to use (for example "Dùng cấu trúc although để nối hai ý sau…").
-- "model" is the English sentence they are aiming at, at most 20 words, natural and grammatical.
-- "hint" names the key word or structure in at most 6 words.
-- The model sentence must be something a candidate could really write in an essay, not a textbook example about apples.`,
-    contract: `{"lessons":[{"title":"...","blurb":"...","items":[{"instruction":"...","model":"...","hint":"..."}]}]}`,
+- Include a real, original IELTS-style Task 1 or Task 2 writing prompt in "taskPrompt" (a chart/process/map description or a complete essay question), not merely a sentence-translation instruction. State which task type it is in "taskType" as "TASK_1" or "TASK_2".
+- Produce exactly the number of sentence exercises requested in OUTPUT. Each item practises a useful sentence-level skill for answering that task (overview, comparison, position, reason, example, concession, or conclusion).
+- "instruction" is Vietnamese and tells the learner what to write; it may name a structure without giving away the full model.
+- "model" is one natural, grammatical English sentence of at most 24 words that could genuinely appear in an IELTS response.
+- "hint" names the key idea or structure in at most 8 words.
+- Task 1 must be self-contained because no chart image is attached: include every relevant category, unit, time period and figure directly in "taskPrompt" as concise prose or an inline text table. Label invented values as fictional practice data; never ask the learner to make up missing figures.
+- For a process or map prompt, describe each stage or the before/after changes completely in "taskPrompt". For Task 2, write a concrete, original question with all required parts.
+- Do not request citations, external research or unsupported statistics as a way to raise the IELTS score.`,
+    contract: `{"lessons":[{"title":"...","blurb":"...","taskType":"TASK_1|TASK_2","taskPrompt":"...","items":[{"instruction":"...","model":"...","hint":"..."}]}]}`,
   },
   SPEAKING: {
     kindRules: `SPEAKING RULES
-- Six items per lesson, all from one Part 1, Part 2 or Part 3 theme. Say which in the lesson blurb.
+- Produce exactly the number of items requested in OUTPUT, all from one Part 1, Part 2 or Part 3 theme. Say which in the lesson blurb.
 - "question" is what an examiner would actually ask, word for word.
 - "cue" lists in at most 12 words what a good answer covers.
 - "sample" is a model spoken answer of 35 to 60 words: natural, with the connectives and hedging of real speech, not a written paragraph.
@@ -103,7 +106,8 @@ ${SHARED_RULES}
 ${spec.kindRules}
 
 OUTPUT
-${input.count} lessons in the "lessons" array, each with the number of items the rules above require.
+${input.count} lessons in the "lessons" array.
+${input.kind === 'VOCAB' ? 'Each vocabulary lesson must contain exactly 6 words; the player turns these into about 30 varied exercises.' : `Every lesson must contain exactly ${input.items} playable items (${input.items} questions/prompts). Do not stop early or return examples.`}
 Output ONLY this JSON object:
 ${spec.contract}`,
     },

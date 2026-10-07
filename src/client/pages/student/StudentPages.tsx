@@ -39,6 +39,7 @@ import {
   TEST_TYPE_LABELS,
 } from '../../lib/format';
 import { useAuth } from '../../context/AuthContext';
+import { ProfileAppearanceEditor } from './SocialPages';
 
 // ---------------------------------------------------------------------------
 // Practice catalogue
@@ -727,6 +728,7 @@ export function ProfilePage() {
       />
 
       {tabs === 'profile' ? (
+        <>
         <Card title="Profile details" hint={user?.email}>
           <Field label="Display name" required>
             {(id) => <TextInput id={id} value={displayName} onChange={(event) => setDisplayName(event.target.value)} />}
@@ -765,6 +767,8 @@ export function ProfilePage() {
             Save profile
           </Button>
         </Card>
+        <ProfileAppearanceEditor />
+        </>
       ) : (
         <Card title="Change password" hint="Changing your password signs out all other sessions.">
           <Field label="Current password" required>

@@ -17,6 +17,7 @@ import fileRoutes from './routes/files';
 import importRoutes from './routes/imports';
 import speakingRoutes from './routes/speaking';
 import { dictionaryRouter, learnRouter } from './routes/learn';
+import { socialRouter } from './routes/social';
 
 export function createApp() {
   const app = new Hono<AppBindings>();
@@ -59,6 +60,7 @@ export function createApp() {
   app.route('/api/student', studentRoutes);
   app.route('/api/speaking', speakingRoutes);
   app.route('/api/learn', learnRouter);
+  app.route('/api/social', socialRouter);
   app.route('/api/dictionary', dictionaryRouter);
   app.route('/api', classroomRoutes);
   app.route('/api/teacher', teacherRoutes);

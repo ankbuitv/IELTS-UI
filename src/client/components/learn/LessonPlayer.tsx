@@ -25,7 +25,7 @@ import type { TranslationResult } from '@shared/learn';
 import { Icon } from '../Icon';
 import { Button } from '../ui';
 import { Stars } from './Stars';
-import { Mascot, reactionTo, type MascotMood } from './Mascot';
+import { Mascot, mascotForQuestion, reactionTo, type MascotMood } from './Mascot';
 import { Confetti, ComboBadge, FloatingAward, ScreenFlash } from './Effects';
 import { LookupHint, LookupProvider, LookupText } from './LookupText';
 
@@ -83,6 +83,30 @@ function embeddableVideo(url: string): string | null {
  * paying the least attention to a spinner.
  */
 const TRANSLATIONS = new Map<string, TranslationResult>();
+
+const LESSON_COMPLETION_QUOTES = [
+  'Small steps still move the horizon.',
+  'A clear sentence is progress you can build on.',
+  'Today’s practice becomes tomorrow’s confidence.',
+  'Mistakes are notes for your next attempt.',
+  'Keep the meaning clear; let the words grow naturally.',
+  'One more question is one more chance to understand.',
+] as const;
+let fallbackQuoteCursor = 0;
+
+function nextLessonCompletionQuote(): string {
+  try {
+    const key = 'aieo.learn-completion-quote';
+    const previous = Number.parseInt(localStorage.getItem(key) ?? '-1', 10);
+    const next = Number.isFinite(previous) ? (previous + 1) % LESSON_COMPLETION_QUOTES.length : 0;
+    localStorage.setItem(key, String(next));
+    return LESSON_COMPLETION_QUOTES[next]!;
+  } catch {
+    const quote = LESSON_COMPLETION_QUOTES[fallbackQuoteCursor % LESSON_COMPLETION_QUOTES.length]!;
+    fallbackQuoteCursor += 1;
+    return quote;
+  }
+}
 
 function useSentenceTranslation(sentence: string, active: boolean): TranslationResult | null {
   const key = sentence.trim().toLowerCase();
@@ -160,6 +184,8 @@ export function LessonPlayer({
   onRestart,
   videoUrl,
   legendary,
+  taskPrompt,
+  taskType,
 }: {
   title: string;
   exercises: Exercise[];
@@ -168,6 +194,9 @@ export function LessonPlayer({
   onRestart: () => void;
   videoUrl?: string;
   legendary?: boolean;
+  /** The full IELTS-style task that the writing sentence drills practise. */
+  taskPrompt?: string;
+  taskType?: 'TASK_1' | 'TASK_2';
 }) {
   const [queue, setQueue] = useState<Exercise[]>(exercises);
   const [index, setIndex] = useState(0);
@@ -177,6 +206,7 @@ export function LessonPlayer({
   const [verdict, setVerdict] = useState<{ correct: boolean; almost?: boolean } | null>(null);
   const [answered, setAnswered] = useState(false);
   const [result, setResult] = useState<LessonFinish | null>(null);
+  const [completionQuote, setCompletionQuote] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
@@ -245,6 +275,7 @@ export function LessonPlayer({
       try {
         const response = await onFinish(score);
         setResult(response);
+        setCompletionQuote(nextLessonCompletionQuote());
         setPhase('done');
         const perfect = score.total > 0 && score.correct === score.total;
         sfx.play(perfect ? 'perfect' : 'complete');
@@ -390,7 +421,7 @@ export function LessonPlayer({
       <div className="lesson lesson--failed">
         <ScreenFlash burst={flash.burst} tone={flash.tone} />
         <div className="lesson__end">
-          <Mascot mood="sad" size={168} message="That is all five hearts. Nothing is lost — the words will come round again." tone="bad" />
+          <Mascot creature={current ? mascotForQuestion(current.id) : 'bo'} mood="sad" size={168} message="That is all five hearts. Nothing is lost — the words will come round again." tone="bad" />
           <h1>Out of hearts</h1>
           <p className="muted">
             You ran out of tries on “{title}”. Your XP and coins so far are kept, and the words you missed will come back in your review.
@@ -431,6 +462,7 @@ export function LessonPlayer({
         <ScreenFlash burst={flash.burst} tone={flash.tone} />
         <div className="lesson__end">
           <Mascot
+            creature={current ? mascotForQuestion(current.id) : 'bo'}
             mood={perfect ? 'wow' : 'happy'}
             size={196}
             message={
@@ -442,6 +474,7 @@ export function LessonPlayer({
           />
           <h1>{perfect ? 'Perfect lesson' : 'Lesson complete'}</h1>
           <p className="muted">{title}</p>
+          {completionQuote ? <blockquote className="lesson__quote">“{completionQuote}”</blockquote> : null}
           <dl className="lesson__stats">
             <div>
               <dt>XP</dt>
@@ -553,6 +586,12 @@ export function LessonPlayer({
         </header>
 
         <main className="lesson__main">
+          {taskPrompt ? (
+            <section className="lesson__task-prompt" aria-label="IELTS writing task prompt">
+              <p>IELTS Writing {taskType === 'TASK_1' ? 'Task 1' : 'Task 2'}</p>
+              <blockquote>{taskPrompt}</blockquote>
+            </section>
+          ) : null}
           {legendary ? (
             <p className="lesson__retry" style={{ color: '#b8860b', fontWeight: 700 }}>★ Legendary — harder set. Look-ups are off; answer from memory.</p>
           ) : null}
@@ -582,8 +621,10 @@ export function LessonPlayer({
                 }}
                 onAnswered={setAnswered}
               />
+              {phase === 'answering' ? <AnswerSupport exercise={current} /> : null}
               <div className="lesson__mascot">
                 <Mascot
+                  creature={mascotForQuestion(current.id)}
                   mood={phase === 'feedback' ? reaction.mood : isRetry ? 'think' : 'idle'}
                   size={92}
                   message={phase === 'feedback' ? reaction.message : isRetry ? 'This one again — you know it now.' : undefined}
@@ -660,6 +701,41 @@ export function LessonPlayer({
  * When no provider answers, the word's gloss is still shown — it is the part
  * that a learner can always have — with a quiet note rather than an error.
  */
+function AnswerSupport({ exercise }: { exercise: Exercise }) {
+  const shouldShow = exercise.kind === 'choose' || exercise.kind === 'fill' || exercise.kind === 'paraphrase';
+  const sentence = exercise.kind === 'paraphrase'
+    ? exercise.prompt
+    : exercise.kind === 'choose' || exercise.kind === 'fill'
+      ? exercise.explain.example
+      : '';
+  const translation = useSentenceTranslation(sentence, shouldShow && Boolean(sentence));
+  if (!shouldShow) return null;
+
+  return (
+    <aside className="lesson__answer-help" aria-label="Learning support while answering">
+      <strong>{exercise.kind === 'paraphrase' ? 'Understand the original sentence' : 'Quick help'}</strong>
+      {exercise.kind === 'fill' ? (
+        <>
+          <p><b>Meaning:</b> {exercise.explain.meaning}</p>
+          {exercise.explain.vi ? <p lang="vi"><b>Tiếng Việt:</b> {exercise.explain.vi}</p> : null}
+          <p className="lesson__answer-help-tip">The options above are your word bank. Use the definition and sentence context to choose.</p>
+        </>
+      ) : exercise.kind === 'choose' ? (
+        <>
+          {exercise.explain.vi ? <p lang="vi"><b>Nghĩa tiếng Việt:</b> {exercise.explain.vi}</p> : null}
+          <p className="lesson__answer-help-tip">Think about how the word is used in the example before choosing its English meaning.</p>
+        </>
+      ) : null}
+      {sentence ? (
+        <p className="lesson__answer-help-translation" lang="vi">
+          <b>Vietnamese translation:</b>{' '}
+          {translation?.available ? translation.vi : translation === null ? <em>translating…</em> : <em className="muted">Not available right now.</em>}
+        </p>
+      ) : null}
+    </aside>
+  );
+}
+
 function FeedbackTranslation({ sentence, explain }: { sentence: string; explain: Exercise['explain'] }) {
   const translation = useSentenceTranslation(sentence, Boolean(sentence));
   const hasWord = Boolean(explain.term && explain.meaning);
@@ -804,7 +880,7 @@ function OptionExercise({ exercise, disabled, hinted, verdict, registerSubmit, o
       ) : null}
       {exercise.kind === 'fill' ? (
         <>
-          <p className="lesson__kicker">Complete the sentence</p>
+          <p className="lesson__kicker">Complete the sentence · choose from the word bank</p>
           <h1 className="lesson__prompt lesson__prompt--sentence">
             <LookupText as="span" text={exercise.sentence} />
           </h1>
@@ -863,7 +939,7 @@ function OptionExercise({ exercise, disabled, hinted, verdict, registerSubmit, o
           ) : null}
         </>
       ) : null}
-      <div className="lesson__options" role="radiogroup">
+      <div className="lesson__options" role="radiogroup" aria-label={exercise.kind === 'fill' ? 'Word bank' : 'Answer options'}>
         {options.map((option, optionIndex) => {
           const gone = eliminated.has(optionIndex);
           const state =

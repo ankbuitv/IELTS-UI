@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { boostState } from '@shared/shop';
 import { useAuth } from '../context/AuthContext';
 import { learnApi } from '../lib/learn-api';
+import { api } from '../lib/api';
 import { BrandLogo } from './BrandLogo';
 import { DisplayMenu } from './DisplayMenu';
 import { Icon, type IconName } from './Icon';
@@ -38,6 +39,7 @@ const MAIN_NAV: NavItem[] = [
 const MORE_NAV: NavItem[] = [
   { to: '/learn/shop', label: 'Shop', icon: 'cart' },
   { to: '/learn/leaderboard', label: 'Leaderboards', icon: 'trophy' },
+  { to: '/friends', label: 'Friends', icon: 'users' },
   { to: '/learn/plan', label: 'Study plan', icon: 'calendar' },
   { to: '/speaking', label: 'Speaking', icon: 'mic' },
   { to: '/analytics', label: 'My progress', icon: 'chart' },
@@ -91,6 +93,7 @@ export function AppShell() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [coins, setCoins] = useState<number | null>(null);
   const [boosted, setBoosted] = useState(false);
+  const heartbeatUserId = user?.id;
 
   // The coin balance belongs to the whole shell, not to the shop page: it is the
   // thing that makes "spend it or lose the habit" visible while the learner is
@@ -112,6 +115,30 @@ export function AppShell() {
       alive = false;
     };
   }, [user?.role, location.pathname]);
+
+  // Keep the leaderboard's short-lived presence marker accurate while a signed-in
+  // learner is actively using the app. Hidden tabs stop pinging and naturally
+  // become offline after the server's five-minute window.
+  useEffect(() => {
+    if (!heartbeatUserId) return;
+    let inFlight = false;
+    const beat = () => {
+      if (document.visibilityState === 'hidden' || inFlight) return;
+      inFlight = true;
+      void api.post('/api/auth/heartbeat', {}).catch(() => undefined).finally(() => {
+        inFlight = false;
+      });
+    };
+    const interval = window.setInterval(beat, 60_000);
+    window.addEventListener('focus', beat);
+    document.addEventListener('visibilitychange', beat);
+    beat();
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', beat);
+      document.removeEventListener('visibilitychange', beat);
+    };
+  }, [heartbeatUserId]);
 
   // Close the panel whenever the page changes or Escape is pressed.
   useEffect(() => {

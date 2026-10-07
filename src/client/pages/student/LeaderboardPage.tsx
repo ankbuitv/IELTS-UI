@@ -39,9 +39,14 @@ const WINDOWS: Array<{ id: LeaderboardWindow; label: string }> = [
   { id: 'all', label: 'All time' },
 ];
 
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).slice(0, 2);
-  return parts.map((part) => part[0]?.toUpperCase() ?? '').join('') || '?';
+const AVATAR_GLYPHS: Record<LeaderboardRow['avatarKey'], string> = { bo: '🌱', muc: '🪼', sen: '🌸' };
+
+function Avatar({ avatarKey, size = 36 }: { avatarKey: LeaderboardRow['avatarKey']; size?: number }) {
+  return (
+    <span className={`board__avatar-illustration board__avatar-illustration--${avatarKey}`} style={{ width: size, height: size }} aria-hidden="true">
+      {AVATAR_GLYPHS[avatarKey]}
+    </span>
+  );
 }
 
 function Row({ row, scope }: { row: LeaderboardRow; scope: LeaderboardScope }) {
@@ -49,15 +54,19 @@ function Row({ row, scope }: { row: LeaderboardRow; scope: LeaderboardScope }) {
   return (
     <li className={`board__row${row.isMe ? ' is-me' : ''}${row.rank <= 3 ? ' is-top' : ''}`}>
       <span className="board__rank">{medal ?? row.rank}</span>
-      <span className={`board__avatar board__avatar--${scope}`} aria-hidden="true">
-        {initialsOf(row.name)}
+      <span className={`board__avatar board__avatar--${scope}${row.profileEffect === 'glow' ? ' board__avatar--glow' : ''}`}>
+        <Avatar avatarKey={row.avatarKey} />
       </span>
       <span className="board__who">
         <b>
-          {row.name}
+          <Link className={`board__profile-link board__name--${row.usernameColor}`} to={`/profiles/${encodeURIComponent(row.userId)}`}>
+            {row.name}
+          </Link>
           {row.isMe ? <em className="board__you">you</em> : null}
+          <span className={`board__presence ${row.online ? 'is-online' : 'is-offline'}`} aria-label={row.online ? 'Online' : 'Offline'} title={row.online ? 'Online now' : 'Offline'} />
         </b>
-        <span>{row.secondary}</span>
+        <span>{row.secondary} · Level {row.level}</span>
+        {row.badges.length > 0 ? <span className="board__badges">{row.badges.join(' · ')}</span> : null}
       </span>
       <span className="board__value">{row.valueLabel}</span>
     </li>
@@ -80,7 +89,7 @@ export function LeaderboardPage() {
           <p className="board__kicker">Leaderboards</p>
           <h1>{scope === 'learn' ? 'Who is putting the work in' : 'Who is sitting the tests'}</h1>
           <p className="muted">
-            {SCOPES.find((item) => item.id === scope)?.blurb} {window === 'week' ? 'Since Monday.' : 'Since the beginning.'}
+            {SCOPES.find((item) => item.id === scope)?.blurb} {window === 'week' ? 'Since Monday.' : 'Since the beginning.'} Students and admin accounts are included; presence is based on activity in the last five minutes.
           </p>
         </div>
       </header>
@@ -169,10 +178,14 @@ export function LeaderboardPage() {
                   <span className="podium__medal" aria-hidden="true">
                     {['🥇', '🥈', '🥉'][row.rank - 1]}
                   </span>
-                  <span className="podium__avatar" aria-hidden="true">
-                    {initialsOf(row.name)}
+                  <span className={`podium__avatar${row.profileEffect === 'glow' ? ' podium__avatar--glow' : ''}`}>
+                    <Avatar avatarKey={row.avatarKey} size={54} />
                   </span>
-                  <b>{row.name}</b>
+                  <b className={`board__name--${row.usernameColor}`}>
+                    <Link to={`/profiles/${encodeURIComponent(row.userId)}`}>{row.name}</Link>
+                  </b>
+                  <span className={`podium__presence ${row.online ? 'is-online' : 'is-offline'}`}>{row.online ? 'Online' : 'Offline'} · Level {row.level}</span>
+                  {row.badges[0] ? <span className="podium__badge">{row.badges[0]}</span> : null}
                   <span className="podium__value">{row.valueLabel}</span>
                   <span className="podium__secondary">{row.secondary}</span>
                 </li>

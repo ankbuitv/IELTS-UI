@@ -93,8 +93,10 @@ function normaliseReading(raw: unknown): LessonPayload | null {
 }
 
 function normaliseWriting(raw: unknown): LessonPayload | null {
+  const source = record(raw);
+  if (!source) return null;
   const items: WritingItem[] = [];
-  for (const entry of listOf(record(raw)?.items)) {
+  for (const entry of listOf(source.items)) {
     const value = record(entry);
     if (!value) continue;
     const instruction = text(value.instruction, 320);
@@ -102,7 +104,15 @@ function normaliseWriting(raw: unknown): LessonPayload | null {
     if (!instruction || !model) continue;
     items.push({ instruction, model, hint: text(value.hint, 160) });
   }
-  return items.length > 0 ? { kind: 'WRITING', items } : null;
+  if (items.length === 0) return null;
+  const taskPrompt = text(source.taskPrompt, 2_000);
+  const taskType = source.taskType === 'TASK_1' || source.taskType === 'TASK_2' ? source.taskType : undefined;
+  return {
+    kind: 'WRITING',
+    ...(taskPrompt ? { taskPrompt } : {}),
+    ...(taskType ? { taskType } : {}),
+    items,
+  };
 }
 
 function normaliseSpeaking(raw: unknown): LessonPayload | null {
@@ -164,7 +174,7 @@ export function lessonPreview(payload: LessonPayload): string {
     case 'READING':
       return `${payload.questions.length} questions · ${payload.passage.split(/\s+/).length} words`;
     case 'WRITING':
-      return payload.items[0]?.instruction ?? '';
+      return payload.taskPrompt ?? payload.items[0]?.instruction ?? '';
     case 'SPEAKING':
       return payload.items[0]?.question ?? '';
   }

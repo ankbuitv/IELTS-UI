@@ -241,7 +241,7 @@ function PlanItemRow({
 }) {
   const target =
     item.kind === 'LESSON' && item.lessonId
-      ? `/learn/lesson/${item.lessonId}`
+      ? `/learn/lesson/${item.lessonId}?returnTo=%2Flearn%2Fplan`
       : item.kind === 'REVIEW'
         ? '/learn/review'
         : item.kind === 'MOCK_TEST'

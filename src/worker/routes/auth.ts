@@ -144,6 +144,13 @@ router.post('/logout', async (c) => {
   return c.json({ ok: true });
 });
 
+router.post('/heartbeat', async (c) => {
+  assertSameOrigin(c);
+  currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  return c.json({ ok: true });
+});
+
 router.get('/me', async (c) => {
   const token = getSessionToken(c);
   if (!token) return c.json({ user: null, csrfToken: null });

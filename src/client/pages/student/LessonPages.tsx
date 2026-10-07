@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { LessonPlayPayload, LessonWord } from '@shared/learn';
 import { buildLessonFromPayload, buildReviewLesson } from '@shared/learn-engine';
 import { LessonPlayer, useLessonSeed, type LessonFinish } from '../../components/learn/LessonPlayer';
@@ -11,7 +11,12 @@ import { describeError } from '../../lib/api';
 /** A lesson from the path, played full screen. */
 export function LessonPage() {
   const { lessonId = '' } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
+  // Only allow known in-app return destinations; a copied lesson URL cannot be
+  // used as an open redirect. Study-plan launches keep their context on refresh.
+  const returnTo = new URLSearchParams(location.search).get('returnTo');
+  const backPath = returnTo === '/learn/plan' ? '/learn/plan' : '/learn';
   const [seed, restart] = useLessonSeed(lessonId);
   const [lesson, setLesson] = useState<LessonPlayPayload | null>(null);
   const [missing, setMissing] = useState(false);
@@ -64,14 +69,14 @@ export function LessonPage() {
     [lessonId],
   );
 
-  if (missing) return <Navigate to="/learn" replace />;
+  if (missing) return <Navigate to={backPath} replace />;
   if (error) {
     return (
       <div className="lesson">
         <div className="lesson__end">
           <Notice tone="danger">{error}</Notice>
-          <Link className="btn" to="/learn">
-            Back to Learn
+          <Link className="btn" to={backPath}>
+            {backPath === '/learn/plan' ? 'Back to Study Plan' : 'Back to Learn'}
           </Link>
         </div>
       </div>
@@ -86,7 +91,9 @@ export function LessonPage() {
       exercises={exercises}
       videoUrl={lesson.videoUrl}
       legendary={lesson.legendary}
-      onExit={() => navigate('/learn')}
+      taskPrompt={lesson.payload.kind === 'WRITING' ? lesson.payload.taskPrompt : undefined}
+      taskType={lesson.payload.kind === 'WRITING' ? lesson.payload.taskType : undefined}
+      onExit={() => navigate(backPath)}
       onFinish={finish}
       onRestart={restart}
     />
