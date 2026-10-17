@@ -43,7 +43,7 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
   `Section`, `Row`/`RowList`, `Ring`, `StatPill` and `Hero` are the five shapes every screen
   is assembled from, so a student dashboard, a class report and the admin console open the
   same way and share spacing, tone accents and entry motion. Pages stay dumb: they pass data,
-  the kit owns the geometry. `tests/unit/client-page-kit.test.ts` renders each piece and
+  the kit owns the geometry. `tests/unit/page-kit.test.ts` renders each piece and
   fails if a class it emits has no rule in the stylesheets.
 - **Motion system** (`styles/app.css`): one easing family and three speeds; every route
   re-keys its content column, so a page entry rises once and its card grids stagger by
