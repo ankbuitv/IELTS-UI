@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { createElement } from 'react';
+import { createElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
@@ -9,8 +9,7 @@ import { Hero, PageHead, Ring, Row, Section, StatPill } from '../../src/client/c
  * The page kit is the only layer every screen is built from, so it is worth a
  * test: a broken class here silently restyles the whole product.
  */
-const render = (element: Parameters<typeof createElement>[0]) =>
-  renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: ['/x'] }, element as never));
+const render = (element: ReactElement) => renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: ['/x'] }, element));
 
 describe('PageHead', () => {
   it('renders the eyebrow, title, meta and actions in the kit structure', () => {
@@ -107,13 +106,13 @@ describe('kit CSS', () => {
       render(createElement(Hero, { kicker: 'K', title: 'T', lede: 'L', bars: true, aside: 'A' })),
     ].join('');
     const classes = new Set(
-      [...html.matchAll(/class="([^"{]+)"/g)].flatMap((match) => match[1].split(/\s+/)).filter(Boolean),
+      [...html.matchAll(/class="([^"{]+)"/g)].flatMap((match) => (match[1] ?? '').split(/\s+/)).filter(Boolean),
     );
     expect(classes.size).toBeGreaterThan(12);
     const kit = [...classes].filter(isKitClass);
     expect(kit.length).toBeGreaterThan(8);
     for (const name of kit) {
-      expect(css, `the stylesheets are missing .${name}`).toContain(`.${name}`);
+      expect(css, `the stylesheets are missing a rule for .${name}`).toMatch(new RegExp(`\\.${name}[\\s,{:.>\\[]`));
     }
   });
 });

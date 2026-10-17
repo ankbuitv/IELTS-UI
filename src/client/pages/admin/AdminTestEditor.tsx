@@ -48,6 +48,7 @@ import {
   type EditableQuestion,
   type EditableSection,
 } from './content-types';
+import { PageHead } from '../../components/page';
 
 const SECTION_TYPE_LABELS: Record<string, string> = Object.fromEntries(
   SECTION_TYPES.map((type) => [type, SECTION_TYPE_META[type].label]),
@@ -300,18 +301,20 @@ export function AdminTestEditorPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <Link to="/admin/tests" className="small">
-            ← All tests
+      <PageHead
+        eyebrow={
+          <Link to="/admin/tests" className="ph__back">
+            All tests
           </Link>
-          <h1>{test.title}</h1>
-          <p className="page-head__meta">
+        }
+        title={test.title}
+        meta={
+          <>
             {test.slug} · {TEST_TYPE_LABELS[test.type] ?? test.type} · content origin{' '}
             {test.content_origin.replace(/_/g, ' ').toLowerCase()}
-          </p>
-        </div>
-        <div className="row">
+          </>
+        }
+        actions={<div className="row">
           <Badge tone={test.status === 'PUBLISHED' ? 'success' : test.status === 'REVIEW' ? 'warning' : test.status === 'ARCHIVED' ? 'dim' : 'neutral'}>
             {test.status.toLowerCase()}
           </Badge>
@@ -360,8 +363,8 @@ export function AdminTestEditorPage() {
           >
             New version
           </ConfirmButton>
-        </div>
-      </div>
+        </div>}
+      />
 
       <div className="grid grid--2 stagger">
         <Card title="Test summary">
