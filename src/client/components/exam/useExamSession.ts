@@ -6,6 +6,8 @@ import type { CandidateTestPayload } from '@shared/candidate';
 import type { AttemptSectionState } from '@shared/candidate';
 import type { SectionPolicy } from '@shared/sections';
 import { countWords } from '../../lib/format';
+import { useExamWindowGuard, type WindowGuardApi } from './useExamWindowGuard';
+import { requestExamFullscreen } from './window-guard';
 import {
   applyDraft,
   backoffMs,
@@ -70,6 +72,9 @@ export interface AttemptState {
     counted: number;
     tabAway: number;
     fullscreenExits: number;
+    popupsBlocked: number;
+    overlaysSuppressed: number;
+    allowanceUsed: boolean;
     warningLevel: 'NONE' | 'WARNING' | 'CRITICAL';
     notice: string;
   };
@@ -114,6 +119,8 @@ export interface ExamSessionApi {
   logIntegrity: (type: IntegrityEventType, metadata?: Record<string, unknown>) => void;
   requestFullscreen: () => Promise<void>;
   isFullscreen: boolean;
+  /** Fullscreen / popup / extension-overlay guard for this attempt. */
+  windowGuard: WindowGuardApi;
   /** Set when the candidate has just come back to the exam tab after leaving it. */
   tabLock: TabLockState | null;
   /** Times the candidate has left the exam tab in this attempt (server count or this tab's count, whichever is higher). */
@@ -282,11 +289,19 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     if (integrityQueue.current.length === 0) return;
     const batch = integrityQueue.current.splice(0, integrityQueue.current.length);
     try {
-      const result = await api.post<{ warningLevel: 'NONE' | 'WARNING' | 'CRITICAL'; autoSubmitted: boolean }>(
+      const result = await api.post<{
+        warningLevel: 'NONE' | 'WARNING' | 'CRITICAL';
+        autoSubmitted: boolean;
+        allowanceUsed?: boolean;
+      }>(
         `/api/attempts/${attemptId}/integrity`,
         { events: batch.map((event) => ({ type: event.type, occurredAt: new Date().toISOString(), metadata: event.metadata ?? {} })) },
       );
-      if (result.warningLevel === 'CRITICAL') {
+      if (result.warningLevel === 'CRITICAL' && !result.autoSubmitted) {
+        // CRITICAL without a submission can only come from the fullscreen
+        // allowance, which is a lock and never an auto-submit.
+        setWarning('The allowed fullscreen exits for this exam are used up. Go back to fullscreen to continue — nothing has been submitted.');
+      } else if (result.warningLevel === 'CRITICAL') {
         setWarning('You have left the exam tab too many times. This attempt is being submitted automatically.');
       }
       if (result.autoSubmitted) {
@@ -300,10 +315,20 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     }
   }, [attemptId, load]);
 
+  /** Guard events are bursty (a held Ctrl-click), so their flush is throttled. */
+  const lastGuardFlush = useRef(0);
+
   const logIntegrity = useCallback(
     (type: IntegrityEventType, metadata?: Record<string, unknown>) => {
       integrityQueue.current.push({ type, ...(metadata ? { metadata } : {}) });
-      if (type === 'TAB_HIDDEN' || type === 'FULLSCREEN_EXIT' || type === 'COPY_ATTEMPT' || type === 'PASTE_ATTEMPT') {
+      if (type === 'POPUP_BLOCKED' || type === 'EXTENSION_OVERLAY') {
+        const now = Date.now();
+        if (now - lastGuardFlush.current < 2_000) return;
+        lastGuardFlush.current = now;
+        void flushIntegrity();
+        return;
+      }
+      if (['TAB_HIDDEN', 'FULLSCREEN_EXIT', 'COPY_ATTEMPT', 'PASTE_ATTEMPT'].includes(type)) {
         void flushIntegrity();
       }
     },
@@ -423,22 +448,48 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     document.addEventListener('fullscreenchange', onFullscreenChange);
     cleanup.push(() => document.removeEventListener('fullscreenchange', onFullscreenChange));
 
+    /**
+     * The candidate's own answer field. Text already inside it is theirs, and an
+     * essay cannot be written at all if it cannot be selected, copied and cut —
+     * so those are the one place the clipboard lock stands down.
+     */
+    const isOwnAnswerField = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      return Boolean(
+        target &&
+          (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable),
+      );
+    };
+
     if (!policy.allowCopy) {
-      const onCopy = (event: Event) => {
+      const blockClipboard = (kind: 'copy' | 'cut') => (event: Event) => {
+        if (isOwnAnswerField(event)) return;
         event.preventDefault();
-        logIntegrity('COPY_ATTEMPT');
-        setWarning('Copying is disabled during this attempt.');
+        logIntegrity('COPY_ATTEMPT', { via: kind });
+        setWarning(kind === 'cut' ? 'Cutting text is disabled during this attempt.' : 'Copying is disabled during this attempt.');
       };
+      const onCopy = blockClipboard('copy');
+      const onCut = blockClipboard('cut');
       document.addEventListener('copy', onCopy);
+      document.addEventListener('cut', onCut);
       cleanup.push(() => document.removeEventListener('copy', onCopy));
+      cleanup.push(() => document.removeEventListener('cut', onCut));
+
+      // Dragging a selection out of the window is a copy that never fires `copy`.
+      const onDragStart = (event: Event) => {
+        if (isOwnAnswerField(event)) return;
+        event.preventDefault();
+        logIntegrity('COPY_ATTEMPT', { via: 'drag' });
+      };
+      document.addEventListener('dragstart', onDragStart);
+      cleanup.push(() => document.removeEventListener('dragstart', onDragStart));
     }
 
     if (!policy.allowPaste) {
       const onPaste = (event: Event) => {
-        const target = event.target as HTMLElement | null;
-        if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
+        if (isOwnAnswerField(event)) {
           // Writing sections must remain usable; paste is recorded not blocked there.
-          logIntegrity('PASTE_ATTEMPT', { target: target.tagName });
+          logIntegrity('PASTE_ATTEMPT', { target: (event.target as HTMLElement).tagName });
           return;
         }
         event.preventDefault();
@@ -455,6 +506,19 @@ export function useExamSession(attemptId: string): ExamSessionApi {
       };
       document.addEventListener('contextmenu', onContextMenu);
       cleanup.push(() => document.removeEventListener('contextmenu', onContextMenu));
+    }
+
+    if (policy.blockTextSelection) {
+      // `user-select: none` alone still lets Ctrl+A pick a paragraph up, so the
+      // selection itself is refused as well.
+      const onSelectStart = (event: Event) => {
+        if (isOwnAnswerField(event)) return;
+        event.preventDefault();
+      };
+      document.documentElement.classList.add('exam-noselect');
+      document.addEventListener('selectstart', onSelectStart);
+      cleanup.push(() => document.removeEventListener('selectstart', onSelectStart));
+      cleanup.push(() => document.documentElement.classList.remove('exam-noselect'));
     }
 
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -738,6 +802,13 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     [commit, persistDraft],
   );
 
+  const windowGuard = useExamWindowGuard({
+    policy: state?.integrity.policy ?? null,
+    active: state?.status === 'IN_PROGRESS',
+    fullscreenExits: state?.integrity.fullscreenExits ?? 0,
+    logIntegrity,
+  });
+
   return {
     state,
     loading,
@@ -791,11 +862,11 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     reload: load,
     logIntegrity,
     isFullscreen,
+    windowGuard,
     requestFullscreen: async () => {
-      try {
-        await document.documentElement.requestFullscreen();
-        setIsFullscreen(true);
-      } catch {
+      const granted = await requestExamFullscreen();
+      setIsFullscreen(granted);
+      if (!granted) {
         setWarning(
           'This browser refused the fullscreen request. You can continue, but fullscreen monitoring is not active.',
         );

@@ -12,6 +12,8 @@ import './styles/public.css';
 import './styles/pages.css';
 import './styles/learn.css';
 import './styles/exam.css';
+// The surface layer last: it re-points tokens and adds the phone-first structure.
+import './styles/app.css';
 import { applyPrefs, loadPrefs } from './lib/display';
 
 // Apply the reader's display preferences before the first paint, so the page

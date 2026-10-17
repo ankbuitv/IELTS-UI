@@ -1,0 +1,688 @@
+{
+  "testTitle": "Reading - Three Passages, Progressively Harder (Band 7.5-8.5)",
+  "testType": "READING",
+  "durationSeconds": 3600,
+  "sections": [
+    {
+      "sectionNumber": 1,
+      "type": "reading_passage",
+      "label": "Passage 1",
+      "title": "Bones, Guano and the Invention of Fertility",
+      "instructions": "Read the following text and answer Questions 1-13, which are based on Reading Passage 1 below. The passage has seven paragraphs, labelled A-G. You should spend about 20 minutes on this passage.",
+      "order": 0,
+      "durationSeconds": 1200,
+      "passage": {
+        "title": "Bones, Guano and the Invention of Fertility",
+        "paragraphs": [
+          {
+            "label": "A",
+            "text": "Before the middle of the nineteenth century the fertility of a European farm was a matter of husbandry rather than of purchase. Nutrients were returned to the field in the dung of the animals that the field itself had fed, and the number of those animals was limited by the hay and straw a holding could raise. Where livestock was scarce the soil was thin, and a village that could not keep more beasts than its own meadows supported could not sell more grain than its own oxen could cart. The circle was narrow, and almost every settlement in Europe depended on it."
+          },
+          {
+            "label": "B",
+            "text": "The German chemist Justus von Liebig broke that circle in theory before anyone could break it in practice. His researches in the 1840s established that a crop removes particular mineral substances from the soil and that these must be replaced in a form the root is able to take up. Manure, on this account, was not a general tonic but a slow and inefficient delivery of the same chemicals that a factory might measure and package. Fertility became a purchasable commodity, and the search for raw materials turned into an industrial as well as an agricultural business."
+          },
+          {
+            "label": "C",
+            "text": "The first great import was a mineral that had already been buried. Bones arrived in British ports by the hundred thousand tons, scraped from the tables of South American slaughterhouses and from the battlefields of continental Europe, and they arrived in a condition that no chemist would have called promising. Phosphate of lime, the mineral fraction of a bone, dissolves barely at all in water, and a field dressed with uncrushed skeleton kept most of its new wealth on the surface for years. Steam mills made the grinding cheaper; they did not make the phosphate soluble. The trade therefore grew on a half-understood promise, and the sceptics who observed that a plant cannot eat a stone were answered by the quieter fact that certain soils had in truth improved."
+          },
+          {
+            "label": "D",
+            "text": "The practical answer came from an acid. In 1841 a patent was granted to a farmer at Rothamsted in Hertfordshire for treating ground bone with sulphuric acid, which converted the insoluble phosphate into a form that would dissolve in rainwater and reach the roots within a season. The process was messy, it stank, and the first works were objectionable neighbours; but it produced a fertiliser whose effect could be seen within a single crop, and it established the template for an industry in which a raw mineral is chemically unlocked before it is sold. Superphosphate, as the product was called, is still manufactured on the same principle."
+          },
+          {
+            "label": "E",
+            "text": "For three decades the world looked also to birds. On a handful of islands off Peru the droppings of seabirds had accumulated to a depth of fifty feet, and the dried material was rich in both nitrogen and phosphate. Governments and contractors mined it under licence, shipped it around Cape Horn and sold it at prices that rose and collapsed with the news from the docks. The Peruvian state, which owned the deposits, borrowed heavily against future revenue and mortgaged the islands themselves; when the guano earnings fell short in the 1870s, the resulting debt unraveled the finances of the republic for a generation. It was the first modern illustration of a resource that seemed inexhaustible until the ships stopped coming."
+          },
+          {
+            "label": "F",
+            "text": "The debate that followed was not only about prices. A new school of agricultural economists argued that an import economy of this kind was mining the land rather than feeding it. Nutrients left a field in a wagon of wheat, were eaten in a city, and were buried in a river. The soil of Britain, on this account, was being sustained by the excrement of foreign animals and by the deposits of foreign islands, and nothing equivalent was sent back. The complaint was not moralistic; it described a real discontinuity in the flow of matter, and it is now cited by writers who warn that a nation which buys its fertility has only rented it."
+          },
+          {
+            "label": "G",
+            "text": "Nature supplied the missing term a little later. In the 1880s two German agronomists showed that the nitrogen contained in leguminous plants comes not from the air directly but from bacteria living in nodules on their roots, and that so valuable a partnership could be encouraged rather than merely inherited. Eighty years of industrial chemistry followed, culminating in a process that fixed atmospheric nitrogen under heat and pressure, and synthetic fertiliser eventually made the bone and guano trades redundant. Phosphate was another matter. There is no comparable industrial route to it, the high-grade rock remains concentrated in a handful of mines, and the arguments of the 1870s have returned almost word for word."
+          }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "MATCHING_HEADINGS",
+          "instructions": "Choose the correct heading for paragraphs A-E from the list of headings below. Write the correct number, i-vii, in boxes 1-5. There are more headings than you need.",
+          "fromQuestion": 1,
+          "toQuestion": 5,
+          "configuration": {
+            "optionNumbering": "roman"
+          },
+          "sharedOptions": [
+            {
+              "id": "i",
+              "text": "A theory that turned plant food into a manufactured product"
+            },
+            {
+              "id": "ii",
+              "text": "A chemical treatment that made a slow mineral act at once"
+            },
+            {
+              "id": "iii",
+              "text": "The limits of a system that depended on itself"
+            },
+            {
+              "id": "iv",
+              "text": "A natural deposit that ruined the state which owned it"
+            },
+            {
+              "id": "v",
+              "text": "The disappearance of a traditional rotation of crops"
+            },
+            {
+              "id": "vi",
+              "text": "An imported material that disappointed the farmers who used it"
+            },
+            {
+              "id": "vii",
+              "text": "A dispute about where a growing plant gets its carbon"
+            }
+          ],
+          "questions": [
+            {
+              "number": 1,
+              "prompt": "Paragraph A",
+              "answer": "iii",
+              "evidence": "Paragraph A: “The circle was narrow, and almost every settlement in Europe depended on it.”",
+              "explanation": "Paragraph A describes a closed loop whose size was fixed by the livestock a holding could keep, which is the limit named in the heading."
+            },
+            {
+              "number": 2,
+              "prompt": "Paragraph B",
+              "answer": "i",
+              "evidence": "Paragraph B: “Fertility became a purchasable commodity, and the search for raw materials turned into an industrial as well as an agricultural business.”",
+              "explanation": "Liebig recast manure as packaged chemicals, and the paragraph closes by making fertility something a farmer buys."
+            },
+            {
+              "number": 3,
+              "prompt": "Paragraph C",
+              "answer": "vi",
+              "evidence": "Paragraph C: “Phosphate of lime, the mineral fraction of a bone, dissolves barely at all in water, and a field dressed with uncrushed skeleton kept most of its new wealth on the surface for years.”",
+              "explanation": "The bone trade is presented as disappointing: the mineral barely dissolved, so most of the purchased wealth sat on the surface."
+            },
+            {
+              "number": 4,
+              "prompt": "Paragraph D",
+              "answer": "ii",
+              "evidence": "Paragraph D: “In 1841 a patent was granted to a farmer at Rothamsted in Hertfordshire for treating ground bone with sulphuric acid, which converted the insoluble phosphate into a form that would dissolve in rainwater and reach the roots within a season.”",
+              "explanation": "Sulphuric acid is the treatment that made an insoluble phosphate act within one season, which is what that heading states."
+            },
+            {
+              "number": 5,
+              "prompt": "Paragraph E",
+              "answer": "iv",
+              "evidence": "Paragraph E: “The Peruvian state, which owned the deposits, borrowed heavily against future revenue and mortgaged the islands themselves; when the guano earnings fell short in the 1870s, the resulting debt unraveled the finances of the republic for a generation.”",
+              "explanation": "Peru borrowed against guano and its public finances unraveled when the revenue fell short: a deposit that ruined its owner."
+            }
+          ]
+        },
+        {
+          "questionType": "TRUE_FALSE_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the information given in Reading Passage 1? Write TRUE if the statement agrees with the information, FALSE if the statement contradicts the information, or NOT GIVEN if there is no information on this.",
+          "fromQuestion": 6,
+          "toQuestion": 9,
+          "questions": [
+            {
+              "number": 6,
+              "prompt": "Before the nineteenth century, the amount of fertiliser available to a European farm depended on the animals the farm could keep.",
+              "answer": "TRUE",
+              "evidence": "Paragraph A: “Nutrients were returned to the field in the dung of the animals that the field itself had fed, and the number of those animals was limited by the hay and straw a holding could raise.”",
+              "explanation": "The passage states that nutrients came back as the dung of animals the land itself had fed, so stock numbers set the ceiling."
+            },
+            {
+              "number": 7,
+              "prompt": "Phosphate in uncrushed bones became available to crops almost as soon as it was spread on a field.",
+              "answer": "FALSE",
+              "evidence": "Paragraph C: “Phosphate of lime, the mineral fraction of a bone, dissolves barely at all in water, and a field dressed with uncrushed skeleton kept most of its new wealth on the surface for years.”",
+              "explanation": "The mineral is described as dissolving barely at all in water and as staying on the surface for years, which contradicts immediate availability."
+            },
+            {
+              "number": 8,
+              "prompt": "The first superphosphate works were built close to a port.",
+              "answer": "NOT GIVEN",
+              "evidence": "Paragraph D: “The process was messy, it stank, and the first works were objectionable neighbours; but it produced a fertiliser whose effect could be seen within a single crop, and it established the template for an industry in which a raw mineral is chemically unlocked before it is sold.”",
+              "explanation": "The passage says the works were messy, smelly and unpopular with neighbours, but it never states where they stood."
+            },
+            {
+              "number": 9,
+              "prompt": "The government of Peru used income that had not yet been earned as security for loans.",
+              "answer": "TRUE",
+              "evidence": "Paragraph E: “The Peruvian state, which owned the deposits, borrowed heavily against future revenue and mortgaged the islands themselves; when the guano earnings fell short in the 1870s, the resulting debt unraveled the finances of the republic for a generation.”",
+              "explanation": "Borrowing against future revenue and mortgaging the islands is exactly the claim made in the statement."
+            }
+          ]
+        },
+        {
+          "questionType": "SENTENCE_COMPLETION",
+          "instructions": "Complete the sentences below. Write ONE WORD ONLY from the passage for each answer.",
+          "fromQuestion": 10,
+          "toQuestion": 13,
+          "configuration": {
+            "wordLimitMax": 1
+          },
+          "questions": [
+            {
+              "number": 10,
+              "prompt": "Under the older system, a field was replenished mainly with the [[10]] of the animals it had fed.",
+              "answer": "dung",
+              "evidence": "Paragraph A: “Nutrients were returned to the field in the dung of the animals that the field itself had fed, and the number of those animals was limited by the hay and straw a holding could raise.”",
+              "explanation": "The sentence restates paragraph A: the dung of the animals was the vehicle by which nutrients came back."
+            },
+            {
+              "number": 11,
+              "prompt": "Liebig's work encouraged the view that soil fertility could be bought as a [[11]].",
+              "answer": "commodity",
+              "evidence": "Paragraph B: “Fertility became a purchasable commodity, and the search for raw materials turned into an industrial as well as an agricultural business.”",
+              "explanation": "The passage names the word directly: fertility became a purchasable commodity."
+            },
+            {
+              "number": 12,
+              "prompt": "Ground bone was treated with [[12]] so that its phosphate would dissolve.",
+              "answer": "acid | sulphuric",
+              "evidence": "Paragraph D: “In 1841 a patent was granted to a farmer at Rothamsted in Hertfordshire for treating ground bone with sulphuric acid, which converted the insoluble phosphate into a form that would dissolve in rainwater and reach the roots within a season.”",
+              "explanation": "Sulphuric acid is the treatment named in the patent; either single word is accepted because the passage gives the compound and the class."
+            },
+            {
+              "number": 13,
+              "prompt": "Industrial processes for nitrogen eventually made imported bone and guano [[13]].",
+              "answer": "redundant",
+              "evidence": "Paragraph G: “Eighty years of industrial chemistry followed, culminating in a process that fixed atmospheric nitrogen under heat and pressure, and synthetic fertiliser eventually made the bone and guano trades redundant.”",
+              "explanation": "The passage ends the sequence by saying synthetic fertiliser made both trades redundant."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sectionNumber": 2,
+      "type": "reading_passage",
+      "label": "Passage 2",
+      "title": "The Sense Nobody Has",
+      "instructions": "Read the following text and answer Questions 14-26, which are based on Reading Passage 2 below. The passage has eight paragraphs, labelled A-H. You should spend about 20 minutes on this passage.",
+      "order": 1,
+      "durationSeconds": 1200,
+      "passage": {
+        "title": "The Sense Nobody Has",
+        "paragraphs": [
+          {
+            "label": "A",
+            "text": "A bird that has never made a journey can nevertheless correct its course after being displaced by a storm. Any account of that ability has to supply two things which the literature habitually confuses: a compass, which tells an animal which way it is facing, and a map, which tells it where it is. A compass alone can produce a straight line; only a map can make the line a homing one. For forty years the argument about animal navigation has been, at bottom, an argument about how much of the second requirement any creature actually meets."
+          },
+          {
+            "label": "B",
+            "text": "The physical field available to such a map is unpromising. The intensity of the geomagnetic field at the surface varies between roughly 25 and 65 microtesla, and it changes by less than one part in a hundred over distances that a migrating warbler covers in a night. What varies usefully is the inclination, the angle at which the lines of force meet the ground, which dips steeply near the poles and lies flat at the equator. A compass of this kind has no north and no south: it distinguishes only a poleward direction and an equatorward one. It also carries a mirror-image problem, since a single reading of intensity together with inclination corresponds to two widely separated places, one in each hemisphere."
+          },
+          {
+            "label": "C",
+            "text": "Two candidate detectors have been argued for, and they are not the same kind of object. The first is a magnetic particle, a crystal of the iron oxide magnetite large enough to be turned by the field and attached, in principle, to a nerve. The second is a chemical reaction whose rate depends on the field, proposed for a class of light-sensitive molecules called cryptochromes, in which an entangled pair of electrons lives for a microsecond longer or shorter according to the angle of the field. The two are habitually presented as rivals. There is no reason why they should be, since one could serve as a compass readable in daylight and the other as the instrument that keeps the count."
+          },
+          {
+            "label": "D",
+            "text": "The history of the first candidate is a warning about tissue. In the early 1990s clusters of magnetite were described in the upper beak of the homing pigeon, and the finding was reported widely as the long-sought receptor. Fifteen years later the same laboratories, with others, reported that the cells concerned were not nerve endings at all but macrophages, a kind of scavenger cell, and that the beak had been misread because the preparation was too coarse to show what lay around the crystals. The controversy is often summarised as a retraction. It is better understood as a demonstration that a sensory claim is only as good as the anatomy underneath it."
+          },
+          {
+            "label": "E",
+            "text": "The evidence for the second candidate comes from experiments that look, at first, like tricks of lighting. Pigeons and robins disoriented by the field of a radio-frequency coil behave differently under blue light than under green or amber, and the wavelength on which their performance depends is the wavelength that the relevant molecule absorbs. The most elegant test rests on a physical prediction rather than on a correlation. At one particular radio frequency, corresponding to the precession of an electron pair in the strength of the local field, an oscillating field should resonate with the reaction and destroy its sensitivity, and an experiment of this type on migrating birds produced precisely that disruption at the frequency the local geomagnetic intensity implies."
+          },
+          {
+            "label": "F",
+            "text": "If the mechanism is delicate, the world has become noisy. Overhead lines, broadcast masts and the switchgear of substations all produce fields in the same range as those under which birds are said to orient, and surveys along migration routes have recorded disorientation in the neighbourhood of strong transmitters, particularly on clear nights when no celestial cue is available to override the disturbance. Such reports are easy to overstate, and a bird that circles a radio mast on a single evening has proved nothing about a population. The reason they are taken seriously is narrower: the effect appears while the equipment is live and disappears when it is switched off, which is the only clean manipulation a landscape can offer."
+          },
+          {
+            "label": "G",
+            "text": "The most persuasive account of a genuine map comes from turtles rather than from birds. Loggerhead hatchlings emerging on the coast of Florida swim for a fixed period in a direction set by the local field, a behaviour that carries them into a current and away from a predator-rich shore. Work in a tank surrounded by coils showed that changing the field changes the bearing, as a compass user would expect, and later studies argued that young turtles also hold a sense of position because the routes they keep place them inside productive open water for years at a time. The practical consequence has been modest but real, since devices that emit a magnetic barrier are now tested as a way of discouraging turtles from longlines and trawls."
+          },
+          {
+            "label": "H",
+            "text": "What the whole literature finally exposes is a problem about experience. The evidence establishes a competence: an animal alters its behaviour when the field is changed, and the alteration is often specific, calibrated and repeatable. It does not establish, and cannot establish, whether the animal is aware of anything, because the tests available are behavioural and the question asked is about what it is like to be a pigeon in a coil. Writers on the subject slide between the two levels, describing a sixth sense as though it were like sight, with a felt direction and a quality of certainty. The honest summary is narrower and stranger: an organism can be tuned to a field it never perceives, and the tuning can be exquisite."
+          }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "MATCHING_INFORMATION",
+          "instructions": "Which paragraph contains the following information? Write the correct letter, A-H, in boxes 14-18. You may use any letter more than once.",
+          "fromQuestion": 14,
+          "toQuestion": 18,
+          "sharedOptions": [
+            {
+              "id": "A",
+              "text": "Paragraph A"
+            },
+            {
+              "id": "B",
+              "text": "Paragraph B"
+            },
+            {
+              "id": "C",
+              "text": "Paragraph C"
+            },
+            {
+              "id": "D",
+              "text": "Paragraph D"
+            },
+            {
+              "id": "E",
+              "text": "Paragraph E"
+            },
+            {
+              "id": "F",
+              "text": "Paragraph F"
+            },
+            {
+              "id": "G",
+              "text": "Paragraph G"
+            },
+            {
+              "id": "H",
+              "text": "Paragraph H"
+            }
+          ],
+          "questions": [
+            {
+              "number": 14,
+              "prompt": "an instance in which a sensory claim was overturned by better preparation of tissue",
+              "answer": "D",
+              "evidence": "Paragraph D: “Fifteen years later the same laboratories, with others, reported that the cells concerned were not nerve endings at all but macrophages, a kind of scavenger cell, and that the beak had been misread because the preparation was too coarse to show what lay around the crystals.”",
+              "explanation": "The beak clusters were reinterpreted as scavenger cells once the preparation was fine enough to show their surroundings."
+            },
+            {
+              "number": 15,
+              "prompt": "an explanation of why a single magnetic reading can fit two very distant places",
+              "answer": "B",
+              "evidence": "Paragraph B: “It also carries a mirror-image problem, since a single reading of intensity together with inclination corresponds to two widely separated places, one in each hemisphere.”",
+              "explanation": "Paragraph B closes with the mirror-image problem, which is the ambiguity the statement describes."
+            },
+            {
+              "number": 16,
+              "prompt": "a use of the research that could reduce the number of animals killed by fishing gear",
+              "answer": "G",
+              "evidence": "Paragraph G: “The practical consequence has been modest but real, since devices that emit a magnetic barrier are now tested as a way of discouraging turtles from longlines and trawls.”",
+              "explanation": "Paragraph G ends with magnetic barriers tested to keep turtles away from longlines and trawls."
+            },
+            {
+              "number": 17,
+              "prompt": "an experiment that interfered with a mechanism instead of removing it",
+              "answer": "E",
+              "evidence": "Paragraph E: “At one particular radio frequency, corresponding to the precession of an electron pair in the strength of the local field, an oscillating field should resonate with the reaction and destroy its sensitivity, and an experiment of this type on migrating birds produced precisely that disruption at the frequency the local geomagnetic intensity implies.”",
+              "explanation": "The resonating field destroys the sensitivity of a reaction rather than taking any structure away."
+            },
+            {
+              "number": 18,
+              "prompt": "a complaint about the language used to describe what an animal is like inside",
+              "answer": "H",
+              "evidence": "Paragraph H: “Writers on the subject slide between the two levels, describing a sixth sense as though it were like sight, with a felt direction and a quality of certainty.”",
+              "explanation": "The writer faults the habit of describing a sixth sense as though it were like sight."
+            }
+          ]
+        },
+        {
+          "questionType": "YES_NO_NOT_GIVEN",
+          "instructions": "Do the following statements agree with the claims of the writer in Reading Passage 2? Write YES if the statement agrees with the claims of the writer, NO if the statement contradicts the claims, or NOT GIVEN if it is impossible to say what the writer thinks about this.",
+          "fromQuestion": 19,
+          "toQuestion": 23,
+          "questions": [
+            {
+              "number": 19,
+              "prompt": "An inclination compass is by itself enough for a bird to determine where it is on the planet.",
+              "answer": "NO",
+              "evidence": "Paragraph B: “A compass of this kind has no north and no south: it distinguishes only a poleward direction and an equatorward one.”",
+              "explanation": "The inclination compass supplies direction only, and paragraph B shows the reading still fits two places, so it cannot locate a bird alone."
+            },
+            {
+              "number": 20,
+              "prompt": "The two candidate detectors have to be treated as rivals, since only one of them can operate in a given species.",
+              "answer": "NO",
+              "evidence": "Paragraph C: “There is no reason why they should be, since one could serve as a compass readable in daylight and the other as the instrument that keeps the count.”",
+              "explanation": "The writer rejects the rivalry framing outright and suggests the two could work together."
+            },
+            {
+              "number": 21,
+              "prompt": "The laboratories that first reported magnetite in the beak also published the later reinterpretation.",
+              "answer": "YES",
+              "evidence": "Paragraph D: “Fifteen years later the same laboratories, with others, reported that the cells concerned were not nerve endings at all but macrophages, a kind of scavenger cell, and that the beak had been misread because the preparation was too coarse to show what lay around the crystals.”",
+              "explanation": "The passage says the same laboratories, with others, reported the corrected finding."
+            },
+            {
+              "number": 22,
+              "prompt": "The lighting experiments were designed before the molecular mechanism they now support had been proposed.",
+              "answer": "NOT GIVEN",
+              "evidence": "Paragraph E: “Pigeons and robins disoriented by the field of a radio-frequency coil behave differently under blue light than under green or amber, and the wavelength on which their performance depends is the wavelength that the relevant molecule absorbs.”",
+              "explanation": "The passage connects the wavelength result to the molecule but says nothing about which was proposed first."
+            },
+            {
+              "number": 23,
+              "prompt": "Evidence of interference from human-made fields is sometimes presented more strongly than it can bear.",
+              "answer": "YES",
+              "evidence": "Paragraph F: “Such reports are easy to overstate, and a bird that circles a radio mast on a single evening has proved nothing about a population.”",
+              "explanation": "The writer concedes that the reports are easy to overstate before defending the one clean comparison available."
+            }
+          ]
+        },
+        {
+          "questionType": "MCQ_SINGLE",
+          "instructions": "Choose the correct letter, A, B, C or D.",
+          "fromQuestion": 24,
+          "toQuestion": 26,
+          "questions": [
+            {
+              "number": 24,
+              "prompt": "According to the writer, a magnetic map is a harder claim to support than a magnetic compass because",
+              "answer": "B",
+              "evidence": "Paragraph B: “The intensity of the geomagnetic field at the surface varies between roughly 25 and 65 microtesla, and it changes by less than one part in a hundred over distances that a migrating warbler covers in a night.”",
+              "explanation": "The field varies too little over an evening's flight for a location to be read off it, which is why map claims attract more scepticism than compass claims.",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "no animal has been shown to detect fields below 25 microtesla"
+                },
+                {
+                  "id": "B",
+                  "text": "the field changes very little over the distances an animal travels in a day"
+                },
+                {
+                  "id": "C",
+                  "text": "inclination cannot be measured by an animal in daylight"
+                },
+                {
+                  "id": "D",
+                  "text": "the magnetic poles move faster than any migration schedule"
+                }
+              ]
+            },
+            {
+              "number": 25,
+              "prompt": "The radio-frequency experiment described in paragraph E is considered persuasive mainly because",
+              "answer": "A",
+              "evidence": "Paragraph E: “The most elegant test rests on a physical prediction rather than on a correlation.”",
+              "explanation": "A prediction that specified a single frequency and could easily have failed is what gives the result its force.",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "the disruption occurred at the frequency the theory predicted"
+                },
+                {
+                  "id": "B",
+                  "text": "it was the only such experiment carried out on free-living birds"
+                },
+                {
+                  "id": "C",
+                  "text": "it removed magnetite from the tissue being tested"
+                },
+                {
+                  "id": "D",
+                  "text": "it showed that robins can navigate without using their eyes"
+                }
+              ]
+            },
+            {
+              "number": 26,
+              "prompt": "In the final paragraph, the writer's main point is that the experiments",
+              "answer": "B",
+              "evidence": "Paragraph H: “It does not establish, and cannot establish, whether the animal is aware of anything, because the tests available are behavioural and the question asked is about what it is like to be a pigeon in a coil.”",
+              "explanation": "The distinction the paragraph turns on is between a demonstrated competence and an awareness no behavioural test can reach.",
+              "options": [
+                {
+                  "id": "A",
+                  "text": "contradict the behavioural evidence gathered in earlier paragraphs"
+                },
+                {
+                  "id": "B",
+                  "text": "show what an animal can do without showing what it experiences"
+                },
+                {
+                  "id": "C",
+                  "text": "should be repeated on turtles rather than on birds"
+                },
+                {
+                  "id": "D",
+                  "text": "have been described too cautiously by the scientists who ran them"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sectionNumber": 3,
+      "type": "reading_passage",
+      "label": "Passage 3",
+      "title": "Erased: The Palimpsest and the Machine",
+      "instructions": "Read the following text and answer Questions 27-40, which are based on Reading Passage 3 below. The passage has nine paragraphs, labelled A-I. You should spend about 20 minutes on this passage.",
+      "order": 2,
+      "durationSeconds": 1200,
+      "passage": {
+        "title": "Erased: The Palimpsest and the Machine",
+        "paragraphs": [
+          {
+            "label": "A",
+            "text": "Parchment is expensive, and for a thousand years it was also recyclable. A written page was made from the skin of an animal, prepared by liming, stretching and scraping, and a book that had gone out of date could be washed of its text and given to a new one. The result, where the older writing remains legible, is a palimpsest: a manuscript in which one hand survives beneath another, usually turned a quarter of a circle, because the scribe who reused the page could not afford to leave a line empty. Modern readers call this destruction. The people who did the work called it repair, and the difference in vocabulary is not innocent."
+          },
+          {
+            "label": "B",
+            "text": "Most of what disappeared was lost to nothing more dramatic than thrift. Liturgical books fall out of date faster than classical texts fall out of fashion, and a monastery with three service books and no money for new skins will scrub the least useful of them. The direction of the loss is therefore perverse: the psalter survives and the grammarian perishes, and a prayer book is written over a mathematician. In the case that has become the emblem of the field, a small octavo in the library of a monastery near Constantinople carries a tenth-century service book on top of a copy made some six hundred years earlier of three treatises by Archimedes, two of which were known from no other source in the world."
+          },
+          {
+            "label": "C",
+            "text": "The first modern eyes fell on it in 1846, when a German scholar travelling in the East found the volume listed in a catalogue and copied a few lines of what he took to be a mathematical text. His account attracted almost no attention, and when a critical edition finally appeared sixty years later its editor had worked with reagents, solutions of gallic acid and of ammonium hydrosulphide which darkened the iron in the older ink and made the under-writing flash up for a few hours before it browned and, in places, went permanently. Later scholars have had to read his transcript rather than the book, because the chemistry continued to act long after the reading was done."
+          },
+          {
+            "label": "D",
+            "text": "What the reagents proved, by accident, was that nothing had been removed. Scraping takes away the surface layer of the skin, but the writing had been inside the skin, and the iron and tannin of the ink had stained the collagen beneath it. Erasure, on this account, is not deletion but fading, and the words survive as a discolouration measured in a few percent of reflected light. Physical chemistry, which had appeared to offer a destructive shortcut, turned out to be the wrong instrument for a problem that was really a problem of contrast."
+          },
+          {
+            "label": "E",
+            "text": "Contrast is what imaging supplies. A team working in Baltimore photographed every page under twelve bands of light running from the ultraviolet to the infrared, and processed the stack so that the difference between stained and unstained parchment could be amplified while the newer and blacker over-writing was subtracted. The method is not a trick of the camera. Every material reflects differently at every wavelength, a page is therefore a mixture whose components can be separated arithmetically, and the separation holds only if illumination, geometry and focus are kept inside tolerances that the care of a fragile object rarely permits."
+          },
+          {
+            "label": "F",
+            "text": "Some of the writing had no ink left to photograph. Where the scribe had scraped hard, what remains is the trace of metal ions corroded into the skin, and in 1999 the manuscript was carried to a synchrotron in California, where a beam of X-rays two hundred micrometers wide was scanned across the pages while a detector counted the iron that fluoresced. The machine measured an element rather than a letter, and its output is a map of concentration that must be read as cautiously as any transcript. It showed, among other things, that the pages had once been washed in acid, that a restorer had applied a modern glue, and that two leaves had been stuck together, concealing the text on the surfaces they hid."
+          },
+          {
+            "label": "G",
+            "text": "Putting the pages where a camera could see them required an act that a century of scholarship had refused to perform, because the book was taken apart. Its binding was removed, its gatherings separated, and two hundred and eleven leaves flattened between glass, a procedure that ended the object as a bound volume in order to make its writing legible. William Noel, the curator who directed the work, argued in public that a manuscript is a physical thing with a finite life, and that in the 1990s there was no way to read most of it except by handling every leaf alone. The choice lay between two kinds of damage, and it was made while a camera recorded the reasoning behind it."
+          },
+          {
+            "label": "H",
+            "text": "What came back was not what the field had hoped for, or not in the order it had hoped for. The recovered treatises include the Sand-Reckoner, in which Archimedes computes how many grains of sand would be needed to fill the universe, and the Method, the letter in which he describes the mechanical procedure by which he found results before proving them, a document that has reshaped a long argument about how mathematics is made. The project also returned the service book to notice. Its liturgical text is now studied as a witness in its own right, its scribe has a place in a list of tenth-century copyists, and the volume is cited by historians of devotion rather than only by historians of science."
+          },
+          {
+            "label": "I",
+            "text": "The general lesson of the sequence is not a celebration of technology. Reagents, cameras and synchrotrons have this in common, that each was invented for something else and each was turned on the manuscript by people who first had to be persuaded that it was worth damaging a page in order to read it. Archives do not preserve because they are wise; they preserve because somebody found a thing useful, and usefulness is a category that changes. A thousand years of thrift protected a text that nobody wanted, and a decade of imaging recovered it for a discipline that had stopped hoping for it. Noel insisted that the result should be a resource rather than a possession, and the images were published online for anyone to take away."
+          }
+        ]
+      },
+      "questionGroups": [
+        {
+          "questionType": "MATCHING_HEADINGS",
+          "instructions": "Choose the correct heading for paragraphs A-F from the list of headings below. Write the correct number, i-viii, in boxes 27-32. There are more headings than you need.",
+          "fromQuestion": 27,
+          "toQuestion": 32,
+          "configuration": {
+            "optionNumbering": "roman"
+          },
+          "sharedOptions": [
+            {
+              "id": "i",
+              "text": "A measurement of an element rather than of a letter"
+            },
+            {
+              "id": "ii",
+              "text": "An edition that made a text readable and damaged it in the process"
+            },
+            {
+              "id": "iii",
+              "text": "A quarrel about who owns a digitised treasure"
+            },
+            {
+              "id": "iv",
+              "text": "A reuse that followed from the price of the writing material"
+            },
+            {
+              "id": "v",
+              "text": "Separating the layers of a page by arithmetic"
+            },
+            {
+              "id": "vi",
+              "text": "A pattern of loss that favours the less valuable text"
+            },
+            {
+              "id": "vii",
+              "text": "The case that destruction had never actually been completed"
+            },
+            {
+              "id": "viii",
+              "text": "The rediscovery of a prayer book by the church that wrote it"
+            }
+          ],
+          "questions": [
+            {
+              "number": 27,
+              "prompt": "Paragraph A",
+              "answer": "iv",
+              "evidence": "Paragraph A: “A written page was made from the skin of an animal, prepared by liming, stretching and scraping, and a book that had gone out of date could be washed of its text and given to a new one.”",
+              "explanation": "The paragraph is organised around what parchment cost and how it was prepared, which is why reuse was rational."
+            },
+            {
+              "number": 28,
+              "prompt": "Paragraph B",
+              "answer": "vi",
+              "evidence": "Paragraph B: “The direction of the loss is therefore perverse: the psalter survives and the grammarian perishes, and a prayer book is written over a mathematician.”",
+              "explanation": "B names the perverse direction of the loss, with the devotional book surviving over the scientific one."
+            },
+            {
+              "number": 29,
+              "prompt": "Paragraph C",
+              "answer": "ii",
+              "evidence": "Paragraph C: “His account attracted almost no attention, and when a critical edition finally appeared sixty years later its editor had worked with reagents, solutions of gallic acid and of ammonium hydrosulphide which darkened the iron in the older ink and made the under-writing flash up for a few hours before it browned and, in places, went permanently.”",
+              "explanation": "The editor gained a few readable hours with reagents and left the pages permanently dimmer, which is heading iii."
+            },
+            {
+              "number": 30,
+              "prompt": "Paragraph D",
+              "answer": "vii",
+              "evidence": "Paragraph D: “Erasure, on this account, is not deletion but fading, and the words survive as a discolouration measured in a few percent of reflected light.”",
+              "explanation": "D is the argument that the scraping faded a text instead of removing it, that is, that destruction was never completed."
+            },
+            {
+              "number": 31,
+              "prompt": "Paragraph E",
+              "answer": "v",
+              "evidence": "Paragraph E: “Every material reflects differently at every wavelength, a page is therefore a mixture whose components can be separated arithmetically, and the separation holds only if illumination, geometry and focus are kept inside tolerances that the care of a fragile object rarely permits.”",
+              "explanation": "E describes unmixing the reflected light of a page band by band, an arithmetic separation rather than a chemical one."
+            },
+            {
+              "number": 32,
+              "prompt": "Paragraph F",
+              "answer": "i",
+              "evidence": "Paragraph F: “The machine measured an element rather than a letter, and its output is a map of concentration that must be read as cautiously as any transcript.”",
+              "explanation": "The synchrotron output is a map of iron concentration; the letters only appear once someone interprets it."
+            }
+          ]
+        },
+        {
+          "questionType": "MATCHING_FEATURES",
+          "instructions": "Look at the following statements and the list of people below. Match each statement with the correct person, A, B, C or D. Write the correct letter in boxes 33-37. You may use any letter more than once.",
+          "fromQuestion": 33,
+          "toQuestion": 37,
+          "configuration": {
+            "optionNumbering": "alpha"
+          },
+          "sharedOptions": [
+            {
+              "id": "A",
+              "text": "Uwe Bergmann"
+            },
+            {
+              "id": "B",
+              "text": "William Noel"
+            },
+            {
+              "id": "C",
+              "text": "Constantin von Tischendorf"
+            },
+            {
+              "id": "D",
+              "text": "Johan Ludvig Heiberg"
+            }
+          ],
+          "questions": [
+            {
+              "number": 33,
+              "prompt": "noted the existence of an important manuscript but revealed almost nothing of its contents",
+              "answer": "C",
+              "evidence": "Paragraph C: “The first modern eyes fell on it in 1846, when a German scholar travelling in the East found the volume listed in a catalogue and copied a few lines of what he took to be a mathematical text.”",
+              "explanation": "The scholar who found the volume in a catalogue copied a few lines, and his account drew no attention."
+            },
+            {
+              "number": 34,
+              "prompt": "used a method that harmed the very pages it was meant to recover",
+              "answer": "D",
+              "evidence": "Paragraph C: “Later scholars have had to read his transcript rather than the book, because the chemistry continued to act long after the reading was done.”",
+              "explanation": "The reagents continued to act after the edition was finished, so later readers had only the transcript left."
+            },
+            {
+              "number": 35,
+              "prompt": "accepted the loss of a book as an object in order to make its text readable",
+              "answer": "B",
+              "evidence": "Paragraph G: “William Noel, the curator who directed the work, argued in public that a manuscript is a physical thing with a finite life, and that in the 1990s there was no way to read most of it except by handling every leaf alone.”",
+              "explanation": "Noel argued publicly that dismembering the volume was the only way to read most of it in the 1990s."
+            },
+            {
+              "number": 36,
+              "prompt": "produced evidence of uninformed work done on the manuscript by earlier people",
+              "answer": "A",
+              "evidence": "Paragraph F: “It showed, among other things, that the pages had once been washed in acid, that a restorer had applied a modern glue, and that two leaves had been stuck together, concealing the text on the surfaces they hid.”",
+              "explanation": "The elemental maps revealed an acid wash, a modern glue and two leaves stuck together by previous handlers."
+            },
+            {
+              "number": 37,
+              "prompt": "made sure that readers who would never approach the object could still work on it",
+              "answer": "B",
+              "evidence": "Paragraph I: “Noel insisted that the result should be a resource rather than a possession, and the images were published online for anyone to take away.”",
+              "explanation": "He insisted the result be a resource rather than a possession, and the images were published online."
+            }
+          ]
+        },
+        {
+          "questionType": "SUMMARY_COMPLETION",
+          "instructions": "Complete the summary below. Write NO MORE THAN TWO WORDS from the passage for each answer.",
+          "fromQuestion": 38,
+          "toQuestion": 40,
+          "configuration": {
+            "wordLimitMax": 2
+          },
+          "questions": [
+            {
+              "number": 38,
+              "prompt": "Because a writing surface was made from prepared skin, a book that had gone out of date could be [[38]] of its text and given to a new one.",
+              "answer": "washed | scraped",
+              "evidence": "Paragraph A: “A written page was made from the skin of an animal, prepared by liming, stretching and scraping, and a book that had gone out of date could be washed of its text and given to a new one.”",
+              "explanation": "Paragraph A says the page was prepared by scraping and that an outdated book could be washed of its text, so either verb is supported by the passage."
+            },
+            {
+              "number": 39,
+              "prompt": "The older writing survived only as a [[39]] in the page, because the ink had gone beneath the surface that was removed.",
+              "answer": "discolouration",
+              "evidence": "Paragraph D: “Erasure, on this account, is not deletion but fading, and the words survive as a discolouration measured in a few percent of reflected light.”",
+              "explanation": "The passage states directly that the words survive as a discolouration measured in reflected light."
+            },
+            {
+              "number": 40,
+              "prompt": "Where scraping had removed the ink entirely, the instrument recorded the [[40]] that had corroded into the skin instead.",
+              "answer": "iron | metal ions",
+              "evidence": "Paragraph F: “Where the scribe had scraped hard, what remains is the trace of metal ions corroded into the skin, and in 1999 the manuscript was carried to a synchrotron in California, where a beam of X-rays two hundred micrometers wide was scanned across the pages while a detector counted the iron that fluoresced.”",
+              "explanation": "The detector counted fluorescing iron; metal ions is the same description from the same sentence, and both fit the limit."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

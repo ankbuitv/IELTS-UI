@@ -9,6 +9,8 @@ IELTS, British Council, IDP or Cambridge material.
 | `cities-knowledge-and-adaptation.source.json` | Authoring format (`schemaVersion` + `questionGroups` + `answerKey`) |
 | `full-test.json` | One-file `FULL_MOCK` (`testType: FULL_MOCK` + every section inline, no mock components) |
 | `reading-four-passages.json` | Four separate Reading passages in one file (40 questions, Q1–40) |
+| `band-8-reading-set.json` | Three Reading passages in difficulty order, band 7.5 → 8.5 (Q1–40, sectioned format) |
+| `listening-part1-bookbinding.json` | Listening Part 1, table completion (Q1–10, **platform content schema** because it needs `body`) |
 
 The first two files describe the same 40-question Academic-style Reading set,
 **Cities, Knowledge and Adaptation**. Paste either into Admin → Imports. Extra
@@ -26,7 +28,36 @@ publishable 40-question READING test with no manual key entry.
 validator the importer uses, so the file cannot drift out of the platform's
 evidence rules unnoticed.
 
-All four files also work in the **version editor's JSON tab**
+`band-8-reading-set.json` is written in the **sectioned** format (one
+`reading_passage` section per text, `questionGroups` with `fromQuestion` /
+`toQuestion`) and is ordered by difficulty rather than by topic: Passage 1 is a
+785-word historical-scientific text at band 7.5 (headings, TRUE/FALSE/NOT GIVEN,
+one-word sentence completion), Passage 2 is 945 words at band 8.0 and shifts to
+writer's-claims items (matching information, YES/NO/NOT GIVEN, multiple choice),
+Passage 3 is 1051 words at band 8.5 (headings, matching features across four
+named researchers, two-word summary completion). Option banks are deliberately
+out of sequence, so a key cannot be guessed from the order of the list. Every
+answer carries a verbatim sentence of its own passage as `evidence` plus an
+`explanation`, so Applying it needs no manual key entry, and the `[[n]]` markers
+make the two completion groups render as real gap-fill forms.
+
+`listening-part1-bookbinding.json` is the exception to "use the sectioned
+format": a **table** task only renders as a table when the candidate payload
+carries `question.body = { kind: 'TABLE', rows: [[…]] }` with `[[n]]` inside a
+cell (`src/client/components/exam/QuestionRenderer.tsx`), and the sectioned
+importer parses `audioUrl` / `transcript` but not `body`. The file is therefore
+written in the platform content schema (`sections[].groups[]`), which carries
+`body`, `audioUrl`, `playback` and `transcript` together — and which
+`convertAiPayload` recognises first, so it still pastes into
+Administration → Imports as well as into the version editor's JSON tab. Every
+gap's `evidence` is a transcript segment reference (`segment:bp11`), which is
+what links the review panel to the line that contains the answer; the segments
+carry no `startSeconds` because the recording's cue times are unknown, and the
+seek control stays inert until they are added in the JSON (editing the
+transcript in the editor instead regenerates ids as `seg-N` and breaks the
+`segment:` references).
+
+All five files also work in the **version editor's JSON tab**
 (Admin → Tests → version → Edit content → JSON): *Parse into outline* and
 *Save content* run them through the same shared conversion as the import
 pipeline (`src/shared/import-convert.ts`), so an import-format paste is turned

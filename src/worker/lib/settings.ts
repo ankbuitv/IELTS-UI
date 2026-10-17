@@ -12,7 +12,11 @@ export interface PlatformSettings {
 }
 
 export const DEFAULT_INTEGRITY_NOTICE =
-  'This exam records observable browser events (visibility changes, fullscreen exits, copy/paste) for the integrity log. ' +
+  'This exam records observable browser events (visibility changes, fullscreen exits, copy/paste, blocked pop-ups) for ' +
+  'the integrity log. In exam modes the test also opens fullscreen by itself, refuses new windows and tabs, hides ' +
+  'translation or dictionary overlays that a browser extension adds to the page, and does not let the text of the paper ' +
+  'be copied, cut or dragged out. Selecting words on the paper is allowed and only ever marks them up as a highlight or ' +
+  'a note for you. ' +
   'A web page cannot block operating-system shortcuts such as Alt+Tab, cannot see other applications, and these events ' +
   'are not proof of misconduct on their own.';
 

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { LEARN_BANDS, LEARN_BAND_LABELS, type LearnBand, type PlanView } from '@shared/learn';
 import { useAsync } from '../../hooks/useAsync';
 import { Icon } from '../../components/Icon';
+import { PageHead } from '../../components/page';
 import { Button, Loading, Modal, Notice, useToast } from '../../components/ui';
 import { describeError } from '../../lib/api';
 import { learnApi, localDay } from '../../lib/learn-api';
@@ -123,15 +124,16 @@ export function PlanPage() {
   if (!data) {
     return (
       <div className="stack">
-        <div className="page-head">
-          <div>
-            <h1>Study plan</h1>
-            <p className="page-head__meta">A dated route from your current band to the one you want.</p>
-          </div>
-          <Button variant="primary" onClick={() => setFormOpen(true)}>
-            Build my plan
-          </Button>
-        </div>
+        <PageHead
+          eyebrow="Roadmap"
+          title="Study plan"
+          meta="A dated route from your current band to the one you want."
+          actions={
+            <Button variant="primary" onClick={() => setFormOpen(true)}>
+              Build my plan
+            </Button>
+          }
+        />
         <section className="card plan-empty">
           <h2>What a plan does</h2>
           <ul className="muted small">
@@ -148,23 +150,27 @@ export function PlanPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Study plan</h1>
-          <p className="page-head__meta">
-            Band {data.currentBand.toFixed(1)} now → <b>{data.targetBand.toFixed(1)}</b> target
-            {data.examDay ? ` · exam ${data.examDay}` : ''} · {data.minutesPerDay} min/day · {data.daysCovered} days
-          </p>
-        </div>
-        <div className="row">
-          <Link className="btn" to="/learn">
-            Open the path
-          </Link>
-          <Button variant="primary" onClick={() => setFormOpen(true)}>
-            Rebuild
-          </Button>
-        </div>
-      </div>
+      <PageHead
+        eyebrow={`Band ${data.currentBand.toFixed(1)} → ${data.targetBand.toFixed(1)}`}
+        title="Study plan"
+        meta={
+          <>
+            {data.examDay ? `Exam on ${data.examDay} · ` : ''}
+            {data.minutesPerDay} minutes a day for {data.daysCovered} days. Tick a step and it stays ticked when you come back.
+          </>
+        }
+        actions={
+          <>
+            <Link className="btn" to="/learn">
+              <Icon name="book" size={14} />
+              Open the path
+            </Link>
+            <Button variant="primary" onClick={() => setFormOpen(true)}>
+              Rebuild
+            </Button>
+          </>
+        }
+      />
 
       {knownSkills.length > 0 ? (
         <section className="plan-skills" aria-label="Your bands by skill">

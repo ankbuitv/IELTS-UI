@@ -5,8 +5,14 @@ interface AuthState {
   user: ApiUser | null;
   loading: boolean;
   refresh: () => Promise<void>;
-  login: (email: string, password: string) => Promise<ApiUser>;
-  register: (input: { email: string; password: string; displayName: string; bootstrapAdmin?: boolean }) => Promise<ApiUser>;
+  login: (email: string, password: string, turnstileToken?: string | null) => Promise<ApiUser>;
+  register: (input: {
+    email: string;
+    password: string;
+    displayName: string;
+    bootstrapAdmin?: boolean;
+    turnstileToken?: string | null;
+  }) => Promise<ApiUser>;
   logout: () => Promise<void>;
   setUser: (user: ApiUser | null) => void;
 }
@@ -35,8 +41,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await api.post<{ user: ApiUser; csrfToken: string; sessionToken?: string | null }>('/api/auth/login', { email, password });
+  const login = useCallback(async (email: string, password: string, turnstileToken?: string | null) => {
+    const result = await api.post<{ user: ApiUser; csrfToken: string; sessionToken?: string | null }>('/api/auth/login', {
+      email,
+      password,
+      ...(turnstileToken ? { turnstileToken } : {}),
+    });
     setUser(result.user);
     setCsrfToken(result.csrfToken);
     setSessionToken(result.sessionToken ?? null);

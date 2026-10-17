@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { Icon } from '../../components/Icon';
+import { PageHead } from '../../components/page';
 import { Badge, Button, Chips, EmptyState, Field, Notice, TextArea, TextInput, useToast } from '../../components/ui';
 import { learnApi } from '../../lib/learn-api';
 import { canSpeak, speak } from '../../lib/speech';
@@ -138,29 +139,27 @@ export function VocabularyPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Vocabulary</h1>
-          <p className="page-head__meta">
-            Words you save, new words the AI picks for your level every day, and the words you missed in lessons. Review
-            the ones that are due and they come back less and less often.
-          </p>
-        </div>
-        <div className="row">
-          <Link className={`btn btn--primary${dueCount === 0 ? ' is-disabled' : ''}`} to="/learn/review" aria-disabled={dueCount === 0}>
-            <Icon name="rotate" size={14} />
-            Review {dueCount > 0 ? `${dueCount} due` : 'words'}
-          </Link>
-          <Button onClick={() => void fetchWords(true)} loading={fetching}>
-            <Icon name="sparkle" size={14} />
-            5 more words
-          </Button>
-          <Button onClick={() => setAdding((open) => !open)} aria-expanded={adding}>
-            <Icon name="plus" size={14} />
-            Add
-          </Button>
-        </div>
-      </div>
+      <PageHead
+        eyebrow="Notebook"
+        title="Vocabulary"
+        meta="Words you save, new words the AI picks for your level every day, and the words you missed in lessons. Review the ones that are due and they come back less and less often."
+        actions={
+          <>
+            <Link className={`btn btn--primary${dueCount === 0 ? ' is-disabled' : ''}`} to="/learn/review" aria-disabled={dueCount === 0}>
+              <Icon name="rotate" size={14} />
+              Review {dueCount > 0 ? `${dueCount} due` : 'words'}
+            </Link>
+            <Button onClick={() => void fetchWords(true)} loading={fetching}>
+              <Icon name="sparkle" size={14} />
+              5 more words
+            </Button>
+            <Button onClick={() => setAdding((open) => !open)} aria-expanded={adding}>
+              <Icon name="plus" size={14} />
+              Add
+            </Button>
+          </>
+        }
+      />
 
       {data ? (
         <div className="kpi-row kpi-row--compact">
@@ -262,9 +261,9 @@ export function VocabularyPage() {
             : 'Try another filter.'}
         </EmptyState>
       ) : (
-        <ul className="vocab-list">
-          {visible.map((entry) => (
-            <li key={entry.id} className="vocab-item">
+        <ul className="vocab-list stagger">
+          {visible.map((entry, index) => (
+            <li key={entry.id} className="vocab-item" style={{ ['--i' as string]: index }}>
               <div className="vocab-item__head">
                 <span className="vocab-item__term">{entry.term}</span>
                 {entry.pos ? <span className="vocab-item__pos">{entry.pos}</span> : null}

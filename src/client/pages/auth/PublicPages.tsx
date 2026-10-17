@@ -4,7 +4,8 @@ import { useAuth } from '../../context/AuthContext';
 import { BrandLogo, BrandMark } from '../../components/BrandLogo';
 import { Icon, type IconName } from '../../components/Icon';
 import { Button, Field, Notice, PasswordInput, TextInput } from '../../components/ui';
-import { api, describeError } from '../../lib/api';
+import { ApiRequestError, api, describeError } from '../../lib/api';
+import { TurnstileField, useTurnstileGuard } from '../../components/auth/TurnstileField';
 
 /* ------------------------------------------------------------------ landing */
 type SkillKey = 'listening' | 'reading' | 'writing' | 'speaking';
@@ -322,7 +323,7 @@ function JudgeReport() {
 const TRUST: Array<{ icon: IconName; text: string }> = [
   { icon: 'check', text: 'Reading and Listening marked instantly' },
   { icon: 'sparkle', text: 'Writing and Speaking marked by two AI judges' },
-  { icon: 'lock', text: 'Server clock and tab lock' },
+  { icon: 'lock', text: 'Server clock, tab lock and window lock' },
 ];
 
 const FACTS: Array<{ value: string; label: string; detail: string }> = [
@@ -505,7 +506,9 @@ export function LandingPage() {
               <h3>Tab lock</h3>
               <p>
                 Leaving the exam tab is counted and you are stopped when you return. At three strikes the attempt is
-                submitted. A browser cannot block other apps, so Ai eo records it instead.
+                submitted. In exam modes the test also opens fullscreen by itself, covers the paper until you go back,
+                refuses pop-ups and new tabs, and hides translation overlays. A browser cannot block other apps, so
+                Ai eo records it instead.
               </p>
             </article>
             <article>
@@ -660,6 +663,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const human = useTurnstileGuard();
 
   if (user) return <Navigate to="/dashboard" replace />;
 
@@ -668,13 +672,16 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const next = await login(email, password);
+      const next = await login(email, password, human.token);
       const target = new URLSearchParams(location.search).get('next');
       navigate(target ?? (next.role === 'ADMIN' ? '/admin' : next.role === 'TEACHER' ? '/teacher' : '/dashboard'), {
         replace: true,
       });
     } catch (loginError) {
       setError(describeError(loginError));
+      // A rejected attempt means the token was spent or refused: mint a new one
+      // rather than making the candidate reload the page.
+      if (loginError instanceof ApiRequestError && loginError.code === 'TURNSTILE_FAILED') human.rearm();
     } finally {
       setBusy(false);
     }
@@ -719,6 +726,7 @@ export function LoginPage() {
             <PasswordInput id={id} value={password} onChange={setPassword} autoComplete="current-password" required />
           )}
         </Field>
+        <TurnstileField enabled={human.enabled} siteKey={human.siteKey} action="LOGIN" resetKey={human.resetKey} onToken={human.setToken} />
         <Button type="submit" variant="primary" size="lg" block loading={busy}>
           Sign in
         </Button>
@@ -782,6 +790,7 @@ export function RegisterPage() {
   const [busy, setBusy] = useState(false);
   const [needsBootstrap, setNeedsBootstrap] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(true);
+  const human = useTurnstileGuard();
 
   useEffect(() => {
     void api
@@ -825,10 +834,11 @@ export function RegisterPage() {
     setBusy(true);
     setError(null);
     try {
-      await register(form);
+      await register({ ...form, ...(human.token ? { turnstileToken: human.token } : {}) });
       navigate(params.get('next') ?? '/dashboard', { replace: true });
     } catch (registerError) {
       setError(describeError(registerError));
+      if (registerError instanceof ApiRequestError && registerError.code === 'TURNSTILE_FAILED') human.rearm();
     } finally {
       setBusy(false);
     }
@@ -911,6 +921,7 @@ export function RegisterPage() {
         ) : null}
 
         <div style={{ height: 16 }} />
+        <TurnstileField enabled={human.enabled} siteKey={human.siteKey} action="REGISTER" resetKey={human.resetKey} onToken={human.setToken} />
         <Button type="submit" variant="primary" size="lg" block loading={busy}>
           Create account
         </Button>

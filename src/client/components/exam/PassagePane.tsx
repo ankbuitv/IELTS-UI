@@ -1,14 +1,19 @@
 import type { ReactNode } from 'react';
 import type { CandidateSection } from '@shared/question-types';
+import { AnnotatedText } from './Annotations';
+import type { AnnotationsApi } from './useAnnotations';
 
 export function PassagePane({
   sections,
   showInstructions,
   lead,
+  annotations,
   children,
 }: {
   sections: CandidateSection[];
   showInstructions?: boolean;
+  /** Highlighter state; when it is passed the text becomes markable. */
+  annotations?: AnnotationsApi | null;
   /** Material that sits above the passage inside the same scroll region (audio, a figure). */
   lead?: ReactNode;
   /**
@@ -47,7 +52,17 @@ export function PassagePane({
             {section.passage!.paragraphs.map((paragraph) => (
               <div className="passage__paragraph" key={paragraph.label || paragraph.text.slice(0, 24)}>
                 <span className="passage__label">{paragraph.label}</span>
-                <span className="passage__text">{paragraph.text}</span>
+                {annotations ? (
+                  <AnnotatedText
+                    text={paragraph.text}
+                    annotations={annotations.forParagraph(section.id, paragraph.label)}
+                    sectionId={section.id}
+                    anchor={paragraph.label}
+                    interactive={annotations.enabled}
+                  />
+                ) : (
+                  <span className="passage__text">{paragraph.text}</span>
+                )}
               </div>
             ))}
           </div>

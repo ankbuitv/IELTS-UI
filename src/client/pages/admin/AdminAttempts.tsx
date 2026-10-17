@@ -13,6 +13,7 @@ import {
 } from '../../components/ui';
 import { ResultSummary, type AttemptResultPayload } from '../../components/ResultView';
 import { formatBand, formatDateTime, formatScore, MODE_LABELS, TEST_TYPE_LABELS } from '../../lib/format';
+import { PageHead } from '../../components/page';
 
 interface AdminAttemptRow {
   id: string;
@@ -51,15 +52,11 @@ export function AdminAttemptsPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Attempts</h1>
-          <p className="page-head__meta">
-            Review marked attempts, integrity event logs and teacher-scored writing. Scores are computed on the server;
-            this view never recalculates them.
-          </p>
-        </div>
-      </div>
+      <PageHead
+        eyebrow="Records"
+        title="Attempts"
+        meta="Review marked attempts, integrity event logs and teacher-scored writing. Scores are computed on the server; this view never recalculates them."
+      />
 
       <Card>
         <div className="filter-bar">

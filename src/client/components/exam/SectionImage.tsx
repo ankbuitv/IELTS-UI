@@ -104,6 +104,7 @@ export function ImageLightbox({ src, alt, onClose }: { src: string; alt: string;
   return createPortal(
     <div
       className="exam-lightbox"
+      data-exam-layer=""
       role="dialog"
       aria-modal="true"
       aria-label={alt}

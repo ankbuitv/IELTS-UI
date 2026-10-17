@@ -4,6 +4,7 @@ import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Button, Card, EmptyState, Loading, Notice, TextArea, useToast } from '../../components/ui';
 import { Icon } from '../../components/Icon';
+import { PageHead } from '../../components/page';
 import { formatBand, formatDateTime } from '../../lib/format';
 import { BAND_DESCRIPTORS_NOTE } from '@shared/ai-rubric';
 import { SPEAKING_PART_META } from '@shared/speaking';
@@ -108,16 +109,17 @@ function SpeakingLobby({ onStarted }: { onStarted: (sessionId: string) => void }
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Speaking practice</h1>
-          <p className="page-head__meta">
-            Record a full three-part speaking test and get an instant <strong>estimated</strong> band with
-            criterion-by-criterion feedback. Your recording stays private to you and your teacher.
-          </p>
-        </div>
-        <Badge tone="accent">3 parts · ~11 minutes</Badge>
-      </div>
+      <PageHead
+        eyebrow="Speaking"
+        title="Speaking practice"
+        meta={
+          <>
+            Record a full three-part speaking test and get an instant <strong>estimated</strong> band with criterion-by-criterion
+            feedback. Your recording stays private to you and your teacher.
+          </>
+        }
+        actions={<Badge tone="accent">3 parts · ~11 minutes</Badge>}
+      />
 
       <Notice tone="info" title="Cách chấm điểm">
         <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
@@ -287,28 +289,37 @@ function SpeakingSessionView({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <p className="page-head__meta" style={{ marginBottom: 4 }}>
-            <Link to="/speaking">← Danh sách chủ đề</Link>
-          </p>
-          <h1>{session.topicTitle}</h1>
-          <p className="page-head__meta">
-            {recordedParts}/3 phần đã ghi · {session.status === 'MARKED' ? 'đã được hai giám khảo AI chấm' : submittedUnmarked ? 'đã nộp, chờ chấm' : 'chưa nộp'}
-          </p>
-        </div>
-        {marked ? (
-          <Badge tone="success">~{formatBand(data.score?.band ?? null)}</Badge>
-        ) : submittedUnmarked ? (
-          <Button variant="primary" loading={submitting} onClick={() => void retryMarking()}>
-            <Icon name="rotate" size={15} /> Chấm lại
-          </Button>
-        ) : (
-          <Button variant="primary" loading={submitting} disabled={!canSubmit} onClick={() => void submit()}>
-            <Icon name="sparkle" size={15} /> Nộp &amp; chấm tự động
-          </Button>
-        )}
-      </div>
+      <PageHead
+        eyebrow={
+          <Link to="/speaking" className="ph__back">
+            Danh sách chủ đề
+          </Link>
+        }
+        title={session.topicTitle}
+        meta={
+          <>
+            {recordedParts}/3 phần đã ghi ·{' '}
+            {session.status === 'MARKED'
+              ? 'đã được hai giám khảo AI chấm'
+              : submittedUnmarked
+                ? 'đã nộp, chờ chấm'
+                : 'chưa nộp'}
+          </>
+        }
+        actions={
+          marked ? (
+            <Badge tone="success">~{formatBand(data.score?.band ?? null)}</Badge>
+          ) : submittedUnmarked ? (
+            <Button variant="primary" loading={submitting} onClick={() => void retryMarking()}>
+              <Icon name="rotate" size={15} /> Chấm lại
+            </Button>
+          ) : (
+            <Button variant="primary" loading={submitting} disabled={!canSubmit} onClick={() => void submit()}>
+              <Icon name="sparkle" size={15} /> Nộp &amp; chấm tự động
+            </Button>
+          )
+        }
+      />
 
       {submitting ? (
         <div className="ai-running" role="status" aria-live="polite">

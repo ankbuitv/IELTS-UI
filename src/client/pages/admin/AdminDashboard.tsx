@@ -4,6 +4,7 @@ import { Badge, Card, Loading, Notice, Stat } from '../../components/ui';
 import { BarChart } from '../../components/charts';
 import { Icon } from '../../components/Icon';
 import { formatDateTime } from '../../lib/format';
+import { PageHead } from '../../components/page';
 
 interface AdminAnalytics {
   users: { total: number; students: number; teachers: number; admins: number; activeLast30Days: number };
@@ -29,21 +30,20 @@ export function AdminDashboardPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Platform dashboard</h1>
-          <p className="page-head__meta">
-            Environment {runtime.environment} · {runtime.baseUrl}
-          </p>
-        </div>
-        <Badge tone={ai.available ? 'success' : 'neutral'}>
-          AI import {ai.available ? `available (${ai.model})` : 'unavailable'}
-        </Badge>
-      </div>
+      <PageHead
+        eyebrow="Platform"
+        title="Platform dashboard"
+        meta={<>Environment {runtime.environment} · {runtime.baseUrl}</>}
+        actions={
+          <Badge tone={ai.available ? 'success' : 'neutral'}>
+            AI import {ai.available ? `available (${ai.model})` : 'unavailable'}
+          </Badge>
+        }
+      />
 
       {!ai.available ? <Notice tone="info" title="AI import is not configured">{ai.reason}</Notice> : null}
 
-      <div className="grid grid--4">
+      <div className="grid grid--4 stagger">
         <Stat
           label="Users"
           value={analytics.users.total}
@@ -74,7 +74,7 @@ export function AdminDashboardPage() {
         />
       </div>
 
-      <div className="grid grid--2">
+      <div className="grid grid--2 stagger">
         <Card title="Attempts started per day" hint="Last 30 days">
           <BarChart
             bars={analytics.recentActivity.map((row) => ({

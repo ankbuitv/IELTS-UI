@@ -1032,7 +1032,8 @@ router.get('/attempts', async (c) => {
     `SELECT a.id, a.status, a.mode, a.test_type, a.started_at, a.submitted_at, a.raw_score, a.total_questions,
             a.estimated_band, a.submitted_reason, t.title AS test_title, u.email,
             p.display_name, v.version_number,
-            (SELECT COUNT(*) FROM integrity_events e WHERE e.attempt_id = a.id AND e.type IN ('TAB_HIDDEN','FULLSCREEN_EXIT','COPY_ATTEMPT','PASTE_ATTEMPT')) AS integrity_count
+            (SELECT COUNT(*) FROM integrity_events e WHERE e.attempt_id = a.id
+               AND e.type IN ('TAB_HIDDEN','FULLSCREEN_EXIT','COPY_ATTEMPT','PASTE_ATTEMPT','POPUP_BLOCKED','EXTENSION_OVERLAY')) AS integrity_count
        FROM attempts a
        JOIN tests t ON t.id = a.test_id
        JOIN users u ON u.id = a.user_id

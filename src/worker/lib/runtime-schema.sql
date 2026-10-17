@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_attempt_annotations.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 55   Indexes: 69
+-- Tables: 56   Indexes: 70
 -- =============================================================================
 
 -- table: users
@@ -840,6 +840,25 @@ CREATE TABLE IF NOT EXISTS ai_adjudications (
   PRIMARY KEY (entity_type, entity_id)
 );
 
+-- table: attempt_annotations
+CREATE TABLE IF NOT EXISTS attempt_annotations (
+  id           TEXT NOT NULL PRIMARY KEY,
+  attempt_id   TEXT NOT NULL REFERENCES attempts (id) ON DELETE CASCADE,
+  user_id      TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  scope        TEXT NOT NULL DEFAULT 'PASSAGE' CHECK (scope IN ('PASSAGE')),
+  section_id   TEXT NOT NULL,
+  anchor       TEXT NOT NULL,
+  start_offset INTEGER NOT NULL CHECK (start_offset >= 0),
+  end_offset   INTEGER NOT NULL CHECK (end_offset > start_offset),
+  excerpt      TEXT NOT NULL,
+  color        TEXT NOT NULL DEFAULT 'yellow' CHECK (color IN ('yellow', 'green', 'blue', 'pink')),
+  note         TEXT,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL,
+  CHECK (length(excerpt) <= 800),
+  CHECK (note IS NULL OR length(note) <= 800)
+);
+
 -- index: idx_users_role
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 
@@ -1046,3 +1065,6 @@ CREATE INDEX IF NOT EXISTS idx_learn_daily_lessons_user_day ON learn_daily_lesso
 
 -- index: idx_ai_adjudications_entity
 CREATE INDEX IF NOT EXISTS idx_ai_adjudications_entity ON ai_adjudications (entity_type, entity_id);
+
+-- index: idx_attempt_annotations_attempt
+CREATE INDEX IF NOT EXISTS idx_attempt_annotations_attempt ON attempt_annotations (attempt_id, section_id, anchor);

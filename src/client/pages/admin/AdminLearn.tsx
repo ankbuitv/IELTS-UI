@@ -114,7 +114,7 @@ export function AdminLearnPage() {
 
   return (
     <div className="stack">
-      <section className="grid grid--3">
+      <section className="grid grid--3 stagger">
         <Stat label="Lessons shown" value={String(lessons.length)} />
         <Stat label="Waiting to be published" value={String(drafts)} />
         <Stat label="Bands with content" value={String(LEARN_BANDS.filter((value) => bandCount(value) > 0).length)} />
@@ -124,7 +124,7 @@ export function AdminLearnPage() {
         title="Generate lessons"
         hint="Uses the provider configured under Settings. Nothing reaches a learner until you publish it."
       >
-        <div className="grid grid--3">
+        <div className="grid grid--3 stagger">
           <Field label="Band">
             {(id) => (
               <Select id={id} value={String(genBand)} onChange={(event) => setGenBand(Number(event.target.value) as LearnBand)}>

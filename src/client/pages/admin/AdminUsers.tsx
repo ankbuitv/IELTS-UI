@@ -3,6 +3,8 @@ import { api, describeError, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Button, Card, EmptyState, Field, Loading, Modal, Notice, Select, TextInput, useToast } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
+import { Icon } from '../../components/Icon';
+import { PageHead } from '../../components/page';
 
 interface AdminUserRow {
   id: string;
@@ -31,15 +33,17 @@ export function AdminUsersPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Users</h1>
-          <p className="page-head__meta">Roles are enforced on the server. Public sign-up always creates students.</p>
-        </div>
-        <Button variant="primary" onClick={() => setCreateOpen(true)}>
-          Create user
-        </Button>
-      </div>
+      <PageHead
+        eyebrow="Accounts"
+        title="Users"
+        meta="Roles are enforced on the server. Public sign-up always creates students."
+        actions={
+          <Button variant="primary" onClick={() => setCreateOpen(true)}>
+            <Icon name="plus" size={14} />
+            Create user
+          </Button>
+        }
+      />
 
       <Card>
         <div className="filter-bar">

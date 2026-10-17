@@ -22,6 +22,8 @@ import {
 } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
 import { parseLeadingJson } from '@shared/json';
+import { Icon } from '../../components/Icon';
+import { PageHead } from '../../components/page';
 
 interface ImportRow {
   id: string;
@@ -108,17 +110,17 @@ export function AdminImportsPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Imports</h1>
-          <p className="page-head__meta">
-            UPLOAD → EXTRACT → AI STRUCTURE → VALIDATE → ADMIN REVIEW → PUBLISH. Nothing is ever published automatically.
-          </p>
-        </div>
-        <Button variant="primary" onClick={() => setUploadOpen(true)}>
-          New import
-        </Button>
-      </div>
+      <PageHead
+        eyebrow="Content pipeline"
+        title="Imports"
+        meta="Upload → extract → AI structure → validate → admin review → publish. Nothing is ever published automatically."
+        actions={
+          <Button variant="primary" onClick={() => setUploadOpen(true)}>
+            <Icon name="upload" size={14} />
+            New import
+          </Button>
+        }
+      />
 
       {data && !data.ai.available ? (
         <Notice tone="info" title="AI structuring is unavailable">
@@ -282,7 +284,7 @@ function ImportStartForm({
           </Select>
         )}
       </Field>
-      <div className="grid grid--2">
+      <div className="grid grid--2 stagger">
         <Field label="Source title">{(id) => <TextInput id={id} value={form.sourceTitle} onChange={(event) => setForm({ ...form, sourceTitle: event.target.value })} />}</Field>
         <Field label="Source URL">{(id) => <TextInput id={id} value={form.sourceUrl} onChange={(event) => setForm({ ...form, sourceUrl: event.target.value })} />}</Field>
       </div>
@@ -437,7 +439,7 @@ function ImportDetailView({
 
   return (
     <div className="stack">
-      <div className="grid grid--4">
+      <div className="grid grid--4 stagger">
         <Stat label="Status" value={record.status.toLowerCase()} />
         <Stat label="AI structuring" value={record.aiUsed ? 'used' : 'not used'} hint={record.aiModel ?? 'No model key configured'} />
         <Stat label="Extracted characters" value={record.extractedChars ?? 0} />

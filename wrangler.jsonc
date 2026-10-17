@@ -83,6 +83,10 @@
     "OLLAMA_BASE_URL": "https://ollama.com/v1",
     "MAX_UPLOAD_BYTES": "26214400",
     "LOGIN_RATE_LIMIT_PER_15MIN": "10",
+    // Cloudflare Turnstile on the auth forms. The site key is public; the secret
+    // is `wrangler secret put TURNSTILE_SECRET_KEY` (or TURNSTILE_SECRET_KEY in
+    // .dev.vars locally). Leave either one unset and the check stays inert.
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAFZRHwLmTuFl48ll",
     "AI_RATE_LIMIT_PER_HOUR": "30"
   },
 

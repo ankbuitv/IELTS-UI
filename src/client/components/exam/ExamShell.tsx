@@ -18,8 +18,11 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { ExamSessionApi } from './useExamSession';
 import { ExamDictionary } from './ExamDictionary';
 import { TabLockOverlay } from './TabLockOverlay';
+import { WindowLockOverlay } from './WindowLockOverlay';
 import { useExamViewportLock } from './useExamViewport';
 import { useInputLockdown } from '../../hooks/useInputLockdown';
+import { AnnotationNotesPanel, AnnotationToolbar, useAnnotationSelection } from './Annotations';
+import { useAnnotations } from './useAnnotations';
 
 export function ExamShell({ session, onFinished }: { session: ExamSessionApi; onFinished: () => void }) {
   // The exam owns the viewport: only its panes scroll (see exam.css).
@@ -43,6 +46,21 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
   const [dictionaryOpen, setDictionaryOpen] = useState(false);
+  /**
+   * The highlighter and note pad (the paper markup the real CBT offers). It is
+   * switched off when a centre locks text selection, and it goes read-only as
+   * soon as the paper is submitted — the marks stay for the teacher to see.
+   */
+  const annotations = useAnnotations({
+    attemptId: state?.attemptId ?? '',
+    enabled: Boolean(state) && state!.status === 'IN_PROGRESS' && !state!.integrity.policy.blockTextSelection,
+  });
+  const materialRef = useRef<HTMLElement | null>(null);
+  useAnnotationSelection({
+    enabled: annotations.enabled,
+    rootRef: materialRef,
+    onPick: annotations.setPending,
+  });
   const [leaving, setLeaving] = useState(false);
   const [advancedToNext, setAdvancedToNext] = useState(false);
   const [highlightSegmentId] = useState<string | null>(null);
@@ -257,6 +275,14 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
       <div className="exam-root exam-root--center">
         {session.tabLock ? (
           <TabLockOverlay lock={session.tabLock} onReturn={session.acknowledgeTabLock} onViewResults={onFinished} />
+        ) : session.windowGuard.needsFullscreen ? (
+          <WindowLockOverlay
+            exits={state?.integrity.fullscreenExits ?? 0}
+            allowance={state?.integrity.policy.maxFullscreenExits ?? null}
+            browserRefused={session.windowGuard.fullscreenUnavailable}
+            onEnterFullscreen={() => void session.requestFullscreen()}
+            onContinue={session.windowGuard.continueWithoutFullscreen}
+          />
         ) : (
           <div className="card" style={{ maxWidth: 420 }}>
             <h2>Preparing your test…</h2>
@@ -361,6 +387,19 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
           <div className="exam-topbar__sub">
             {skillLabel} · {MODE_LABELS[state.mode]}
           </div>
+          {total > 0 ? (
+            <div
+              className="exam-answer-bar"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={total}
+              aria-valuenow={answeredTotal}
+              aria-label={`${answeredTotal} of ${total} questions answered`}
+              title={`${answeredTotal} of ${total} answered`}
+            >
+              <span className="exam-answer-bar__fill" style={{ width: `${Math.round((answeredTotal / total) * 100)}%` }} />
+            </div>
+          ) : null}
         </div>
 
         {state.components.length > 1 ? (
@@ -402,7 +441,11 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
                     ? 'exam-integrity--warning'
                     : ''
               }`}
-              title={state.integrity.notice}
+              title={
+                session.windowGuard.engaged
+                  ? `${state.integrity.notice} Window lock is on: fullscreen ${session.windowGuard.isFullscreen ? 'active' : 'not granted'}, ${session.windowGuard.popupsBlocked} pop-up request(s) refused, ${session.windowGuard.overlaysSuppressed} overlay(s) hidden.`
+                  : state.integrity.notice
+              }
             >
               <Icon name="shield" size={14} />
               <span className="exam-integrity__text">
@@ -432,6 +475,23 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
             </button>
           ) : null}
 
+          {annotations.enabled ? (
+            <button
+              type="button"
+              className={`exam-icon exam-icon--marks${annotations.panelOpen ? ' is-on' : ''}`}
+              onClick={() => annotations.setPanelOpen(!annotations.panelOpen)}
+              title={`Highlights and notes (${annotations.annotations.length})`}
+              aria-label="Highlights and notes"
+              aria-expanded={annotations.panelOpen}
+            >
+              <Icon name="pen" size={17} />
+              {annotations.annotations.length > 0 ? (
+                <span className="exam-icon__badge">{annotations.annotations.length}</span>
+              ) : null}
+              {annotations.queued > 0 || annotations.syncError ? <span className="exam-icon__dot" aria-hidden="true" /> : null}
+            </button>
+          ) : null}
+
           {session.sessionRemainingSeconds !== null ? (
             <span className={`exam-timer ${timerTone}`} aria-live="off" title="Time remaining">
               <Icon name="clock" size={15} strokeWidth={2.2} />
@@ -449,13 +509,41 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
         </div>
       </header>
 
-      {state.integrity.policy.requireFullscreen && !session.isFullscreen ? (
+      {/* Only nag once fullscreen has actually been held: on a browser that never
+          grants it (iOS Safari) the banner would otherwise sit there forever. */}
+      {state.integrity.policy.requireFullscreen && !session.isFullscreen && session.windowGuard.everFullscreen ? (
         <div className="exam-banner exam-banner--warning" role="alert">
-          <Icon name="alert" size={15} />
-          <span>Fullscreen is required in this exam mode. Exits are recorded for your teacher.</span>
+          <Icon name="shield" size={15} />
+          <span>
+            This exam runs fullscreen — pop-ups, new tabs and translation overlays are blocked, and
+            exits are recorded for your teacher
+            {state.integrity.policy.maxFullscreenExits !== null
+              ? ` (${state.integrity.fullscreenExits} of ${state.integrity.policy.maxFullscreenExits} used)`
+              : ''}
+            .
+          </span>
           <Button size="sm" onClick={() => void session.requestFullscreen()}>
             Re-enter fullscreen
           </Button>
+        </div>
+      ) : null}
+
+      {session.windowGuard.popupsBlocked > 0 || session.windowGuard.overlaysSuppressed > 0 ? (
+        <div className="exam-banner exam-banner--info" role="status">
+          <Icon name="info" size={15} />
+          <span>
+            {[
+              session.windowGuard.popupsBlocked > 0
+                ? `${session.windowGuard.popupsBlocked} new window/tab request${session.windowGuard.popupsBlocked === 1 ? '' : 's'} refused`
+                : '',
+              session.windowGuard.overlaysSuppressed > 0
+                ? `${session.windowGuard.overlaysSuppressed} extension overlay${session.windowGuard.overlaysSuppressed === 1 ? '' : 's'} hidden`
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            . This is recorded for your teacher.
+          </span>
         </div>
       ) : null}
 
@@ -548,7 +636,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
         style={mode === 'SPLIT' ? ({ '--passage-share': `${passageWidth}%` } as CSSProperties) : undefined}
       >
         {showMaterial ? (
-          <section className="exam-pane exam-pane--material" aria-label={isWriting ? 'Writing task' : 'Passage and audio'}>
+          <section className="exam-pane exam-pane--material" ref={materialRef} aria-label={isWriting ? 'Writing task' : 'Passage and audio'}>
             {isWriting ? (
               <div className="exam-pane__scroll" key={`task-${activeSection?.id}-${activeTaskId}`}>
                 {activeTask ? <WritingPrompt item={activeTask} /> : null}
@@ -557,6 +645,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
               <PassagePane
                 key={activeSection.id}
                 sections={[activeSection]}
+                annotations={annotations}
                 showInstructions
                 lead={
                   <>
@@ -831,9 +920,21 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
       </Modal>
 
       {dictionaryOpen ? <ExamDictionary onClose={() => setDictionaryOpen(false)} /> : null}
+      <AnnotationToolbar annotations={annotations} />
+      {annotations.panelOpen ? (
+        <AnnotationNotesPanel annotations={annotations} onClose={() => annotations.setPanelOpen(false)} />
+      ) : null}
 
       {session.tabLock ? (
         <TabLockOverlay lock={session.tabLock} onReturn={session.acknowledgeTabLock} onViewResults={onFinished} />
+      ) : session.windowGuard.needsFullscreen ? (
+        <WindowLockOverlay
+          exits={state.integrity.fullscreenExits}
+          allowance={state.integrity.policy.maxFullscreenExits}
+          browserRefused={session.windowGuard.fullscreenUnavailable}
+          onEnterFullscreen={() => void session.requestFullscreen()}
+          onContinue={session.windowGuard.continueWithoutFullscreen}
+        />
       ) : null}
     </div>
   );

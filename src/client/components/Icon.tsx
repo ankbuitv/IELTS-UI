@@ -74,9 +74,28 @@ export type IconName =
   | 'bulb'
   | 'crown'
   | 'shieldCheck'
-  | 'hourglass';
+  | 'hourglass'
+  | 'chevronLeft'
+  | 'panelLeft'
+  | 'highlighter'
+  | 'bookmark';
 
 const PATHS: Record<IconName, ReactElement> = {
+  chevronLeft: <path d="M14.5 5.5 8 12l6.5 6.5" />,
+  panelLeft: (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="3" />
+      <path d="M9.5 4.5v15" />
+    </>
+  ),
+  highlighter: (
+    <>
+      <path d="M8.5 13.5 5 17v2h2.5l3-3" />
+      <path d="m11 11 6-6 2 2-6 6z" />
+      <path d="M4 21.5h16" />
+    </>
+  ),
+  bookmark: <path d="M6.5 3.5h11v17l-5.5-4-5.5 4z" />,
   grid: (
     <>
       <rect x="3" y="3" width="7.5" height="7.5" rx="2" />

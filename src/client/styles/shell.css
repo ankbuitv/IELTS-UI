@@ -1,7 +1,13 @@
 /* ==========================================================================
-   App shell: white top bar with pill navigation, a bottom tab bar on phones,
-   one "More" panel (dropdown on desktop, bottom sheet on a phone) and the
-   navy footer shared with the public pages.
+   Shell geometry that is shared by both chrome shapes: the page width, the
+   `.site` column model, the public top bar (pill navigation, coin chip,
+   avatar), the navy footer and the More sheet's list rows.
+
+   The *signed-in* navigation is not here any more: the desktop sidebar, the
+   floating phone dock and the tiled More sheet are laid out in styles/app.css
+   (sections 3 and 4), next to the motion they animate with. `.site-tabbar` and
+   `.more-panel` below are kept only because the public pages and a few
+   embedded views still reuse their rows.
    ========================================================================== */
 :root { --page-max: 1200px; --page-pad: 20px; }
 
