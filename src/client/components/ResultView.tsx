@@ -760,7 +760,11 @@ function SectionReview({
           <Card title="Why these answers" hint="Evidence and explanations released with this result">
             <div className="stack">
               {explainable.map((item) => (
-                <div key={item.questionId} className="review-q" id={`review-q-${item.number}`}>
+                <div
+                  key={item.questionId}
+                  className={`review-q${item.isCorrect === false ? ' is-wrong' : item.isCorrect ? ' is-right' : ''}`}
+                  id={`review-q-${item.number}`}
+                >
                   <div className="review-q__head">
                     <span className="review-q__number">{item.number}</span>
                     <span className="review-q__prompt">{item.prompt}</span>

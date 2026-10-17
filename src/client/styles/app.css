@@ -1165,3 +1165,221 @@ html[data-reduce-motion='true'] .report-overall__value { animation: none !import
 .data tbody tr { transition: background var(--speed) var(--ease); }
 .data tbody tr:hover { background: color-mix(in srgb, var(--brand-50) 55%, var(--paper)); }
 .data th, .data td { padding-block: 10px; }
+
+/* ============================== 25. one surface language, everywhere */
+/* The Learn family (cards, shop, social, boards, everyday lessons) grew its own
+   chunky look — 2px borders and a hard 5px bottom edge — while the kit uses a
+   hairline plus a soft shadow. Both now speak the kit's language: same border,
+   radius, elevation, hover and title typography, with the colours kept. */
+.card { border-color: var(--hair); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.card__title { font-size: 1.04rem; font-weight: 780; letter-spacing: -0.022em; }
+.card__hint { font-size: 0.83rem; line-height: 1.5; }
+.card__header { margin-bottom: 14px; }
+.card:hover { border-color: var(--hair-strong); }
+.card--link:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+
+.learn-card,
+.shop-card,
+.social-panel,
+.achievement-panel,
+.profile-level,
+.profile-customise,
+.everyday-hero,
+.everyday-band,
+.everyday-item,
+.plan-empty,
+.plan-stats,
+.plan-day {
+  border: 1px solid var(--hair); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm);
+  transition: transform var(--speed) var(--ease), box-shadow var(--speed) var(--ease), border-color var(--speed) var(--ease);
+}
+.learn-card:hover, .everyday-item:hover, .social-panel:hover { border-color: var(--hair-strong); }
+.shop-card { box-shadow: var(--shadow-sm), 0 4px 0 color-mix(in srgb, var(--ink-300) 40%, transparent); }
+.shop-card:hover { transform: translateY(-3px); box-shadow: var(--shadow), 0 6px 0 color-mix(in srgb, var(--ink-300) 30%, transparent); }
+
+/* One title voice for every card head in the product. */
+.learn-card__head h2, .shop-card__head h2, .social-panel > header h2, .achievement-panel > header h2,
+.profile-customise > header h2, .shop-sounds__head h2, .everyday-set__heading h2, .everyday-band h2,
+.unit__head h2, .plan-day__head h2, .quests-card .learn-card__head h2 {
+  font-size: 1.04rem; font-weight: 780; letter-spacing: -0.022em; color: var(--ink-950);
+}
+.learn-card__head h2::before, .everyday-set__heading h2::before, .shop-sounds__head h2::before, .unit__head h2::before {
+  content: ''; display: inline-block; vertical-align: middle; width: 7px; height: 7px; margin-right: 8px;
+  border-radius: 3px; background: var(--sec-dot, var(--brand-400)); transform: rotate(45deg);
+}
+.learn-card--brand { --sec-dot: var(--brand-500); }
+.learn-card--info { --sec-dot: var(--info); }
+.learn-card--teal { --sec-dot: var(--fill-listening, #12a594); }
+.learn-card--amber { --sec-dot: var(--warning); }
+.learn-card--violet { --sec-dot: var(--violet); }
+.learn-card--success { --sec-dot: var(--success); }
+
+/* Repeated rows arrive in order, whatever page they live on. */
+.shop__grid, .shop-sounds__grid, .social-player-list, .everyday-list, .board__list, .board__podium, .mini-board, .unit__nodes, .quests, .learn__today { --stagger-step: 38ms; }
+.shop__grid > *, .shop-sounds__grid > *, .social-player-list > *, .board__list > *, .board__podium > *, .mini-board > *, .everyday-list > *, .unit__nodes > *, .learn__today > * {
+  animation: rise-in 420ms var(--ease-spring) backwards;
+  animation-delay: calc(var(--i, 0) * var(--stagger-step, 42ms) + 40ms);
+}
+.sound-chip, .everyday-item { transition: transform var(--speed) var(--ease), border-color var(--speed) var(--ease), background var(--speed) var(--ease); }
+.sound-chip:hover, .everyday-item:hover { transform: translateY(-2px); }
+.mini-board > li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 6px 4px; border-radius: var(--radius); transition: background var(--speed) var(--ease); }
+.mini-board > li:hover { background: var(--paper-muted); }
+.board__hero { border-radius: var(--radius-2xl); box-shadow: var(--shadow); }
+.everyday-hero, .everyday-band { border-radius: var(--radius-2xl); }
+.plan-day > summary { transition: background var(--speed) var(--ease); }
+.plan-day > summary:hover { background: var(--paper-muted); }
+html[data-reduce-motion='true'] .shop__grid > *, html[data-reduce-motion='true'] .shop-sounds__grid > *,
+html[data-reduce-motion='true'] .social-player-list > *, html[data-reduce-motion='true'] .board__list > *,
+html[data-reduce-motion='true'] .board__podium > *, html[data-reduce-motion='true'] .mini-board > *,
+html[data-reduce-motion='true'] .everyday-list > *, html[data-reduce-motion='true'] .unit__nodes > *,
+html[data-reduce-motion='true'] .learn__today > * { animation: none !important; }
+
+/* ============================== 26. landing, admin toolbar & report follow-through */
+/* The last three surfaces that were still doing their own thing: the public
+   landing grid, an admin filter bar (a toolbar, so it stops looking like a card)
+   and the result report's tiles. */
+.lp-skills > *, .lp-steps > *, .lp-facts > *, .lp-split__list > *, .auth__points > li {
+  animation: rise-in 460ms var(--ease-spring) backwards;
+  animation-delay: calc(var(--i, 0) * 55ms + 60ms);
+}
+.lp-skill, .lp-step, .lp-fact { transition: transform var(--speed) var(--ease), box-shadow var(--speed) var(--ease), border-color var(--speed) var(--ease); }
+.lp-skill:hover, .lp-step:hover, .lp-fact:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--hair-strong); }
+
+.filter-bar { gap: 10px 14px; align-items: flex-end; }
+.stack > .card:has(> .filter-bar), .admin-console .card:has(> .filter-bar) {
+  padding: 11px 13px; border-radius: var(--radius-lg); background: var(--paper-muted); border-color: var(--hair); box-shadow: none;
+}
+.stack > .card:has(> .filter-bar) .field__label, .admin-console .card:has(> .filter-bar) .field__label {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-500);
+}
+.card--flush .table-wrap > .data, .card--flush > .table-wrap .table { border: 0; border-radius: 0; }
+
+.report-head__kicker {
+  display: inline-flex; align-items: center; gap: 7px; margin: 0 0 8px;
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; color: var(--brand-300, rgba(255, 255, 255, 0.72));
+}
+.report-tiles > li { animation: rise-in 420ms var(--ease-spring) backwards; animation-delay: calc(var(--i, 0) * 40ms + 120ms); }
+.report-tiles > :nth-child(1) { --i: 0; }
+.report-tiles > :nth-child(2) { --i: 1; }
+.report-tiles > :nth-child(3) { --i: 2; }
+.report-tiles > :nth-child(4) { --i: 3; }
+html[data-reduce-motion='true'] .lp-skills > *, html[data-reduce-motion='true'] .lp-steps > *,
+html[data-reduce-motion='true'] .lp-facts > *, html[data-reduce-motion='true'] .lp-split__list > *,
+html[data-reduce-motion='true'] .auth__points > li, html[data-reduce-motion='true'] .report-tiles > li,
+html[data-reduce-motion='true'] .lp-skill:hover, html[data-reduce-motion='true'] .lp-step:hover { animation: none !important; transform: none !important; }
+
+/* ============================== 27. result review, speaking steps, lesson end */
+/* Question review is read on a phone after a test, so each answer is a row with
+   a coloured edge rather than a grey box, and the folding panels look like the
+   kit's list rows (chevron rotates, the row lifts its background). */
+.result details { border-radius: var(--radius-lg); }
+.result details > summary {
+  display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-radius: var(--radius-lg);
+  list-style: none; cursor: pointer; font-weight: 700; color: var(--ink-700);
+  background: var(--paper-muted); border: 1px solid var(--hair);
+  transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+.result details > summary::-webkit-details-marker { display: none; }
+.result details > summary::before {
+  content: ''; flex: none; width: 14px; height: 14px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg); transform-origin: 40% 50%; transition: transform 240ms var(--ease-spring);
+}
+.result details[open] > summary::before { transform: rotate(45deg); }
+.result details > summary:hover { background: var(--brand-50); border-color: var(--brand-200); color: var(--brand-700); }
+
+.review-q { position: relative; border: 1px solid var(--hair); border-radius: var(--radius-lg); background: var(--paper); padding: 12px 14px 12px 16px; overflow: hidden; transition: border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease), transform var(--speed) var(--ease); }
+.review-q::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--ink-300); }
+.review-q.is-right::before { background: var(--success); }
+.review-q.is-wrong::before { background: var(--danger); }
+.review-q.is-wrong { background: color-mix(in srgb, var(--danger-soft) 40%, var(--paper)); }
+.review-q.is-right .review-q__number { background-image: linear-gradient(180deg, var(--success), color-mix(in srgb, var(--success) 76%, #000)); }
+.review-q.is-wrong .review-q__number { background-image: linear-gradient(180deg, var(--danger), color-mix(in srgb, var(--danger) 76%, #000)); }
+.review-q:hover { transform: translateY(-1px); border-color: var(--hair-strong); box-shadow: var(--shadow-xs); }
+.review-q__number { border-radius: 9px; background-image: var(--grad-brand); font-variant-numeric: tabular-nums; }
+.review-q__prompt { letter-spacing: -0.012em; }
+.review-q__answers { margin-left: 38px; gap: 10px 18px; }
+.review-q__answer { padding: 3px 9px; border-radius: var(--radius-pill); background: var(--surface-sunken); }
+.review-q__answer--key { background: var(--success-soft); font-weight: 700; }
+
+.part-steps { gap: 8px; }
+.part-step { border-radius: var(--radius-pill); padding: 8px 14px; font-weight: 680; letter-spacing: -0.01em; }
+.part-step:hover { transform: translateY(-1px); }
+.part-step.is-done, .part-step[data-done='true'] { color: var(--success); }
+
+.lesson__end h1 { letter-spacing: -0.03em; }
+.lesson__end-mark { box-shadow: 0 12px 30px -14px rgba(18, 133, 90, 0.8); animation: pop-in 520ms var(--ease-spring) backwards; }
+.lesson__end-mark--bad { box-shadow: 0 12px 30px -14px rgba(198, 40, 46, 0.8); }
+.ai-running { border-radius: var(--radius-lg); }
+html[data-reduce-motion='true'] .review-q:hover,
+html[data-reduce-motion='true'] .lesson__end-mark { animation: none !important; transform: none !important; }
+
+@media (max-width: 719px) {
+  .review-q__answers { margin-left: 0; }
+  .review-q__prompt { min-width: 0; }
+  .result details > summary { font-size: 0.86rem; }
+}
+
+/* ============================== 28. learn-family details (speaking, path, plan, shop) */
+.speaking-topic-grid > * { animation: rise-in 440ms var(--ease-spring) backwards; animation-delay: calc(var(--i, 0) * 45ms + 60ms); }
+.speaking-topic-grid > :nth-child(1) { --i: 0; }
+.speaking-topic-grid > :nth-child(2) { --i: 1; }
+.speaking-topic-grid > :nth-child(3) { --i: 2; }
+.speaking-topic-grid > :nth-child(4) { --i: 3; }
+.speaking-topic-grid > :nth-child(n + 5) { --i: 4; }
+.topic-card { border-color: var(--hair); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); background-image: linear-gradient(180deg, var(--paper), var(--paper-muted) 260px); }
+.topic-card__icon { box-shadow: var(--shadow-xs); transition: transform 260ms var(--ease-spring); }
+.topic-card:hover:not(:disabled) .topic-card__icon { transform: scale(1.08) rotate(-5deg); }
+.topic-card__title { letter-spacing: -0.02em; }
+.topic-card__summary { line-height: 1.55; }
+
+.unit { border: 1px solid var(--hair); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); transition: box-shadow var(--speed) var(--ease), border-color var(--speed) var(--ease); }
+.unit:hover { border-color: var(--hair-strong); box-shadow: var(--shadow); }
+.unit__head h2 { letter-spacing: -0.024em; }
+.unit__node { transition: transform var(--speed) var(--ease-spring), box-shadow var(--speed) var(--ease); }
+.unit__node:hover { transform: translateY(-3px) scale(1.03); }
+
+.plan-items > li { display: flex; align-items: flex-start; gap: 10px; padding: 9px 4px; border-radius: var(--radius); transition: background var(--speed) var(--ease); }
+.plan-items > li + li { border-top: 1px solid var(--hair); }
+.plan-items > li:hover { background: var(--paper-muted); }
+.plan-skill { transition: transform var(--speed) var(--ease), box-shadow var(--speed) var(--ease); }
+.plan-skill:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.quests__bar i { animation: bar-grow 620ms var(--ease-spring) backwards; }
+.daily-words li { transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease); }
+.daily-words li:hover { background: var(--paper-muted); }
+.everyday-band__choice { transition: transform var(--speed) var(--ease-spring), border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease); }
+.everyday-band__choice:hover { transform: translateY(-2px); }
+.everyday-band__choice.is-on { box-shadow: 0 0 0 1px var(--brand-500) inset, var(--shadow-xs); }
+.social-player, .player-card { transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease), transform var(--speed) var(--ease); }
+.social-player:hover, .player-card:hover { transform: translateY(-1px); }
+.podium { transition: transform var(--speed) var(--ease-spring), box-shadow var(--speed) var(--ease); }
+.podium:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
+html[data-reduce-motion='true'] .speaking-topic-grid > *,
+html[data-reduce-motion='true'] .quests__bar i { animation: none !important; }
+html[data-reduce-motion='true'] .topic-card:hover:not(:disabled),
+html[data-reduce-motion='true'] .unit__node:hover,
+html[data-reduce-motion='true'] .plan-skill:hover,
+html[data-reduce-motion='true'] .podium:hover { transform: none; }
+
+/* ============================== 29. the last unstyled corners */
+/* Every class the markup emits should mean something. These were the leftovers:
+   the report's left column, a row's action slot, the coin chip's small variant,
+   the dictionary footer, and the lesson player's video / Vietnamese prompt /
+   end screens. */
+.report-head__meta { min-width: 0; }
+.lp-hero__copy { min-width: 0; }
+.assign-row__action { flex: none; display: flex; align-items: center; gap: 6px; }
+.coin-chip--sm { padding: 3px 9px 3px 7px; font-size: 0.76rem; }
+.dict__more { padding-top: 10px; border-top: 1px solid var(--hair); }
+.lesson__video { position: relative; overflow: hidden; border-radius: var(--radius-lg); background: #0b1420; aspect-ratio: 16 / 9; }
+.lesson__video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.lesson__prompt-vi { margin: 4px 0 10px; color: var(--ink-600); font-size: 0.92rem; line-height: 1.55; }
+.lesson__stats { border-color: var(--hair); border-radius: var(--radius); overflow: hidden; }
+.lesson__stats > div { border-right-color: var(--hair); }
+.lesson--done { background: linear-gradient(180deg, var(--success-soft), var(--paper) 46%); }
+.lesson--failed { background: linear-gradient(180deg, var(--danger-soft), var(--paper) 46%); }
+.lesson__end { animation: rise-in 520ms var(--ease-spring) backwards; }
+html[data-reduce-motion='true'] .lesson__end { animation: none !important; }
+@media (max-width: 719px) {
+  .lesson__video { aspect-ratio: 4 / 3; }
+  .lesson__prompt-vi { font-size: 0.88rem; }
+}

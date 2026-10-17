@@ -283,7 +283,7 @@ export function StudentDashboardPage() {
             </Button>
           </div>
 
-          <div className="grid grid--2">
+          <div className="grid grid--2 stagger">
             <Card title="Skill breakdown">
               <div className="stack" style={{ gap: 10 }}>
                 {data.skillPerformance.map((skill) => (

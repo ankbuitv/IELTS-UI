@@ -316,7 +316,7 @@ export function LearnPage() {
 
   const todayPanels = (
     <aside className="learn__today" aria-label="Today">
-      <section className="card learn-card quests-card">
+      <section className="card learn-card quests-card learn-card--violet">
         <header className="learn-card__head">
           <h2>Today’s quests</h2>
           <span className="learn-card__count">{questsDone}/{data.quests.length}</span>
@@ -344,7 +344,7 @@ export function LearnPage() {
         </ul>
       </section>
 
-      <section className="card learn-card">
+      <section className="card learn-card learn-card--amber">
         <header className="learn-card__head">
           <h2>Ranking</h2>
           <Link className="learn-card__link" to="/learn/leaderboard">
@@ -374,7 +374,7 @@ export function LearnPage() {
         ) : null}
       </section>
 
-      <section className="card learn-card">
+      <section className="card learn-card learn-card--teal">
         <header className="learn-card__head">
           <h2>Study plan</h2>
           <Link className="learn-card__link" to="/learn/plan">
@@ -388,7 +388,7 @@ export function LearnPage() {
         </Button>
       </section>
 
-      <section className="card learn-card">
+      <section className="card learn-card learn-card--info">
         <header className="learn-card__head">
           <h2>Today’s words</h2>
           <div className="row">
@@ -462,7 +462,7 @@ export function LearnPage() {
         </Link>
       </section>
 
-      <section className="card learn-card">
+      <section className="card learn-card learn-card--brand">
         <header className="learn-card__head">
           <h2>Review</h2>
           {data.dueWords > 0 ? <span className="learn-card__count">{data.dueWords}</span> : null}
@@ -485,7 +485,7 @@ export function LearnPage() {
         </Button>
       </section>
 
-      <section className="card learn-card">
+      <section className="card learn-card learn-card--success">
         <header className="learn-card__head">
           <h2>Your band</h2>
           <Button

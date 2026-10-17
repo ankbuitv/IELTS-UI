@@ -333,7 +333,7 @@ export function ClassroomPage() {
             </Card>
           </div>
 
-          <div className="grid grid--2">
+          <div className="grid grid--2 stagger">
             <Card title="Skill performance">
               <AccuracyList
                 items={data.analytics.skillPerformance.map((skill) => ({
@@ -786,7 +786,7 @@ function CreateAssignmentModal({
         )}
       </Field>
 
-      <div className="grid grid--2">
+      <div className="grid grid--2 stagger">
         <Field label="Assignment title" hint="Defaults to the test title.">
           {(id) => <TextInput id={id} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />}
         </Field>

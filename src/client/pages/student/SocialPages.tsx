@@ -4,6 +4,7 @@ import { AVATARS, NAME_EFFECTS, PROFILE_EFFECTS, type FriendOverview, type Frien
 import type { NameEffect, ProfileEffect } from '@shared/gamification';
 import { PlayerAvatar, badgeName, playerNameClass } from '../../components/learn/PlayerAvatar';
 import { Icon } from '../../components/Icon';
+import { PageHead } from '../../components/page';
 import { Button, Loading, Notice, useToast } from '../../components/ui';
 import { describeError } from '../../lib/api';
 import { learnApi } from '../../lib/learn-api';
@@ -107,10 +108,17 @@ export function FriendPage() {
 
   return (
     <main className="social-page">
-      <header className="page-heading social-page__heading">
-        <div><p className="eyebrow">Learn together</p><h1>Friends</h1><p className="muted">Find learners, send requests, and keep each other moving.</p></div>
-        <Link className="btn" to="/learn"><Icon name="book" size={15} /> Learn path</Link>
-      </header>
+      <PageHead
+        eyebrow="Learn together"
+        title="Friends"
+        meta="Find learners, send requests, and keep each other moving. A friend shows up in your weekly ranking strip and can be challenged to the same test."
+        actions={
+          <Link className="btn" to="/learn">
+            <Icon name="book" size={15} />
+            Learn path
+          </Link>
+        }
+      />
 
       <section className="card social-search">
         <label htmlFor="people-search"><Icon name="search" size={18} /> Find a learner</label>

@@ -18,6 +18,7 @@ import { itemIcon } from './shop-icons';
 import { Icon } from '../../components/Icon';
 import { Badge, Button, Loading, Notice, useToast } from '../../components/ui';
 import { Mascot } from '../../components/learn/Mascot';
+import { Section } from '../../components/page';
 import { useAsync } from '../../hooks/useAsync';
 import { describeError } from '../../lib/api';
 import { learnApi } from '../../lib/learn-api';
@@ -118,117 +119,131 @@ export function ShopPage() {
         </div>
       </header>
 
-      <section className="shop__grid" aria-label="Items">
-        {state.items.map((item) => (
-          <article key={item.key} className={`shop-card shop-card--${item.tone}`}>
-            <header className="shop-card__head">
-              <span className="shop-card__icon" aria-hidden="true">
-                <Icon name={itemIcon(item.key)} size={22} />
-              </span>
-              <div>
-                <h2>{item.name}</h2>
-                <p className="shop-card__tagline">{item.tagline}</p>
+      <Section
+        title="Everything in the shop"
+        hint="Prices are in coins. Nothing here can be bought with money, so a shelf only empties when you put work into it."
+        actions={
+          boost.active ? (
+            <Badge tone="warning">
+              <Icon name="bolt" size={12} /> Double XP live · {boost.minutesLeft}m
+            </Badge>
+          ) : null
+        }
+      >
+        <div className="shop__grid" aria-label="Items">
+          {state.items.map((item) => (
+            <article key={item.key} className={`shop-card shop-card--${item.tone}`}>
+              <header className="shop-card__head">
+                <span className="shop-card__icon" aria-hidden="true">
+                  <Icon name={itemIcon(item.key)} size={22} />
+                </span>
+                <div>
+                  <h2>{item.name}</h2>
+                  <p className="shop-card__tagline">{item.tagline}</p>
+                </div>
+              </header>
+              <p className="shop-card__detail">{item.detail}</p>
+              <div className="shop-card__meta">
+                <Badge tone={item.owned > 0 ? 'success' : 'neutral'}>
+                  {item.owned > 0 ? `${item.owned} in your bag` : 'Not owned'}
+                </Badge>
+                {item.owned >= item.maxOwned ? <Badge tone="warning">Max</Badge> : null}
               </div>
-            </header>
-            <p className="shop-card__detail">{item.detail}</p>
-            <div className="shop-card__meta">
-              <Badge tone={item.owned > 0 ? 'success' : 'neutral'}>
-                {item.owned > 0 ? `${item.owned} in your bag` : 'Not owned'}
-              </Badge>
-              {item.owned >= item.maxOwned ? <Badge tone="warning">Max</Badge> : null}
-            </div>
-            <div className="shop-card__actions">
-              <span className="shop-card__price">
-                <Icon name="coin" size={15} /> {item.price}
-              </span>
-              <Button
-                variant={item.affordable ? 'primary' : 'default'}
-                size="sm"
-                disabled={!item.canBuyMore || !item.affordable}
-                loading={busyKey === item.key}
-                onClick={() => void buy(item)}
-              >
-                {!item.canBuyMore ? 'At the cap' : item.affordable ? 'Buy' : `Need ${item.price - state.coins} more`}
-              </Button>
-            </div>
-            {item.manual && item.owned > 0 ? (
-              <Button size="sm" variant="secondary" block loading={busyKey === item.key} onClick={() => void switchOn(item)}>
-                <Icon name={item.key === 'xp_boost' ? 'bolt' : 'play'} size={13} />
-                {item.key === 'xp_boost' ? 'Switch on now' : 'Use now'}
-              </Button>
-            ) : null}
-            {item.cosmetic ? <Link className="shop-card__profile-link" to="/learn/profile">Equip on your profile <Icon name="arrowRight" size={13} /></Link> : null}
-          </article>
-        ))}
-      </section>
+              <div className="shop-card__actions">
+                <span className="shop-card__price">
+                  <Icon name="coin" size={15} /> {item.price}
+                </span>
+                <Button
+                  variant={item.affordable ? 'primary' : 'default'}
+                  size="sm"
+                  disabled={!item.canBuyMore || !item.affordable}
+                  loading={busyKey === item.key}
+                  onClick={() => void buy(item)}
+                >
+                  {!item.canBuyMore ? 'At the cap' : item.affordable ? 'Buy' : `Need ${item.price - state.coins} more`}
+                </Button>
+              </div>
+              {item.manual && item.owned > 0 ? (
+                <Button size="sm" variant="secondary" block loading={busyKey === item.key} onClick={() => void switchOn(item)}>
+                  <Icon name={item.key === 'xp_boost' ? 'bolt' : 'play'} size={13} />
+                  {item.key === 'xp_boost' ? 'Switch on now' : 'Use now'}
+                </Button>
+              ) : null}
+              {item.cosmetic ? <Link className="shop-card__profile-link" to="/learn/profile">Equip on your profile <Icon name="arrowRight" size={13} /></Link> : null}
+            </article>
+          ))}
+        </div>
+      </Section>
 
-      <section className="shop__extras">
-        <article className="card shop-sounds">
-          <header className="shop-sounds__head">
-            <div>
-              <h2>Soundboard</h2>
-              <p className="muted small">
-                One effect for every event — {SFX_LIBRARY.length} sounds, all made by the browser. Press any of them to hear it; auditions play
-                even while the lesson is muted.
-              </p>
-            </div>
-            <Button
-              size="sm"
-              variant={soundOn ? 'default' : 'primary'}
-              aria-pressed={soundOn}
-              onClick={() => {
-                const next = !soundOn;
-                setSoundOn(next);
-                sfx.setEnabled(next);
-                if (next) sfx.preview('select');
-              }}
-            >
-              <Icon name="volume" size={14} />
-              {soundOn ? 'Sound on' : 'Sound off'}
-            </Button>
-          </header>
-          <div className="shop-sounds__grid">
-            {SFX_LIBRARY.map((sound) => (
-              <button
-                key={sound.name}
-                type="button"
-                className="sound-chip"
+      <Section title="Your bag & your soundboard" hint="What you own, and every effect the app can play.">
+        <div className="shop__extras">
+          <article className="card shop-sounds">
+            <header className="shop-sounds__head">
+              <div>
+                <h2>Soundboard</h2>
+                <p className="muted small">
+                  One effect for every event — {SFX_LIBRARY.length} sounds, all made by the browser. Press any of them to hear it; auditions play
+                  even while the lesson is muted.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant={soundOn ? 'default' : 'primary'}
+                aria-pressed={soundOn}
                 onClick={() => {
-                  sfx.preview(sound.name as SfxName);
+                  const next = !soundOn;
+                  setSoundOn(next);
+                  sfx.setEnabled(next);
+                  if (next) sfx.preview('select');
                 }}
               >
-                <Icon name="play" size={12} />
-                <b>{sound.label}</b>
-                <span>{sound.when}</span>
-              </button>
-            ))}
-          </div>
-        </article>
-
-        <article className="card shop__inventory">
-          <h2>Your bag</h2>
-          {Object.entries(state.inventory).length === 0 ? (
-            <p className="muted small">Nothing yet. Buy something and it appears here, ready for the next lesson.</p>
-          ) : (
-            <ul>
-              {Object.entries(state.inventory).map(([key, quantity]) => (
-                <li key={key}>
-                  <Icon name={itemIcon(key as ShopItemView['key'])} size={15} />
-                  <b>{state.items.find((item) => item.key === key)?.name ?? key}</b>
-                  <span>×{quantity}</span>
-                </li>
+                <Icon name="volume" size={14} />
+                {soundOn ? 'Sound on' : 'Sound off'}
+              </Button>
+            </header>
+            <div className="shop-sounds__grid">
+              {SFX_LIBRARY.map((sound) => (
+                <button
+                  key={sound.name}
+                  type="button"
+                  className="sound-chip"
+                  onClick={() => {
+                    sfx.preview(sound.name as SfxName);
+                  }}
+                >
+                  <Icon name="play" size={12} />
+                  <b>{sound.label}</b>
+                  <span>{sound.when}</span>
+                </button>
               ))}
-            </ul>
-          )}
-          <p className="muted tiny">
-            A streak freeze is spent by itself when you miss a day. A heart refill and a hint are spent inside a lesson. Double XP runs from
-            the moment you switch it on.
-          </p>
-          <Link className="learn-card__link" to="/learn">
-            Back to the path <Icon name="arrowRight" size={13} />
-          </Link>
-        </article>
-      </section>
+            </div>
+          </article>
+
+          <article className="card shop__inventory">
+            <h2>Your bag</h2>
+            {Object.entries(state.inventory).length === 0 ? (
+              <p className="muted small">Nothing yet. Buy something and it appears here, ready for the next lesson.</p>
+            ) : (
+              <ul>
+                {Object.entries(state.inventory).map(([key, quantity]) => (
+                  <li key={key}>
+                    <Icon name={itemIcon(key as ShopItemView['key'])} size={15} />
+                    <b>{state.items.find((item) => item.key === key)?.name ?? key}</b>
+                    <span>×{quantity}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="muted tiny">
+              A streak freeze is spent by itself when you miss a day. A heart refill and a hint are spent inside a lesson. Double XP runs from
+              the moment you switch it on.
+            </p>
+            <Link className="learn-card__link" to="/learn">
+              Back to the path <Icon name="arrowRight" size={13} />
+            </Link>
+          </article>
+        </div>
+      </Section>
 
     </div>
   );
