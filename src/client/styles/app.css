@@ -493,15 +493,8 @@ h1 { font-size: clamp(1.5rem, 1.05rem + 1.7vw, 2.1rem); font-weight: 800; line-h
 h2 { letter-spacing: -0.022em; }
 .muted { color: var(--ink-500); }
 /* A page opens with its title and a drawn accent rule, so switching pages reads
-   as a deliberate cut rather than a repaint. */
-.page-head { margin-bottom: 22px; }
-.page-head h1 { display: flex; align-items: center; gap: 11px; margin-bottom: 6px; }
-.page-head h1::before {
-  content: ''; width: 24px; height: 3px; flex: none; border-radius: 99px;
-  background-image: var(--grad-brand); transform-origin: left center;
-  animation: bar-grow 560ms var(--ease-spring) 60ms backwards;
-}
-.page-head__meta { max-width: 74ch; line-height: 1.5; }
+   as a deliberate cut rather than a repaint. `.page-head` itself is retired —
+   every page now renders PageHead from components/page.tsx. */
 .section-bar { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 6px 2px 10px; }
 .section-bar h2 { margin: 0; font-size: 1rem; font-weight: 780; }
 .section-bar a { font-size: 0.8rem; font-weight: 720; color: var(--brand-700); display: inline-flex; align-items: center; gap: 4px; }
@@ -1006,7 +999,7 @@ html[data-reduce-motion='true'] .hero-panel__bars i { animation: none !important
 .switch-chip:hover { border-color: var(--brand-300); background: var(--brand-50); color: var(--brand-700); }
 .switch-chip input { width: 16px; height: 16px; }
 
-.ph + .skill-tiles, .page-head + .skill-tiles { margin-top: -4px; }
+.ph + .skill-tiles { margin-top: -4px; }
 .skill-tile {
   border-color: var(--hair); border-radius: var(--radius-lg); box-shadow: var(--shadow-xs);
   transition: transform var(--speed) var(--ease), border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease), background var(--speed) var(--ease);
@@ -1059,13 +1052,6 @@ html[data-reduce-motion='true'] .hero-panel__bars i { animation: none !important
 
 .band-strip, .band-chip { border-radius: var(--radius-pill); }
 
-/* A page head written with the old class gets the kit header, so pages mixed
-   across releases still open the same way. */
-.page-head { margin: 2px 0 22px; align-items: flex-end; }
-.page-head h1 { font-size: clamp(1.45rem, 1.05rem + 1.6vw, 2.05rem); font-weight: 800; }
-.page-head__meta { margin-top: 7px; font-size: 0.92rem; line-height: 1.55; }
-.page-head .row, .page-head .toolbar__end, .page-head > div:last-child { gap: 8px; }
-
 .empty { padding: 30px 22px; border-radius: var(--radius-xl); }
 .empty__title { font-size: 1.05rem; letter-spacing: -0.02em; }
 
@@ -1075,7 +1061,7 @@ html[data-reduce-motion='true'] .hero-panel__bars i { animation: none !important
   .attempt-row { grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; padding: 11px 12px; }
   .attempt-row__chev { display: none; }
   .switch-chip { order: -1; }
-  .ph__actions .btn, .page-head .btn { flex: 1; justify-content: center; }
+  .ph__actions .btn { flex: 1; justify-content: center; }
 }
 html[data-reduce-motion='true'] .skill-tile:hover:not(:disabled),
 html[data-reduce-motion='true'] .test-card:hover,
@@ -1161,7 +1147,7 @@ html[data-reduce-motion='true'] .report-overall__value { animation: none !import
 }
 .admin-sub__tab:hover { color: var(--brand-700); background: color-mix(in srgb, var(--brand-50) 70%, transparent); }
 .admin-sub__tab.is-on { background: var(--paper); color: var(--brand-700); box-shadow: var(--shadow-xs); }
-.admin-console > .page-head, .admin-console .ph { margin-top: 6px; }
+.admin-console > .ph { margin-top: 6px; }
 .data tbody tr { transition: background var(--speed) var(--ease); }
 .data tbody tr:hover { background: color-mix(in srgb, var(--brand-50) 55%, var(--paper)); }
 .data th, .data td { padding-block: 10px; }
@@ -1203,7 +1189,7 @@ html[data-reduce-motion='true'] .report-overall__value { animation: none !import
 .unit__head h2, .plan-day__head h2, .quests-card .learn-card__head h2 {
   font-size: 1.04rem; font-weight: 780; letter-spacing: -0.022em; color: var(--ink-950);
 }
-.learn-card__head h2::before, .everyday-set__heading h2::before, .shop-sounds__head h2::before, .unit__head h2::before {
+.learn-card__head h2::before, .everyday-set__heading h2::before, .shop-sounds__head h2::before, .unit__head h2::before, .social-panel > header h2::before, .achievement-panel > header h2::before {
   content: ''; display: inline-block; vertical-align: middle; width: 7px; height: 7px; margin-right: 8px;
   border-radius: 3px; background: var(--sec-dot, var(--brand-400)); transform: rotate(45deg);
 }
@@ -1383,3 +1369,32 @@ html[data-reduce-motion='true'] .lesson__end { animation: none !important; }
   .lesson__video { aspect-ratio: 4 / 3; }
   .lesson__prompt-vi { font-size: 0.88rem; }
 }
+
+/* --------------------------------------- 30. learn & shop heads take the tone dot */
+/* The Learn panels and shop cards already told you what they were by colour; now
+   they carry the same accent dot as a kit Section head, so a card title in Learn
+   and a section title on the dashboard are cut from one cloth. */
+.learn-card, .shop-card { --sec-dot: var(--brand-400); }
+.learn-card--violet { --sec-dot: var(--violet); }
+.learn-card--amber { --sec-dot: var(--warning); }
+.learn-card--teal { --sec-dot: var(--fill-listening, #12a594); }
+.learn-card--info { --sec-dot: var(--info); }
+.learn-card--success { --sec-dot: var(--success); }
+.learn-card--brand { --sec-dot: var(--brand-500); }
+.shop-card--sun { --sec-dot: var(--sun, #f5a623); }
+.shop-card--ice { --sec-dot: #38a7d6; }
+.shop-card--rose { --sec-dot: var(--danger); }
+.shop-card--violet { --sec-dot: var(--violet); }
+/* The dot itself is drawn by §25 for `.learn-card__head h2` and `.unit__head h2`;
+   these two heads were left out of that list. */
+.shop-card__head h2::before, .everyday-band h2::before {
+  content: ''; display: inline-block; vertical-align: middle; width: 7px; height: 7px; margin-right: 8px;
+  border-radius: 3px; background: var(--sec-dot, var(--brand-400)); transform: rotate(45deg);
+}
+.shop-card__head { width: 100%; }
+.shop-card__head > div { min-width: 0; }
+.unit--c0 { --sec-dot: var(--brand-400); }
+.unit--c1 { --sec-dot: var(--info); }
+.unit--c2 { --sec-dot: var(--warning); }
+.unit--c3 { --sec-dot: var(--fill-listening, #12a594); }
+.everyday-band { --sec-dot: var(--violet); }

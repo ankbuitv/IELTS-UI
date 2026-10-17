@@ -183,9 +183,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 html { scroll-behavior: smooth; }
 
 /* ---------------------------------------------------------------- layout */
-.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px 16px; margin-bottom: 20px; flex-wrap: wrap; }
-.page-head h1 { margin-bottom: 4px; font-size: 1.85rem; letter-spacing: -0.03em; }
-.page-head__meta { color: var(--ink-500); font-size: 0.9rem; margin: 0; max-width: 78ch; }
+/* The page header is the kit's PageHead (`components/page.tsx`, styles §19):
+   an eyebrow, the title, a line of context and the actions on the right. */
 .stack { display: flex; flex-direction: column; gap: 18px; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .row--between { justify-content: space-between; }
@@ -507,7 +506,6 @@ table.data--zebra tbody tr:nth-child(even) { background: var(--paper-muted); }
   /* Wide tables scroll sideways inside .table-wrap; short key/value lists simply fit. */
   table.data:has(thead th:nth-child(4)) { min-width: 480px; }
   .kv { gap: 4px; }
-  .page-head { margin-bottom: 10px; }
   /* Bottom sheet instead of a centred dialog. */
   .modal-backdrop { align-items: flex-end; padding: 0; }
   .modal {
