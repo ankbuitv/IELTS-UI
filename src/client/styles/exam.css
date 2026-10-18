@@ -635,14 +635,17 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
   line-height: 1.65;
 }
 .exam-root--review .review-scorebar {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 8px 12px;
-  border: 1px solid var(--brand-200, var(--ink-200));
+  display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid var(--ink-200);
   border-radius: var(--radius-lg);
-  background: var(--brand-50, var(--ink-50));
+  background: var(--paper);
 }
+.exam-root--review .review-scorebar__lead { display: flex; align-items: baseline; gap: 10px; }
 .exam-root--review .review-scorebar__band {
-  font-size: 1.5rem; font-weight: 800; line-height: 1;
-  color: var(--brand-700); font-variant-numeric: tabular-nums;
+  font-size: 1.7rem; font-weight: 800; line-height: 1;
+  color: var(--ink-950); font-variant-numeric: tabular-nums;
 }
+.exam-root--review .review-scorebar__caption { font-size: 0.78rem; color: var(--ink-600); }
+.exam-root--review .review-scorebar__chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .exam-root--review .aimark { margin-top: 10px; }

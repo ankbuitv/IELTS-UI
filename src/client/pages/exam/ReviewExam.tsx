@@ -9,6 +9,7 @@ import { AnswerExplanation, evidenceSegmentId } from '../../components/exam/Answ
 import { TranscriptView } from '../../components/exam/TranscriptView';
 import { WritingPrompt, writingTasksOf, type WritingTaskRef } from '../../components/exam/WritingEditor';
 import { AiMarkPanel } from '../../components/AiMarkPanel';
+import { useAiMarking } from '../../hooks/useAiMarking';
 import type { AttemptResultPayload } from '../../components/ResultView';
 import type { CandidateSection } from '@shared/question-types';
 import type { CandidateTestPayload } from '@shared/candidate';
@@ -212,7 +213,12 @@ export function AttemptReviewPage() {
       {speakingTab && result.speaking ? (
         <SpeakingReview sessionId={result.speaking.sessionId} />
       ) : isWriting ? (
-        <WritingReview session={activeSession} sections={previewQ.data?.test.sections ?? []} />
+        <WritingReview
+          session={activeSession}
+          attemptId={result.attemptId}
+          sections={previewQ.data?.test.sections ?? []}
+          onRefresh={resultQ.reload}
+        />
       ) : (
         <SplitPanes
           share={46}
@@ -448,7 +454,29 @@ function SplitPanes({ share, left, right }: { share: number; left: ReactNode; ri
   );
 }
 
-function WritingReview({ session, sections }: { session: AttemptResultPayload['sessions'][number] | null; sections: CandidateSection[] }) {
+/** IELTS criterion shorthands — full names live in the tooltip and the panel below. */
+const CRITERION_SHORT: Record<string, string> = {
+  TASK_ACHIEVEMENT: 'TA',
+  TASK_RESPONSE: 'TR',
+  COHERENCE_COHESION: 'CC',
+  LEXICAL_RESOURCE: 'LR',
+  GRAMMATICAL_RANGE: 'GRA',
+  FLUENCY_COHERENCE: 'FC',
+  PRONUNCIATION: 'P',
+};
+const criterionShort = (key: string, label: string) => CRITERION_SHORT[key] ?? (label.split(' ')[0] || label);
+
+function WritingReview({
+  session,
+  attemptId,
+  sections,
+  onRefresh,
+}: {
+  session: AttemptResultPayload['sessions'][number] | null;
+  attemptId: string;
+  sections: CandidateSection[];
+  onRefresh?: () => Promise<void> | void;
+}) {
   const [taskIdx, setTaskIdx] = useState(0);
   if (!session) return null;
   const submissions = session.writing ?? [];
@@ -461,6 +489,15 @@ function WritingReview({ session, sections }: { session: AttemptResultPayload['s
   }
   const idx = Math.min(taskIdx, submissions.length - 1);
   const submission = submissions[idx]!;
+  const needsAi = submissions.some(
+    (item) => item.responseText.trim().length > 0 && !item.ai && !(item.score && item.score.source !== 'AI'),
+  );
+  const marker = useAiMarking({
+    path: `/api/attempts/${encodeURIComponent(attemptId)}/ai-mark`,
+    enabled: true,
+    needed: needsAi,
+    ...(onRefresh ? { onDone: onRefresh } : {}),
+  });
   // The prompt exactly as the exam showed it (rubric, requirements, chart).
   const paperTasks = writingTasksOf(sections);
   const ref: WritingTaskRef | null = paperTasks.find((item) => item.task.id === submission.questionId) ?? paperTasks[idx] ?? null;
@@ -510,26 +547,52 @@ function WritingReview({ session, sections }: { session: AttemptResultPayload['s
 
             {/* The marks — first thing on screen */}
             <div className="review-scorebar">
-              <span className="review-scorebar__band">{bandText(ai?.band ?? teacher?.band ?? null)}</span>
-              <div className="row" style={{ gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                {ai ? (
-                  <span className="mchip mchip--violet">
-                    <Icon name="sparkle" size={12} /> AI band {bandText(ai.band)}
-                  </span>
-                ) : (
-                  <span className="mchip">Not marked by AI yet</span>
-                )}
+              <div className="review-scorebar__lead">
+                <span className="review-scorebar__band">{bandText(ai?.band ?? teacher?.band ?? null)}</span>
+                <span className="review-scorebar__caption">
+                  {ai
+                    ? (ai.unavailable?.length ?? 0) > 0
+                      ? `Partial estimate — ${ai.judges[0]?.judge ?? 'one judge'} marked this`
+                      : 'AI estimate · two independent judges'
+                    : teacher
+                      ? 'Teacher band'
+                      : needsAi
+                        ? 'Waiting for the AI judges…'
+                        : 'Not marked yet'}
+                </span>
+              </div>
+              <div className="review-scorebar__chips">
                 {(ai?.criteria ?? []).map((criterion) => (
-                  <span key={criterion.key} className="mchip" title={criterion.comment}>
-                    {criterion.label} {bandText(criterion.band)}
+                  <span
+                    key={criterion.key}
+                    className="mchip"
+                    title={`${criterion.label}${criterion.comment ? ` — ${criterion.comment}` : ''}`}
+                  >
+                    {criterionShort(criterion.key, criterion.label)} {bandText(criterion.band)}
                   </span>
                 ))}
                 {teacher ? (
-                  <span className="mchip mchip--sun">
-                    <Icon name="check" size={12} /> Teacher band {bandText(teacher.band)}
+                  <span className="mchip mchip--sun" title="Teacher band">
+                    Teacher {bandText(teacher.band)}
                   </span>
                 ) : null}
               </div>
+              {!marker.running && ((ai?.unavailable?.length ?? 0) > 0 || needsAi) ? (
+                <button
+                  type="button"
+                  className="btn btn--sm btn--secondary"
+                  onClick={() => void marker.run(false)}
+                  title="Only the judges without a verdict are asked again"
+                >
+                  <Icon name="rotate" size={13} />
+                  {(ai?.unavailable?.length ?? 0) > 0 ? 'Ask the missing judge again' : 'Mark now'}
+                </button>
+              ) : null}
+              {marker.running ? (
+                <span className="tiny muted">
+                  <Icon name="clock" size={12} /> Judges are marking…
+                </span>
+              ) : null}
             </div>
 
             <div className="writing-answer__meta">
@@ -663,8 +726,12 @@ function SpeakingReview({ sessionId }: { sessionId: string }) {
                       : 'Marking…'}
               </span>
               {score?.criteria?.map((criterion) => (
-                <span key={criterion.key} className="mchip" title={criterion.comment}>
-                  {criterion.label} {criterion.band !== null ? criterion.band : '—'}
+                <span
+                  key={criterion.key}
+                  className="mchip"
+                  title={`${criterion.label}${criterion.comment ? ` — ${criterion.comment}` : ''}`}
+                >
+                  {criterionShort(criterion.key, criterion.label)} {criterion.band !== null ? criterion.band : '—'}
                 </span>
               ))}
             </div>
