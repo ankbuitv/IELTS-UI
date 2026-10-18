@@ -8,13 +8,20 @@ import { enforceRateLimit } from '../lib/rate-limit';
 import {
   changePassword,
   createUser,
+  disableTotp,
+  enableTotp,
   hasAnyUserWithRole,
   login,
+  loginFederated,
+  loginWithOtp,
   normaliseEmail,
+  requestLoginOtp,
   revokeAllSessions,
   revokeSession,
+  setupTotp,
   toAuthUser,
   updateProfile,
+  verifyTwoFactor,
 } from '../services/auth-service';
 import { recordAudit } from '../lib/audit';
 import { currentUser } from '../middleware/auth';
@@ -39,6 +46,8 @@ const registerSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   password: z.string().min(1).max(200),
   displayName: z.string().trim().min(1).max(120),
+  /** Public handle — 3–24 chars, letters/numbers/dot/underscore. */
+  username: z.string().trim().max(24).optional(),
   /** Only honoured when the platform has no administrator yet (bootstrap). */
   bootstrapAdmin: z.boolean().optional(),
 });
@@ -86,6 +95,7 @@ router.post('/register', async (c) => {
     email: normaliseEmail(body.email),
     password: body.password,
     displayName: body.displayName,
+    username: body.username ?? null,
     role,
   });
 
@@ -94,6 +104,9 @@ router.post('/register', async (c) => {
     { email: user.email, password: body.password },
     { ip: clientIp(c), userAgent: userAgent(c) },
   );
+  if ('twoFactorRequired' in session) {
+    throw ApiError.unauthenticated('Unexpected second-factor challenge for a new account.');
+  }
 
   if (role === 'ADMIN') {
     await recordAudit(c.env, {
@@ -112,9 +125,10 @@ router.post('/register', async (c) => {
 
 router.post('/login', async (c) => {
   assertSameOrigin(c);
+  // The field accepts either the email address or the username.
   const body = await parseBody(
     c,
-    z.object({ email: z.string().trim().toLowerCase().email().max(254), password: z.string().min(1).max(200) }),
+    z.object({ email: z.string().trim().min(3).max(254), password: z.string().min(1).max(200) }),
   );
 
   await enforceRateLimit(
@@ -129,8 +143,189 @@ router.post('/login', async (c) => {
   );
 
   const result = await login(c.env, body, { ip: clientIp(c), userAgent: userAgent(c) });
+  if ('twoFactorRequired' in result) {
+    // No cookie yet — the authenticator step completes the sign-in.
+    return c.json({ twoFactorRequired: true, ticket: result.ticket, expiresAt: result.expiresAt });
+  }
   setSessionCookie(c, result.token, result.session.expiresAt);
   return c.json({ user: result.user, csrfToken: result.session.csrfToken, sessionToken: devSessionToken(c, result.token) });
+});
+
+// ---------------------------------------------------------------- 2FA & OTP
+
+router.get('/2fa/status', async (c) => {
+  const user = currentUser(c);
+  const row = await c.env.DB.prepare('SELECT totp_enabled, totp_secret FROM user_profiles WHERE user_id = ?')
+    .bind(user.id)
+    .first<{ totp_enabled: number; totp_secret: string | null }>();
+  return c.json({ enabled: row?.totp_enabled === 1, pending: Boolean(row?.totp_secret) });
+});
+
+router.post('/2fa/setup', async (c) => {
+  assertSameOrigin(c);
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  return c.json(await setupTotp(c.env, user));
+});
+
+router.post('/2fa/enable', async (c) => {
+  assertSameOrigin(c);
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ code: z.string().trim().min(6).max(8) }));
+  return c.json(await enableTotp(c.env, user, body.code));
+});
+
+router.post('/2fa/disable', async (c) => {
+  assertSameOrigin(c);
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ code: z.string().trim().max(8).default('') }));
+  return c.json(await disableTotp(c.env, user, body.code));
+});
+
+router.post('/2fa/verify', async (c) => {
+  assertSameOrigin(c);
+  const body = await parseBody(
+    c,
+    z.object({ ticket: z.string().min(8).max(200), code: z.string().trim().min(6).max(8) }),
+  );
+  await enforceRateLimit(
+    c.env,
+    { bucket: `2fa:${clientIp(c)}`, windowSeconds: 900, limit: 20 },
+    'Too many verification attempts. Please try again later.',
+  );
+  const result = await verifyTwoFactor(c.env, body, { ip: clientIp(c), userAgent: userAgent(c) });
+  setSessionCookie(c, result.token, result.session.expiresAt);
+  return c.json({ user: result.user, csrfToken: result.session.csrfToken, sessionToken: devSessionToken(c, result.token) });
+});
+
+router.post('/otp/request', async (c) => {
+  assertSameOrigin(c);
+  const body = await parseBody(c, z.object({ identifier: z.string().trim().min(3).max(254) }));
+  await enforceRateLimit(
+    c.env,
+    { bucket: `otp-request:${clientIp(c)}`, windowSeconds: 900, limit: 10 },
+    'Too many code requests. Please try again later.',
+  );
+  await enforceRateLimit(
+    c.env,
+    { bucket: `otp-request-account:${body.identifier}`, windowSeconds: 900, limit: 5 },
+    'Too many code requests for this account. Please try again later.',
+  );
+  return c.json(await requestLoginOtp(c.env, body.identifier));
+});
+
+router.post('/otp/login', async (c) => {
+  assertSameOrigin(c);
+  const body = await parseBody(
+    c,
+    z.object({ identifier: z.string().trim().min(3).max(254), code: z.string().trim().min(4).max(16) }),
+  );
+  await enforceRateLimit(
+    c.env,
+    { bucket: `otp-login:${clientIp(c)}`, windowSeconds: 900, limit: 12 },
+    'Too many sign-in attempts. Please try again later.',
+  );
+  const result = await loginWithOtp(c.env, body, { ip: clientIp(c), userAgent: userAgent(c) });
+  if ('twoFactorRequired' in result) {
+    return c.json({ twoFactorRequired: true, ticket: result.ticket, expiresAt: result.expiresAt });
+  }
+  setSessionCookie(c, result.token, result.session.expiresAt);
+  return c.json({ user: result.user, csrfToken: result.session.csrfToken, sessionToken: devSessionToken(c, result.token) });
+});
+
+// ------------------------------------------------------------------- SSO
+
+const SSO_PROVIDERS: Record<string, { label: string; clientIdEnv: string; clientSecretEnv: string; authUrl: string; tokenUrl: string; userUrl: string }> = {
+  google: {
+    label: 'Google',
+    clientIdEnv: 'SSO_GOOGLE_CLIENT_ID',
+    clientSecretEnv: 'SSO_GOOGLE_CLIENT_SECRET',
+    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    userUrl: 'https://openidconnect.googleapis.com/v1/userinfo',
+  },
+  microsoft: {
+    label: 'Microsoft',
+    clientIdEnv: 'SSO_MICROSOFT_CLIENT_ID',
+    clientSecretEnv: 'SSO_MICROSOFT_CLIENT_SECRET',
+    authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+    tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+    userUrl: 'https://graph.microsoft.com/oidc/userinfo',
+  },
+};
+
+/** Starts an OIDC sign-in. Requires the provider credentials in env. */
+router.get('/sso/:provider/start', async (c) => {
+  const provider = SSO_PROVIDERS[c.req.param('provider')];
+  if (!provider) throw ApiError.notFound('Unknown sign-in provider.');
+  const clientId = (c.env as unknown as Record<string, string | undefined>)[provider.clientIdEnv];
+  if (!clientId) {
+    throw new ApiError(
+      'SSO_NOT_CONFIGURED',
+      `${provider.label} sign-in is not configured on this platform yet. Ask an administrator to add ${provider.clientIdEnv}.`,
+    );
+  }
+  const redirectUri = `${new URL(c.req.url).origin}/api/auth/sso/${c.req.param('provider')}/callback`;
+  const authUrl = new URL(provider.authUrl);
+  authUrl.searchParams.set('client_id', clientId);
+  authUrl.searchParams.set('redirect_uri', redirectUri);
+  authUrl.searchParams.set('response_type', 'code');
+  authUrl.searchParams.set('scope', 'openid email profile');
+  authUrl.searchParams.set('prompt', 'select_account');
+  return c.redirect(authUrl.toString());
+});
+
+/**
+ * OIDC callback — exchanges the code and signs the matching account in.
+ * Accounts are matched by email; first login through a provider still requires
+ * the account to exist (teachers/admins create accounts on this platform).
+ */
+router.get('/sso/:provider/callback', async (c) => {
+  const providerName = c.req.param('provider');
+  const provider = SSO_PROVIDERS[providerName];
+  if (!provider) throw ApiError.notFound('Unknown sign-in provider.');
+  const clientId = (c.env as unknown as Record<string, string | undefined>)[provider.clientIdEnv];
+  const clientSecret = (c.env as unknown as Record<string, string | undefined>)[provider.clientSecretEnv];
+  if (!clientId || !clientSecret) {
+    throw new ApiError('SSO_NOT_CONFIGURED', `${provider.label} sign-in is not configured on this platform yet.`);
+  }
+  const code = c.req.query('code');
+  if (!code) throw ApiError.validation('The provider did not return a sign-in code.');
+  const redirectUri = `${new URL(c.req.url).origin}/api/auth/sso/${providerName}/callback`;
+
+  const tokenResponse = await fetch(provider.tokenUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: redirectUri,
+      grant_type: 'authorization_code',
+    }),
+  });
+  if (!tokenResponse.ok) throw ApiError.unauthenticated('Could not complete the provider sign-in.');
+  const tokens = (await tokenResponse.json()) as { access_token?: string };
+  if (!tokens.access_token) throw ApiError.unauthenticated('Could not complete the provider sign-in.');
+
+  const userResponse = await fetch(provider.userUrl, {
+    headers: { authorization: `Bearer ${tokens.access_token}` },
+  });
+  if (!userResponse.ok) throw ApiError.unauthenticated('Could not read your provider profile.');
+  const profile = (await userResponse.json()) as { email?: string; name?: string };
+  if (!profile.email) throw ApiError.unauthenticated('The provider account has no email address.');
+
+  try {
+    const result = await loginFederated(c.env, profile.email, { ip: clientIp(c), userAgent: userAgent(c) });
+    setSessionCookie(c, result.token, result.session.expiresAt);
+    return c.redirect('/');
+  } catch {
+    throw ApiError.forbidden(
+      'No platform account matches that provider email yet. Ask your teacher or administrator to invite you first.',
+    );
+  }
 });
 
 router.post('/logout', async (c) => {
@@ -173,14 +368,15 @@ router.patch('/profile', async (c) => {
   );
   await updateProfile(c.env, user.id, body);
   const updated = await c.env.DB.prepare(
-    `SELECT u.id, u.email, u.role, u.status, u.created_at, u.last_login_at, p.display_name, p.avatar_updated_at
+    `SELECT u.id, u.email, u.username, u.role, u.status, u.created_at, u.last_login_at, p.display_name, p.avatar_updated_at
        FROM users u LEFT JOIN user_profiles p ON p.user_id = u.id WHERE u.id = ?`,
   )
     .bind(user.id)
     .first<{
       id: string;
       email: string;
-      role: 'STUDENT' | 'TEACHER' | 'ADMIN';
+      username: string | null;
+      role: 'STUDENT' | 'TEACHER' | 'ADMIN' | 'MENTOR';
       status: 'ACTIVE' | 'SUSPENDED' | 'INVITED';
       created_at: string;
       last_login_at: string | null;

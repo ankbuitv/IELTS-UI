@@ -4,7 +4,7 @@ import { mentorApi } from '../../lib/mentor-api';
 import { Button, Field, Modal, Select, TextInput, useToast } from '../ui';
 import type { MentorClass } from '@shared/mentor';
 
-const CAPACITY_OPTIONS = [4, 6, 8, 10, 12, 16, 20, 24, 30, 40, 50];
+const CAPACITY_OPTIONS = [4, 6, 8, 10, 12, 16, 20, 24, 30, 40, 50, 80, 100, 150, 200, 300, 500, 1000, 2000, 5000];
 
 function isoLocal(daysAhead: number, hour: number): string {
   const date = new Date();

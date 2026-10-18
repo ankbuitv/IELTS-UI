@@ -2,137 +2,68 @@ import { Link } from 'react-router-dom';
 import { BrandLogo } from './BrandLogo';
 
 /**
- * The footer shared by the public pages and the signed-in app: brand and tagline on the left,
- * three short link columns on the right, and the standing disclaimer on its own line. Every link
- * is a real route or a landing-page section, so the footer never points at a page that is not there.
+ * Slim footer — one short bar: brand, a handful of links, the legal note.
+ * (The old three-column footer was heavy and noisy; this keeps every page's
+ * bottom edge light.)
  */
 interface FooterLink {
   label: string;
-  /** A route (`/practice`) or a landing-page section (`/#skills`). */
   to: string;
 }
 
-interface FooterColumn {
-  title: string;
-  links: FooterLink[];
-}
-
-const SIGNED_OUT: FooterColumn[] = [
-  {
-    title: 'Practise',
-    links: [
-      { label: 'Four skills', to: '/#skills' },
-      { label: 'How a test works', to: '/#how' },
-      { label: 'Exam conditions', to: '/#exam' },
-    ],
-  },
-  {
-    title: 'Learn',
-    links: [
-      { label: 'Learning path', to: '/#learn' },
-      { label: 'AI marking', to: '/#marking' },
-      { label: 'Questions', to: '/#faq' },
-    ],
-  },
-  {
-    title: 'Account',
-    links: [
-      { label: 'Sign in', to: '/login' },
-      { label: 'Create account', to: '/register' },
-      { label: 'For teachers', to: '/#teachers' },
-    ],
-  },
+const SIGNED_OUT: FooterLink[] = [
+  { label: 'Ôn luyện', to: '/#skills' },
+  { label: 'Cách thi', to: '/#how' },
+  { label: 'Câu hỏi', to: '/#faq' },
+  { label: 'Đăng nhập', to: '/login' },
 ];
 
-const CANDIDATE: FooterColumn[] = [
-  {
-    title: 'Practise',
-    links: [
-      { label: 'Practice tests', to: '/practice' },
-      { label: 'Speaking', to: '/speaking' },
-      { label: 'Results', to: '/history' },
-    ],
-  },
-  {
-    title: 'Learn',
-    links: [
-      { label: 'Learning path', to: '/learn' },
-      { label: 'Vocabulary', to: '/vocabulary' },
-      { label: 'Dictionary', to: '/dictionary' },
-    ],
-  },
-  {
-    title: 'Account',
-    links: [
-      { label: 'My progress', to: '/analytics' },
-      { label: 'Classrooms', to: '/classrooms' },
-      { label: 'Profile', to: '/profile' },
-    ],
-  },
+const CANDIDATE: FooterLink[] = [
+  { label: 'Luyện tập', to: '/practice' },
+  { label: 'Speaking', to: '/speaking' },
+  { label: 'Kết quả', to: '/history' },
+  { label: 'Hồ sơ', to: '/profile' },
 ];
 
-const TEACHER: FooterColumn = {
-  title: 'Teaching',
-  links: [
-    { label: 'Classes and tests', to: '/teacher' },
-    { label: 'Writing queue', to: '/teacher/marking' },
-    { label: 'Profile', to: '/profile' },
-  ],
-};
+const STAFF_EXTRA: FooterLink[] = [
+  { label: 'Lớp & bài thi', to: '/teacher' },
+  { label: 'Chấm Writing', to: '/teacher/marking' },
+];
 
-const ADMIN: FooterColumn = {
-  title: 'Admin',
-  links: [
-    { label: 'Console', to: '/admin' },
-    { label: 'Classes and tests', to: '/teacher' },
-    { label: 'Writing queue', to: '/teacher/marking' },
-  ],
-};
+const MENTOR_EXTRA: FooterLink[] = [
+  { label: 'Mentor', to: '/mentor' },
+  { label: 'Lớp học', to: '/classes' },
+  { label: 'Lịch hẹn', to: '/my-sessions' },
+];
 
-function columnsFor(role: string | undefined): FooterColumn[] {
+function linksFor(role: string | undefined): FooterLink[] {
   if (!role) return SIGNED_OUT;
-  if (role === 'ADMIN') return [ADMIN, CANDIDATE[0]!, CANDIDATE[1]!];
-  if (role === 'TEACHER') return [TEACHER, CANDIDATE[0]!, CANDIDATE[1]!];
+  if (role === 'ADMIN') return [...MENTOR_EXTRA, ...STAFF_EXTRA, { label: 'Quản trị', to: '/admin' }].slice(0, 5);
+  if (role === 'TEACHER') return [...STAFF_EXTRA, ...CANDIDATE].slice(0, 5);
+  if (role === 'MENTOR') return [...MENTOR_EXTRA, CANDIDATE[3]!].slice(0, 5);
   return CANDIDATE;
 }
 
 export function SiteFooter({ role, compact = false }: { role?: string; compact?: boolean }) {
-  const columns = columnsFor(role);
+  const links = linksFor(role);
   const year = new Date().getFullYear();
   return (
-    <footer className={`site-footer${compact ? ' site-footer--compact' : ''}`}>
-      <div className="site-footer__inner">
-        <div className="site-footer__top">
-          <div className="site-footer__brand">
-            <BrandLogo theme="dark" height={34} />
-            <p className="site-footer__tagline">Luyện IELTS như thi thật.</p>
-            {compact ? null : (
-              <p className="site-footer__about">
-                Full-length practice tests under exam conditions, two AI judges for Writing and Speaking, and a short
-                daily path for vocabulary. Made for learners in Vietnam.
-              </p>
-            )}
-          </div>
-          {columns.map((column) => (
-            <nav key={column.title} className="site-footer__col" aria-label={column.title}>
-              <h2>{column.title}</h2>
-              <ul>
-                {column.links.map((link) => (
-                  <li key={link.label}>
-                    <Link to={link.to}>{link.label}</Link>
-                  </li>
-                ))}
-              </ul>
-            </nav>
+    <footer className={`site-footer site-footer--slim${compact ? ' site-footer--compact' : ''}`}>
+      <div className="site-footer__slim">
+        <Link to="/" className="site-footer__slim-brand" aria-label="Ai eo — home">
+          <BrandLogo theme="dark" height={24} />
+          <span>Luyện IELTS như thi thật</span>
+        </Link>
+        <nav className="site-footer__slim-links" aria-label="Footer">
+          {links.map((link) => (
+            <Link key={link.to + link.label} to={link.to}>
+              {link.label}
+            </Link>
           ))}
-        </div>
-        <div className="site-footer__bottom">
-          <p>
-            Ai eo is an independent practice platform. It is not affiliated with, endorsed by or connected to IELTS,
-            IDP, the British Council or Cambridge. Band scores are practice estimates, not official results.
-          </p>
-          <span className="site-footer__made">© {year} Ai eo</span>
-        </div>
+        </nav>
+        <p className="site-footer__slim-note">
+          © {year} Ai eo · Điểm luyện tập là ước tính, không phải kết quả IELTS chính thức.
+        </p>
       </div>
     </footer>
   );

@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 66   Indexes: 81
+-- Tables: 67   Indexes: 83
 -- =============================================================================
 
 -- table: user_profiles
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   locale       TEXT NOT NULL DEFAULT 'en',
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
-, avatar_id TEXT NOT NULL DEFAULT 'bo', name_effect TEXT NOT NULL DEFAULT 'default', profile_effect TEXT NOT NULL DEFAULT 'none', avatar_updated_at TEXT, avatar_mime TEXT);
+, avatar_id TEXT NOT NULL DEFAULT 'bo', name_effect TEXT NOT NULL DEFAULT 'default', profile_effect TEXT NOT NULL DEFAULT 'none', avatar_updated_at TEXT, avatar_mime TEXT, totp_secret TEXT, totp_enabled INTEGER NOT NULL DEFAULT 0);
 
 -- table: sessions
 CREATE TABLE IF NOT EXISTS sessions (
@@ -585,7 +585,7 @@ CREATE TABLE IF NOT EXISTS speaking_sessions (
   marked_at      TEXT,
   created_at     TEXT NOT NULL,
   updated_at     TEXT NOT NULL
-, score_source TEXT, scored_by TEXT REFERENCES users (id) ON DELETE SET NULL, scored_at TEXT);
+, score_source TEXT, scored_by TEXT REFERENCES users (id) ON DELETE SET NULL, scored_at TEXT, topic_json TEXT);
 
 -- table: speaking_responses
 CREATE TABLE IF NOT EXISTS speaking_responses (
@@ -838,7 +838,7 @@ CREATE TABLE IF NOT EXISTS "users" (
   last_login_at       TEXT,
   failed_login_count  INTEGER NOT NULL DEFAULT 0,
   locked_until        TEXT
-);
+, username TEXT);
 
 -- table: mentor_profiles
 CREATE TABLE IF NOT EXISTS mentor_profiles (
@@ -975,6 +975,19 @@ CREATE TABLE IF NOT EXISTS mentor_class_messages (
   class_id   TEXT NOT NULL REFERENCES mentor_classes (id) ON DELETE CASCADE,
   sender_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   body       TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- table: login_otp_codes
+CREATE TABLE IF NOT EXISTS login_otp_codes (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL CHECK (purpose IN ('LOGIN', 'BACKUP')),
+  code_hash TEXT NOT NULL,
+  code_salt TEXT NOT NULL,
+  code_iterations INTEGER NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
   created_at TEXT NOT NULL
 );
 
@@ -1220,3 +1233,10 @@ CREATE INDEX IF NOT EXISTS idx_mentor_reviews_mentor ON mentor_reviews (mentor_i
 
 -- index: idx_mentor_class_messages_class
 CREATE INDEX IF NOT EXISTS idx_mentor_class_messages_class ON mentor_class_messages (class_id, created_at);
+
+-- index: idx_users_username
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)
+  WHERE username IS NOT NULL;
+
+-- index: idx_login_otp_user
+CREATE INDEX IF NOT EXISTS idx_login_otp_user ON login_otp_codes (user_id, purpose, used_at);

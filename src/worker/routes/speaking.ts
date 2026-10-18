@@ -1,3 +1,5 @@
+import { completeJson } from '../ai/providers';
+import { SPEAKING_TOPIC_SETS, type SpeakingTopicSet } from '../../shared/speaking';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
@@ -33,6 +35,71 @@ router.use('*', async (c, next) => {
 /** The topic catalog is the same for staff and candidates. */
 router.get('/catalog', (c) => {
   return c.json({ topics: speakingCatalog() });
+});
+
+/**
+ * A fresh speaking topic written by the AI ("Chủ đề ngẫu nhiên"), with a
+ * shuffled remix of the built-in sets as the offline fallback so the button
+ * always deals a usable topic.
+ */
+router.post('/random-topic', async (c) => {
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const seed = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+  const remixFallback = (): SpeakingTopicSet => {
+    const pool = SPEAKING_TOPIC_SETS;
+    const pick = pool[Math.floor(Math.random() * pool.length)] ?? pool[0]!;
+    const rotate = <T,>(items: T[]): T[] => {
+      const at = Math.floor(Math.random() * Math.max(1, items.length));
+      return [...items.slice(at), ...items.slice(0, at)];
+    };
+    return {
+      id: `mix-${seed}`,
+      title: pick.title,
+      summary: pick.summary,
+      part1: rotate(pick.part1).slice(0, 4),
+      part2: pick.part2,
+      part3: rotate(pick.part3).slice(0, 4),
+    };
+  };
+
+  try {
+    const result = await completeJson<{
+      title?: string; summary?: string; part1?: string[];
+      part2?: { cue?: string; bullets?: string[] }; part3?: string[];
+    }>(c.env, {
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You write original IELTS Speaking practice topic sets. Respond with JSON only: ' +
+            '{ "title": string, "summary": string, "part1": string[4], ' +
+            '"part2": { "cue": string, "bullets": string[3-4] }, "part3": string[4] }. ' +
+            'Natural everyday English, no numbering inside the strings, topics a Vietnamese candidate can talk about.',
+        },
+        { role: 'user', content: 'Create a brand-new IELTS Speaking topic set nobody has seen before.' },
+      ],
+      temperature: 1.0,
+      maxTokens: 1600,
+      timeoutMs: 25_000,
+    });
+    const data = result.data ?? {};
+    const topic: SpeakingTopicSet = {
+      id: `ai-${seed}`,
+      title: String(data.title ?? '').trim().slice(0, 120) || 'A fresh speaking topic',
+      summary: String(data.summary ?? '').trim().slice(0, 200) || 'Generated just for this practice',
+      part1: Array.isArray(data.part1) ? data.part1.slice(0, 6).map((q) => String(q).trim()).filter(Boolean) : [],
+      part2: {
+        cue: String(data.part2?.cue ?? '').trim() || 'Describe something interesting from your daily life.',
+        bullets: (Array.isArray(data.part2?.bullets) ? data.part2!.bullets! : []).slice(0, 5).map((b) => String(b).trim()).filter(Boolean),
+      },
+      part3: Array.isArray(data.part3) ? data.part3.slice(0, 6).map((q) => String(q).trim()).filter(Boolean) : [],
+    };
+    if (topic.part1.length < 3 || topic.part3.length < 3) return c.json({ topic: remixFallback() });
+    return c.json({ topic });
+  } catch {
+    return c.json({ topic: remixFallback() });
+  }
 });
 
 router.get('/sessions', async (c) => {
@@ -76,6 +143,17 @@ router.post('/sessions', async (c) => {
     z.object({
       topicSetId: z.string().min(1).max(64).optional(),
       mode: z.enum(['PRACTICE', 'MOCK']).optional(),
+      /** A full custom/AI topic snapshot (from POST /speaking/random-topic). */
+      topic: z
+        .object({
+          id: z.string().min(1).max(64),
+          title: z.string().min(1).max(160),
+          summary: z.string().max(300),
+          part1: z.array(z.string().max(400)).max(8),
+          part2: z.object({ cue: z.string().max(600), bullets: z.array(z.string().max(300)).max(6) }),
+          part3: z.array(z.string().max(400)).max(8),
+        })
+        .optional(),
     }),
   );
   const session = await createSpeakingSession(c.env, user, body);

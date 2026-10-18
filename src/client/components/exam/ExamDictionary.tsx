@@ -7,7 +7,7 @@ import { Icon } from '../Icon';
  * from it, so a candidate never leaves the test (or loses their place) to look
  * a word up. Only offered in practice mode.
  */
-export function ExamDictionary({ onClose }: { onClose: () => void }) {
+export function ExamDictionary({ onClose, initialTerm = '' }: { onClose: () => void; initialTerm?: string }) {
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export function ExamDictionary({ onClose }: { onClose: () => void }) {
         </button>
       </header>
       <div className="exam-dict__body">
-        <DictionaryPanel compact autoFocus />
+        <DictionaryPanel compact autoFocus initialTerm={initialTerm} />
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import './styles/public.css';
 import './styles/pages.css';
 import './styles/learn.css';
 import './styles/exam.css';
+import './styles/exam-tools.css';
 import './styles/mentor.css';
 import { applyPrefs, loadPrefs } from './lib/display';
 

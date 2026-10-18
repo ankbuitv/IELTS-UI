@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiRequestError, api, describeError, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
@@ -7,7 +7,6 @@ import {
   Badge,
   Button,
   Card,
-  Checkbox,
   Chips,
   EmptyState,
   Field,
@@ -117,15 +116,18 @@ export function PracticePage() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortKey>('newest');
   const [starting, setStarting] = useState<string | null>(null);
-  const [strict, setStrict] = useState(false);
+  type StartMode = 'PRACTICE' | 'STANDARD_EXAM';
+  const [chooser, setChooser] = useState<{ test: CatalogTest; sectionIds?: string[] } | null>(null);
   const [codePrompt, setCodePrompt] = useState<CatalogTest | null>(null);
+  const [codeTarget, setCodeTarget] = useState<{ test: CatalogTest; sectionIds?: string[]; mode: StartMode } | null>(null);
   const [accessCode, setAccessCode] = useState('');
   const [codeError, setCodeError] = useState<string | null>(null);
 
   const { data, loading, error, reload } = useAsync<{ tests: CatalogTest[] }>(() => api.get('/api/tests'), []);
 
-  const start = async (test: CatalogTest, code?: string, sectionIds?: string[]) => {
+  const start = async (test: CatalogTest, code?: string, sectionIds?: string[], mode: StartMode = 'PRACTICE') => {
     if (test.requiresAccessCode && !test.unlocked && !code) {
+      setCodeTarget({ test, sectionIds, mode });
       setCodePrompt(test);
       setAccessCode('');
       setCodeError(null);
@@ -136,7 +138,7 @@ export function PracticePage() {
     try {
       const result = await api.post<{ attemptId: string }>('/api/attempts', {
         testId: test.id,
-        mode: strict ? 'STANDARD_EXAM' : 'PRACTICE',
+        mode,
         // A scoped practice set: only these sections are timed, shown and marked.
         ...(sectionIds && sectionIds.length > 0 ? { sectionIds } : {}),
         ...(code ? { accessCode: code } : {}),
@@ -144,6 +146,7 @@ export function PracticePage() {
       navigate(`/exam/${result.attemptId}`);
     } catch (startError) {
       if (startError instanceof ApiRequestError && startError.code === 'ACCESS_CODE_REQUIRED') {
+        setCodeTarget({ test, sectionIds, mode });
         setCodePrompt(test);
         setAccessCode('');
         setCodeError(null);
@@ -241,9 +244,6 @@ export function PracticePage() {
               </option>
             ))}
           </select>
-          <span title="Exam mode also blocks copy and paste and records fullscreen exits for your teacher. The tab lock (three strikes, then the attempt is submitted) applies in every mode.">
-            <Checkbox checked={strict} onChange={setStrict} label="Exam mode" />
-          </span>
         </div>
       </div>
 
@@ -300,7 +300,12 @@ export function PracticePage() {
                 </div>
 
                 <div className="test-card__actions">
-                  <Button variant="primary" size="sm" loading={starting === test.id} onClick={() => void start(test)}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    loading={starting === test.id}
+                    onClick={() => setChooser({ test })}
+                  >
                     {locked ? 'Unlock & start' : 'Start'}
                   </Button>
                   <span className="tiny muted" title={bandHint(test)}>
@@ -356,6 +361,55 @@ export function PracticePage() {
       )}
 
       <Modal
+        open={chooser !== null}
+        title={chooser ? `“${chooser.test.title}”` : 'Choose your mode'}
+        onClose={() => setChooser(null)}
+        wide
+      >
+        <p className="small muted" style={{ marginTop: 0 }}>
+          Học qua luyện tập hay thi thử? Chọn chế độ của bạn:
+        </p>
+        <div className="mode-chooser">
+          <button
+            type="button"
+            className="mode-card mode-card--practice"
+            disabled={starting !== null}
+            onClick={() => {
+              const target = chooser;
+              setChooser(null);
+              if (target) void start(target.test, undefined, target.sectionIds, 'PRACTICE');
+            }}
+          >
+            <span className="mode-card__icon">
+              <Icon name="pen" size={22} />
+            </span>
+            <strong>Ôn luyện (Practice)</strong>
+            <span className="mode-card__desc">
+              Có tra từ, highlight, ghi chú trên bài đọc. Làm xong hiện đáp án & giải thích để học từ lỗi sai.
+            </span>
+          </button>
+          <button
+            type="button"
+            className="mode-card mode-card--exam"
+            disabled={starting !== null}
+            onClick={() => {
+              const target = chooser;
+              setChooser(null);
+              if (target) void start(target.test, undefined, target.sectionIds, 'STANDARD_EXAM');
+            }}
+          >
+            <span className="mode-card__icon">
+              <Icon name="shield" size={22} />
+            </span>
+            <strong>Thi thử (Exam)</strong>
+            <span className="mode-card__desc">
+              Như thi thật: không tra từ, không ghi chú, tính giờ nghiêm ngặt — để ước lượng band của bạn.
+            </span>
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
         open={codePrompt !== null}
         title={codePrompt ? `Unlock “${codePrompt.title}”` : 'Unlock test'}
         onClose={() => {
@@ -378,7 +432,7 @@ export function PracticePage() {
               variant="primary"
               loading={starting !== null}
               disabled={!accessCode.trim()}
-              onClick={() => codePrompt && void start(codePrompt, accessCode)}
+              onClick={() => codePrompt && void start(codePrompt, accessCode, codeTarget?.sectionIds, codeTarget?.mode ?? 'PRACTICE')}
             >
               Unlock & start
             </Button>
@@ -399,7 +453,7 @@ export function PracticePage() {
               onChange={(event) => setAccessCode(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && codePrompt && accessCode.trim() && !starting) {
-                  void start(codePrompt, accessCode);
+                  void start(codePrompt, accessCode, codeTarget?.sectionIds, codeTarget?.mode ?? 'PRACTICE');
                 }
               }}
             />
@@ -574,6 +628,10 @@ export function AttemptResultPage() {
           All results
         </Link>
         <div className="row">
+          <Link className="btn btn--secondary btn--sm" to={`/exam/${attemptId}/review`}>
+            <Icon name="eye" size={13} />
+            Ôn lại như lúc thi
+          </Link>
           {wrongSectionIds.length > 0 ? (
             <Button size="sm" loading={restarting === 'weak'} onClick={() => void startAttempt('weak')}>
               <Icon name="rotate" size={13} />
@@ -871,6 +929,8 @@ export function ProfilePage() {
         </Card>
         </>
       ) : (
+        <>
+        <TwoFactorCard />
         <Card title="Change password" hint="Changing your password signs out all other sessions.">
           <Field label="Current password" required>
             {(id) => (
@@ -913,6 +973,8 @@ export function ProfilePage() {
             Change password
           </Button>
         </Card>
+        </>
+      
       )}
 
       <Card title="Data and privacy">
@@ -927,3 +989,129 @@ export function ProfilePage() {
 }
 
 export { formatBand, formatScore, formatPercent, SKILL_LABELS };
+
+
+/**
+ * Two-factor authentication card (profile → security). Enrolment shows the
+ * TOTP secret and otpauth:// URL for manual entry into an authenticator app —
+ * the platform never displays a QR image, so there is no library dependency.
+ */
+function TwoFactorCard() {
+  const toast = useToast();
+  const [status, setStatus] = useState<{ enabled: boolean; pending: boolean } | null>(null);
+  const [enrolment, setEnrolment] = useState<{ secret: string; authUrl: string } | null>(null);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const refreshStatus = useCallback(async () => {
+    try {
+      setStatus(await api.get<{ enabled: boolean; pending: boolean }>('/api/auth/2fa/status'));
+    } catch {
+      setStatus(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshStatus();
+  }, [refreshStatus]);
+
+  const startSetup = async () => {
+    setBusy(true);
+    try {
+      setEnrolment(await api.post<{ secret: string; authUrl: string }>('/api/auth/2fa/setup', {}));
+    } catch (setupError) {
+      toast.push(describeError(setupError), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const enable = async () => {
+    setBusy(true);
+    try {
+      await api.post('/api/auth/2fa/enable', { code: code.trim() });
+      setEnrolment(null);
+      setCode('');
+      await refreshStatus();
+      toast.push('Two-factor authentication is on.', 'success');
+    } catch (enableError) {
+      toast.push(describeError(enableError), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = async () => {
+    if (!window.confirm('Turn off two-factor authentication? Your password alone will protect the account.')) return;
+    setBusy(true);
+    try {
+      await api.post('/api/auth/2fa/disable', { code: code.trim() });
+      setCode('');
+      await refreshStatus();
+      toast.push('Two-factor authentication is off.', 'success');
+    } catch (disableError) {
+      toast.push(describeError(disableError), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card
+      title="Two-factor authentication"
+      hint={status?.enabled ? 'On · your authenticator code is required at sign in' : 'Off · sign in with password or a one-time code'}
+    >
+      {status?.enabled ? (
+        <>
+          <p className="small muted">
+            Enter your current authenticator code to turn two-factor authentication off.
+          </p>
+          <Field label="Authenticator code" required>
+            {(id) => (
+              <TextInput id={id} inputMode="numeric" placeholder="123456" value={code} onChange={(event) => setCode(event.target.value)} />
+            )}
+          </Field>
+          <Button variant="danger" loading={busy} onClick={disable}>
+            Turn off two-factor
+          </Button>
+        </>
+      ) : enrolment ? (
+        <>
+          <p className="small muted">
+            Add this account to Google Authenticator, Microsoft Authenticator or any TOTP app, using the key below.
+          </p>
+          <Field label="Setup key" hint="Base32 key — enter it manually in your authenticator app.">
+            {(id) => <TextInput id={id} readOnly value={enrolment.secret} />}
+          </Field>
+          <Field label="Or open this link on your phone">
+            {(id) => <TextInput id={id} readOnly value={enrolment.authUrl} />}
+          </Field>
+          <Field label="Confirm the six-digit code" required>
+            {(id) => (
+              <TextInput id={id} inputMode="numeric" placeholder="123456" value={code} onChange={(event) => setCode(event.target.value)} />
+            )}
+          </Field>
+          <div className="row gap-8">
+            <Button variant="primary" loading={busy} onClick={enable}>
+              Turn on two-factor
+            </Button>
+            <Button variant="ghost" onClick={() => { setEnrolment(null); setCode(''); }}>
+              Cancel
+            </Button>
+          </div>
+        </>
+      ) : (
+        <div className="stack">
+          <p className="small muted">
+            With two-factor on, signing in needs your password and a rotating six-digit code from your authenticator app.
+          </p>
+          <div>
+            <Button variant="primary" loading={busy} onClick={startSetup}>
+              Set up two-factor
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}

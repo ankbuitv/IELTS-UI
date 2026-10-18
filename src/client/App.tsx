@@ -24,6 +24,7 @@ import { LessonPage, ReviewPage } from './pages/student/LessonPages';
 import { DictionaryPage } from './pages/student/DictionaryPage';
 import { SpeakingPage } from './pages/student/SpeakingPage';
 import { TakeExamPage } from './pages/exam/TakeExam';
+import { AttemptReviewPage } from './pages/exam/ReviewExam';
 import { TeacherHomePage, ClassroomPage, AssignmentPage, StudentDetailPage } from './pages/teacher/TeacherPages';
 import { AdminWritingQueuePage, TeacherWritingQueuePage } from './pages/staff/WritingQueue';
 import { AdminLayout } from './pages/admin/AdminLayout';
@@ -64,6 +65,14 @@ export function App() {
   return (
     <Routes>
       {/* Full-screen exam experience: deliberately outside the app chrome. */}
+      <Route
+        path="/exam/:attemptId/review"
+        element={
+          <RequireAuth>
+            <AttemptReviewPage />
+          </RequireAuth>
+        }
+      />
       <Route
         path="/exam/:attemptId"
         element={

@@ -3,6 +3,8 @@ import type { Role } from '../../shared/types';
 export interface AuthUser {
   id: string;
   email: string;
+  /** Public handle (also usable as the sign-in identifier), or null when unset. */
+  username: string | null;
   role: Role;
   status: 'ACTIVE' | 'SUSPENDED' | 'INVITED';
   displayName: string;

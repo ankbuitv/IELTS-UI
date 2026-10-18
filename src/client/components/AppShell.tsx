@@ -187,6 +187,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [panelOpen, setPanelOpen] = useState(false);
+  const [panelOrigin, setPanelOrigin] = useState<'sidebar' | 'topbar' | 'tabbar' | 'more'>('topbar');
   const [coins, setCoins] = useState<number | null>(null);
   const [streak, setStreak] = useState<number | null>(null);
   const [xp, setXp] = useState<number | null>(null);
@@ -329,7 +330,14 @@ export function AppShell() {
                 </span>
               </div>
             ) : null}
-            <button type="button" className="app-sidebar__user" onClick={() => setPanelOpen((open) => !open)}>
+            <button
+              type="button"
+              className="app-sidebar__user"
+              onClick={() => {
+                setPanelOrigin('sidebar');
+                setPanelOpen((open) => !open);
+              }}
+            >
               <UserAvatar src={user.avatarUrl} userId={user.id} name={user.displayName} size={40} title={user.displayName} />
               <span className="app-sidebar__user-text">
                 <strong title={user.displayName}>{user.displayName}</strong>
@@ -360,7 +368,10 @@ export function AppShell() {
                   className={`site-nav__more${moreActive && !inTabs ? ' active' : ''}`}
                   aria-expanded={panelOpen}
                   aria-haspopup="menu"
-                  onClick={() => setPanelOpen((open) => !open)}
+                  onClick={() => {
+                    setPanelOrigin('more');
+                    setPanelOpen((open) => !open);
+                  }}
                 >
                   More
                   <Icon name="chevronDown" size={13} />
@@ -412,7 +423,10 @@ export function AppShell() {
                     title={user.displayName}
                     aria-label="Account menu"
                     aria-expanded={panelOpen}
-                    onClick={() => setPanelOpen((open) => !open)}
+                    onClick={() => {
+                      setPanelOrigin('topbar');
+                      setPanelOpen((open) => !open);
+                    }}
                   >
                     <UserAvatar src={user.avatarUrl} userId={user.id} name={user.displayName} size={38} />
                   </button>
@@ -454,7 +468,10 @@ export function AppShell() {
           <button
             type="button"
             className={`site-tabbar__item${panelOpen || (moreActive && !inTabs) ? ' active' : ''}`}
-            onClick={() => setPanelOpen((open) => !open)}
+            onClick={() => {
+              setPanelOrigin('tabbar');
+              setPanelOpen((open) => !open);
+            }}
             aria-expanded={panelOpen}
           >
             <Icon name="menu" size={20} />
@@ -466,7 +483,7 @@ export function AppShell() {
       {user && panelOpen ? (
         <>
           <div className="more-backdrop" onClick={() => setPanelOpen(false)} />
-          <div className="more-panel" role="menu" aria-label="More">
+          <div className={`more-panel more-panel--${panelOrigin}`} role="menu" aria-label="More">
             <div className="more-panel__who">
               <UserAvatar src={user.avatarUrl} userId={user.id} name={user.displayName} size={44} />
               <span className="more-panel__who-text">

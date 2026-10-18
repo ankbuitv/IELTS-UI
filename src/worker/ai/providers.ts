@@ -772,7 +772,12 @@ export async function testProvider(
  * provider that has no speech route surfaces as AI_UNAVAILABLE and the client
  * falls back to the browser's own voices.
  */
-export const SERVER_SPEECH_VOICES = ['nova', 'alloy', 'echo', 'fable', 'onyx', 'shimmer'] as const;
+// Every voice the gpt-4o-mini-tts family speaks with — the in-app voice picker
+// lists them all so learners can pick the reading voice they like.
+export const SERVER_SPEECH_VOICES = [
+  'nova', 'alloy', 'echo', 'fable', 'onyx', 'shimmer',
+  'ash', 'ballad', 'coral', 'sage', 'verse', 'marin', 'cedar',
+] as const;
 export type ServerSpeechVoice = (typeof SERVER_SPEECH_VOICES)[number];
 
 export async function synthesizeSpeechWithProvider(

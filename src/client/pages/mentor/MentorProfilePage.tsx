@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAsync } from '../../hooks/useAsync';
 import { mentorApi } from '../../lib/mentor-api';
 import { describeError } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Loading, Modal, Notice, TextArea, useToast } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { MentorAvatar, SpecialtyChip, StarRating, formatWhen } from '../../components/mentor/MentorBits';
@@ -42,12 +43,19 @@ export function MentorProfilePage() {
   const slots = useMemo(() => (mentor ? buildSlots(mentor) : new Map<string, string[]>()), [mentor]);
   const dayKeys = [...slots.keys()];
 
+  const { user } = useAuth();
   const [day, setDay] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
+  const [duration, setDuration] = useState(60);
+  const [customWhen, setCustomWhen] = useState('');
   const [topic, setTopic] = useState('');
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showBook, setShowBook] = useState(false);
+
+  // A mentor must not book themselves, and only students/admins book at all.
+  const isSelf = Boolean(user && mentorId && user.id === mentorId);
+  const canBook = Boolean(user && !isSelf && (user.role === 'STUDENT' || user.role === 'ADMIN'));
 
   const activeDay = day ?? dayKeys[0] ?? null;
   const times = activeDay ? (slots.get(activeDay) ?? []) : [];
@@ -60,7 +68,7 @@ export function MentorProfilePage() {
       const startsAt = new Date(picked).toISOString();
       const result = await mentorApi.book(mentorId, {
         startsAt,
-        durationMinutes: 60,
+        durationMinutes: duration,
         topic: topic.trim() || 'Coaching session',
       });
       toast.push('Session booked — see you in My sessions.', 'success');
@@ -163,7 +171,27 @@ export function MentorProfilePage() {
           </Card>
         </div>
 
-        <Card title="Book a session" hint="Pick a day, then a time — 60-minute video call">
+        <Card
+          title={canBook ? 'Book a session' : isSelf ? 'This is your profile' : 'Booking'}
+          hint={
+            canBook
+              ? 'Pick a suggested slot or choose any time that suits you.'
+              : isSelf
+                ? 'You cannot book a session with yourself — this is how students see your page.'
+                : 'Only student accounts can book mentor sessions.'
+          }
+        >
+          {!canBook ? (
+            <div className="mentor-empty">
+              <Icon name="lock" size={22} />
+              <h3>{isSelf ? 'Preview mode' : 'Booking closed for this account'}</h3>
+              <p className="small" style={{ margin: 0 }}>
+                {isSelf
+                  ? 'Share your profile link with students so they can book time with you.'
+                  : 'Sign in with a student account to book this mentor.'}
+              </p>
+            </div>
+          ) : (
           <div className="slot-picker">
             {dayKeys.length === 0 ? (
               <div className="mentor-empty">
@@ -214,11 +242,47 @@ export function MentorProfilePage() {
                   })}
                 </div>
                 <p className="tiny muted" style={{ margin: '6px 2px 0' }}>
-                  Times are shown in your local time zone. Sessions run 60 minutes over a live video call.
+                  Times are shown in your local time zone. Sessions run over a live video call.
                 </p>
               </>
             )}
+
+            <div className="slot-custom">
+              <div className="slot-custom__head">
+                <Icon name="clock" size={13} />
+                Or pick any date & time
+              </div>
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                <input
+                  type="datetime-local"
+                  className="answer-input"
+                  aria-label="Custom date and time"
+                  value={customWhen}
+                  onChange={(event) => {
+                    setCustomWhen(event.target.value);
+                    if (event.target.value) {
+                      setPicked(event.target.value);
+                      setShowBook(true);
+                    }
+                  }}
+                />
+                <select
+                  className="answer-input"
+                  aria-label="Duration"
+                  value={duration}
+                  onChange={(event) => setDuration(Number(event.target.value))}
+                  style={{ maxWidth: 140 }}
+                >
+                  {[30, 45, 60, 90, 120].map((minutes) => (
+                    <option key={minutes} value={minutes}>
+                      {minutes} minutes
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
+          )}
         </Card>
       </div>
 
@@ -243,7 +307,9 @@ export function MentorProfilePage() {
           <MentorAvatar name={mentor.displayName} />
           <div>
             <strong>{mentor.displayName}</strong>
-            <div className="small muted">{picked ? formatWhen(new Date(picked).toISOString()) : ''} · 60 min</div>
+            <div className="small muted">
+              {picked ? formatWhen(new Date(picked).toISOString()) : ''} · {duration} min
+            </div>
           </div>
         </div>
         <Field label="What do you want to work on?" hint="e.g. Speaking part 2 fluency, or feedback on two task 2 essays">

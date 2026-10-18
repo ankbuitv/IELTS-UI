@@ -304,6 +304,10 @@
 .auth__form h1 { font-size: 1.7rem; margin-bottom: 4px; }
 .auth__form-intro { color: var(--ink-500); font-size: 0.94rem; margin-bottom: 20px; }
 .auth__alt { margin: 18px 0 0; font-size: 0.9rem; color: var(--ink-600); }
+.auth__divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--ink-400); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.auth__divider::before, .auth__divider::after { content: ''; flex: 1; height: 1px; background: var(--edge); }
+.auth__sso { justify-content: center; border: 1px solid var(--edge); background: var(--solid); color: var(--on-solid); margin-bottom: 8px; }
+.auth__sso:hover { border-color: var(--ink-300); }
 .auth__bootstrap { margin-top: 12px; }
 
 .policy { display: grid; gap: 4px; margin: -4px 0 8px; font-size: 0.8rem; color: var(--ink-500); }

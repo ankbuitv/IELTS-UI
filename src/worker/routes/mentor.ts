@@ -186,7 +186,7 @@ router.post('/mentor/classes', async (c) => {
       title: z.string().min(3).max(140),
       description: z.string().max(2000).optional().default(''),
       level: z.string().max(60).optional().default('All levels'),
-      capacity: z.number().int().min(2).max(60).optional().default(10),
+      capacity: z.number().int().min(2).max(5000).optional().default(10),
       priceCoins: z.number().int().min(0).max(10_000).optional().default(0),
       startsAt: z.string().min(8),
       endsAt: z.string().min(8),

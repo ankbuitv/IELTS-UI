@@ -54,7 +54,7 @@ export function StudentDashboardPage() {
   const dueSoon = data.upcomingDeadlines.slice(0, 3);
   const activeAssignments = data.assignments.filter((assignment) => assignment.status !== 'SUBMITTED').slice(0, 3);
   const upNext = dueSoon.length > 0 ? dueSoon : activeAssignments;
-  const firstName = user?.displayName.split(' ')[0] ?? '';
+  const firstName = user?.username ?? user?.displayName.split(' ')[0] ?? '';
 
   const trendPoints = data.trends
     .slice(0, 12)

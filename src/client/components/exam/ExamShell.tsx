@@ -43,6 +43,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
   const [dictionaryOpen, setDictionaryOpen] = useState(false);
+  const [dictTerm, setDictTerm] = useState('');
   const [leaving, setLeaving] = useState(false);
   const [advancedToNext, setAdvancedToNext] = useState(false);
   const [highlightSegmentId] = useState<string | null>(null);
@@ -340,6 +341,11 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
 
   const showMaterial = mode !== 'QUESTIONS';
   const showWork = mode !== 'PASSAGE';
+  const practiceTools = state.integrity.policy.mode === 'PRACTICE';
+  const lookupWord = (term: string) => {
+    setDictTerm(term);
+    setDictionaryOpen(true);
+  };
 
   return (
     <div className="exam-root">
@@ -418,7 +424,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
           {/* Text size / spacing / theme, reachable mid-exam on a phone. */}
           <DisplayMenu compact />
 
-          {state.integrity.policy.mode === 'PRACTICE' ? (
+          {practiceTools ? (
             <button
               type="button"
               className={`exam-icon exam-icon--vocab${dictionaryOpen ? ' is-on' : ''}`}
@@ -558,6 +564,9 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
                 key={activeSection.id}
                 sections={[activeSection]}
                 showInstructions
+                practiceTools={practiceTools}
+                storageKey={state.attemptId}
+                onLookup={lookupWord}
                 lead={
                   <>
                     {activeSection.description ? <p className="exam-lead small muted">{activeSection.description}</p> : null}
@@ -830,7 +839,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
         />
       </Modal>
 
-      {dictionaryOpen ? <ExamDictionary onClose={() => setDictionaryOpen(false)} /> : null}
+      {dictionaryOpen ? <ExamDictionary initialTerm={dictTerm} onClose={() => setDictionaryOpen(false)} /> : null}
 
       {session.tabLock ? (
         <TabLockOverlay lock={session.tabLock} onReturn={session.acknowledgeTabLock} onViewResults={onFinished} />

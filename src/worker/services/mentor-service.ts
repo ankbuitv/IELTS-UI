@@ -486,12 +486,24 @@ export async function roomState(
   const session = await getSession(env, sessionId);
   await assertSessionAccess(env, session, viewer);
 
-  // Presence older than 90 s is considered gone (polling clients beat every few
-  // seconds while the tab is open).
+  const now = new Date();
+  const timestamp = now.toISOString();
+
+  // The poll itself is the heartbeat: bump this viewer so they stay listed, then
+  // drop anyone silent for 30 s. (Presence used to be written only on join, so
+  // everyone timed out while still talking — the counter said "0 in room" next
+  // to live tiles.)
   await env.DB.prepare(
-    "DELETE FROM mentor_room_presence WHERE session_id = ? AND last_seen_at < ?",
+    `INSERT INTO mentor_room_presence (session_id, user_id, joined_at, last_seen_at, hand_raised)
+     VALUES (?, ?, ?, ?, 0)
+     ON CONFLICT (session_id, user_id) DO UPDATE SET last_seen_at = excluded.last_seen_at`,
   )
-    .bind(sessionId, new Date(new Date().getTime() - 90_000).toISOString())
+    .bind(sessionId, viewer.id, timestamp, timestamp)
+    .run();
+  await env.DB.prepare(
+    'DELETE FROM mentor_room_presence WHERE session_id = ? AND last_seen_at < ?',
+  )
+    .bind(sessionId, new Date(now.getTime() - 30_000).toISOString())
     .run();
 
   const presence = await env.DB.prepare(
@@ -813,7 +825,7 @@ export async function createClass(
       title,
       input.description.trim().slice(0, 2000),
       input.level.trim() || 'All levels',
-      clamp(Math.round(input.capacity), 2, 60),
+      clamp(Math.round(input.capacity), 2, 5000),
       Math.max(0, Math.round(input.priceCoins)),
       startsAt.toISOString(),
       endsAt.toISOString(),

@@ -63,6 +63,7 @@ export class ApiRequestError extends Error {
 export interface ApiUser {
   id: string;
   email: string;
+  username: string | null;
   role: Role;
   status: string;
   displayName: string;

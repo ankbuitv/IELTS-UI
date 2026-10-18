@@ -91,17 +91,33 @@ function SpeakingLobby({ onStarted }: { onStarted: (sessionId: string) => void }
   const topics = useAsync<{ topics: SpeakingCatalogTopic[] }>(() => api.get('/api/speaking/catalog'), []);
   const history = useAsync<{ sessions: SessionSummary[] }>(() => api.get('/api/speaking/sessions'), []);
 
-  const start = async (topicSetId?: string) => {
+  const start = async (topicSetId?: string, topic?: unknown) => {
     setStarting(topicSetId ?? 'custom');
     try {
       const payload = await api.post<SpeakingSessionPayload>('/api/speaking/sessions', {
         ...(topicSetId ? { topicSetId } : {}),
+        ...(topic ? { topic } : {}),
         mode: 'PRACTICE',
       });
       onStarted(payload.session.id);
     } catch (error) {
       toast.push(describeError(error), 'error');
     } finally {
+      setStarting(null);
+    }
+  };
+
+  /** "Chủ đề ngẫu nhiên" — the AI writes a fresh topic set (remix offline). */
+  const startRandom = async () => {
+    setStarting('random');
+    try {
+      const result = await api.post<{ topic: { id: string } & Record<string, unknown> }>(
+        '/api/speaking/random-topic',
+        {},
+      );
+      await start(result.topic.id, result.topic);
+    } catch (error) {
+      toast.push(describeError(error), 'error');
       setStarting(null);
     }
   };
@@ -131,6 +147,18 @@ function SpeakingLobby({ onStarted }: { onStarted: (sessionId: string) => void }
       {topics.error ? <Notice tone="danger">{topics.error}</Notice> : null}
 
       <div className="speaking-topic-grid">
+        <button
+          type="button"
+          className="topic-card topic-card--random"
+          onClick={() => void startRandom()}
+          disabled={starting !== null}
+        >
+          <span className="topic-card__icon">
+            <Icon name="sparkle" size={20} strokeWidth={2} />
+          </span>
+          <span className="topic-card__title">Chủ đề ngẫu nhiên 🎲</span>
+          <span className="topic-card__meta">AI viết một bộ đề mới mỗi lần bấm — không đụng hàng</span>
+        </button>
         {(topics.data?.topics ?? []).map((topic) => (
           <button
             key={topic.id}

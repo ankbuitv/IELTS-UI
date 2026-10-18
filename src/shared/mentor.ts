@@ -180,16 +180,18 @@ export interface MentorClassesResponse {
   classes: MentorClass[];
 }
 
+export interface RoomParticipant {
+  userId: string;
+  displayName: string;
+  role: string;
+  joinedAt: string;
+  handRaised: boolean;
+  avatarUpdatedAt: string | null;
+}
+
 export interface MentorRoomState {
   session: MentorSession;
-  participants: Array<{
-    userId: string;
-    displayName: string;
-    role: string;
-    joinedAt: string;
-    handRaised: boolean;
-    avatarUpdatedAt: string | null;
-  }>;
+  participants: RoomParticipant[];
   messages: MentorChatMessage[];
   /** WebRTC signalling envelopes for the viewer since `since`. */
   signals: MentorSignal[];

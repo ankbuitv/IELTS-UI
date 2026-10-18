@@ -7,10 +7,13 @@ import { Button, Loading, Notice } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { MentorAvatar, formatWhen } from '../../components/mentor/MentorBits';
 import { UserAvatar } from '../../components/UserAvatar';
-import type { MentorChatMessage, MentorRoomState, MentorSignal } from '@shared/mentor';
+import type { MentorChatMessage, MentorRoomState, MentorSignal, RoomParticipant } from '@shared/mentor';
 
-const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
-const POLL_MS = 2500;
+const ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
+const POLL_MS = 1500;
 
 interface Peer {
   userId: string;
@@ -19,12 +22,16 @@ interface Peer {
 }
 
 /**
- * The call room — a live video session between a mentor and a student.
+ * The call room — a live video session (1-on-1 coaching or a class room).
  *
- * Media is peer-to-peer WebRTC (mesh): D1 relays the SDP/ICE signalling
- * envelopes (`mentor_signals`) and the room polls for them, so no realtime
- * service is needed for a two-or-three person coaching call. The room also
- * carries chat, structured notes and the roster with hand-raises.
+ * Media is peer-to-peer WebRTC (mesh) with D1 relaying the SDP/ICE signalling
+ * envelopes. The implementation follows the "perfect negotiation" pattern:
+ * - ICE candidates that arrive before the remote description are queued;
+ * - glare is resolved with rollback on the polite peer (the larger user id);
+ * - tracks that appear after connecting (late camera, screen share) trigger a
+ *   renegotiation so they are actually sent;
+ * - each tile only shows its avatar fallback while no live video track flows,
+ *   so a shared screen is never hidden behind a placeholder.
  */
 export function CallRoomPage() {
   const { sessionId = '' } = useParams();
@@ -33,6 +40,7 @@ export function CallRoomPage() {
 
   const [phase, setPhase] = useState<'loading' | 'prejoin' | 'room' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const [state, setState] = useState<MentorRoomState | null>(null);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
@@ -44,20 +52,24 @@ export function CallRoomPage() {
   const [notes, setNotes] = useState('');
   const [peers, setPeers] = useState<Peer[]>([]);
   const [elapsed, setElapsed] = useState(0);
+  const [joinBusy, setJoinBusy] = useState(false);
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
-  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
   const pcsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const participantsRef = useRef<MentorRoomState['participants']>([]);
   const lastSignalIdRef = useRef<string | null>(null);
   const sessionRef = useRef<string>(sessionId);
+  const leftRef = useRef(false);
 
-  // Keep the signalling helpers pointed at the current session without touching
-  // refs during render.
   useEffect(() => {
     sessionRef.current = sessionId;
   }, [sessionId]);
+
+  const selfId = user?.id ?? '';
 
   // ---------------------------------------------------------------- media
   const stopMedia = useCallback(() => {
@@ -67,7 +79,15 @@ export function CallRoomPage() {
     screenStreamRef.current = null;
   }, []);
 
-  const startMedia = useCallback(async () => {
+  /** Put the right stream under the self tile: the screen while sharing, else the camera. */
+  const attachSelf = useCallback(() => {
+    const el = localVideoRef.current;
+    if (!el) return;
+    const stream = screenStreamRef.current ?? localStreamRef.current;
+    if (el.srcObject !== stream) el.srcObject = stream;
+  }, []);
+
+  const startMedia = useCallback(async (): Promise<MediaStream | null> => {
     if (localStreamRef.current) return localStreamRef.current;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -82,70 +102,125 @@ export function CallRoomPage() {
       } catch {
         setMicOn(false);
         setCamOn(false);
+        setMediaError('Camera and microphone are unavailable — you can still join and use chat.');
         return null;
       }
     }
   }, []);
 
-  // ------------------------------------------------------------- WebRTC
-  const addPeer = useCallback((userId: string, displayName: string, initiator: boolean) => {
-    if (pcsRef.current.has(userId)) return pcsRef.current.get(userId)!;
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    pcsRef.current.set(userId, pc);
+  // Media is requested as soon as the prejoin screen appears, so the preview is
+  // live and the toggles really control the device before anyone else joins.
+  useEffect(() => {
+    if (phase !== 'prejoin' && phase !== 'room') return;
+    void startMedia().then(() => attachSelf());
+  }, [phase, startMedia, attachSelf]);
 
-    const remoteStream = new MediaStream();
-    pc.ontrack = (event) => {
-      event.streams[0]?.getTracks().forEach((track) => remoteStream.addTrack(track));
-      setPeers((prev) => {
-        const without = prev.filter((peer) => peer.userId !== userId);
-        return [...without, { userId, displayName, stream: remoteStream }];
-      });
-    };
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        void mentorApi.signal(sessionRef.current, {
-          kind: 'CANDIDATE',
-          targetId: userId,
-          payload: JSON.stringify(event.candidate),
-        }).catch(() => undefined);
+  // ---------------------------------------------------------- WebRTC plumbing
+  /** Create (or fetch) the peer connection for a remote user. */
+  const addPeer = useCallback(
+    (userId: string, displayName: string): RTCPeerConnection => {
+      const existing = pcsRef.current.get(userId);
+      if (existing) return existing;
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      pcsRef.current.set(userId, pc);
+
+      const remoteStream = new MediaStream();
+      pc.ontrack = (event) => {
+        // Reuse the same track objects so <video> keeps playing across renegotiations.
+        if (!remoteStream.getTracks().includes(event.track)) remoteStream.addTrack(event.track);
+        event.track.addEventListener('mute', () => {
+          setPeers((prev) => [...prev.filter((p) => p.userId !== userId), { userId, displayName, stream: remoteStream }]);
+        });
+        event.track.addEventListener('unmute', () => {
+          setPeers((prev) => [...prev.filter((p) => p.userId !== userId), { userId, displayName, stream: remoteStream }]);
+        });
+        setPeers((prev) => [...prev.filter((p) => p.userId !== userId), { userId, displayName, stream: remoteStream }]);
+      };
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          void mentorApi
+            .signal(sessionRef.current, { kind: 'CANDIDATE', targetId: userId, payload: JSON.stringify(event.candidate) })
+            .catch(() => undefined);
+        }
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+          pc.close();
+          pcsRef.current.delete(userId);
+          setPeers((prev) => prev.filter((peer) => peer.userId !== userId));
+        }
+      };
+
+      // Attach whatever media is available now; late tracks are added by syncSenders.
+      const local = localStreamRef.current;
+      local?.getTracks().forEach((track) => pc.addTrack(track, local));
+      return pc;
+    },
+    [],
+  );
+
+  /** Offer from this side (perfect negotiation: both may offer; the polite peer rolls back on glare). */
+  const negotiate = useCallback(
+    async (userId: string) => {
+      const pc = pcsRef.current.get(userId);
+      if (!pc || pc.signalingState !== 'stable') return;
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await mentorApi.signal(sessionRef.current, { kind: 'OFFER', targetId: userId, payload: JSON.stringify(offer) });
+      } catch {
+        // The next poll or track change retries.
       }
-    };
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-        pc.close();
-        pcsRef.current.delete(userId);
-        setPeers((prev) => prev.filter((peer) => peer.userId !== userId));
+    },
+    [],
+  );
+
+  /** Add any local tracks the connection is missing (late camera, first media, screen). */
+  const syncSenders = useCallback(
+    (userId: string) => {
+      const pc = pcsRef.current.get(userId);
+      const local = localStreamRef.current;
+      if (!pc || !local) return;
+      let added = false;
+      for (const track of local.getTracks()) {
+        const has = pc.getSenders().some((sender) => sender.track?.kind === track.kind);
+        if (!has) {
+          pc.addTrack(track, local);
+          added = true;
+        }
       }
-    };
+      if (added) void negotiate(userId);
+    },
+    [negotiate],
+  );
 
-    const local = localStreamRef.current;
-    local?.getTracks().forEach((track) => pc.addTrack(track, local));
-
-    if (initiator) {
-      void pc
-        .createOffer()
-        .then((offer) => pc.setLocalDescription(offer).then(() => offer))
-        .then((offer) =>
-          mentorApi.signal(sessionRef.current, {
-            kind: 'OFFER',
-            targetId: userId,
-            payload: JSON.stringify(offer),
-          }),
-        )
-        .catch(() => undefined);
+  const flushCandidates = useCallback(async (userId: string, pc: RTCPeerConnection) => {
+    const queued = pendingCandidatesRef.current.get(userId);
+    if (!queued?.length) return;
+    pendingCandidatesRef.current.set(userId, []);
+    for (const candidate of queued) {
+      try {
+        await pc.addIceCandidate(candidate);
+      } catch {
+        // Stale candidate — drop it.
+      }
     }
-    return pc;
   }, []);
 
   const handleSignal = useCallback(
     async (signal: MentorSignal) => {
       const fromName = participantsRef.current.find((p) => p.userId === signal.senderId)?.displayName ?? 'Guest';
-      let pc = pcsRef.current.get(signal.senderId);
-      if (!pc) pc = addPeer(signal.senderId, fromName, false);
+      const pc = addPeer(signal.senderId, fromName);
+      const polite = selfId > signal.senderId;
 
       try {
         if (signal.kind === 'OFFER') {
+          if (pc.signalingState !== 'stable') {
+            if (!polite) return; // impolite peer keeps its own offer; the other side rolls back
+            await pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit);
+          }
           await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(signal.payload)));
+          await flushCandidates(signal.senderId, pc);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           await mentorApi.signal(sessionRef.current, {
@@ -153,12 +228,21 @@ export function CallRoomPage() {
             targetId: signal.senderId,
             payload: JSON.stringify(answer),
           });
+          syncSenders(signal.senderId);
         } else if (signal.kind === 'ANSWER') {
           if (pc.signalingState === 'have-local-offer') {
             await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(signal.payload)));
+            await flushCandidates(signal.senderId, pc);
           }
         } else if (signal.kind === 'CANDIDATE') {
-          await pc.addIceCandidate(new RTCIceCandidate(JSON.parse(signal.payload)));
+          const candidate = JSON.parse(signal.payload) as RTCIceCandidateInit;
+          if (!pc.remoteDescription) {
+            const queued = pendingCandidatesRef.current.get(signal.senderId) ?? [];
+            queued.push(candidate);
+            pendingCandidatesRef.current.set(signal.senderId, queued);
+          } else {
+            await pc.addIceCandidate(candidate);
+          }
         } else if (signal.kind === 'BYE') {
           pc.close();
           pcsRef.current.delete(signal.senderId);
@@ -168,11 +252,10 @@ export function CallRoomPage() {
         // A malformed or stale envelope is dropped: the next poll re-syncs.
       }
     },
-    [addPeer],
+    [addPeer, selfId, flushCandidates, syncSenders],
   );
 
   // ---------------------------------------------------------------- poll
-  const selfId = user?.id ?? '';
   useEffect(() => {
     if (phase !== 'room' || !selfId) return;
     let alive = true;
@@ -185,13 +268,26 @@ export function CallRoomPage() {
         const newest = next.signals.at(-1);
         if (newest) lastSignalIdRef.current = newest.id;
         for (const signal of next.signals) await handleSignal(signal);
-        // Everyone present (except me) gets a peer connection; the lexicographically
-        // smaller id initiates the offer so both sides don't glare.
+
+        const presentIds = new Set(next.participants.map((p) => p.userId));
+        // Everyone present (except me) gets a connection; the smaller id initiates
+        // to avoid both sides offering at the exact same moment.
         for (const participant of next.participants) {
           if (participant.userId === selfId) continue;
-          if (pcsRef.current.has(participant.userId)) continue;
-          const initiator = selfId < participant.userId;
-          addPeer(participant.userId, participant.displayName, initiator);
+          addPeer(participant.userId, participant.displayName);
+          syncSenders(participant.userId);
+          if (!pcsRef.current.get(participant.userId)?.remoteDescription && selfId < participant.userId) {
+            void negotiate(participant.userId);
+          }
+        }
+        // A peer that vanished from presence has really left: drop the tile now.
+        setPeers((prev) => prev.filter((peer) => presentIds.has(peer.userId)));
+        for (const [peerId, pc] of pcsRef.current) {
+          if (!presentIds.has(peerId)) {
+            pc.close();
+            pcsRef.current.delete(peerId);
+            pendingCandidatesRef.current.delete(peerId);
+          }
         }
       } catch {
         // Polling hiccup: the next tick retries.
@@ -199,11 +295,16 @@ export function CallRoomPage() {
     };
     void tick();
     const interval = window.setInterval(() => void tick(), POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void tick();
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       alive = false;
       window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [phase, sessionId, selfId, addPeer, handleSignal]);
+  }, [phase, sessionId, selfId, addPeer, handleSignal, syncSenders, negotiate]);
 
   // Session clock.
   useEffect(() => {
@@ -222,6 +323,8 @@ export function CallRoomPage() {
       .then((data) => {
         if (!alive) return;
         setState(data);
+        const me = data.participants.find((p) => p.userId === selfId);
+        if (me) setHandRaised(me.handRaised);
         setPhase('prejoin');
       })
       .catch((cause) => {
@@ -232,14 +335,7 @@ export function CallRoomPage() {
     return () => {
       alive = false;
     };
-  }, [sessionId]);
-
-  // Attach the local preview whenever it appears.
-  useEffect(() => {
-    if (localVideoRef.current && localStreamRef.current) {
-      localVideoRef.current.srcObject = localStreamRef.current;
-    }
-  }, [phase, camOn, peers.length, panelOpen]);
+  }, [sessionId, selfId]);
 
   // Mic/cam toggles push straight onto the live tracks.
   useEffect(() => {
@@ -253,6 +349,19 @@ export function CallRoomPage() {
     });
   }, [camOn]);
 
+  // Best-effort goodbye when the tab is closed, so tiles disappear immediately.
+  useEffect(() => {
+    const bye = () => {
+      if (leftRef.current) return;
+      pcsRef.current.forEach((_pc, peerId) => {
+        void mentorApi.signal(sessionRef.current, { kind: 'BYE', targetId: peerId, payload: '' }).catch(() => undefined);
+      });
+      void mentorApi.leave(sessionRef.current).catch(() => undefined);
+    };
+    window.addEventListener('pagehide', bye);
+    return () => window.removeEventListener('pagehide', bye);
+  }, []);
+
   // Clean up media + peers on exit.
   useEffect(
     () => () => {
@@ -264,18 +373,29 @@ export function CallRoomPage() {
   );
 
   const join = async () => {
+    setJoinBusy(true);
     const stream = await startMedia();
-    if (localVideoRef.current && stream) localVideoRef.current.srcObject = stream;
     try {
       await mentorApi.join(sessionId);
       setPhase('room');
+      // Tracks are attached by the effect/callback refs on mount; make sure the
+      // connection to an already-present peer renegotiates with the real media.
+      requestAnimationFrame(() => {
+        attachSelf();
+        pcsRef.current.forEach((_pc, peerId) => syncSenders(peerId));
+      });
     } catch (cause) {
       setError(describeError(cause));
       setPhase('error');
+    } finally {
+      setJoinBusy(false);
+      if (stream) attachSelf();
     }
   };
 
   const leave = async () => {
+    if (leftRef.current) return;
+    leftRef.current = true;
     pcsRef.current.forEach((pc, peerId) => {
       void mentorApi.signal(sessionId, { kind: 'BYE', targetId: peerId, payload: '' }).catch(() => undefined);
       pc.close();
@@ -295,7 +415,8 @@ export function CallRoomPage() {
       screenStreamRef.current?.getTracks().forEach((track) => track.stop());
       screenStreamRef.current = null;
       setScreenOn(false);
-      // Restore camera track on every peer.
+      attachSelf();
+      // Restore the camera track on every peer.
       const video = localStreamRef.current?.getVideoTracks()[0];
       pcsRef.current.forEach((pc) => {
         const sender = pc.getSenders().find((item) => item.track?.kind === 'video');
@@ -310,9 +431,17 @@ export function CallRoomPage() {
       const [track] = screen.getVideoTracks();
       pcsRef.current.forEach((pc) => {
         const sender = pc.getSenders().find((item) => item.track?.kind === 'video');
-        if (sender && track) void sender.replaceTrack(track);
+        if (sender && track) {
+          void sender.replaceTrack(track);
+        } else if (track) {
+          pc.addTrack(track, screen);
+          void negotiate(
+            [...pcsRef.current.entries()].find(([, item]) => item === pc)?.[0] ?? '',
+          );
+        }
       });
       if (track) track.onended = () => void toggleScreen();
+      attachSelf();
     } catch {
       // The user declined the picker.
     }
@@ -334,7 +463,11 @@ export function CallRoomPage() {
     setDraft('');
     try {
       const { message } = await mentorApi.sendMessage(sessionId, body);
-      setState((prev) => (prev ? { ...prev, messages: [...prev.messages, message] } : prev));
+      setState((prev) => {
+        if (!prev) return prev;
+        const withoutDupes = prev.messages.filter((item) => item.id !== message.id);
+        return { ...prev, messages: [...withoutDupes, message] };
+      });
     } catch (cause) {
       setError(describeError(cause));
     }
@@ -350,11 +483,50 @@ export function CallRoomPage() {
     }
   };
 
+  // Auto-scroll the chat to the newest message.
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [state?.messages.length]);
+
   const clock = useMemo(() => {
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }, [elapsed]);
+
+  const session = state?.session;
+  const isMentor = session?.mentorId === user?.id;
+  const isClass = session?.kind === 'CLASS';
+
+  // Roster = server presence ∪ live peer connections ∪ me. The chip can never
+  // disagree with the tiles on screen.
+  const roster = useMemo(() => {
+    const byId = new Map<string, RoomParticipant>();
+    for (const participant of state?.participants ?? []) byId.set(participant.userId, participant);
+    for (const peer of peers) {
+      if (!byId.has(peer.userId)) {
+        byId.set(peer.userId, {
+          userId: peer.userId,
+          displayName: peer.displayName,
+          role: 'MEMBER',
+          avatarUpdatedAt: null,
+          handRaised: false,
+          joinedAt: '',
+        });
+      }
+    }
+    if (selfId && !byId.has(selfId)) {
+      byId.set(selfId, {
+        userId: selfId,
+        displayName: user?.displayName ?? 'You',
+        role: user?.role ?? 'STUDENT',
+        avatarUpdatedAt: null,
+        handRaised,
+        joinedAt: '',
+      });
+    }
+    return [...byId.values()];
+  }, [state?.participants, peers, selfId, user?.displayName, handRaised]);
 
   if (phase === 'loading') {
     return <Loading label="Opening the call room…" />;
@@ -371,18 +543,25 @@ export function CallRoomPage() {
     );
   }
 
-  const session = state?.session;
-  const isMentor = session?.mentorId === user?.id;
-
   if (phase === 'prejoin') {
     return (
       <div className="room-prejoin">
         <div className="room-prejoin__card">
           <div className="room-prejoin__preview">
-            <video ref={localVideoRef} autoPlay playsInline muted />
+            <video
+              ref={(el) => {
+                localVideoRef.current = el;
+                if (el && localStreamRef.current && el.srcObject !== localStreamRef.current) {
+                  el.srcObject = localStreamRef.current;
+                }
+              }}
+              autoPlay
+              playsInline
+              muted
+            />
             {!camOn ? (
               <div className="room-tile__avatar">
-                <Icon name="video" size={28} />
+                <UserAvatar src={user?.avatarUrl ?? null} userId={user?.id} name={user?.displayName ?? 'Me'} size={80} />
               </div>
             ) : null}
           </div>
@@ -397,30 +576,28 @@ export function CallRoomPage() {
                 ? `You are about to host this session with ${session?.studentName ?? 'your student'}.`
                 : `You are about to join ${session?.mentorName ?? 'your mentor'} for a live video session.`}
             </p>
+            {mediaError ? <Notice tone="warning">{mediaError}</Notice> : null}
             <div className="room-prejoin__toggles">
               <button
                 type="button"
                 className={`room-btn${micOn ? '' : ' room-btn--off'}`}
-                aria-label={micOn ? 'Mute microphone' : 'Unmute microphone'}
                 onClick={() => setMicOn((value) => !value)}
+                aria-label={micOn ? 'Mute' : 'Unmute'}
               >
                 <Icon name="mic" size={20} />
               </button>
               <button
                 type="button"
                 className={`room-btn${camOn ? '' : ' room-btn--off'}`}
-                aria-label={camOn ? 'Turn camera off' : 'Turn camera on'}
                 onClick={() => setCamOn((value) => !value)}
+                aria-label={camOn ? 'Camera off' : 'Camera on'}
               >
                 <Icon name="video" size={20} />
               </button>
             </div>
-            <Button variant="primary" size="lg" block onClick={join}>
-              <Icon name="video" size={16} />
+            <Button variant="primary" size="lg" loading={joinBusy} onClick={() => void join()}>
+              <Icon name="video" size={17} />
               Join now
-            </Button>
-            <Button variant="glass" block onClick={() => navigate('/my-sessions')} style={{ marginTop: 10 }}>
-              Not now
             </Button>
           </div>
         </div>
@@ -430,41 +607,60 @@ export function CallRoomPage() {
 
   return (
     <div className="room">
-      <header className="room__top">
-        <div className="room__title">
+      <header className="room__topbar">
+        <div className="row" style={{ gap: 10, alignItems: 'center' }}>
           <Icon name="video" size={18} />
-          {session?.topic ?? 'Session'}
-          <span className="room__live">Live</span>
+          <strong>{session?.topic ?? 'Session'}</strong>
+          <span className="mchip mchip--coral">
+            <span className="dot" /> LIVE
+          </span>
+          <span className="mchip">{clock}</span>
         </div>
-        <span className="room__timer">{clock}</span>
-        <div className="room__top-right">
-          <span className="mchip mchip--violet" style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', borderColor: 'transparent' }}>
-            <Icon name="users" size={12} />
-            {state?.participants.length ?? 1} in room
+        <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+          <span className="mchip">
+            <Icon name="users" size={13} />
+            {roster.length} in room
           </span>
           <button
             type="button"
-            className="room-btn"
-            style={{ width: 42, height: 42 }}
+            className={`room-btn room-btn--sm${panelOpen ? ' room-btn--active' : ''}`}
             onClick={() => setPanelOpen((value) => !value)}
             aria-label="Toggle side panel"
           >
-            <Icon name="bubble" size={18} />
+            <Icon name="bubble" size={17} />
           </button>
         </div>
       </header>
 
+      {error ? (
+        <div style={{ padding: '8px 16px 0' }}>
+          <Notice tone="danger">{error}</Notice>
+        </div>
+      ) : null}
+
       <div className="room__body">
         <div className={`room__stage${peers.length === 0 ? ' room__stage--solo' : ''}`}>
           <div className="room-tile room-tile--self">
-            <video ref={localVideoRef} autoPlay playsInline muted />
-            {!camOn ? (
+            <video
+              ref={(el) => {
+                localVideoRef.current = el;
+                if (el) {
+                  const stream = screenStreamRef.current ?? localStreamRef.current;
+                  if (el.srcObject !== stream) el.srcObject = stream;
+                }
+              }}
+              autoPlay
+              playsInline
+              muted
+            />
+            {!camOn && !screenOn ? (
               <div className="room-tile__avatar">
                 <UserAvatar src={user?.avatarUrl ?? null} userId={user?.id} name={user?.displayName ?? 'Me'} size={80} />
               </div>
             ) : null}
             <span className="room-tile__name">
               You ({user?.displayName ?? 'Me'})
+              {screenOn ? <span className="room-tile__badge">screen</span> : null}
               {!micOn ? (
                 <span className="room-tile__mic-off">
                   <Icon name="mic" size={13} />
@@ -479,30 +675,20 @@ export function CallRoomPage() {
           </div>
 
           {peers.map((peer) => (
-            <div key={peer.userId} className="room-tile">
-              <RemoteVideo stream={peer.stream} />
-              <div className="room-tile__avatar">
-                <UserAvatar
-                  userId={peer.userId}
-                  avatarUpdatedAt={state?.participants.find((p) => p.userId === peer.userId)?.avatarUpdatedAt}
-                  name={peer.displayName}
-                  size={80}
-                />
-              </div>
-              <span className="room-tile__name">
-                {peer.displayName}
-                {state?.participants.find((p) => p.userId === peer.userId)?.handRaised ? (
-                  <Icon name="hand" size={13} />
-                ) : null}
-              </span>
-            </div>
+            <RemoteTile
+              key={peer.userId}
+              peer={peer}
+              participant={state?.participants.find((p) => p.userId === peer.userId)}
+            />
           ))}
 
           {peers.length === 0 ? (
             <div className="room-tile room-tile--waiting" style={{ gridColumn: '1 / -1', minHeight: 120 }}>
               <Icon name="users" size={26} />
               <div>
-                <strong>Waiting for {isMentor ? 'your student' : 'your mentor'} to join…</strong>
+                <strong>
+                  Waiting for {isClass ? 'class members' : isMentor ? 'your student' : 'your mentor'} to join…
+                </strong>
                 <div className="small" style={{ opacity: 0.75 }}>
                   The call connects automatically when they arrive. Keep this tab open.
                 </div>
@@ -544,18 +730,22 @@ export function CallRoomPage() {
                         <div className="room-msg__bubble">{message.body}</div>
                       </div>
                     ))}
+                  <div ref={chatEndRef} />
                 </div>
                 <div className="room__composer">
                   <input
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={(event) => {
-                      if (event.key === 'Enter') void send();
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        void send();
+                      }
                     }}
                     placeholder="Write a message…"
                     aria-label="Chat message"
                   />
-                  <button type="button" onClick={send} aria-label="Send message">
+                  <button type="button" onClick={() => void send()} aria-label="Send message">
                     <Icon name="send" size={17} />
                   </button>
                 </div>
@@ -573,7 +763,7 @@ export function CallRoomPage() {
                   placeholder="Vocabulary to revisit, essay structure notes, next actions…"
                   aria-label="Session notes"
                 />
-                <Button variant="primary" onClick={saveNotes} disabled={!notes.trim()}>
+                <Button variant="primary" onClick={() => void saveNotes()} disabled={!notes.trim()}>
                   <Icon name="send" size={14} />
                   Save notes to session
                 </Button>
@@ -594,7 +784,7 @@ export function CallRoomPage() {
 
             {panel === 'people' ? (
               <div className="room__roster">
-                {(state?.participants ?? []).map((participant) => (
+                {roster.map((participant) => (
                   <div key={participant.userId} className="room-roster-item">
                     <MentorAvatar
                       name={participant.displayName}
@@ -608,7 +798,13 @@ export function CallRoomPage() {
                         {participant.userId === user?.id ? ' (you)' : ''}
                       </div>
                       <div className="room-roster-item__role">
-                        {participant.userId === session?.mentorId ? 'mentor' : 'student'}
+                        {participant.userId === session?.mentorId
+                          ? 'mentor'
+                          : participant.userId === user?.id
+                            ? 'you'
+                            : isClass
+                              ? 'member'
+                              : 'student'}
                       </div>
                     </div>
                     {participant.handRaised ? (
@@ -703,7 +899,7 @@ export function CallRoomPage() {
             <span className="room-btn__label">End session</span>
           </span>
         ) : null}
-        <button type="button" className="room-btn room-btn--leave" onClick={leave}>
+        <button type="button" className="room-btn room-btn--leave" onClick={() => void leave()}>
           <Icon name="phoneOff" size={19} />
           Leave
         </button>
@@ -712,13 +908,69 @@ export function CallRoomPage() {
   );
 }
 
-/** Binds a remote MediaStream to a <video> element. */
-function RemoteVideo({ stream }: { stream: MediaStream }) {
-  const ref = useRef<HTMLVideoElement>(null);
+/**
+ * One remote participant: the video fills the tile and the avatar fallback only
+ * shows while no live video is arriving (camera off / still connecting) — a
+ * shared screen must never hide behind a placeholder.
+ */
+function RemoteTile({ peer, participant }: { peer: Peer; participant?: RoomParticipant }) {
+  const [live, setLive] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
   useEffect(() => {
-    if (ref.current) ref.current.srcObject = stream;
-  }, [stream]);
-  return <video ref={ref} autoPlay playsInline />;
+    const stream = peer.stream;
+    const evaluate = () => {
+      const videos = stream.getVideoTracks();
+      setLive(videos.some((track) => track.readyState === 'live' && !track.muted && track.enabled));
+    };
+    const el = videoRef.current;
+    if (el && el.srcObject !== stream) el.srcObject = stream;
+    evaluate();
+    const tracks = stream.getTracks();
+    for (const track of tracks) {
+      track.addEventListener('mute', evaluate);
+      track.addEventListener('unmute', evaluate);
+      track.addEventListener('ended', evaluate);
+    }
+    stream.addEventListener('addtrack', evaluate);
+    stream.addEventListener('removetrack', evaluate);
+    return () => {
+      for (const track of tracks) {
+        track.removeEventListener('mute', evaluate);
+        track.removeEventListener('unmute', evaluate);
+        track.removeEventListener('ended', evaluate);
+      }
+      stream.removeEventListener('addtrack', evaluate);
+      stream.removeEventListener('removetrack', evaluate);
+    };
+  }, [peer.stream]);
+
+  return (
+    <div className="room-tile">
+      <video
+        ref={(el) => {
+          videoRef.current = el;
+          if (el && el.srcObject !== peer.stream) el.srcObject = peer.stream;
+        }}
+        autoPlay
+        playsInline
+      />
+      {!live ? (
+        <div className="room-tile__avatar">
+          <UserAvatar
+            userId={peer.userId}
+            avatarUpdatedAt={participant?.avatarUpdatedAt}
+            name={peer.displayName}
+            size={80}
+          />
+        </div>
+      ) : null}
+      <span className="room-tile__name">
+        {peer.displayName}
+        {participant?.handRaised ? <Icon name="hand" size={13} /> : null}
+      </span>
+    </div>
+  );
 }
 
 export default CallRoomPage;
