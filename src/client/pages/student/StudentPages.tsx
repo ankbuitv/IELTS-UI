@@ -776,6 +776,61 @@ function JoinByCode() {
 }
 
 /** Upload or remove the profile picture shown across the app. */
+function ConnectedAccountsCard() {
+  const toast = useToast();
+  const [search] = useSearchParams();
+  const identitiesQ = useAsync<Array<{ provider: string; email: string | null }>>(
+    async () =>
+      (await api.get<{ identities: Array<{ provider: string; email: string | null }> }>('/api/auth/identities')).identities,
+    [],
+  );
+
+  const linkedParam = search.get('linked');
+  useEffect(() => {
+    if (!linkedParam) return;
+    toast.push(`${linkedParam === 'google' ? 'Google' : 'Microsoft'} connected to your account.`, 'success');
+  }, [linkedParam, toast]);
+
+  const linked = new Set((identitiesQ.data ?? []).map((identity) => identity.provider));
+  const providers = [
+    { id: 'google', label: 'Google' },
+    { id: 'microsoft', label: 'Microsoft' },
+  ];
+  return (
+    <Card
+      title="Connected accounts"
+      hint="Link Google or Microsoft to this account, then sign in with one click — no password needed."
+    >
+      <div className="stack" style={{ gap: 10 }}>
+        {providers.map((provider) => (
+          <div
+            key={provider.id}
+            className="row"
+            style={{ justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}
+          >
+            <div>
+              <strong>{provider.label}</strong>
+              <div className="tiny muted">
+                {linked.has(provider.id) ? 'Connected — you can sign in with it.' : 'Not connected yet.'}
+              </div>
+            </div>
+            {linked.has(provider.id) ? (
+              <span className="mchip mchip--sun">
+                <Icon name="check" size={12} /> Connected
+              </span>
+            ) : (
+              <a className="btn btn--sm btn--secondary" href={`/api/auth/sso/${provider.id}/start?link=1`}>
+                <Icon name="target" size={13} />
+                Connect {provider.label}
+              </a>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 function AvatarCard() {
   const { user, setUser } = useAuth();
   const toast = useToast();
@@ -880,6 +935,7 @@ export function ProfilePage() {
   const { user, refresh } = useAuth();
   const toast = useToast();
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
+  const [username, setUsername] = useState(user?.username ?? '');
   const [targetBand, setTargetBand] = useState('');
   const [passwords, setPasswords] = useState({ current: '', next: '' });
   const [busy, setBusy] = useState(false);
@@ -900,9 +956,13 @@ export function ProfilePage() {
       {tabs === 'profile' ? (
         <>
         <AvatarCard />
+        <ConnectedAccountsCard />
         <Card title="Profile details" hint={user?.email}>
           <Field label="Display name" required>
             {(id) => <TextInput id={id} value={displayName} onChange={(event) => setDisplayName(event.target.value)} />}
+          </Field>
+          <Field label="Username" hint="How you sign in and how the leaderboard greets you. 3–24 characters: letters, numbers, dot, dash or underscore.">
+            {(id) => <TextInput id={id} value={username} onChange={(event) => setUsername(event.target.value)} />}
           </Field>
           <Field label="Target band" hint="Optional. Shown only to you and your teachers as a goal, never as a score.">
             {(id) => (
@@ -924,6 +984,7 @@ export function ProfilePage() {
               try {
                 await api.patch('/api/auth/profile', {
                   displayName,
+                  username: username.trim() || undefined,
                   targetBand: targetBand ? Number(targetBand) : null,
                 });
                 await refresh();

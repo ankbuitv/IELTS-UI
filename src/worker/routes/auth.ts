@@ -26,7 +26,7 @@ import {
 import { recordAudit } from '../lib/audit';
 import { currentUser } from '../middleware/auth';
 import { parseBody } from '../lib/validate';
-import { nowIso } from '../lib/ids';
+import { newId, nowIso } from '../lib/ids';
 import { loadPlatformSettings } from '../lib/settings';
 import { resolveSession } from '../services/auth-service';
 import { getSessionToken } from '../lib/http';
@@ -315,6 +315,14 @@ const SSO_PROVIDERS: Record<string, { label: string; clientIdEnv: string; client
 router.get('/sso/:provider/start', async (c) => {
   const provider = SSO_PROVIDERS[c.req.param('provider')];
   if (!provider) throw ApiError.notFound('Unknown sign-in provider.');
+  // `?link=1` connects the provider to the account that is already signed in.
+  const linkMode = c.req.query('link') === '1';
+  let linkUserId: string | null = null;
+  if (linkMode) {
+    const session = c.get('session');
+    if (!session) throw ApiError.unauthenticated('Sign in first, then connect the provider.');
+    linkUserId = session.userId;
+  }
   const clientId = (c.env as unknown as Record<string, string | undefined>)[provider.clientIdEnv];
   if (!clientId) {
     throw new ApiError(
@@ -329,6 +337,9 @@ router.get('/sso/:provider/start', async (c) => {
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('scope', 'openid email profile');
   authUrl.searchParams.set('prompt', 'select_account');
+  if (linkUserId) {
+    authUrl.searchParams.set('state', btoa(JSON.stringify({ link: linkUserId })));
+  }
   return c.redirect(authUrl.toString());
 });
 
@@ -369,18 +380,86 @@ router.get('/sso/:provider/callback', async (c) => {
     headers: { authorization: `Bearer ${tokens.access_token}` },
   });
   if (!userResponse.ok) throw ApiError.unauthenticated('Could not read your provider profile.');
-  const profile = (await userResponse.json()) as { email?: string; name?: string };
+  const profile = (await userResponse.json()) as { email?: string; name?: string; sub?: string };
   if (!profile.email) throw ApiError.unauthenticated('The provider account has no email address.');
+  const subject = (profile.sub ?? '').trim() || profile.email;
+
+  // Link mode: attach this provider identity to the signed-in account.
+  const stateRaw = c.req.query('state');
+  let linkUserId: string | null = null;
+  if (stateRaw) {
+    try {
+      const state = JSON.parse(atob(stateRaw)) as { link?: string };
+      linkUserId = typeof state.link === 'string' ? state.link : null;
+    } catch {
+      linkUserId = null;
+    }
+  }
+  if (linkUserId) {
+    const session = c.get('session');
+    if (!session || session.userId !== linkUserId) {
+      throw ApiError.unauthenticated('Sign in first, then connect the provider.');
+    }
+    const owned = await c.env.DB.prepare('SELECT user_id FROM user_identities WHERE provider = ? AND subject = ?')
+      .bind(providerName, subject)
+      .first<{ user_id: string }>();
+    if (owned && owned.user_id !== linkUserId) {
+      throw ApiError.forbidden(`That ${provider.label} account is already linked to a different user on this platform.`);
+    }
+    const timestamp = nowIso();
+    await c.env.DB.prepare(
+      `INSERT INTO user_identities (id, user_id, provider, subject, email, created_at) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (provider, subject) DO UPDATE SET user_id = excluded.user_id, email = excluded.email`,
+    )
+      .bind(newId('uid'), linkUserId, providerName, subject, profile.email, timestamp)
+      .run();
+    return c.redirect(`/settings?linked=${encodeURIComponent(providerName)}`);
+  }
+
+  // Sign-in: a known identity wins; an email match links the identity too.
+  const identity = await c.env.DB.prepare('SELECT user_id FROM user_identities WHERE provider = ? AND subject = ?')
+    .bind(providerName, subject)
+    .first<{ user_id: string }>();
+  if (identity) {
+    const row = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?')
+      .bind(identity.user_id)
+      .first<{ email: string }>();
+    if (row) {
+      const result = await loginFederated(c.env, row.email, { ip: clientIp(c), userAgent: userAgent(c) });
+      setSessionCookie(c, result.token, result.session.expiresAt);
+      return c.redirect('/');
+    }
+  }
 
   try {
     const result = await loginFederated(c.env, profile.email, { ip: clientIp(c), userAgent: userAgent(c) });
     setSessionCookie(c, result.token, result.session.expiresAt);
+    // Back-fill the link so the next sign-in works even if the email changes.
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO user_identities (id, user_id, provider, subject, email, created_at) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (provider, subject) DO NOTHING`,
+      )
+        .bind(newId('uid'), result.session.userId, providerName, subject, profile.email, nowIso())
+        .run();
+    } catch (linkError) {
+      console.warn('sso_identity_backfill_failed', linkError instanceof Error ? linkError.message : linkError);
+    }
     return c.redirect('/');
   } catch {
     throw ApiError.forbidden(
       'No platform account matches that provider email yet. Ask your teacher or administrator to invite you first.',
     );
   }
+});
+
+/** Which providers are linked to the signed-in account (settings screen). */
+router.get('/identities', async (c) => {
+  const user = currentUser(c);
+  const rows = await c.env.DB.prepare('SELECT provider, email, created_at FROM user_identities WHERE user_id = ? ORDER BY provider')
+    .bind(user.id)
+    .all<{ provider: string; email: string | null; created_at: string }>();
+  return c.json({ identities: rows.results ?? [] });
 });
 
 router.post('/logout', async (c) => {
@@ -417,6 +496,13 @@ router.patch('/profile', async (c) => {
     c,
     z.object({
       displayName: z.string().trim().min(1).max(120).optional(),
+      username: z
+        .string()
+        .trim()
+        .min(3)
+        .max(24)
+        .regex(/^[a-zA-Z0-9._-]+$/, 'Use letters, numbers, dot, dash or underscore.')
+        .optional(),
       targetBand: z.number().min(0).max(9).nullable().optional(),
       timezone: z.string().trim().max(64).nullable().optional(),
       bio: z.string().trim().max(600).optional(),
@@ -426,6 +512,15 @@ router.patch('/profile', async (c) => {
         .optional(),
     }),
   );
+  if (body.username !== undefined && body.username.toLowerCase() !== (user.username ?? '').toLowerCase()) {
+    const clash = await c.env.DB.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?')
+      .bind(body.username, user.id)
+      .first<{ id: string }>();
+    if (clash) throw ApiError.validation('That username is already taken.');
+    await c.env.DB.prepare('UPDATE users SET username = ?, updated_at = ? WHERE id = ?')
+      .bind(body.username, nowIso(), user.id)
+      .run();
+  }
   await updateProfile(c.env, user.id, body);
   const updated = await c.env.DB.prepare(
     `SELECT u.id, u.email, u.username, u.role, u.status, u.created_at, u.last_login_at, p.display_name, p.avatar_updated_at

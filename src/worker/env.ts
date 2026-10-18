@@ -43,6 +43,8 @@ export interface Env {
   OLLAMA_MODEL?: string;
   /** Model behind Judge02 (a second opinion through the same Ollama endpoint and keys). */
   OLLAMA_MODEL_2?: string;
+  /** Vision model for marking tasks that come with an image (default gemma4:31b). */
+  OLLAMA_VISION_MODEL?: string;
   OLLAMA_BASE_URL?: string;
 }
 

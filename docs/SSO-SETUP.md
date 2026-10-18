@@ -114,3 +114,14 @@ rồi khởi động lại `npm run dev`.
 | `SSO_NOT_CONFIGURED` | Quên khai báo 1 trong 4 biến secret, hoặc khai sai tên |
 | App Google ở chế độ *Testing* | Email chưa nằm trong **Test users** → thêm vào hoặc **Publish app** |
 | Bí mật Microsoft không khớp | Copy lại giá trị **Value** của client secret (mỗi secret chỉ hiện 1 lần khi tạo) |
+
+
+## Liên kết tài khoản có sẵn (Connect Google/Microsoft)
+
+Ngoài đăng nhập SSO, người dùng đã có tài khoản có thể **liên kết** Google/Microsoft ngay trong app:
+
+- Vào **Profile → Connected accounts → Connect Google / Connect Microsoft**
+- Trình duyệt mở trang xác thực của Google/Microsoft, xác nhận xong quay lại trang Profile là xong
+- Từ đó đăng nhập bằng 1 chạm qua nút Google/Microsoft ở trang đăng nhập (khớp theo tài khoản đã liên kết trước, sau đó mới tới email)
+
+Người dùng phải **đăng nhập sẵn** mới liên kết được; mỗi tài khoản Google/Microsoft chỉ liên kết với 1 tài khoản nền tảng.

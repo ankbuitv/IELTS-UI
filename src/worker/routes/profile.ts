@@ -59,10 +59,14 @@ router.post('/avatar', async (c) => {
 
   await putBlob(c.env, 'profile_avatars', 'user_id', user.id, base64, { mime });
   const timestamp = nowIso();
+  // Upsert: a user without a profile row would silently lose the avatar on
+  // reload because the plain UPDATE would match zero rows.
   await c.env.DB.prepare(
-    'UPDATE user_profiles SET avatar_updated_at = ?, avatar_mime = ?, updated_at = ? WHERE user_id = ?',
+    `INSERT INTO user_profiles (user_id, display_name, avatar_updated_at, avatar_mime, created_at, updated_at)
+     VALUES (?, '', ?, ?, ?, ?)
+     ON CONFLICT (user_id) DO UPDATE SET avatar_updated_at = excluded.avatar_updated_at, avatar_mime = excluded.avatar_mime, updated_at = excluded.updated_at`,
   )
-    .bind(timestamp, mime, timestamp, user.id)
+    .bind(user.id, timestamp, mime, timestamp, timestamp)
     .run();
 
   return c.json({ ok: true, avatarUrl: avatarUrlFor(user.id, timestamp) });
@@ -73,7 +77,8 @@ router.delete('/avatar', async (c) => {
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   await deleteBlob(c.env, 'profile_avatars', 'user_id', user.id);
   await c.env.DB.prepare(
-    'UPDATE user_profiles SET avatar_updated_at = NULL, avatar_mime = NULL, updated_at = ? WHERE user_id = ?',
+    `INSERT INTO user_profiles (user_id, display_name, created_at, updated_at) VALUES (?, '', ?, ?)
+     ON CONFLICT (user_id) DO UPDATE SET avatar_updated_at = NULL, avatar_mime = NULL, updated_at = excluded.updated_at`,
   )
     .bind(nowIso(), user.id)
     .run();

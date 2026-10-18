@@ -7,6 +7,7 @@ import { formatDateTime } from '../../lib/format';
 interface AdminUserRow {
   id: string;
   email: string;
+  username: string | null;
   role: string;
   status: string;
   created_at: string;
@@ -207,10 +208,16 @@ function ManageUserForm({
 }) {
   const [role, setRole] = useState(user.role);
   const [status, setStatus] = useState(user.status);
+  const [username, setUsername] = useState(user.username ?? '');
   const [resetPassword, setResetPassword] = useState('');
 
   return (
     <div className="stack">
+      <Field label="Username" hint="3–24 characters: letters, numbers, dot, dash or underscore. Leave empty to remove it.">
+        {(id) => (
+          <TextInput id={id} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="e.g. nguyenan" />
+        )}
+      </Field>
       <Field label="Role">
         {(id) => (
           <Select id={id} value={role} onChange={(event) => setRole(event.target.value)}>
@@ -250,6 +257,7 @@ function ManageUserForm({
             await api.patch(`/api/admin/users/${user.id}`, {
               role,
               status,
+              ...(username.trim() ? { username: username.trim() } : {}),
               ...(resetPassword ? { resetPassword } : {}),
             });
             await onDone('User updated.');

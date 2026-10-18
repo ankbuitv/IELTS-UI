@@ -80,12 +80,12 @@ router.get('/users', async (c) => {
     bindings.push(query.role);
   }
   if (query.search) {
-    conditions.push('(u.email LIKE ? OR p.display_name LIKE ?)');
-    bindings.push(`%${query.search}%`, `%${query.search}%`);
+    conditions.push('(u.email LIKE ? OR p.display_name LIKE ? OR u.username LIKE ?)');
+    bindings.push(`%${query.search}%`, `%${query.search}%`, `%${query.search}%`);
   }
 
   const rows = await c.env.DB.prepare(
-    `SELECT u.id, u.email, u.role, u.status, u.created_at, u.last_login_at, p.display_name,
+    `SELECT u.id, u.email, u.username, u.role, u.status, u.created_at, u.last_login_at, p.display_name,
             (SELECT COUNT(*) FROM attempts a WHERE a.user_id = u.id) AS attempts,
             (SELECT COUNT(*) FROM classrooms c WHERE c.teacher_id = u.id) AS classrooms
        FROM users u
@@ -137,6 +137,13 @@ router.patch('/users/:id', async (c) => {
       role: z.enum(ROLES).optional(),
       status: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
       displayName: z.string().trim().min(1).max(120).optional(),
+      username: z
+        .string()
+        .trim()
+        .min(3)
+        .max(24)
+        .regex(/^[a-zA-Z0-9._-]+$/, 'Use letters, numbers, dot, dash or underscore.')
+        .optional(),
       resetPassword: z.string().min(10).max(200).optional(),
     }),
   );
@@ -161,10 +168,20 @@ router.patch('/users/:id', async (c) => {
     );
   }
 
+  if (body.username !== undefined) {
+    const clash = await c.env.DB.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?')
+      .bind(body.username, userId)
+      .first<{ id: string }>();
+    if (clash) throw ApiError.validation('That username is already taken.');
+    statements.push(
+      c.env.DB.prepare('UPDATE users SET username = ?, updated_at = ? WHERE id = ?').bind(body.username, timestamp, userId),
+    );
+  }
+
   if (body.displayName !== undefined) {
     statements.push(
-      c.env.DB.prepare('UPDATE user_profiles SET display_name = ?, updated_at = ? WHERE user_id = ?')
-        .bind(body.displayName, timestamp, userId),
+      c.env.DB.prepare("INSERT INTO user_profiles (user_id, display_name, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET display_name = excluded.display_name, updated_at = excluded.updated_at")
+        .bind(userId, body.displayName, timestamp, timestamp),
     );
   }
 

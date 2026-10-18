@@ -13,6 +13,8 @@ import { DEFAULT_OLLAMA_MODEL, isUsable, loadProviders } from './providers';
  * a response: candidates and teachers only see the labels.
  */
 export const DEFAULT_JUDGE_2_MODEL = 'gemma4:31b';
+/** Image tasks (a chart, map or diagram) are marked on a vision-capable model. */
+export const DEFAULT_VISION_MODEL = 'gemma4:31b';
 
 export interface Judge {
   label: JudgeLabel;
@@ -29,13 +31,19 @@ export const AI_NOT_CONFIGURED_MESSAGE =
  * on two different models; with any other provider there is a single judge, and
  * the combined band is simply that judge's band.
  */
-export async function resolveJudges(env: Env): Promise<Judge[]> {
+export async function resolveJudges(env: Env, options: { vision?: boolean } = {}): Promise<Judge[]> {
   const usable = (await loadProviders(env)).filter((provider) => isUsable(provider));
   if (usable.length === 0) throw new ApiError('AI_UNAVAILABLE', AI_NOT_CONFIGURED_MESSAGE);
 
   const ollama = usable.filter((provider) => provider.kind === 'OLLAMA');
   if (ollama.length > 0) {
     const lead = ollama.find((provider) => provider.isDefault) ?? ollama[0]!;
+    // A task with an image (Writing Task 1 on a chart) goes to a vision model —
+    // one judge on it by default: the same model twice is not a second opinion.
+    if (options.vision) {
+      const visionModel = (env.OLLAMA_VISION_MODEL ?? '').trim() || DEFAULT_VISION_MODEL;
+      return [{ label: 'Judge01', providerId: lead.id, model: visionModel }];
+    }
     const first = lead.model.trim() || DEFAULT_OLLAMA_MODEL;
     const second = (env.OLLAMA_MODEL_2 ?? '').trim() || DEFAULT_JUDGE_2_MODEL;
     const judges: Judge[] = [{ label: 'Judge01', providerId: lead.id, model: first }];

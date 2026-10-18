@@ -435,24 +435,34 @@ export async function updateProfile(
     links?: Array<{ label: string; url: string }>;
   },
 ): Promise<void> {
+  const timestamp = nowIso();
+  // Upsert so accounts without a profile row keep every field they save.
   await env.DB.prepare(
-    `UPDATE user_profiles
-        SET display_name = COALESCE(?, display_name),
-            target_band = ?,
-            timezone = COALESCE(?, timezone),
-            bio = COALESCE(?, bio),
-            links_json = COALESCE(?, links_json),
-            updated_at = ?
-      WHERE user_id = ?`,
+    `INSERT INTO user_profiles (user_id, display_name, target_band, timezone, bio, links_json, created_at, updated_at)
+     VALUES (?, COALESCE(?, ''), ?, ?, COALESCE(?, ''), COALESCE(?, '[]'), ?, ?)
+     ON CONFLICT (user_id) DO UPDATE SET
+       display_name = COALESCE(?, display_name),
+       target_band = ?,
+       timezone = COALESCE(?, timezone),
+       bio = COALESCE(?, bio),
+       links_json = COALESCE(?, links_json),
+       updated_at = ?`,
   )
     .bind(
+      userId,
       input.displayName ?? null,
       input.targetBand ?? null,
       input.timezone ?? null,
       input.bio ?? null,
       input.links ? JSON.stringify(input.links.slice(0, 5)) : null,
-      nowIso(),
-      userId,
+      timestamp,
+      timestamp,
+      input.displayName ?? null,
+      input.targetBand ?? null,
+      input.timezone ?? null,
+      input.bio ?? null,
+      input.links ? JSON.stringify(input.links.slice(0, 5)) : null,
+      timestamp,
     )
     .run();
 }

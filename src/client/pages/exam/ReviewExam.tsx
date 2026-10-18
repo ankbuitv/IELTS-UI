@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
@@ -214,9 +214,9 @@ export function AttemptReviewPage() {
       ) : isWriting ? (
         <WritingReview session={activeSession} sections={previewQ.data?.test.sections ?? []} />
       ) : (
-        <div className="exam-body exam-body--split" style={{ '--passage-share': '46%' } as React.CSSProperties}>
-          {/* Left: the material, exactly as it was in the exam */}
-          <div className="exam-pane">
+        <SplitPanes
+          share={46}
+          left={
             <div className="exam-pane__scroll">
               {activeSectionResult?.passage ? (
                 <article className="passage-article">
@@ -238,6 +238,8 @@ export function AttemptReviewPage() {
                 </article>
               ) : previewQ.loading ? (
                 <Loading label="Loading the paper…" />
+              ) : activeSectionResult?.audio || activeSectionResult?.transcript || activePaperSection?.transcript ? (
+                null
               ) : (
                 <p className="muted small" style={{ padding: 12 }}>
                   {activePaperSection?.passage
@@ -260,10 +262,8 @@ export function AttemptReviewPage() {
                 <TranscriptView transcript={activePaperSection.transcript} highlightSegmentId={null} />
               ) : null}
             </div>
-          </div>
-
-          {/* Right: read-only questions with answers + evidence */}
-          <div className="exam-pane">
+          }
+          right={
             <div className="exam-pane__scroll">
               {activePaperSection ? (
                 activePaperSection.groups.map((group) => {
@@ -353,8 +353,8 @@ export function AttemptReviewPage() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
+          }
+        />
       )}
 
       {/* Bottom: jump strip, green/red per question */}
@@ -389,6 +389,65 @@ export function AttemptReviewPage() {
   );
 }
 
+/**
+ * The exam's two panes with the same drag-the-divider control as the exam
+ * itself: the width is shared with the exam (`exam.passageWidth` in storage)
+ * and the divider also moves with the arrow keys.
+ */
+function SplitPanes({ share, left, right }: { share: number; left: ReactNode; right: ReactNode }) {
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState<number>(() => {
+    const stored = Number(window.localStorage.getItem('exam.passageWidth'));
+    return Number.isFinite(stored) && stored >= 26 && stored <= 72 ? stored : share;
+  });
+  const setWidthStored = (value: number) => {
+    const clamped = Math.min(72, Math.max(26, value));
+    setWidth(clamped);
+    try {
+      window.localStorage.setItem('exam.passageWidth', String(Math.round(clamped * 10) / 10));
+    } catch {
+      /* private mode: the width still applies for this view */
+    }
+  };
+
+  return (
+    <div className="exam-body exam-body--split" ref={bodyRef} style={{ '--passage-share': `${width}%` } as React.CSSProperties}>
+      <section className="exam-pane exam-pane--material">{left}</section>
+      <div
+        className="exam-divider"
+        role="separator"
+        tabIndex={0}
+        aria-orientation="vertical"
+        aria-valuenow={Math.round(width)}
+        aria-label="Resize the two panes (arrow keys)"
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+          event.preventDefault();
+          setWidthStored(width + (event.key === 'ArrowRight' ? 3 : -3));
+        }}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+          const body = bodyRef.current;
+          if (!body) return;
+          const rect = body.getBoundingClientRect();
+          if (rect.width === 0) return;
+          setWidthStored(((event.clientX - rect.left) / rect.width) * 100);
+        }}
+        onPointerUp={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+        }}
+      />
+      <section className="exam-pane exam-pane--work">{right}</section>
+    </div>
+  );
+}
+
 function WritingReview({ session, sections }: { session: AttemptResultPayload['sessions'][number] | null; sections: CandidateSection[] }) {
   const [taskIdx, setTaskIdx] = useState(0);
   if (!session) return null;
@@ -410,9 +469,9 @@ function WritingReview({ session, sections }: { session: AttemptResultPayload['s
   const bandText = (band: number | null) => (band === null || band === undefined ? '—' : formatBand(band));
 
   return (
-    <div className="exam-body exam-body--split" style={{ '--passage-share': '42%' } as React.CSSProperties}>
-      {/* Left: the task prompt, exactly like the paper */}
-      <div className="exam-pane">
+    <SplitPanes
+      share={42}
+      left={
         <div className="exam-pane__scroll">
           {ref ? (
             <WritingPrompt item={ref} />
@@ -428,10 +487,8 @@ function WritingReview({ session, sections }: { session: AttemptResultPayload['s
             </article>
           )}
         </div>
-      </div>
-
-      {/* Right: the same answer box as the exam — marks on top */}
-      <div className="exam-pane">
+      }
+      right={
         <div className="exam-pane__scroll">
           <div className="writing-answer">
             {submissions.length > 1 ? (
@@ -514,8 +571,8 @@ function WritingReview({ session, sections }: { session: AttemptResultPayload['s
             </div>
           ) : null}
         </div>
-      </div>
-    </div>
+      }
+    />
   );
 }
 
@@ -558,9 +615,9 @@ function SpeakingReview({ sessionId }: { sessionId: string }) {
   const partLabel = (part: number) => (part === 1 ? 'Part 1' : part === 2 ? 'Part 2 · Long turn' : 'Part 3');
 
   return (
-    <div className="exam-body exam-body--split" style={{ '--passage-share': '42%' } as React.CSSProperties}>
-      {/* Left: the speaking topic */}
-      <div className="exam-pane">
+    <SplitPanes
+      share={42}
+      left={
         <div className="exam-pane__scroll">
           <article className="passage-article">
             <div className="passage-article__head">
@@ -591,10 +648,8 @@ function SpeakingReview({ sessionId }: { sessionId: string }) {
             )}
           </article>
         </div>
-      </div>
-
-      {/* Right: answers + AI judgement */}
-      <div className="exam-pane">
+      }
+      right={
         <div className="exam-pane__scroll">
           <div className="question-block">
             <div className="row" style={{ gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
@@ -673,8 +728,8 @@ function SpeakingReview({ sessionId }: { sessionId: string }) {
             ) : null}
           </div>
         </div>
-      </div>
-    </div>
+      }
+    />
   );
 }
 

@@ -288,13 +288,13 @@ export interface CompletionRequest {
 }
 
 /**
- * Only OpenAI's endpoint accepts image parts. For every other provider the
- * images are replaced by a note saying they were dropped, so a model is never
- * asked to describe a picture it cannot see.
+ * OpenAI's endpoint and Ollama (vision models such as gemma) both accept image
+ * parts. For every other provider the images are replaced by a note saying they
+ * were dropped, so a model is never asked to describe a picture it cannot see.
  */
 function normaliseMessageContent(content: string | ChatContentPart[], kind: AiProviderKind): string | ChatContentPart[] {
   if (typeof content === 'string') return content;
-  if (kind === 'OPENAI') return content;
+  if (kind === 'OPENAI' || kind === 'OLLAMA') return content;
   const images = content.filter((part) => part.type === 'image_url').length;
   const text = content
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
