@@ -82,6 +82,7 @@ const MENTOR_GROUP: NavGroup = {
     { to: '/my-sessions', label: 'Sessions', icon: 'video' },
     { to: '/classes', label: 'My classes', icon: 'users' },
     { to: '/mentors', label: 'Directory', icon: 'graduation' },
+    { to: '/training', label: 'Training', icon: 'bulb' },
   ],
 };
 
@@ -116,6 +117,7 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
             { to: '/admin', label: 'Admin console', icon: 'shield' },
             { to: '/teacher', label: 'Teaching', icon: 'presentation' },
             { to: '/teacher/marking', label: 'Marking queue', icon: 'pen' },
+            { to: '/training', label: 'Training', icon: 'bulb' },
           ],
         },
         LEARN_GROUP,
@@ -140,6 +142,7 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
           items: [
             { to: '/teacher', label: 'Teaching console', icon: 'presentation' },
             { to: '/teacher/marking', label: 'Marking queue', icon: 'pen' },
+            { to: '/training', label: 'Training', icon: 'bulb' },
             { to: '/practice', label: 'Practice', icon: 'book' },
             { to: '/learn', label: 'Learn path', icon: 'target' },
           ],

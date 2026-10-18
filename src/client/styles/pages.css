@@ -55,6 +55,10 @@
 .dash-hero h1 { color: #fff; margin: 0 0 6px; font-size: 2rem; letter-spacing: -0.03em; }
 .dash-hero p:not(.dash-hero__kicker) { margin: 0; color: #c3cde0; font-size: 0.98rem; }
 .dash-hero__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.dash-hero__stats { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 2px; }
+.dash-stat { display: flex; flex-direction: column; gap: 2px; min-width: 96px; padding: 10px 14px; border-radius: 16px; background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.22); }
+.dash-stat__value { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; color: #fff; }
+.dash-stat__label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(255, 255, 255, 0.72); }
 .dash-hero .btn:not(.btn--primary) { --btn-bg: rgba(255, 255, 255, 0.08); --btn-bd: rgba(255, 255, 255, 0.34); --btn-fg: #fff; --btn-edge: rgba(0, 0, 0, 0.28); }
 .dash-hero .btn:not(.btn--primary):hover:not(:disabled) { --btn-bg: rgba(255, 255, 255, 0.16); --btn-bd: #fff; --btn-edge: rgba(0, 0, 0, 0.28); color: #fff; }
 .dash-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }

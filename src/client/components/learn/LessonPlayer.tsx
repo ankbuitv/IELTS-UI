@@ -75,6 +75,11 @@ function embeddableVideo(url: string): string | null {
   return /^https:\/\//.test(value) ? value : null;
 }
 
+/** True for directly streamable lecture files (uploaded mp4/webm or any https .mp4). */
+function isDirectMedia(url: string): boolean {
+  return /\.(mp4|webm|ogv|ogg|m4v)(\?|$)/i.test(url.trim()) || url.trim().startsWith('/api/files/');
+}
+
 /**
  * Translations already fetched in this tab.
  *
@@ -571,7 +576,17 @@ export function LessonPlayer({
             <p className="lesson__retry" style={{ color: '#b8860b', fontWeight: 700 }}>★ Legendary — harder set. Look-ups are off; answer from memory.</p>
           ) : null}
           {walletError ? <p className="lesson__retry muted">The shop is unreachable, so hints and refills are off for this lesson.</p> : null}
-          {videoUrl && embeddableVideo(videoUrl) ? (
+          {videoUrl && isDirectMedia(videoUrl) ? (
+            <div className="lesson__video" style={{ margin: '0 0 14px' }}>
+              <video
+                src={videoUrl}
+                controls
+                playsInline
+                preload="metadata"
+                style={{ width: '100%', aspectRatio: '16 / 9', borderRadius: 12, background: '#000' }}
+              />
+            </div>
+          ) : videoUrl && embeddableVideo(videoUrl) ? (
             <div className="lesson__video" style={{ margin: '0 0 14px' }}>
               <iframe
                 src={embeddableVideo(videoUrl)!}

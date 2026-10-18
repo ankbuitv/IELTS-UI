@@ -1,11 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { AppBindings } from '../env';
+import type { AppBindings, Env } from '../env';
 import { assertCsrf, assertSameOrigin } from '../lib/http';
+import { ApiError } from '../lib/errors';
 import { parseBody } from '../lib/validate';
 import { requireAuth } from '../middleware/auth';
 import { currentUser } from '../middleware/auth';
 import { acceptClassroomInvite, joinClassroomByCode } from '../services/teacher-service';
+import { newId } from '../lib/ids';
+import { nowIso } from '../lib/ids';
 
 const router = new Hono<AppBindings>();
 
@@ -70,6 +73,85 @@ router.get('/classrooms/mine', requireAuth, async (c) => {
       activeAssignments: row.active_assignments,
     })),
   });
+});
+
+/** Membership check shared by the course chat routes. */
+async function assertClassroomAccess(env: Env, classroomId: string, userId: string, role: string) {
+  if (role === 'ADMIN') {
+    const row = await env.DB.prepare('SELECT id FROM classrooms WHERE id = ?').bind(classroomId).first<{ id: string }>();
+    if (!row) throw ApiError.notFound('That classroom does not exist.');
+    return;
+  }
+  const member = await env.DB.prepare(
+    `SELECT 1 AS ok FROM classroom_members WHERE classroom_id = ? AND user_id = ? AND status = 'ACTIVE'
+     UNION SELECT 1 AS ok FROM classrooms WHERE id = ? AND teacher_id = ? LIMIT 1`,
+  )
+    .bind(classroomId, userId, classroomId, userId)
+    .first<{ ok: number }>();
+  if (!member) throw ApiError.forbidden('Join this classroom to see its chat.');
+}
+
+interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  body: string;
+  createdAt: string;
+}
+
+/** The course chat stream, newest 100, oldest first. */
+router.get('/classrooms/:classroomId/messages', requireAuth, async (c) => {
+  const user = currentUser(c);
+  const classroomId = c.req.param('classroomId');
+  await assertClassroomAccess(c.env, classroomId, user.id, user.role);
+  const rows = await c.env.DB.prepare(
+    `SELECT m.id, m.sender_id, m.body, m.created_at,
+            COALESCE(NULLIF(p.display_name, ''), u.username, 'Someone') AS display_name
+       FROM classroom_messages m
+       JOIN users u ON u.id = m.sender_id
+       LEFT JOIN user_profiles p ON p.user_id = m.sender_id
+      WHERE m.classroom_id = ?
+      ORDER BY m.created_at DESC
+      LIMIT 100`,
+  )
+    .bind(classroomId)
+    .all<{ id: string; sender_id: string; body: string; created_at: string; display_name: string }>();
+  const messages: ChatMessage[] = rows.results
+    .map((row) => ({
+      id: row.id,
+      senderId: row.sender_id,
+      senderName: row.display_name,
+      body: row.body,
+      createdAt: row.created_at,
+    }))
+    .reverse();
+  return c.json({ messages });
+});
+
+/** Post a course chat message. */
+router.post('/classrooms/:classroomId/messages', requireAuth, async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const classroomId = c.req.param('classroomId');
+  await assertClassroomAccess(c.env, classroomId, user.id, user.role);
+  const body = await parseBody(c, z.object({ body: z.string().min(1).max(4000) }));
+  const text = body.body.trim();
+  if (!text) throw ApiError.validation('Write something first.');
+  const id = newId('ccm');
+  const timestamp = nowIso();
+  await c.env.DB.prepare(
+    'INSERT INTO classroom_messages (id, classroom_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)',
+  )
+    .bind(id, classroomId, user.id, text, timestamp)
+    .run();
+  const message: ChatMessage = {
+    id,
+    senderId: user.id,
+    senderName: user.displayName || user.username || 'Someone',
+    body: text,
+    createdAt: timestamp,
+  };
+  return c.json({ message }, 201);
 });
 
 export default router;

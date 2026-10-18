@@ -22,6 +22,7 @@ import {
 } from '../../components/ui';
 import { Icon, type IconName } from '../../components/Icon';
 import { ResultSummary, type AttemptResultPayload } from '../../components/ResultView';
+import { ClassroomChatButton } from '../../components/ClassroomChat';
 import { AccuracyList } from '../../components/charts';
 import { SkillPerformanceTable, TrendBars } from './Dashboard';
 import { AttemptList, newestFirst } from '../../components/AttemptList';
@@ -712,9 +713,12 @@ export function StudentClassroomsPage() {
             <div className="card" key={classroom.id}>
               <h3>{classroom.name}</h3>
               <p className="small muted">{classroom.description || 'No description.'}</p>
-              <Badge tone="neutral">
-                {classroom.activeAssignments} active assignment{classroom.activeAssignments === 1 ? '' : 's'}
-              </Badge>
+              <div className="row gap-8" style={{ alignItems: 'center' }}>
+                <Badge tone="neutral">
+                  {classroom.activeAssignments} active assignment{classroom.activeAssignments === 1 ? '' : 's'}
+                </Badge>
+                <ClassroomChatButton classroomId={classroom.id} classroomName={classroom.name} />
+              </div>
             </div>
           ))}
         </div>
@@ -931,6 +935,7 @@ export function ProfilePage() {
       ) : (
         <>
         <TwoFactorCard />
+        <SessionsCard />
         <Card title="Change password" hint="Changing your password signs out all other sessions.">
           <Field label="Current password" required>
             {(id) => (
@@ -976,6 +981,32 @@ export function ProfilePage() {
         </>
       
       )}
+
+      <Card title="Export your data" hint="One JSON file with your profile, attempts, vocabulary and progress.">
+        <p className="small muted">
+          Download everything the platform stores about you. Use it to keep your own records or move to another tool.
+        </p>
+        <Button
+          variant="secondary"
+          onClick={async () => {
+            try {
+              const data = await api.get<Record<string, unknown>>('/api/student/export');
+              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const anchor = document.createElement('a');
+              anchor.href = url;
+              anchor.download = `ielts-export-${new Date().toISOString().slice(0, 10)}.json`;
+              anchor.click();
+              URL.revokeObjectURL(url);
+              toast.push('Export downloaded.', 'success');
+            } catch (exportError) {
+              toast.push(describeError(exportError), 'error');
+            }
+          }}
+        >
+          Download my data (JSON)
+        </Button>
+      </Card>
 
       <Card title="Data and privacy">
         <p className="small muted">
@@ -1114,4 +1145,105 @@ function TwoFactorCard() {
       )}
     </Card>
   );
+}
+
+
+/** Account management: the browser sessions signed into this account. */
+function SessionsCard() {
+  const toast = useToast();
+  const [sessions, setSessions] = useState<
+    Array<{ sessionId: string; createdAt: string; lastSeenAt: string; ip: string | null; userAgent: string | null; current: boolean }>
+  >([]);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const result = await api.get<{ sessions: typeof sessions }>('/api/auth/sessions');
+      setSessions(result.sessions);
+    } catch (cause) {
+      toast.push(describeError(cause), 'error');
+    } finally {
+      setLoaded(true);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const revoke = async (sessionId: string) => {
+    setBusy(true);
+    try {
+      await api.post(`/api/auth/sessions/${sessionId}/revoke`, {});
+      toast.push('Session signed out.', 'success');
+      await load();
+    } catch (cause) {
+      toast.push(describeError(cause), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revokeOthers = async () => {
+    setBusy(true);
+    try {
+      const result = await api.post<{ revoked: number }>('/api/auth/sessions/revoke-others', {});
+      toast.push(`${result.revoked} other session${result.revoked === 1 ? '' : 's'} signed out.`, 'success');
+      await load();
+    } catch (cause) {
+      toast.push(describeError(cause), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="Active sessions" hint="Every browser or phone currently signed in to your account.">
+      {!loaded ? (
+        <Loading label="Loading sessions…" />
+      ) : sessions.length === 0 ? (
+        <EmptyState title="No active sessions" icon="monitor">
+          <p>Sessions appear here as soon as you sign in from a device.</p>
+        </EmptyState>
+      ) : (
+        <div className="stack" style={{ gap: 10 }}>
+          {sessions.map((session) => (
+            <div key={session.sessionId} className="row" style={{ alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
+              <div style={{ minWidth: 0 }}>
+                <p className="small" style={{ margin: 0, fontWeight: 700 }}>
+                  {session.current ? 'This device' : truncateAgent(session.userAgent)}
+                </p>
+                <p className="tiny muted" style={{ margin: 0 }}>
+                  Last seen {relativeTime(session.lastSeenAt)} · signed in {relativeTime(session.createdAt)}
+                  {session.ip ? ` · ${session.ip}` : ''}
+                </p>
+              </div>
+              {session.current ? (
+                <Badge tone="success">Current</Badge>
+              ) : (
+                <Button size="sm" variant="danger" loading={busy} onClick={() => void revoke(session.sessionId)}>
+                  Sign out
+                </Button>
+              )}
+            </div>
+          ))}
+          {sessions.length > 1 ? (
+            <div>
+              <Button size="sm" loading={busy} onClick={revokeOthers}>
+                Sign out all other devices
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function truncateAgent(agent: string | null): string {
+  if (!agent) return 'Unknown device';
+  const short = agent.length > 72 ? `${agent.slice(0, 72)}…` : agent;
+  return short;
 }

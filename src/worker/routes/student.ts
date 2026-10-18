@@ -103,6 +103,40 @@ const vocabularyQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional(),
 });
 
+/** Everything this learner owns, as one JSON document (data export). */
+router.get('/export', async (c) => {
+  const user = currentUser(c);
+  const profile = await c.env.DB.prepare(
+    `SELECT u.email, u.username, u.role, u.created_at, p.display_name, p.target_band, p.timezone
+       FROM users u LEFT JOIN user_profiles p ON p.user_id = u.id WHERE u.id = ?`,
+  )
+    .bind(user.id)
+    .first();
+  const attempts = await c.env.DB.prepare(
+    `SELECT a.id, a.test_type, a.status, a.started_at, a.submitted_at, a.raw_score, a.total_questions,
+            a.estimated_band, t.title AS test_title
+       FROM attempts a LEFT JOIN test_versions v ON v.id = a.test_version_id
+       LEFT JOIN tests t ON t.id = v.test_id
+      WHERE a.user_id = ?
+      ORDER BY a.started_at DESC`,
+  )
+    .bind(user.id)
+    .all();
+  const vocabulary = await c.env.DB.prepare('SELECT * FROM vocabulary_entries WHERE user_id = ? ORDER BY created_at DESC')
+    .bind(user.id)
+    .all();
+  const learn = await c.env.DB.prepare('SELECT xp, streak, best_streak, coins FROM learn_profiles WHERE user_id = ?')
+    .bind(user.id)
+    .first();
+  return c.json({
+    exportedAt: new Date().toISOString(),
+    profile,
+    attempts: attempts.results,
+    vocabulary: vocabulary.results,
+    learn,
+  });
+});
+
 router.get('/vocabulary', async (c) => {
   const user = currentUser(c);
   const query = parseQuery(c, vocabularyQuerySchema);

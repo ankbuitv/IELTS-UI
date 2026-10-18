@@ -42,6 +42,7 @@ import { MentorProfilePage } from './pages/mentor/MentorProfilePage';
 import { MySessionsPage } from './pages/mentor/MySessionsPage';
 import { MentorConsolePage } from './pages/mentor/MentorConsolePage';
 import { ClassesPage } from './pages/mentor/ClassesPage';
+import { TrainingPage } from './pages/staff/TrainingPage';
 import { ClassDetailPage } from './pages/mentor/ClassDetailPage';
 import { CallRoomPage } from './pages/mentor/CallRoomPage';
 
@@ -257,6 +258,14 @@ export function App() {
           element={
             <RequireAuth>
               <DictionaryPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="training"
+          element={
+            <RequireAuth roles={['MENTOR', 'TEACHER', 'ADMIN']}>
+              <TrainingPage />
             </RequireAuth>
           }
         />

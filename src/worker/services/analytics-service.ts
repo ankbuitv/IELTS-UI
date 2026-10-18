@@ -689,7 +689,18 @@ export interface StudentDashboard {
   trends: TrendPoint[];
   mockHistory: AttemptSummary[];
   practiceHistory: AttemptSummary[];
-  totals: { attempts: number; submitted: number; inProgress: number; fullMocks: number };
+  totals: {
+    attempts: number;
+    submitted: number;
+    inProgress: number;
+    fullMocks: number;
+    /** Wall-clock seconds across finished attempts (capped per attempt). */
+    totalTimeSeconds: number;
+    averageBand: number | null;
+    streakDays: number;
+    xpTotal: number;
+    coins: number;
+  };
   /** Band estimate per skill and overall, built from every kind of marking (see `estimates-service`). */
   estimates: BandEstimates;
 }
@@ -720,11 +731,28 @@ export async function getStudentDashboard(
         COUNT(*) AS attempts,
         SUM(CASE WHEN status IN ('SUBMITTED','EXPIRED') THEN 1 ELSE 0 END) AS submitted,
         SUM(CASE WHEN status = 'IN_PROGRESS' THEN 1 ELSE 0 END) AS in_progress,
-        SUM(CASE WHEN test_type = 'FULL_MOCK' AND status IN ('SUBMITTED','EXPIRED') THEN 1 ELSE 0 END) AS full_mocks
+        SUM(CASE WHEN test_type = 'FULL_MOCK' AND status IN ('SUBMITTED','EXPIRED') THEN 1 ELSE 0 END) AS full_mocks,
+        SUM(CASE WHEN status IN ('SUBMITTED','EXPIRED')
+              THEN MIN(MAX((julianday(submitted_at) - julianday(started_at)) * 86400, 0), 14400)
+              ELSE 0 END) AS total_time,
+        AVG(CASE WHEN status IN ('SUBMITTED','EXPIRED') THEN estimated_band END) AS avg_band
        FROM attempts WHERE user_id = ?`,
   )
     .bind(userId)
-    .first<{ attempts: number; submitted: number | null; in_progress: number | null; full_mocks: number | null }>();
+    .first<{
+      attempts: number;
+      submitted: number | null;
+      in_progress: number | null;
+      full_mocks: number | null;
+      total_time: number | null;
+      avg_band: number | null;
+    }>();
+
+  const learnProfile = await env.DB.prepare(
+    'SELECT xp, streak, coins FROM learn_profiles WHERE user_id = ?',
+  )
+    .bind(userId)
+    .first<{ xp: number; streak: number; coins: number }>();
 
   const mockHistory = await listAttempts(env, userId, { ...filters, testType: 'FULL_MOCK', limit: 25 });
   const practiceHistory = attempts.filter((attempt) => attempt.testType !== 'FULL_MOCK');
@@ -744,6 +772,11 @@ export async function getStudentDashboard(
       submitted: counts?.submitted ?? 0,
       inProgress: counts?.in_progress ?? 0,
       fullMocks: counts?.full_mocks ?? 0,
+      totalTimeSeconds: Math.round(counts?.total_time ?? 0),
+      averageBand: counts?.avg_band !== null && counts?.avg_band !== undefined ? Math.round(counts.avg_band * 10) / 10 : null,
+      streakDays: learnProfile?.streak ?? 0,
+      xpTotal: learnProfile?.xp ?? 0,
+      coins: learnProfile?.coins ?? 0,
     },
     estimates,
   };

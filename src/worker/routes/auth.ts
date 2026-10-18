@@ -26,6 +26,7 @@ import {
 import { recordAudit } from '../lib/audit';
 import { currentUser } from '../middleware/auth';
 import { parseBody } from '../lib/validate';
+import { nowIso } from '../lib/ids';
 import { loadPlatformSettings } from '../lib/settings';
 import { resolveSession } from '../services/auth-service';
 import { getSessionToken } from '../lib/http';
@@ -152,6 +153,60 @@ router.post('/login', async (c) => {
 });
 
 // ---------------------------------------------------------------- 2FA & OTP
+
+/** Active sign-in sessions of the current account (account management). */
+router.get('/sessions', async (c) => {
+  const user = currentUser(c);
+  const currentId = c.get('session')?.id ?? null;
+  const rows = await c.env.DB.prepare(
+    `SELECT id, created_at, last_seen_at, expires_at, ip, user_agent
+       FROM sessions
+      WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+      ORDER BY last_seen_at DESC
+      LIMIT 30`,
+  )
+    .bind(user.id, nowIso())
+    .all<{ id: string; created_at: string; last_seen_at: string; expires_at: string; ip: string | null; user_agent: string | null }>();
+  return c.json({
+    sessions: rows.results.map((row) => ({
+      sessionId: row.id,
+      createdAt: row.created_at,
+      lastSeenAt: row.last_seen_at,
+      expiresAt: row.expires_at,
+      ip: row.ip,
+      userAgent: row.user_agent,
+      current: row.id === currentId,
+    })),
+  });
+});
+
+/** Revoke one session — the current one signs the browser out. */
+router.post('/sessions/:sessionId/revoke', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const sessionId = c.req.param('sessionId');
+  const result = await c.env.DB.prepare(
+    'UPDATE sessions SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL',
+  )
+    .bind(nowIso(), sessionId, user.id)
+    .run();
+  if (!result.meta.changes) throw ApiError.notFound('That session is not active.');
+  if (sessionId === c.get('session')?.id) deleteCookie(c, c.env.SESSION_COOKIE_NAME || 'ielts_session', { path: '/' });
+  return c.json({ ok: true, signedOutCurrent: sessionId === c.get('session')?.id });
+});
+
+/** Revoke every session except the one in this browser. */
+router.post('/sessions/revoke-others', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const currentId = c.get('session')?.id ?? '';
+  const result = await c.env.DB.prepare(
+    'UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND id <> ? AND revoked_at IS NULL',
+  )
+    .bind(nowIso(), user.id, currentId)
+    .run();
+  return c.json({ ok: true, revoked: result.meta.changes ?? 0 });
+});
 
 router.get('/2fa/status', async (c) => {
   const user = currentUser(c);
