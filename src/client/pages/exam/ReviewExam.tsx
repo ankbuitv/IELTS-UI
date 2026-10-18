@@ -7,6 +7,8 @@ import { Icon } from '../../components/Icon';
 import { QuestionRenderer } from '../../components/exam/QuestionRenderer';
 import { AnswerExplanation, evidenceSegmentId } from '../../components/exam/AnswerExplanation';
 import { TranscriptView } from '../../components/exam/TranscriptView';
+import { WritingPrompt, writingTasksOf, type WritingTaskRef } from '../../components/exam/WritingEditor';
+import { AiMarkPanel } from '../../components/AiMarkPanel';
 import type { AttemptResultPayload } from '../../components/ResultView';
 import type { CandidateSection } from '@shared/question-types';
 import type { CandidateTestPayload } from '@shared/candidate';
@@ -210,7 +212,7 @@ export function AttemptReviewPage() {
       {speakingTab && result.speaking ? (
         <SpeakingReview sessionId={result.speaking.sessionId} />
       ) : isWriting ? (
-        <WritingReview session={activeSession} />
+        <WritingReview session={activeSession} sections={previewQ.data?.test.sections ?? []} />
       ) : (
         <div className="exam-body exam-body--split" style={{ '--passage-share': '46%' } as React.CSSProperties}>
           {/* Left: the material, exactly as it was in the exam */}
@@ -387,85 +389,130 @@ export function AttemptReviewPage() {
   );
 }
 
-function WritingReview({ session }: { session: AttemptResultPayload['sessions'][number] | null }) {
+function WritingReview({ session, sections }: { session: AttemptResultPayload['sessions'][number] | null; sections: CandidateSection[] }) {
   const [taskIdx, setTaskIdx] = useState(0);
   if (!session) return null;
-  const tasks = session.writing ?? [];
-  if (tasks.length === 0) {
+  const submissions = session.writing ?? [];
+  if (submissions.length === 0) {
     return (
       <div className="stack" style={{ padding: 24 }}>
         <p className="muted">No writing responses were submitted in this session.</p>
       </div>
     );
   }
-  const task = tasks[Math.min(taskIdx, tasks.length - 1)]!;
+  const idx = Math.min(taskIdx, submissions.length - 1);
+  const submission = submissions[idx]!;
+  // The prompt exactly as the exam showed it (rubric, requirements, chart).
+  const paperTasks = writingTasksOf(sections);
+  const ref: WritingTaskRef | null = paperTasks.find((item) => item.task.id === submission.questionId) ?? paperTasks[idx] ?? null;
+  const ai = submission.ai ?? null;
+  const teacher = submission.score && submission.score.source !== 'AI' ? submission.score : null;
+  const bandText = (band: number | null) => (band === null || band === undefined ? '—' : formatBand(band));
+
   return (
     <div className="exam-body exam-body--split" style={{ '--passage-share': '42%' } as React.CSSProperties}>
       {/* Left: the task prompt, exactly like the paper */}
       <div className="exam-pane">
         <div className="exam-pane__scroll">
-          {tasks.length > 1 ? (
-            <div className="exam-seg" role="tablist" style={{ margin: '10px 12px 0' }}>
-              {tasks.map((item, index) => (
-                <button
-                  key={item.submissionId}
-                  type="button"
-                  role="tab"
-                  aria-selected={index === taskIdx}
-                  className={`exam-seg__btn ${index === taskIdx ? 'is-on' : ''}`}
-                  onClick={() => setTaskIdx(index)}
-                >
-                  {item.taskLabel}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <article className="passage-article">
-            <div className="passage-article__head">
-              <h2>{task.taskLabel}</h2>
-              <span className="tiny muted nowrap">{task.wordCount} words</span>
-            </div>
-            <p className="small muted" style={{ whiteSpace: 'pre-wrap' }}>{task.prompt}</p>
-          </article>
+          {ref ? (
+            <WritingPrompt item={ref} />
+          ) : (
+            <article className="passage-article">
+              <div className="passage-article__head">
+                <h2>{submission.taskLabel || 'Task'}</h2>
+                <span className="tiny muted nowrap">{submission.wordCount} words</span>
+              </div>
+              {submission.prompt ? (
+                <p className="small muted" style={{ whiteSpace: 'pre-wrap' }}>{submission.prompt}</p>
+              ) : null}
+            </article>
+          )}
         </div>
       </div>
 
-      {/* Right: the script with the examiner's marks inline */}
+      {/* Right: the same answer box as the exam — marks on top */}
       <div className="exam-pane">
         <div className="exam-pane__scroll">
-          <div className="question-block">
-            <div className="row" style={{ gap: 8, marginBottom: 8 }}>
-              {task.ai?.band !== null && task.ai?.band !== undefined ? (
-                <span className="mchip mchip--violet">AI band {task.ai.band}</span>
-              ) : task.score?.band !== null && task.score?.band !== undefined ? (
-                <span className="mchip mchip--violet">Band {task.score.band}</span>
-              ) : (
-                <span className="mchip">Not marked</span>
-              )}
-              {task.score?.band !== null && task.score?.band !== undefined && task.ai?.band !== task.score?.band ? (
-                <span className="mchip">Teacher band {task.score.band}</span>
-              ) : null}
-            </div>
-            <div
-              className="passage"
-              style={{ background: 'var(--ink-50)', borderRadius: 12, padding: '14px 16px', whiteSpace: 'pre-wrap' }}
-            >
-              {task.responseText || <span className="muted">(no response)</span>}
-            </div>
-            {(task.ai?.feedback || task.score?.feedback) ? (
-              <div className="explain" style={{ marginTop: 10 }}>
-                <div className="explain__head">
-                  <span className="explain__title">
-                    <Icon name="info" size={15} />
-                    Examiner feedback
-                  </span>
-                </div>
-                <div className="explain__body">
-                  <p className="explain__text">{task.ai?.feedback ?? task.score?.feedback}</p>
-                </div>
+          <div className="writing-answer">
+            {submissions.length > 1 ? (
+              <div className="writing-answer__tabs" role="tablist" aria-label="Writing tasks">
+                {submissions.map((item, index) => (
+                  <button
+                    key={item.submissionId}
+                    type="button"
+                    role="tab"
+                    aria-selected={index === idx}
+                    className={`writing-answer__tab ${index === idx ? 'is-active' : ''}`}
+                    onClick={() => setTaskIdx(index)}
+                  >
+                    {item.taskLabel || `Task ${index + 1}`}
+                  </button>
+                ))}
               </div>
             ) : null}
+
+            {/* The marks — first thing on screen */}
+            <div className="review-scorebar">
+              <span className="review-scorebar__band">{bandText(ai?.band ?? teacher?.band ?? null)}</span>
+              <div className="row" style={{ gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                {ai ? (
+                  <span className="mchip mchip--violet">
+                    <Icon name="sparkle" size={12} /> AI band {bandText(ai.band)}
+                  </span>
+                ) : (
+                  <span className="mchip">Not marked by AI yet</span>
+                )}
+                {(ai?.criteria ?? []).map((criterion) => (
+                  <span key={criterion.key} className="mchip" title={criterion.comment}>
+                    {criterion.label} {bandText(criterion.band)}
+                  </span>
+                ))}
+                {teacher ? (
+                  <span className="mchip mchip--sun">
+                    <Icon name="check" size={12} /> Teacher band {bandText(teacher.band)}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="writing-answer__meta">
+              <span className="writing-answer__count">
+                <strong>{submission.wordCount}</strong> words
+              </span>
+            </div>
+            <div className="writing-answer__box writing-answer__box--review">
+              {submission.responseText || <span className="muted">(no response)</span>}
+            </div>
           </div>
+
+          {/* Full AI judgement: criteria, feedback (EN + VI), strengths, next steps */}
+          {ai ? <AiMarkPanel mark={ai} heading="AI marking" /> : null}
+          {teacher ? (
+            <div className="explain" style={{ marginTop: 10 }}>
+              <div className="explain__head">
+                <span className="explain__title">
+                  <Icon name="info" size={15} />
+                  Teacher feedback
+                </span>
+              </div>
+              <div className="explain__body">
+                <p className="explain__text">{teacher.feedback || 'No written feedback was added.'}</p>
+              </div>
+            </div>
+          ) : null}
+          {!ai && !teacher && submission.score?.feedback ? (
+            <div className="explain" style={{ marginTop: 10 }}>
+              <div className="explain__head">
+                <span className="explain__title">
+                  <Icon name="info" size={15} />
+                  Examiner feedback
+                </span>
+              </div>
+              <div className="explain__body">
+                <p className="explain__text">{submission.score.feedback}</p>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
