@@ -9,7 +9,7 @@ import { DisplayMenu } from './DisplayMenu';
 import { Icon, type IconName } from './Icon';
 import { SiteFooter } from './SiteFooter';
 import { Button, Loading } from './ui';
-import { initials } from '../lib/format';
+import { UserAvatar } from './UserAvatar';
 
 /**
  * Application shell.
@@ -330,9 +330,7 @@ export function AppShell() {
               </div>
             ) : null}
             <button type="button" className="app-sidebar__user" onClick={() => setPanelOpen((open) => !open)}>
-              <span className="site-avatar site-avatar--lg" aria-hidden="true">
-                {initials(user.displayName)}
-              </span>
+              <UserAvatar src={user.avatarUrl} userId={user.id} name={user.displayName} size={40} title={user.displayName} />
               <span className="app-sidebar__user-text">
                 <strong title={user.displayName}>{user.displayName}</strong>
                 <span>{user.role.toLowerCase()}</span>
@@ -410,13 +408,13 @@ export function AppShell() {
                   </NavLink>
                   <button
                     type="button"
-                    className="site-avatar"
+                    className="site-avatar-btn"
                     title={user.displayName}
                     aria-label="Account menu"
                     aria-expanded={panelOpen}
                     onClick={() => setPanelOpen((open) => !open)}
                   >
-                    {initials(user.displayName)}
+                    <UserAvatar src={user.avatarUrl} userId={user.id} name={user.displayName} size={38} />
                   </button>
                 </>
               ) : (
@@ -470,9 +468,7 @@ export function AppShell() {
           <div className="more-backdrop" onClick={() => setPanelOpen(false)} />
           <div className="more-panel" role="menu" aria-label="More">
             <div className="more-panel__who">
-              <span className="site-avatar site-avatar--lg" aria-hidden="true">
-                {initials(user.displayName)}
-              </span>
+              <UserAvatar src={user.avatarUrl} userId={user.id} name={user.displayName} size={44} />
               <span className="more-panel__who-text">
                 <strong title={user.displayName}>{user.displayName}</strong>
                 <span>{user.role.toLowerCase()}</span>

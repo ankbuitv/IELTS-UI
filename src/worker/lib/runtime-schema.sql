@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 64   Indexes: 80
+-- Tables: 66   Indexes: 81
 -- =============================================================================
 
 -- table: user_profiles
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   locale       TEXT NOT NULL DEFAULT 'en',
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
-, avatar_id TEXT NOT NULL DEFAULT 'bo', name_effect TEXT NOT NULL DEFAULT 'default', profile_effect TEXT NOT NULL DEFAULT 'none');
+, avatar_id TEXT NOT NULL DEFAULT 'bo', name_effect TEXT NOT NULL DEFAULT 'default', profile_effect TEXT NOT NULL DEFAULT 'none', avatar_updated_at TEXT, avatar_mime TEXT);
 
 -- table: sessions
 CREATE TABLE IF NOT EXISTS sessions (
@@ -958,6 +958,26 @@ CREATE TABLE IF NOT EXISTS mentor_room_presence (
   PRIMARY KEY (session_id, user_id)
 );
 
+-- table: profile_avatars
+CREATE TABLE IF NOT EXISTS profile_avatars (
+  user_id     TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  chunk_index INTEGER NOT NULL,
+  data_b64    TEXT NOT NULL,
+  bytes       INTEGER NOT NULL DEFAULT 0,
+  mime        TEXT NOT NULL DEFAULT 'image/png',
+  created_at  TEXT NOT NULL,
+  PRIMARY KEY (user_id, chunk_index)
+);
+
+-- table: mentor_class_messages
+CREATE TABLE IF NOT EXISTS mentor_class_messages (
+  id         TEXT PRIMARY KEY,
+  class_id   TEXT NOT NULL REFERENCES mentor_classes (id) ON DELETE CASCADE,
+  sender_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  body       TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 -- index: idx_sessions_user
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
 
@@ -1197,3 +1217,6 @@ CREATE INDEX IF NOT EXISTS idx_mentor_signals_session ON mentor_signals (session
 
 -- index: idx_mentor_reviews_mentor
 CREATE INDEX IF NOT EXISTS idx_mentor_reviews_mentor ON mentor_reviews (mentor_id, created_at DESC);
+
+-- index: idx_mentor_class_messages_class
+CREATE INDEX IF NOT EXISTS idx_mentor_class_messages_class ON mentor_class_messages (class_id, created_at);

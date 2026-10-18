@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAsync } from '../../hooks/useAsync';
 import { mentorApi } from '../../lib/mentor-api';
 import { describeError } from '../../lib/api';
@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Button, EmptyState, Loading, Notice, useToast } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { MentorAvatar, formatWhen } from '../../components/mentor/MentorBits';
+import { CreateClassModal } from '../../components/mentor/CreateClassModal';
 import type { MentorClass } from '@shared/mentor';
 
 /**
@@ -20,6 +21,7 @@ export function ClassesPage() {
   const classes = useAsync(() => mentorApi.classes(), []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const list = classes.data?.classes ?? [];
   const mine = list.filter((item) => item.joined || item.mentorId === user?.id);
@@ -55,12 +57,12 @@ export function ClassesPage() {
 
   const renderCard = (item: MentorClass) => {
     const full = item.memberCount >= item.capacity && !item.joined;
-    const now = new Date().getTime();
-    const started = new Date(item.startsAt).getTime() <= now && new Date(item.endsAt).getTime() >= now;
     return (
       <article key={item.id} className="class-card">
         <div className="class-card__banner">
-          <h3>{item.title}</h3>
+          <h3>
+            <Link to={`/classes/${item.id}`}>{item.title}</Link>
+          </h3>
           <p>
             {item.level} · led by {item.mentorName}
           </p>
@@ -103,30 +105,21 @@ export function ClassesPage() {
         <div className="row" style={{ marginTop: 'auto' }}>
           {item.mentorId === user?.id ? (
             <>
-              <Button variant="secondary" onClick={() => navigate('/mentor')}>
+              <Button variant="primary" onClick={() => navigate(`/classes/${item.id}`)}>
                 <Icon name="settings" size={14} />
                 Manage
               </Button>
-              {started ? (
-                <Button variant="primary" onClick={() => navigate('/mentor')}>
-                  <Icon name="video" size={14} />
-                  Open room
-                </Button>
-              ) : null}
+              <Button variant="secondary" onClick={() => navigate(`/classes/${item.id}`)}>
+                <Icon name="video" size={14} />
+                Open room
+              </Button>
             </>
           ) : item.joined ? (
             <>
-              {started ? (
-                <Button variant="primary" onClick={() => navigate('/my-sessions')}>
-                  <Icon name="video" size={14} />
-                  Go to sessions
-                </Button>
-              ) : (
-                <Button variant="success" disabled>
-                  <Icon name="check" size={14} />
-                  Joined
-                </Button>
-              )}
+              <Button variant="primary" onClick={() => navigate(`/classes/${item.id}`)}>
+                <Icon name="bubble" size={14} />
+                Open class
+              </Button>
               <Button variant="ghost" loading={busy === item.id} onClick={() => leave(item)}>
                 Leave
               </Button>
@@ -160,7 +153,7 @@ export function ClassesPage() {
               Find a mentor
             </Button>
             {user?.role === 'MENTOR' || user?.role === 'ADMIN' ? (
-              <Button variant="glass" onClick={() => navigate('/mentor')}>
+              <Button variant="glass" onClick={() => setCreateOpen(true)}>
                 <Icon name="plus" size={14} />
                 Open a class
               </Button>
@@ -202,6 +195,14 @@ export function ClassesPage() {
 
       <section className="stack">
         <h2 style={{ fontSize: '1.15rem' }}>Your mentors</h2>
+        <CreateClassModal
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => {
+            toast.push('Class published — students can join now.', 'success');
+            void classes.reload();
+          }}
+        />
         <div className="row">
           <div className="session-card" style={{ flex: 1 }}>
             <MentorAvatar name="Aieo Coaching" tone="sun" />

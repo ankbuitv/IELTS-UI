@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAsync } from '../../hooks/useAsync';
 import { mentorApi } from '../../lib/mentor-api';
 import { describeError } from '../../lib/api';
-import { Button, Card, Field, Loading, Modal, Notice, Select, TextArea, TextInput, useToast } from '../../components/ui';
+import { Button, Card, Field, Loading, Modal, Notice, TextArea, TextInput, useToast } from '../../components/ui';
+import { CreateClassModal } from '../../components/mentor/CreateClassModal';
 import { Icon } from '../../components/Icon';
 import {
   MentorAvatar,
@@ -194,15 +195,13 @@ export function MentorConsolePage() {
 
       {modal === 'class' ? (
         <CreateClassModal
+          open
           onClose={() => setModal(null)}
           onCreated={() => {
             setModal(null);
             toast.push('Class published — students can join now.', 'success');
             navigate('/classes');
           }}
-          onError={setError}
-          setBusy={setBusy}
-          busy={busy}
         />
       ) : null}
       {modal === 'availability' ? (
@@ -230,131 +229,6 @@ export function MentorConsolePage() {
         />
       ) : null}
     </div>
-  );
-}
-
-function CreateClassModal({
-  onClose,
-  onCreated,
-  onError,
-  setBusy,
-  busy,
-}: {
-  onClose: () => void;
-  onCreated: () => void;
-  onError: (message: string | null) => void;
-  setBusy: (busy: boolean) => void;
-  busy: boolean;
-}) {
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    level: 'Band 6.0–7.0',
-    capacity: 10,
-    priceCoins: 0,
-    date: new Date(new Date().getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-    time: '19:00',
-    duration: 90,
-    recurrence: '',
-  });
-
-  const submit = async () => {
-    const start = new Date(`${form.date}T${form.time}`);
-    if (Number.isNaN(start.getTime())) {
-      onError('Pick a valid date and time.');
-      return;
-    }
-    setBusy(true);
-    onError(null);
-    try {
-      await mentorApi.createClass({
-        title: form.title.trim(),
-        description: form.description.trim(),
-        level: form.level,
-        capacity: Number(form.capacity),
-        priceCoins: Number(form.priceCoins),
-        startsAt: start.toISOString(),
-        endsAt: new Date(start.getTime() + Number(form.duration) * 60_000).toISOString(),
-        recurrence: form.recurrence.trim() || null,
-      });
-      onCreated();
-    } catch (cause) {
-      onError(describeError(cause));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Modal
-      open
-      title="Open a live class"
-      onClose={onClose}
-      wide
-      actions={
-        <>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button variant="primary" loading={busy} onClick={submit} disabled={form.title.trim().length < 3}>
-            Publish class
-          </Button>
-        </>
-      }
-    >
-      <Field label="Class title" required>
-        {(id) => (
-          <TextInput id={id} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Rising Speakers Club" />
-        )}
-      </Field>
-      <Field label="Description" hint="What will students do in this class?">
-        {(id) => (
-          <TextArea id={id} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-        )}
-      </Field>
-      <div className="grid grid--2">
-        <Field label="Level">
-          {(id) => (
-            <Select id={id} value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })}>
-              <option>All levels</option>
-              <option>Band 4.5–5.5</option>
-              <option>Band 6.0–7.0</option>
-              <option>Band 7.0+</option>
-            </Select>
-          )}
-        </Field>
-        <Field label="Seats">
-          {(id) => (
-            <TextInput id={id} type="number" min={2} max={60} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: Number(e.target.value) })} />
-          )}
-        </Field>
-        <Field label="Date">
-          {(id) => (
-            <TextInput id={id} type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-          )}
-        </Field>
-        <Field label="Start time">
-          {(id) => (
-            <TextInput id={id} type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
-          )}
-        </Field>
-        <Field label="Duration (minutes)">
-          {(id) => (
-            <TextInput id={id} type="number" min={15} max={240} value={form.duration} onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })} />
-          )}
-        </Field>
-        <Field label="Price (coins, 0 = free)">
-          {(id) => (
-            <TextInput id={id} type="number" min={0} max={10000} value={form.priceCoins} onChange={(e) => setForm({ ...form, priceCoins: Number(e.target.value) })} />
-          )}
-        </Field>
-      </div>
-      <Field label="Recurrence" hint="Optional — e.g. 'Every Tuesday'">
-        {(id) => (
-          <TextInput id={id} value={form.recurrence} onChange={(e) => setForm({ ...form, recurrence: e.target.value })} placeholder="Every Tuesday" />
-        )}
-      </Field>
-    </Modal>
   );
 }
 

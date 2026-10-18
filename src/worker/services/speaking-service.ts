@@ -402,7 +402,7 @@ async function requireOwnedSession(
     .bind(sessionId)
     .first<{ id: string; user_id: string; status: string; topic_set_id: string }>();
   if (!session) throw ApiError.notFound('Speaking session not found.');
-  if (session.user_id !== user.id && user.role === 'STUDENT') {
+  if (session.user_id !== user.id && (user.role === 'STUDENT' || user.role === 'MENTOR')) {
     throw ApiError.forbidden('That speaking session belongs to another candidate.');
   }
   return session;

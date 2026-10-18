@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiRequestError, api, describeError, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
@@ -39,6 +39,7 @@ import {
   TEST_TYPE_LABELS,
 } from '../../lib/format';
 import { useAuth } from '../../context/AuthContext';
+import { UserAvatar } from '../../components/UserAvatar';
 
 // ---------------------------------------------------------------------------
 // Practice catalogue
@@ -705,6 +706,107 @@ function JoinByCode() {
   );
 }
 
+/** Upload or remove the profile picture shown across the app. */
+function AvatarCard() {
+  const { user, setUser } = useAuth();
+  const toast = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ mime: string; dataBase64: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const pick = (file: File | undefined) => {
+    if (!file) return;
+    if (!/^image\/(png|jpe?g|webp|gif)$/i.test(file.type)) {
+      toast.push('Choose a PNG, JPEG, WebP or GIF image.', 'error');
+      return;
+    }
+    if (file.size > 2_000_000) {
+      toast.push('Keep avatars under 2 MB.', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result ?? '');
+      setPreview(dataUrl);
+      setPending({ mime: file.type, dataBase64: dataUrl });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const upload = async () => {
+    if (!pending) return;
+    setBusy(true);
+    try {
+      const result = await api.post<{ avatarUrl: string | null }>('/api/profile/avatar', pending);
+      if (user) setUser({ ...user, avatarUrl: result.avatarUrl });
+      setPending(null);
+      toast.push('Avatar updated.', 'success');
+    } catch (uploadError) {
+      toast.push(describeError(uploadError), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api.delete('/api/profile/avatar');
+      if (user) setUser({ ...user, avatarUrl: null });
+      setPreview(null);
+      setPending(null);
+      toast.push('Avatar removed.', 'success');
+    } catch (removeError) {
+      toast.push(describeError(removeError), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="Your avatar" hint="A face for the leaderboard, mentor rooms and your profile — PNG, JPEG, WebP or GIF up to 2 MB.">
+      <div className="row" style={{ gap: 18, alignItems: 'center' }}>
+        <UserAvatar
+          src={preview ?? user?.avatarUrl ?? null}
+          userId={user?.id}
+          name={user?.displayName ?? 'Me'}
+          size={84}
+          key={preview ?? user?.avatarUrl ?? 'none'}
+        />
+        <div className="stack" style={{ gap: 8 }}>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            hidden
+            onChange={(event) => pick(event.target.files?.[0])}
+          />
+          <div className="row">
+            <Button variant="secondary" onClick={() => fileRef.current?.click()}>
+              <Icon name="upload" size={14} />
+              Choose image
+            </Button>
+            {pending ? (
+              <Button variant="primary" loading={busy} onClick={upload}>
+                <Icon name="check" size={14} />
+                Save avatar
+              </Button>
+            ) : null}
+            {user?.avatarUrl && !pending ? (
+              <Button variant="danger" loading={busy} onClick={remove}>
+                <Icon name="trash" size={14} />
+                Remove
+              </Button>
+            ) : null}
+          </div>
+          {pending ? <span className="tiny muted">Preview shown — press “Save avatar” to apply it everywhere.</span> : null}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function ProfilePage() {
   const { user, refresh } = useAuth();
   const toast = useToast();
@@ -727,6 +829,8 @@ export function ProfilePage() {
       />
 
       {tabs === 'profile' ? (
+        <>
+        <AvatarCard />
         <Card title="Profile details" hint={user?.email}>
           <Field label="Display name" required>
             {(id) => <TextInput id={id} value={displayName} onChange={(event) => setDisplayName(event.target.value)} />}
@@ -765,6 +869,7 @@ export function ProfilePage() {
             Save profile
           </Button>
         </Card>
+        </>
       ) : (
         <Card title="Change password" hint="Changing your password signs out all other sessions.">
           <Field label="Current password" required>

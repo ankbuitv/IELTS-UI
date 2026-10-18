@@ -128,7 +128,7 @@ router.post('/sessions/:id/ai-mark', async (c) => {
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const sessionId = c.req.param('id');
   const body = await parseBody(c, z.object({ force: z.boolean().optional() }).optional());
-  if (user.role === 'STUDENT') {
+  if (user.role === 'STUDENT' || user.role === 'MENTOR') {
     // Ownership check: throws unless the session is the candidate's own.
     await loadSpeakingSession(c.env, user, sessionId);
   }

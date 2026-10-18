@@ -3,7 +3,9 @@
  *
  * A mentor is a dedicated account type that coaches students one on one and in
  * small live classes. This module owns booking, the live room (presence, chat,
- * notes, WebRTC signalling envelopes relayed through D1) and reviews.
+ * notes, WebRTC signalling envelopes relayed through D1), class-level group
+ * chat, and reviews. A class also carries a durable "room session" shared by
+ * every member, so the classroom gets the same call room as a 1-on-1.
  */
 import type { Env } from '../env';
 import type { AuthUser } from '../lib/auth-types';
@@ -13,6 +15,8 @@ import {
   MENTOR_SPECIALTIES,
   type MentorChatMessage,
   type MentorClass,
+  type MentorClassMessage,
+  type MentorClassStatus,
   type MentorProfileDetail,
   type MentorProfileSummary,
   type MentorSession,
@@ -42,6 +46,7 @@ interface MentorProfileRow {
   verified: number;
   active: number;
   created_at: string;
+  avatar_updated_at: string | null;
 }
 
 function parseSpecialties(value: string): MentorSpecialty[] {
@@ -65,12 +70,13 @@ function toSummary(row: MentorProfileRow): MentorProfileSummary {
     sessionsCount: row.sessions_count,
     verified: row.verified === 1,
     active: row.active === 1,
+    avatarUpdatedAt: row.avatar_updated_at,
     createdAt: row.created_at,
   };
 }
 
 const PROFILE_SELECT = `
-  SELECT mp.*, p.display_name
+  SELECT mp.*, p.display_name, p.avatar_updated_at
     FROM mentor_profiles mp
     JOIN user_profiles p ON p.user_id = mp.user_id`;
 
@@ -115,7 +121,8 @@ export async function getMentorProfile(env: Env, mentorId: string, viewer: AuthU
 export async function getMentorReviews(env: Env, mentorId: string) {
   const rows = await env.DB.prepare(
     `SELECT r.id, r.mentor_id, r.student_id, r.session_id, r.rating, r.comment, r.created_at,
-            COALESCE(NULLIF(p.display_name, ''), 'Student') AS display_name
+            COALESCE(NULLIF(p.display_name, ''), 'Student') AS display_name,
+            p.avatar_updated_at
        FROM mentor_reviews r
        LEFT JOIN user_profiles p ON p.user_id = r.student_id
       WHERE r.mentor_id = ?
@@ -132,6 +139,7 @@ export async function getMentorReviews(env: Env, mentorId: string) {
       comment: string;
       created_at: string;
       display_name: string;
+      avatar_updated_at: string | null;
     }>();
 
   return rows.results.map((row) => ({
@@ -139,6 +147,7 @@ export async function getMentorReviews(env: Env, mentorId: string) {
     mentorId: row.mentor_id,
     studentId: row.student_id,
     studentName: row.display_name,
+    studentAvatarUpdatedAt: row.avatar_updated_at,
     sessionId: row.session_id,
     rating: row.rating,
     comment: row.comment,
@@ -154,10 +163,13 @@ interface SessionRow {
   status: string;
   mentor_id: string;
   mentor_name: string;
+  mentor_avatar_at: string | null;
   student_id: string;
   student_name: string;
+  student_avatar_at: string | null;
   class_id: string | null;
   class_title: string | null;
+  room_session_id: string | null;
   topic: string;
   notes: string | null;
   starts_at: string;
@@ -173,8 +185,13 @@ interface SessionRow {
 const SESSION_SELECT = `
   SELECT s.*, 
          COALESCE(NULLIF(pm.display_name, ''), 'Mentor') AS mentor_name,
+         pm.avatar_updated_at AS mentor_avatar_at,
          COALESCE(NULLIF(ps.display_name, ''), 'Student') AS student_name,
-         mc.title AS class_title
+         ps.avatar_updated_at AS student_avatar_at,
+         mc.title AS class_title,
+         (SELECT r.id FROM mentor_sessions r
+           WHERE r.class_id = s.class_id AND r.student_id = r.mentor_id
+           LIMIT 1) AS room_session_id
     FROM mentor_sessions s
     LEFT JOIN user_profiles pm ON pm.user_id = s.mentor_id
     LEFT JOIN user_profiles ps ON ps.user_id = s.student_id
@@ -191,6 +208,7 @@ function toSession(row: SessionRow): MentorSession {
     studentName: row.student_name,
     classId: row.class_id,
     className: row.class_title,
+    roomSessionId: row.room_session_id,
     topic: row.topic,
     notes: row.notes,
     startsAt: row.starts_at,
@@ -200,6 +218,8 @@ function toSession(row: SessionRow): MentorSession {
     paidCoins: row.paid_coins,
     studentRating: row.student_rating,
     mentorFeedback: row.mentor_feedback,
+    mentorAvatarUpdatedAt: row.mentor_avatar_at,
+    studentAvatarUpdatedAt: row.student_avatar_at,
     createdAt: row.created_at,
   };
 }
@@ -296,15 +316,33 @@ export async function listSessionsFor(env: Env, viewer: AuthUser, scope: 'upcomi
   return rows.results.map(toSession);
 }
 
-function assertSessionMember(session: MentorSession, viewer: AuthUser): void {
+/**
+ * Session access: its mentor, its student, an administrator — or, for a CLASS
+ * session, any member (or the mentor) of that class. The class's durable room
+ * session has the mentor on both sides and is shared by every member.
+ */
+async function assertSessionAccess(env: Env, session: MentorSession, viewer: AuthUser): Promise<void> {
   if (session.mentorId === viewer.id || session.studentId === viewer.id) return;
   if (viewer.role === 'ADMIN') return;
+  if (session.kind === 'CLASS' && session.classId) {
+    const member = await env.DB.prepare(
+      'SELECT 1 AS ok FROM mentor_class_members WHERE class_id = ? AND user_id = ?',
+    )
+      .bind(session.classId, viewer.id)
+      .first<{ ok: number }>();
+    if (member) return;
+    const klass = await env.DB.prepare('SELECT mentor_id FROM mentor_classes WHERE id = ?')
+      .bind(session.classId)
+      .first<{ mentor_id: string }>();
+    if (klass && klass.mentor_id === viewer.id) return;
+  }
   throw ApiError.forbidden('This session is not yours.');
 }
 
 export async function cancelSession(env: Env, viewer: AuthUser, sessionId: string, reason?: string): Promise<MentorSession> {
   const session = await getSession(env, sessionId);
-  assertSessionMember(session, viewer);
+  await assertSessionAccess(env, session, viewer);
+  if (session.kind === 'CLASS') throw ApiError.conflict('Leave the class instead of cancelling its room.');
   if (session.status !== 'SCHEDULED') throw ApiError.conflict('Only scheduled sessions can be cancelled.');
 
   const timestamp = nowIso();
@@ -363,6 +401,7 @@ export async function reviewSession(
 ): Promise<void> {
   const session = await getSession(env, sessionId);
   if (session.studentId !== viewer.id) throw ApiError.forbidden('Only the student can review a session.');
+  if (session.kind === 'CLASS') throw ApiError.conflict('Class rooms are reviewed from the 1-on-1 sessions.');
   if (session.status !== 'COMPLETED') throw ApiError.conflict('You can review a session after it is completed.');
   if (session.studentRating !== null) throw ApiError.conflict('You already reviewed this session.');
 
@@ -387,11 +426,12 @@ export interface RoomParticipant {
   role: string;
   joinedAt: string;
   handRaised: boolean;
+  avatarUpdatedAt: string | null;
 }
 
 export async function joinRoom(env: Env, viewer: AuthUser, sessionId: string): Promise<{ ok: true }> {
   const session = await getSession(env, sessionId);
-  assertSessionMember(session, viewer);
+  await assertSessionAccess(env, session, viewer);
   if (session.status === 'CANCELLED') throw ApiError.conflict('That session was cancelled.');
   if (session.status === 'COMPLETED') throw ApiError.conflict('That session is already over.');
 
@@ -444,19 +484,20 @@ export async function roomState(
   serverTime: string;
 }> {
   const session = await getSession(env, sessionId);
-  assertSessionMember(session, viewer);
+  await assertSessionAccess(env, session, viewer);
 
   // Presence older than 90 s is considered gone (polling clients beat every few
   // seconds while the tab is open).
   await env.DB.prepare(
     "DELETE FROM mentor_room_presence WHERE session_id = ? AND last_seen_at < ?",
   )
-    .bind(sessionId, new Date(Date.now() - 90_000).toISOString())
+    .bind(sessionId, new Date(new Date().getTime() - 90_000).toISOString())
     .run();
 
   const presence = await env.DB.prepare(
     `SELECT pr.user_id, pr.joined_at, pr.hand_raised,
             COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name,
+            p.avatar_updated_at,
             u.role
        FROM mentor_room_presence pr
        JOIN users u ON u.id = pr.user_id
@@ -465,11 +506,12 @@ export async function roomState(
       ORDER BY pr.joined_at`,
   )
     .bind(sessionId)
-    .all<{ user_id: string; joined_at: string; hand_raised: number; display_name: string; role: string }>();
+    .all<{ user_id: string; joined_at: string; hand_raised: number; display_name: string; role: string; avatar_updated_at: string | null }>();
 
   const messages = await env.DB.prepare(
     `SELECT m.id, m.session_id, m.sender_id, m.kind, m.body, m.created_at,
-            COALESCE(NULLIF(p.display_name, ''), 'Someone') AS display_name
+            COALESCE(NULLIF(p.display_name, ''), 'Someone') AS display_name,
+            p.avatar_updated_at
        FROM mentor_messages m
        LEFT JOIN user_profiles p ON p.user_id = m.sender_id
       WHERE m.session_id = ?
@@ -485,6 +527,7 @@ export async function roomState(
       body: string;
       created_at: string;
       display_name: string;
+      avatar_updated_at: string | null;
     }>();
 
   const signalQuery = sinceSignalId
@@ -518,6 +561,7 @@ export async function roomState(
       role: row.role,
       joinedAt: row.joined_at,
       handRaised: row.hand_raised === 1,
+      avatarUpdatedAt: row.avatar_updated_at,
     })),
     messages: messages.results
       .map((row) => ({
@@ -525,6 +569,7 @@ export async function roomState(
         sessionId: row.session_id,
         senderId: row.sender_id,
         senderName: row.display_name,
+        senderAvatarUpdatedAt: row.avatar_updated_at,
         kind: (row.kind === 'NOTE' || row.kind === 'SYSTEM' ? row.kind : 'CHAT') as 'CHAT' | 'SYSTEM' | 'NOTE',
         body: row.body,
         createdAt: row.created_at,
@@ -551,7 +596,7 @@ export async function postMessage(
   kind: 'CHAT' | 'NOTE' = 'CHAT',
 ): Promise<MentorChatMessage> {
   const session = await getSession(env, sessionId);
-  assertSessionMember(session, viewer);
+  await assertSessionAccess(env, session, viewer);
   const text = body.trim().slice(0, 4000);
   if (!text) throw ApiError.validation('Write something first.');
   const id = newId('msg');
@@ -566,6 +611,7 @@ export async function postMessage(
     sessionId,
     senderId: viewer.id,
     senderName: viewer.displayName,
+    senderAvatarUpdatedAt: null,
     kind,
     body: text,
     createdAt: timestamp,
@@ -579,7 +625,7 @@ export async function postSignal(
   signal: { kind: 'OFFER' | 'ANSWER' | 'CANDIDATE' | 'BYE'; targetId: string | null; payload: string },
 ): Promise<{ ok: true; id: string }> {
   const session = await getSession(env, sessionId);
-  assertSessionMember(session, viewer);
+  await assertSessionAccess(env, session, viewer);
   if (signal.payload.length > 200_000) throw ApiError.validation('Signal payload is too large.');
   const id = newId('sig');
   await env.DB.prepare(
@@ -589,7 +635,7 @@ export async function postSignal(
     .run();
   // Keep the envelope table small: anything older than 10 minutes is done.
   await env.DB.prepare('DELETE FROM mentor_signals WHERE session_id = ? AND created_at < ?')
-    .bind(sessionId, new Date(Date.now() - 10 * 60_000).toISOString())
+    .bind(sessionId, new Date(new Date().getTime() - 10 * 60_000).toISOString())
     .run();
   return { ok: true, id };
 }
@@ -600,6 +646,7 @@ interface ClassRow {
   id: string;
   mentor_id: string;
   mentor_name: string;
+  mentor_avatar_at: string | null;
   title: string;
   description: string;
   level: string;
@@ -612,9 +659,10 @@ interface ClassRow {
   created_at: string;
   member_count: number;
   joined: number;
+  room_session_id: string | null;
 }
 
-function toClass(row: ClassRow, viewerId: string | undefined): MentorClass {
+function toClass(row: ClassRow, viewerId: string | undefined, members: MentorClass['members'] = []): MentorClass {
   return {
     id: row.id,
     mentorId: row.mentor_id,
@@ -625,11 +673,14 @@ function toClass(row: ClassRow, viewerId: string | undefined): MentorClass {
     capacity: row.capacity,
     memberCount: row.member_count,
     priceCoins: row.price_coins,
-    status: row.status as MentorClass['status'],
+    status: row.status as MentorClassStatus,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
     recurrence: row.recurrence,
     joined: viewerId ? row.joined === 1 : false,
+    mentorAvatarUpdatedAt: row.mentor_avatar_at,
+    roomSessionId: row.room_session_id,
+    members,
     createdAt: row.created_at,
   };
 }
@@ -637,10 +688,43 @@ function toClass(row: ClassRow, viewerId: string | undefined): MentorClass {
 const CLASS_SELECT = `
   SELECT c.*, 
          COALESCE(NULLIF(p.display_name, ''), 'Mentor') AS mentor_name,
+         p.avatar_updated_at AS mentor_avatar_at,
          (SELECT COUNT(*) FROM mentor_class_members m WHERE m.class_id = c.id) AS member_count,
-         (SELECT COUNT(*) FROM mentor_class_members m WHERE m.class_id = c.id AND m.user_id = ?) AS joined
+         (SELECT COUNT(*) FROM mentor_class_members m WHERE m.class_id = c.id AND m.user_id = ?) AS joined,
+         (SELECT r.id FROM mentor_sessions r
+           WHERE r.class_id = c.id AND r.student_id = r.mentor_id
+           LIMIT 1) AS room_session_id
     FROM mentor_classes c
     LEFT JOIN user_profiles p ON p.user_id = c.mentor_id`;
+
+async function classMembers(env: Env, classIds: string[]): Promise<Map<string, MentorClass['members']>> {
+  const map = new Map<string, MentorClass['members']>();
+  if (classIds.length === 0) return map;
+  const placeholders = classIds.map(() => '?').join(', ');
+  const rows = await env.DB.prepare(
+    `SELECT m.class_id, m.user_id, m.joined_at,
+            COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name,
+            p.avatar_updated_at
+       FROM mentor_class_members m
+       JOIN users u ON u.id = m.user_id
+       LEFT JOIN user_profiles p ON p.user_id = m.user_id
+      WHERE m.class_id IN (${placeholders})
+      ORDER BY m.joined_at`,
+  )
+    .bind(...classIds)
+    .all<{ class_id: string; user_id: string; joined_at: string; display_name: string; avatar_updated_at: string | null }>();
+  for (const row of rows.results) {
+    const list = map.get(row.class_id) ?? [];
+    list.push({
+      userId: row.user_id,
+      displayName: row.display_name,
+      avatarUpdatedAt: row.avatar_updated_at,
+      joinedAt: row.joined_at,
+    });
+    map.set(row.class_id, list);
+  }
+  return map;
+}
 
 export async function listClasses(env: Env, viewer: AuthUser): Promise<MentorClass[]> {
   const rows = await env.DB.prepare(
@@ -652,7 +736,44 @@ export async function listClasses(env: Env, viewer: AuthUser): Promise<MentorCla
   )
     .bind(viewer.id, viewer.id, viewer.id)
     .all<ClassRow>();
-  return rows.results.map((row) => toClass(row, viewer.id));
+  const members = await classMembers(env, rows.results.map((row) => row.id));
+  return rows.results.map((row) => toClass(row, viewer.id, members.get(row.id) ?? []));
+}
+
+export async function getClass(env: Env, viewer: AuthUser, classId: string): Promise<MentorClass> {
+  const row = await env.DB.prepare(`${CLASS_SELECT} WHERE c.id = ?`).bind(viewer.id, classId).first<ClassRow>();
+  if (!row) throw ApiError.notFound('That class does not exist.');
+  const members = await classMembers(env, [classId]);
+  return toClass(row, viewer.id, members.get(classId) ?? []);
+}
+
+/**
+ * The class's durable live room: one `mentor_sessions` row with the mentor on
+ * both sides, created with the class (or lazily for older classes). Every
+ * member shares it for the group call and the in-call chat.
+ */
+export async function ensureClassRoomSession(env: Env, classRow: { id: string; mentor_id: string; title: string; starts_at: string; ends_at: string }): Promise<string> {
+  const existing = await env.DB.prepare(
+    'SELECT id FROM mentor_sessions WHERE class_id = ? AND student_id = mentor_id LIMIT 1',
+  )
+    .bind(classRow.id)
+    .first<{ id: string }>();
+  if (existing) return existing.id;
+
+  const id = newId('msn');
+  const timestamp = nowIso();
+  // The room outlives the class window so the chat and an overrunning call stay
+  // reachable: it spans from an hour before to a week after the class.
+  const starts = new Date(classRow.starts_at).toISOString();
+  const ends = new Date(new Date(classRow.ends_at).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  await env.DB.prepare(
+    `INSERT INTO mentor_sessions
+       (id, mentor_id, student_id, class_id, kind, status, topic, starts_at, ends_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'CLASS', 'SCHEDULED', ?, ?, ?, ?, ?)`,
+  )
+    .bind(id, classRow.mentor_id, classRow.mentor_id, classRow.id, classRow.title, starts, ends, timestamp, timestamp)
+    .run();
+  return id;
 }
 
 export async function createClass(
@@ -702,8 +823,84 @@ export async function createClass(
     )
     .run();
 
-  const rows = await env.DB.prepare(`${CLASS_SELECT} WHERE c.id = ?`).bind(viewer.id, id).all<ClassRow>();
-  return toClass(rows.results[0]!, viewer.id);
+  await ensureClassRoomSession(env, {
+    id,
+    mentor_id: viewer.id,
+    title,
+    starts_at: startsAt.toISOString(),
+    ends_at: endsAt.toISOString(),
+  });
+
+  return getClass(env, viewer, id);
+}
+
+async function classAccess(env: Env, classId: string, viewer: AuthUser): Promise<{ id: string; mentor_id: string; title: string; starts_at: string; ends_at: string }> {
+  const row = await env.DB.prepare('SELECT id, mentor_id, title, starts_at, ends_at FROM mentor_classes WHERE id = ?')
+    .bind(classId)
+    .first<{ id: string; mentor_id: string; title: string; starts_at: string; ends_at: string }>();
+  if (!row) throw ApiError.notFound('That class does not exist.');
+  if (row.mentor_id === viewer.id || viewer.role === 'ADMIN') return row;
+  const member = await env.DB.prepare('SELECT 1 AS ok FROM mentor_class_members WHERE class_id = ? AND user_id = ?')
+    .bind(classId, viewer.id)
+    .first<{ ok: number }>();
+  if (!member) throw ApiError.forbidden('Join this class to see its chat.');
+  return row;
+}
+
+export async function classMessages(env: Env, viewer: AuthUser, classId: string): Promise<MentorClassMessage[]> {
+  await classAccess(env, classId, viewer);
+  const rows = await env.DB.prepare(
+    `SELECT m.id, m.class_id, m.sender_id, m.body, m.created_at,
+            COALESCE(NULLIF(p.display_name, ''), 'Someone') AS display_name,
+            p.avatar_updated_at
+       FROM mentor_class_messages m
+       LEFT JOIN user_profiles p ON p.user_id = m.sender_id
+      WHERE m.class_id = ?
+      ORDER BY m.created_at DESC
+      LIMIT 100`,
+  )
+    .bind(classId)
+    .all<{ id: string; class_id: string; sender_id: string; body: string; created_at: string; display_name: string; avatar_updated_at: string | null }>();
+  return rows.results
+    .map((row) => ({
+      id: row.id,
+      classId: row.class_id,
+      senderId: row.sender_id,
+      senderName: row.display_name,
+      senderAvatarUpdatedAt: row.avatar_updated_at,
+      body: row.body,
+      createdAt: row.created_at,
+    }))
+    .reverse();
+}
+
+export async function postClassMessage(env: Env, viewer: AuthUser, classId: string, body: string): Promise<MentorClassMessage> {
+  await classAccess(env, classId, viewer);
+  const text = body.trim().slice(0, 4000);
+  if (!text) throw ApiError.validation('Write something first.');
+  const id = newId('cmt');
+  const timestamp = nowIso();
+  await env.DB.prepare(
+    'INSERT INTO mentor_class_messages (id, class_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)',
+  )
+    .bind(id, classId, viewer.id, text, timestamp)
+    .run();
+  return {
+    id,
+    classId,
+    senderId: viewer.id,
+    senderName: viewer.displayName,
+    senderAvatarUpdatedAt: null,
+    body: text,
+    createdAt: timestamp,
+  };
+}
+
+/** The shared call room of a class (created on demand for older classes). */
+export async function classRoomSessionId(env: Env, viewer: AuthUser, classId: string): Promise<{ sessionId: string }> {
+  const row = await classAccess(env, classId, viewer);
+  const sessionId = await ensureClassRoomSession(env, row);
+  return { sessionId };
 }
 
 export async function joinClass(env: Env, viewer: AuthUser, classId: string): Promise<MentorClass> {
@@ -720,7 +917,8 @@ export async function joinClass(env: Env, viewer: AuthUser, classId: string): Pr
     .bind(classId, viewer.id, timestamp)
     .run();
 
-  // A class session row per member keeps the room, chat and history uniform.
+  // A class session row per member keeps history uniform; the shared room
+  // session is what the member actually calls in.
   const sessionId = newId('msn');
   await env.DB.prepare(
     `INSERT INTO mentor_sessions
@@ -731,17 +929,27 @@ export async function joinClass(env: Env, viewer: AuthUser, classId: string): Pr
     .bind(sessionId, row.mentor_id, viewer.id, classId, row.title, row.starts_at, row.ends_at, timestamp, timestamp)
     .run();
 
-  const refreshed = await env.DB.prepare(`${CLASS_SELECT} WHERE c.id = ?`).bind(viewer.id, classId).first<ClassRow>();
-  return toClass(refreshed!, viewer.id);
+  await ensureClassRoomSession(env, {
+    id: classId,
+    mentor_id: row.mentor_id,
+    title: row.title,
+    starts_at: row.starts_at,
+    ends_at: row.ends_at,
+  });
+
+  return getClass(env, viewer, classId);
 }
 
 export async function leaveClass(env: Env, viewer: AuthUser, classId: string): Promise<MentorClass> {
   await env.DB.prepare('DELETE FROM mentor_class_members WHERE class_id = ? AND user_id = ?')
     .bind(classId, viewer.id)
     .run();
-  const row = await env.DB.prepare(`${CLASS_SELECT} WHERE c.id = ?`).bind(viewer.id, classId).first<ClassRow>();
-  if (!row) throw ApiError.notFound('That class does not exist.');
-  return toClass(row, viewer.id);
+  await env.DB.prepare(
+    "UPDATE mentor_sessions SET status = 'CANCELLED', updated_at = ? WHERE class_id = ? AND student_id = ? AND student_id <> mentor_id AND status = 'SCHEDULED'",
+  )
+    .bind(nowIso(), classId, viewer.id)
+    .run();
+  return getClass(env, viewer, classId);
 }
 
 // ---------------------------------------------------------------------------- mentor console
@@ -753,7 +961,7 @@ export async function mentorConsole(env: Env, viewer: AuthUser) {
   const now = nowIso();
   const upcoming = await env.DB.prepare(
     `${SESSION_SELECT}
-      WHERE s.mentor_id = ? AND s.status IN ('SCHEDULED', 'ACTIVE') AND s.ends_at >= ?
+      WHERE s.mentor_id = ? AND s.status IN ('SCHEDULED', 'ACTIVE') AND s.ends_at >= ? AND s.student_id <> s.mentor_id
       ORDER BY s.starts_at ASC
       LIMIT 20`,
   )
@@ -767,7 +975,7 @@ export async function mentorConsole(env: Env, viewer: AuthUser) {
        SUM(CASE WHEN status = 'COMPLETED' THEN paid_coins ELSE 0 END) AS coins_earned,
        SUM(CASE WHEN status = 'COMPLETED' AND student_rating IS NOT NULL THEN student_rating ELSE 0 END) AS rating_sum,
        SUM(CASE WHEN student_rating IS NOT NULL THEN 1 ELSE 0 END) AS rating_count
-     FROM mentor_sessions WHERE mentor_id = ?`,
+     FROM mentor_sessions WHERE mentor_id = ? AND student_id <> mentor_id`,
   )
     .bind(viewer.id)
     .first<{ total_sessions: number; completed: number; coins_earned: number; rating_sum: number; rating_count: number }>();
@@ -779,17 +987,18 @@ export async function mentorConsole(env: Env, viewer: AuthUser) {
   const students = await env.DB.prepare(
     `SELECT DISTINCT s.student_id AS id,
             COALESCE(NULLIF(p.display_name, ''), 'Student') AS display_name,
+            p.avatar_updated_at,
             COUNT(*) AS sessions_together,
             MAX(s.starts_at) AS last_session
        FROM mentor_sessions s
        LEFT JOIN user_profiles p ON p.user_id = s.student_id
-      WHERE s.mentor_id = ?
+      WHERE s.mentor_id = ? AND s.student_id <> s.mentor_id
       GROUP BY s.student_id
       ORDER BY last_session DESC
       LIMIT 40`,
   )
     .bind(viewer.id)
-    .all<{ id: string; display_name: string; sessions_together: number; last_session: string }>();
+    .all<{ id: string; display_name: string; avatar_updated_at: string | null; sessions_together: number; last_session: string }>();
 
   return {
     profile: profile
@@ -813,6 +1022,7 @@ export async function mentorConsole(env: Env, viewer: AuthUser) {
     students: students.results.map((row) => ({
       id: row.id,
       displayName: row.display_name,
+      avatarUpdatedAt: row.avatar_updated_at,
       sessionsTogether: row.sessions_together,
       lastSession: row.last_session,
     })),
@@ -892,8 +1102,8 @@ async function touchMentorCounters(env: Env, mentorId: string): Promise<void> {
   const timestamp = nowIso();
   await env.DB.prepare(
     `UPDATE mentor_profiles SET
-       sessions_count = (SELECT COUNT(*) FROM mentor_sessions WHERE mentor_id = ? AND status = 'COMPLETED'),
-       students_count = (SELECT COUNT(DISTINCT student_id) FROM mentor_sessions WHERE mentor_id = ? AND status IN ('COMPLETED', 'ACTIVE', 'SCHEDULED')),
+       sessions_count = (SELECT COUNT(*) FROM mentor_sessions WHERE mentor_id = ? AND status = 'COMPLETED' AND student_id <> mentor_id),
+       students_count = (SELECT COUNT(DISTINCT student_id) FROM mentor_sessions WHERE mentor_id = ? AND student_id <> mentor_id AND status IN ('COMPLETED', 'ACTIVE', 'SCHEDULED')),
        updated_at = ?
      WHERE user_id = ?`,
   )

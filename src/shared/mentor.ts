@@ -75,6 +75,8 @@ export interface MentorProfileSummary {
   sessionsCount: number;
   verified: boolean;
   active: boolean;
+  /** Cache-buster for `/api/files/avatar/:userId?v=…`, null when there is no picture. */
+  avatarUpdatedAt: string | null;
   createdAt: string;
 }
 
@@ -103,6 +105,10 @@ export interface MentorSession {
   paidCoins: number;
   studentRating: number | null;
   mentorFeedback: string | null;
+  mentorAvatarUpdatedAt: string | null;
+  studentAvatarUpdatedAt: string | null;
+  /** For CLASS sessions: the durable room session id shared by every member. */
+  roomSessionId: string | null;
   createdAt: string;
 }
 
@@ -111,6 +117,7 @@ export interface MentorReview {
   mentorId: string;
   studentId: string;
   studentName: string;
+  studentAvatarUpdatedAt: string | null;
   sessionId: string | null;
   rating: number;
   comment: string;
@@ -132,14 +139,19 @@ export interface MentorClass {
   endsAt: string;
   recurrence: string | null;
   joined: boolean;
+  mentorAvatarUpdatedAt: string | null;
+  /** The class's durable live-room session (chat + group call). */
+  roomSessionId: string | null;
+  members: Array<{ userId: string; displayName: string; avatarUpdatedAt: string | null; joinedAt: string }>;
   createdAt: string;
 }
 
 export interface MentorChatMessage {
   id: string;
-  sessionId: string;
+  sessionId: string | null;
   senderId: string;
   senderName: string;
+  senderAvatarUpdatedAt: string | null;
   kind: 'CHAT' | 'SYSTEM' | 'NOTE';
   body: string;
   createdAt: string;
@@ -147,6 +159,17 @@ export interface MentorChatMessage {
 
 export interface MentorDirectoryResponse {
   mentors: MentorProfileSummary[];
+}
+
+/** A message in a class's persistent group chat. */
+export interface MentorClassMessage {
+  id: string;
+  classId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatarUpdatedAt: string | null;
+  body: string;
+  createdAt: string;
 }
 
 export interface MentorSessionsResponse {
@@ -159,7 +182,14 @@ export interface MentorClassesResponse {
 
 export interface MentorRoomState {
   session: MentorSession;
-  participants: Array<{ userId: string; displayName: string; role: string; joinedAt: string; handRaised: boolean }>;
+  participants: Array<{
+    userId: string;
+    displayName: string;
+    role: string;
+    joinedAt: string;
+    handRaised: boolean;
+    avatarUpdatedAt: string | null;
+  }>;
   messages: MentorChatMessage[];
   /** WebRTC signalling envelopes for the viewer since `since`. */
   signals: MentorSignal[];

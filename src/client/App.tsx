@@ -41,6 +41,7 @@ import { MentorProfilePage } from './pages/mentor/MentorProfilePage';
 import { MySessionsPage } from './pages/mentor/MySessionsPage';
 import { MentorConsolePage } from './pages/mentor/MentorConsolePage';
 import { ClassesPage } from './pages/mentor/ClassesPage';
+import { ClassDetailPage } from './pages/mentor/ClassDetailPage';
 import { CallRoomPage } from './pages/mentor/CallRoomPage';
 
 function RequireAuth({ children, roles }: { children: ReactNode; roles?: Array<'STUDENT' | 'TEACHER' | 'ADMIN' | 'MENTOR'> }) {
@@ -281,6 +282,14 @@ export function App() {
           element={
             <RequireAuth>
               <MySessionsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="classes/:classId"
+          element={
+            <RequireAuth>
+              <ClassDetailPage />
             </RequireAuth>
           }
         />

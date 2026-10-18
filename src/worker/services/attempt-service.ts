@@ -1781,10 +1781,12 @@ export async function loadAttemptResult(
 ): Promise<AttemptResultView> {
   const attempt = await env.DB.prepare('SELECT * FROM attempts WHERE id = ?').bind(attemptId).first<AttemptRow>();
   if (!attempt) throw ApiError.notFound('Attempt not found.');
-  if (attempt.user_id !== user.id && user.role === 'STUDENT') {
+  if (attempt.user_id !== user.id && (user.role === 'STUDENT' || user.role === 'MENTOR')) {
     throw ApiError.forbidden('This attempt belongs to another user.');
   }
-  return buildResultView(env, attempt, { includeReview: user.id === attempt.user_id || user.role !== 'STUDENT' });
+  return buildResultView(env, attempt, {
+    includeReview: user.id === attempt.user_id || (user.role !== 'STUDENT' && user.role !== 'MENTOR'),
+  });
 }
 
 export async function buildResultView(

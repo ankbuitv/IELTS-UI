@@ -66,6 +66,8 @@ export interface ApiUser {
   role: Role;
   status: string;
   displayName: string;
+  /** Cache-busted profile picture URL, or null when the user has no avatar. */
+  avatarUrl: string | null;
   createdAt: string;
   lastLoginAt: string | null;
 }

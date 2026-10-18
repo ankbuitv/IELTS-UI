@@ -104,3 +104,25 @@ PUT  /availability                    mentor sets weekly windows
 `mentor_class_members`, `mentor_sessions`, `mentor_messages`, `mentor_signals`,
 `mentor_reviews`, `mentor_room_presence`. The runtime schema is regenerated with
 `npm run schema:generate`.
+
+
+## Class chat, class calls & avatars (added after the first release)
+
+- **Classroom = chat + one call room.** Every class owns a durable room session
+  (`mentor_sessions`, kind `CLASS`): `GET /api/mentor/classes/:classId/room`
+  returns its `sessionId` (created on demand), and any member can open
+  `/sessions/:sessionId/room` for the WebRTC group call. The persistent group
+  chat is `GET/POST /api/mentor/classes/:classId/messages`
+  (`mentor_class_messages`, joined messages carry `senderAvatarUpdatedAt`).
+- **Class detail page** — `/classes/:classId` shows the roster with avatars,
+  the live chat feed and the “Join class call” button; mentors create classes
+  straight from `/classes` (the same `CreateClassModal` powers the console).
+- **Profile avatars** — `POST /api/profile/avatar` `{mime, dataBase64}` (PNG/
+  JPEG/WebP/GIF ≤ ~2 MB base64) stores the picture in `profile_avatars`
+  (chunked); `GET /api/files/avatar/:userId?v=<avatar_updated_at>` serves it
+  cache-busted; `DELETE /api/profile/avatar` removes it. `AuthUser.avatarUrl`
+  flows through `/api/auth/me|login|register`, and the shared mentor payloads
+  carry `avatarUpdatedAt` next to every name. The UI falls back to initials.
+- **Mentors take tests too** — the role guard treats MENTOR as candidate-like:
+  own attempts only, forced PRACTICE mode, published tests, access codes
+  enforced — same rules as students minus staff exemptions.

@@ -1,18 +1,24 @@
 import type { ReactNode } from 'react';
 import { Icon } from '../Icon';
-import { initials } from '../../lib/format';
+import { UserAvatar } from '../UserAvatar';
 import type { MentorSessionStatus, MentorSpecialty } from '@shared/mentor';
 import { MENTOR_SPECIALTY_LABELS, MENTOR_SESSION_STATUS_LABELS } from '@shared/mentor';
 
-/** Colour ring avatars used across the mentor pages (no photos needed). */
+/** Colour ring avatars used across the mentor pages (photo when there is one). */
 export function MentorAvatar({
   name,
+  userId,
+  avatarUpdatedAt,
+  src,
   size = 'md',
   tone = 'violet',
   badge,
   online,
 }: {
   name: string;
+  userId?: string;
+  avatarUpdatedAt?: string | null;
+  src?: string | null;
   size?: 'md' | 'lg';
   tone?: 'violet' | 'sun' | 'coral';
   badge?: ReactNode;
@@ -21,17 +27,22 @@ export function MentorAvatar({
   return (
     <span
       className={[
-        'avatar-ring',
-        tone === 'sun' ? 'avatar-ring--sun' : '',
-        tone === 'coral' ? 'avatar-ring--coral' : '',
-        size === 'lg' ? 'avatar-ring--lg' : '',
-        online ? 'avatar-ring--online' : '',
+        'avatar-wrap',
+        size === 'lg' ? 'avatar-wrap--lg' : '',
+        online ? 'avatar-wrap--online' : '',
       ]
         .filter(Boolean)
         .join(' ')}
-      aria-hidden="true"
+      title={name}
     >
-      {initials(name)}
+      <UserAvatar
+        userId={userId}
+        avatarUpdatedAt={avatarUpdatedAt}
+        src={src}
+        name={name}
+        size={size === 'lg' ? 84 : 58}
+        tone={tone === 'sun' ? 'sun' : tone === 'coral' ? 'coral' : 'violet'}
+      />
       {badge ? <span className="avatar-ring__badge">{badge}</span> : null}
     </span>
   );

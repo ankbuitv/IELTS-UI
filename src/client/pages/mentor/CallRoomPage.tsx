@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Button, Loading, Notice } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { MentorAvatar, formatWhen } from '../../components/mentor/MentorBits';
+import { UserAvatar } from '../../components/UserAvatar';
 import type { MentorChatMessage, MentorRoomState, MentorSignal } from '@shared/mentor';
 
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
@@ -459,7 +460,7 @@ export function CallRoomPage() {
             <video ref={localVideoRef} autoPlay playsInline muted />
             {!camOn ? (
               <div className="room-tile__avatar">
-                <Icon name="user" size={30} />
+                <UserAvatar src={user?.avatarUrl ?? null} userId={user?.id} name={user?.displayName ?? 'Me'} size={80} />
               </div>
             ) : null}
             <span className="room-tile__name">
@@ -481,7 +482,12 @@ export function CallRoomPage() {
             <div key={peer.userId} className="room-tile">
               <RemoteVideo stream={peer.stream} />
               <div className="room-tile__avatar">
-                <Icon name="user" size={30} />
+                <UserAvatar
+                  userId={peer.userId}
+                  avatarUpdatedAt={state?.participants.find((p) => p.userId === peer.userId)?.avatarUpdatedAt}
+                  name={peer.displayName}
+                  size={80}
+                />
               </div>
               <span className="room-tile__name">
                 {peer.displayName}
@@ -590,7 +596,12 @@ export function CallRoomPage() {
               <div className="room__roster">
                 {(state?.participants ?? []).map((participant) => (
                   <div key={participant.userId} className="room-roster-item">
-                    <MentorAvatar name={participant.displayName} tone={participant.userId === user?.id ? 'sun' : 'violet'} />
+                    <MentorAvatar
+                      name={participant.displayName}
+                      userId={participant.userId}
+                      avatarUpdatedAt={participant.avatarUpdatedAt}
+                      tone={participant.userId === user?.id ? 'sun' : 'violet'}
+                    />
                     <div>
                       <div className="room-roster-item__name">
                         {participant.displayName}

@@ -173,7 +173,7 @@ router.patch('/profile', async (c) => {
   );
   await updateProfile(c.env, user.id, body);
   const updated = await c.env.DB.prepare(
-    `SELECT u.id, u.email, u.role, u.status, u.created_at, u.last_login_at, p.display_name
+    `SELECT u.id, u.email, u.role, u.status, u.created_at, u.last_login_at, p.display_name, p.avatar_updated_at
        FROM users u LEFT JOIN user_profiles p ON p.user_id = u.id WHERE u.id = ?`,
   )
     .bind(user.id)
@@ -185,6 +185,7 @@ router.patch('/profile', async (c) => {
       created_at: string;
       last_login_at: string | null;
       display_name: string | null;
+      avatar_updated_at: string | null;
     }>();
   return c.json({
     user: updated

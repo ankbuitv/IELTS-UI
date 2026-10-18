@@ -13,9 +13,12 @@ import { parseBody } from '../lib/validate';
 import { currentUser, requireAuth } from '../middleware/auth';
 import {
   bookSession,
+  classMessages,
+  classRoomSessionId,
   cancelSession,
   completeSession,
   createClass,
+  getClass,
   getMentorProfile,
   getMentorReviews,
   joinClass,
@@ -26,6 +29,7 @@ import {
   listMentors,
   listSessionsFor,
   mentorConsole,
+  postClassMessage,
   postMessage,
   postSignal,
   reviewSession,
@@ -207,6 +211,32 @@ router.post('/mentor/classes/:classId/leave', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   return c.json({ class: await leaveClass(c.env, user, c.req.param('classId')) });
+});
+
+// ------------------------------------------------------------------------------ class chat & room
+
+router.get('/mentor/classes/:classId', async (c) => {
+  const user = currentUser(c);
+  return c.json({ class: await getClass(c.env, user, c.req.param('classId')) });
+});
+
+router.get('/mentor/classes/:classId/messages', async (c) => {
+  const user = currentUser(c);
+  return c.json({ messages: await classMessages(c.env, user, c.req.param('classId')) });
+});
+
+router.post('/mentor/classes/:classId/messages', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ body: z.string().min(1).max(4000) }));
+  const message = await postClassMessage(c.env, user, c.req.param('classId'), body.body);
+  return c.json({ message }, 201);
+});
+
+/** The class's shared call room (created on demand). */
+router.get('/mentor/classes/:classId/room', async (c) => {
+  const user = currentUser(c);
+  return c.json(await classRoomSessionId(c.env, user, c.req.param('classId')));
 });
 
 // ------------------------------------------------------------------------------ console

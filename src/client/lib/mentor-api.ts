@@ -2,6 +2,7 @@ import { api } from './api';
 import type {
   MentorChatMessage,
   MentorClass,
+  MentorClassMessage,
   MentorProfileDetail,
   MentorProfileSummary,
   MentorRoomState,
@@ -48,6 +49,14 @@ export const mentorApi = {
 
   // Classes
   classes: () => api.get<{ classes: MentorClass[] }>('/api/mentor/classes/list'),
+  classDetail: (classId: string) =>
+    api.get<{ class: MentorClass }>(`/api/mentor/classes/${encodeURIComponent(classId)}`),
+  classMessages: (classId: string) =>
+    api.get<{ messages: MentorClassMessage[] }>(`/api/mentor/classes/${encodeURIComponent(classId)}/messages`),
+  postClassMessage: (classId: string, body: string) =>
+    api.post<{ message: MentorClassMessage }>(`/api/mentor/classes/${encodeURIComponent(classId)}/messages`, { body }),
+  classRoom: (classId: string) =>
+    api.get<{ sessionId: string }>(`/api/mentor/classes/${encodeURIComponent(classId)}/room`),
   createClass: (input: {
     title: string;
     description: string;

@@ -1,5 +1,5 @@
 import type { Env } from '../env';
-import type { AuthSession, AuthUser } from '../lib/auth-types';
+import { avatarUrlFor, type AuthSession, type AuthUser } from '../lib/auth-types';
 import { ApiError } from '../lib/errors';
 import { hashPassword, hashSessionToken, randomToken, verifyPassword } from '../lib/crypto';
 import { newId, nowIso } from '../lib/ids';
@@ -65,13 +65,14 @@ interface UserRow {
   failed_login_count: number;
   locked_until: string | null;
   display_name: string | null;
+  avatar_updated_at: string | null;
 }
 
 async function findUserByEmail(env: Env, email: string): Promise<UserRow | null> {
   return env.DB.prepare(
     `SELECT u.id, u.email, u.role, u.status, u.password_hash, u.password_salt, u.password_iterations,
             u.password_algo, u.created_at, u.last_login_at, u.failed_login_count, u.locked_until,
-            p.display_name
+            p.display_name, p.avatar_updated_at
        FROM users u
        LEFT JOIN user_profiles p ON p.user_id = u.id
       WHERE u.email = ?`,
@@ -87,6 +88,7 @@ export function toAuthUser(row: UserRow): AuthUser {
     role: row.role,
     status: row.status,
     displayName: row.display_name ?? row.email.split('@')[0] ?? 'User',
+    avatarUrl: avatarUrlFor(row.id, row.avatar_updated_at),
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at,
   };
@@ -146,6 +148,7 @@ export async function createUser(env: Env, input: CreateUserInput): Promise<Auth
     role: input.role,
     status: input.status ?? 'ACTIVE',
     displayName: input.displayName.trim() || email,
+    avatarUrl: null,
     createdAt: timestamp,
     lastLoginAt: null,
   };
@@ -255,7 +258,7 @@ export async function resolveSession(env: Env, token: string): Promise<ResolvedS
   const id = await hashSessionToken(token, env.SESSION_SECRET ?? 'dev-pepper');
   const row = await env.DB.prepare(
     `SELECT s.id AS session_id, s.csrf_token, s.expires_at, s.revoked_at,
-            u.id, u.email, u.role, u.status, u.created_at, u.last_login_at, p.display_name
+            u.id, u.email, u.role, u.status, u.created_at, u.last_login_at, p.display_name, p.avatar_updated_at
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        LEFT JOIN user_profiles p ON p.user_id = u.id
@@ -274,6 +277,7 @@ export async function resolveSession(env: Env, token: string): Promise<ResolvedS
       created_at: string;
       last_login_at: string | null;
       display_name: string | null;
+      avatar_updated_at: string | null;
     }>();
 
   if (!row) return null;
@@ -288,6 +292,7 @@ export async function resolveSession(env: Env, token: string): Promise<ResolvedS
       role: row.role,
       status: row.status,
       displayName: row.display_name ?? row.email,
+      avatarUrl: avatarUrlFor(row.id, row.avatar_updated_at),
       createdAt: row.created_at,
       lastLoginAt: row.last_login_at,
     },

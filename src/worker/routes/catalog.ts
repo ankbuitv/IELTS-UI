@@ -174,7 +174,7 @@ router.get('/tests', requireAuth, async (c) => {
   }
 
   // Staff bypass access codes, so the client never prompts them.
-  const staffBypass = user.role !== 'STUDENT';
+  const staffBypass = user.role === 'TEACHER' || user.role === 'ADMIN';
   return c.json({
     tests: rows.results.map((row) => ({
       id: row.id,
@@ -223,7 +223,7 @@ router.post('/tests/:testId/unlock', requireAuth, async (c) => {
     .bind(c.req.param('testId'))
     .first<{ id: string; status: string }>();
   if (!test) throw ApiError.notFound('Test not found.');
-  if (user.role === 'STUDENT' && test.status !== 'PUBLISHED') {
+  if ((user.role === 'STUDENT' || user.role === 'MENTOR') && test.status !== 'PUBLISHED') {
     throw ApiError.forbidden('This test is not published.');
   }
 
