@@ -38,13 +38,23 @@ export const mentorApi = {
     ),
   join: (sessionId: string) => api.post<{ ok: true }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/join`, {}),
   leave: (sessionId: string) => api.post<{ ok: true }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/leave`, {}),
+  confirm: (sessionId: string) =>
+    api.post<{ session: MentorSession }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/confirm`, {}),
+  decline: (sessionId: string, reason?: string) =>
+    api.post<{ session: MentorSession }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/decline`, reason ? { reason } : {}),
+  kick: (sessionId: string, userId: string, ban = false) =>
+    api.post<{ ok: true }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/kick`, { userId, ban }),
   raiseHand: (sessionId: string, raised: boolean) =>
     api.post<{ ok: true }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/hand`, { raised }),
   sendMessage: (sessionId: string, body: string, kind: 'CHAT' | 'NOTE' = 'CHAT') =>
     api.post<{ message: MentorChatMessage }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/messages`, { body, kind }),
   signal: (
     sessionId: string,
-    signal: { kind: 'OFFER' | 'ANSWER' | 'CANDIDATE' | 'BYE'; targetId: string | null; payload: string },
+    signal: {
+      kind: 'OFFER' | 'ANSWER' | 'CANDIDATE' | 'BYE' | 'HAND' | 'MUTE_MIC' | 'UNMUTE_MIC' | 'KICK' | 'REACTION';
+      targetId: string | null;
+      payload: string;
+    },
   ) => api.post<{ ok: true; id: string }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/signal`, signal),
 
   // Classes

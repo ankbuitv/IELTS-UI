@@ -43,6 +43,7 @@ import { MySessionsPage } from './pages/mentor/MySessionsPage';
 import { MentorConsolePage } from './pages/mentor/MentorConsolePage';
 import { ClassesPage } from './pages/mentor/ClassesPage';
 import { TrainingPage } from './pages/staff/TrainingPage';
+import { CalendarPage } from './pages/student/CalendarPage';
 import { ClassDetailPage } from './pages/mentor/ClassDetailPage';
 import { CallRoomPage } from './pages/mentor/CallRoomPage';
 
@@ -258,6 +259,14 @@ export function App() {
           element={
             <RequireAuth>
               <DictionaryPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="calendar"
+          element={
+            <RequireAuth>
+              <CalendarPage />
             </RequireAuth>
           }
         />

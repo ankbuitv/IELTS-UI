@@ -37,12 +37,25 @@ export function MySessionsPage() {
   );
   const past = all.filter((session) => !upcoming.includes(session));
 
+  const confirmBooking = async (session: MentorSession) => {
+    setBusy(true);
+    try {
+      await mentorApi.confirm(session.id);
+      toast.push('Booking confirmed.', 'success');
+      await sessions.reload();
+    } catch (cause) {
+      toast.push(describeError(cause), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const cancel = async (session: MentorSession) => {
     if (!window.confirm('Cancel this session? Any coins paid are refunded.')) return;
     setBusy(true);
     setError(null);
     try {
-      await mentorApi.cancel(session.id);
+      await mentorApi.decline(session.id);
       toast.push('Session cancelled.', 'success');
       await sessions.reload();
     } catch (cause) {
@@ -133,10 +146,20 @@ export function MySessionsPage() {
                   </div>
                 </div>
                 <div className="session-card__actions">
-                  {joinable ? (
+                  {isMentorSide && session.status === 'REQUESTED' ? (
+                    <Button variant="primary" disabled={busy} onClick={() => void confirmBooking(session)}>
+                      <Icon name="check" size={14} />
+                      Confirm booking
+                    </Button>
+                  ) : joinable ? (
                     <Button variant="primary" onClick={() => navigate(`/sessions/${session.id}/room`)}>
                       <Icon name="video" size={14} />
                       Join call
+                    </Button>
+                  ) : session.status === 'REQUESTED' ? (
+                    <Button variant="ghost" disabled>
+                      <Icon name="hourglass" size={14} />
+                      Waiting for mentor
                     </Button>
                   ) : (
                     <Button variant="ghost" disabled>
@@ -144,8 +167,12 @@ export function MySessionsPage() {
                       Opens 10 min before
                     </Button>
                   )}
-                  <Button variant="danger" disabled={busy || session.status !== 'SCHEDULED'} onClick={() => cancel(session)}>
-                    Cancel
+                  <Button
+                    variant="danger"
+                    disabled={busy || (session.status !== 'SCHEDULED' && session.status !== 'REQUESTED')}
+                    onClick={() => cancel(session)}
+                  >
+                    {isMentorSide && session.status === 'REQUESTED' ? 'Decline' : 'Cancel'}
                   </Button>
                 </div>
               </article>

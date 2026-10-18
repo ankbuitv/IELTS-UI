@@ -427,13 +427,21 @@ export async function hasAnyUserWithRole(env: Env, role: Role): Promise<boolean>
 export async function updateProfile(
   env: Env,
   userId: string,
-  input: { displayName?: string; targetBand?: number | null; timezone?: string | null },
+  input: {
+    displayName?: string;
+    targetBand?: number | null;
+    timezone?: string | null;
+    bio?: string;
+    links?: Array<{ label: string; url: string }>;
+  },
 ): Promise<void> {
   await env.DB.prepare(
     `UPDATE user_profiles
         SET display_name = COALESCE(?, display_name),
             target_band = ?,
             timezone = COALESCE(?, timezone),
+            bio = COALESCE(?, bio),
+            links_json = COALESCE(?, links_json),
             updated_at = ?
       WHERE user_id = ?`,
   )
@@ -441,6 +449,8 @@ export async function updateProfile(
       input.displayName ?? null,
       input.targetBand ?? null,
       input.timezone ?? null,
+      input.bio ?? null,
+      input.links ? JSON.stringify(input.links.slice(0, 5)) : null,
       nowIso(),
       userId,
     )

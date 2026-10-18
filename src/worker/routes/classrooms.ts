@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { AppBindings, Env } from '../env';
 import { assertCsrf, assertSameOrigin } from '../lib/http';
 import { ApiError } from '../lib/errors';
+import { putBlob } from '../services/blob-store';
 import { parseBody } from '../lib/validate';
 import { requireAuth } from '../middleware/auth';
 import { currentUser } from '../middleware/auth';
@@ -97,6 +98,8 @@ interface ChatMessage {
   senderName: string;
   body: string;
   createdAt: string;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
 }
 
 /** The course chat stream, newest 100, oldest first. */
@@ -105,7 +108,7 @@ router.get('/classrooms/:classroomId/messages', requireAuth, async (c) => {
   const classroomId = c.req.param('classroomId');
   await assertClassroomAccess(c.env, classroomId, user.id, user.role);
   const rows = await c.env.DB.prepare(
-    `SELECT m.id, m.sender_id, m.body, m.created_at,
+    `SELECT m.id, m.sender_id, m.body, m.created_at, m.attachment_url, m.attachment_name,
             COALESCE(NULLIF(p.display_name, ''), u.username, 'Someone') AS display_name
        FROM classroom_messages m
        JOIN users u ON u.id = m.sender_id
@@ -115,7 +118,15 @@ router.get('/classrooms/:classroomId/messages', requireAuth, async (c) => {
       LIMIT 100`,
   )
     .bind(classroomId)
-    .all<{ id: string; sender_id: string; body: string; created_at: string; display_name: string }>();
+    .all<{
+      id: string;
+      sender_id: string;
+      body: string;
+      created_at: string;
+      attachment_url: string | null;
+      attachment_name: string | null;
+      display_name: string;
+    }>();
   const messages: ChatMessage[] = rows.results
     .map((row) => ({
       id: row.id,
@@ -123,6 +134,8 @@ router.get('/classrooms/:classroomId/messages', requireAuth, async (c) => {
       senderName: row.display_name,
       body: row.body,
       createdAt: row.created_at,
+      attachmentUrl: row.attachment_url,
+      attachmentName: row.attachment_name,
     }))
     .reverse();
   return c.json({ messages });
@@ -134,15 +147,44 @@ router.post('/classrooms/:classroomId/messages', requireAuth, async (c) => {
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const classroomId = c.req.param('classroomId');
   await assertClassroomAccess(c.env, classroomId, user.id, user.role);
-  const body = await parseBody(c, z.object({ body: z.string().min(1).max(4000) }));
+  const body = await parseBody(
+    c,
+    z.object({
+      body: z.string().max(4000).optional().default(''),
+      /** Optional file: `data:<mime>;base64,…` up to 10 MB, kept in D1. */
+      attachmentName: z.string().min(1).max(160).optional(),
+      attachmentMime: z.string().min(3).max(120).optional(),
+      attachmentBase64: z.string().min(8).max(15_000_000).optional(),
+    }),
+  );
   const text = body.body.trim();
-  if (!text) throw ApiError.validation('Write something first.');
+  if (!text && !body.attachmentBase64) throw ApiError.validation('Write something or attach a file.');
+
+  let attachmentUrl: string | null = null;
+  let attachmentName: string | null = null;
+  if (body.attachmentBase64 && body.attachmentName) {
+    const payload = body.attachmentBase64.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
+    const size = Math.round((payload.length * 3) / 4);
+    if (size > 10_485_760) throw ApiError.validation('Attachments are limited to 10 MB.');
+    const assetId = newId('ast');
+    const timestamp = nowIso();
+    await c.env.DB.prepare(
+      `INSERT INTO assets (id, kind, storage_kind, external_url, filename, mime, size_bytes, visibility, uploaded_by, created_at, updated_at)
+       VALUES (?, 'OTHER', 'OBJECT_STORAGE', NULL, ?, ?, ?, 'PRIVATE', ?, ?, ?)`,
+    )
+      .bind(assetId, body.attachmentName, body.attachmentMime ?? 'application/octet-stream', size, user.id, timestamp, timestamp)
+      .run();
+    await putBlob(c.env, 'asset_blobs', 'asset_id', assetId, payload, { mime: body.attachmentMime ?? 'application/octet-stream' });
+    attachmentUrl = `/api/files/${assetId}`;
+    attachmentName = body.attachmentName;
+  }
+
   const id = newId('ccm');
   const timestamp = nowIso();
   await c.env.DB.prepare(
-    'INSERT INTO classroom_messages (id, classroom_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)',
+    'INSERT INTO classroom_messages (id, classroom_id, sender_id, body, attachment_url, attachment_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
   )
-    .bind(id, classroomId, user.id, text, timestamp)
+    .bind(id, classroomId, user.id, text, attachmentUrl, attachmentName, timestamp)
     .run();
   const message: ChatMessage = {
     id,
@@ -150,6 +192,8 @@ router.post('/classrooms/:classroomId/messages', requireAuth, async (c) => {
     senderName: user.displayName || user.username || 'Someone',
     body: text,
     createdAt: timestamp,
+    attachmentUrl,
+    attachmentName,
   };
   return c.json({ message }, 201);
 });

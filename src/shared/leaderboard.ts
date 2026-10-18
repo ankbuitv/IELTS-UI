@@ -51,6 +51,8 @@ export interface LeaderboardRow {
   valueLabel: string;
   /** A second fact about the row: the streak, or the best band. */
   secondary: string;
+  /** Estimated overall band from submitted attempts, or null. */
+  bestBand: number | null;
 }
 
 export interface LeaderboardResponse {

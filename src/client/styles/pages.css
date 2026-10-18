@@ -319,3 +319,58 @@ a.skill-tile:hover .skill-tile__go { color: var(--skill); }
   .report-tiles { min-width: 0; width: 100%; }
   .aimark { padding: 16px; }
 }
+
+/* ------------------------------------------------------------- calendar */
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.cal-grid__head { text-align: center; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-400); padding: 4px 0; }
+.cal-cell {
+  position: relative; min-height: 64px; border-radius: 12px; border: 1px solid var(--edge);
+  background: var(--solid); cursor: pointer; font-weight: 700; color: var(--ink-800);
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 8px;
+  transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+.cal-cell:hover:not(:disabled) { border-color: var(--brand-500); transform: translateY(-1px); }
+.cal-cell--pad { opacity: 0; pointer-events: none; }
+.cal-cell--today { border-color: var(--brand-600); box-shadow: 0 0 0 2px var(--brand-200, rgba(99, 91, 255, 0.25)); }
+.cal-cell--selected { background: var(--brand-600); color: #fff; border-color: var(--brand-600); }
+.cal-cell__dots { display: flex; gap: 3px; }
+.cal-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.cal-dot--session { background: var(--brand-600); }
+.cal-dot--class { background: var(--success); }
+.cal-dot--deadline { background: var(--warning); }
+.cal-dot--note { background: var(--ink-400); }
+.cal-cell--selected .cal-dot { background: #fff; }
+@media (max-width: 560px) { .cal-cell { min-height: 44px; font-size: 0.82rem; } }
+
+/* --------------------------------------------------- profile band & links */
+.band-tag {
+  display: inline-flex; align-items: center; margin-left: 10px; padding: 3px 10px;
+  border-radius: 999px; background: var(--sun-500, #f0a200); color: #14233a;
+  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.03em; vertical-align: middle;
+}
+.band-tag--role { background: var(--brand-600, #635bff); color: #fff; }
+.player-profile-hero__bio { margin: 8px 0 0; max-width: 640px; color: inherit; opacity: 0.92; white-space: pre-wrap; }
+.player-profile-hero__links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.profile-link-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px;
+  border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.35);
+  color: inherit; text-decoration: none; font-size: 0.82rem; font-weight: 700;
+  background: rgba(255, 255, 255, 0.12);
+}
+.profile-link-chip:hover { background: rgba(255, 255, 255, 0.24); }
+.board__row .band-tag { margin-left: 6px; font-size: 0.66rem; padding: 2px 8px; }
+
+/* ------------------------------------------------- chat attachments & polish */
+.chat-attach {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 4px;
+  padding: 7px 12px; border-radius: 12px; text-decoration: none; font-size: 0.82rem; font-weight: 700;
+  background: rgba(255, 255, 255, 0.16); color: inherit; border: 1px solid rgba(255, 255, 255, 0.22);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chat-attach:hover { background: rgba(255, 255, 255, 0.28); }
+.chat-attach-btn {
+  display: grid; place-items: center; width: 38px; height: 38px; flex: none;
+  border-radius: 12px; border: 1px solid var(--edge); background: var(--wash);
+  cursor: pointer; color: var(--ink-700);
+}
+.chat-attach-btn:hover { border-color: var(--brand-500); color: var(--brand-600); }

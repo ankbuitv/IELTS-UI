@@ -394,3 +394,16 @@
   .stage__dot { width: 34px; height: 34px; right: 16px; top: 14px; }
   .stage__bars { display: none; }
 }
+
+/* ------------------------------------------------------------ search palette */
+.site-search { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--edge); background: var(--wash); color: var(--ink-400); font-size: 0.85rem; cursor: pointer; }
+.site-search:hover { border-color: var(--brand-500); color: var(--ink-700); }
+.search-palette { display: flex; flex-direction: column; gap: 8px; min-width: min(560px, 80vw); }
+.search-palette__field { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; border: 1.5px solid var(--brand-500); background: var(--wash); }
+.search-palette__field input { flex: 1; border: 0; background: transparent; outline: none; font-size: 1.02rem; color: var(--ink-900); }
+.search-palette__list { display: flex; flex-direction: column; gap: 4px; max-height: 46vh; overflow-y: auto; }
+.search-palette__item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 0; border-radius: 12px; background: transparent; cursor: pointer; text-align: left; color: var(--ink-900); }
+.search-palette__item:hover { background: var(--wash); }
+.search-palette__item span { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.search-palette__item small { color: var(--ink-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-palette__word { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--sun-border, #f2e0b0); background: var(--sun-50, #fff8e6); cursor: pointer; text-align: left; color: var(--ink-900); }

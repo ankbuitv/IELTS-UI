@@ -11,6 +11,8 @@ interface ChatMessage {
   senderName: string;
   body: string;
   createdAt: string;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
 }
 
 /** Opens the course chat of one classroom in a modal. */
@@ -51,6 +53,31 @@ function ClassroomChat({ classroomId }: { classroomId: string }) {
   useEffect(() => {
     if (!messages) void load();
   }, [messages, load]);
+
+  const attach = async (file: File) => {
+    setBusy(true);
+    try {
+      const attachmentBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('Could not read the file.'));
+        reader.readAsDataURL(file);
+      });
+      const result = await api.post<{ message: ChatMessage }>(`/api/classrooms/${classroomId}/messages`, {
+        body: draft.trim() || undefined,
+        attachmentName: file.name,
+        attachmentMime: file.type || 'application/octet-stream',
+        attachmentBase64,
+      });
+      setDraft('');
+      setMessages((current) => [...(current ?? []), result.message]);
+      setTimeout(() => bottomRef.current?.scrollIntoView({ block: 'end' }), 0);
+    } catch (cause) {
+      toast.push(describeError(cause), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const send = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -97,7 +124,21 @@ function ClassroomChat({ classroomId }: { classroomId: string }) {
               {message.senderId !== user?.id ? (
                 <p className="tiny" style={{ margin: '0 0 2px', opacity: 0.75, fontWeight: 700 }}>{message.senderName}</p>
               ) : null}
-              <p style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{message.body}</p>
+              {message.body ? (
+                <p style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{message.body}</p>
+              ) : null}
+              {message.attachmentUrl ? (
+                <a
+                  className="chat-attach"
+                  href={message.attachmentUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  download={message.attachmentName ?? undefined}
+                >
+                  <Icon name="upload" size={13} style={{ transform: 'rotate(180deg)' }} />
+                  {message.attachmentName ?? 'Download file'}
+                </a>
+              ) : null}
               <p className="tiny" style={{ margin: '2px 0 0', opacity: 0.65 }}>{relativeTime(message.createdAt)}</p>
             </div>
           ))
@@ -105,6 +146,18 @@ function ClassroomChat({ classroomId }: { classroomId: string }) {
         <div ref={bottomRef} />
       </div>
       <form className="row gap-8" onSubmit={send}>
+        <label className="chat-attach-btn" title="Send a file">
+          <Icon name="upload" size={16} style={{ transform: 'rotate(180deg)' }} />
+          <input
+            type="file"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) void attach(file);
+            }}
+          />
+        </label>
         <div style={{ flex: 1 }}>
           <TextInput value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message…" aria-label="Message" />
         </div>

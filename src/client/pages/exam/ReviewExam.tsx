@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
@@ -46,6 +46,22 @@ export function AttemptReviewPage() {
 
   const sessions = result?.sessions ?? [];
   const [sessionIdx, setSessionIdx] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  /** "Listen from here": play the section recording from the evidence sentence. */
+  const listenFrom = (segmentId: string | null) => {
+    const segment = (activeSectionResultRef.current?.transcript?.segments ?? []).find((item) => item.id === segmentId);
+    const audio = audioRef.current;
+    if (audio && segment && segment.startSeconds !== null) {
+      audio.currentTime = segment.startSeconds;
+      void audio.play().catch(() => undefined);
+    }
+    if (segmentId) {
+      document
+        .getElementById(`transcript-segment-${segmentId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
   const activeSession = sessions[sessionIdx] ?? null;
   const [sectionId, setSectionId] = useState<string | null>(null);
 
@@ -58,6 +74,10 @@ export function AttemptReviewPage() {
   const sectionResults = activeSession?.sectionResults ?? [];
   const activeSectionId = sectionId ?? sectionResults[0]?.sectionId ?? null;
   const activeSectionResult = sectionResults.find((s) => s.sectionId === activeSectionId) ?? null;
+  const activeSectionResultRef = useRef<typeof activeSectionResult>(null);
+  useEffect(() => {
+    activeSectionResultRef.current = activeSectionResult;
+  }, [activeSectionResult]);
   const activePaperSection = activeSectionId ? (sectionsById.get(activeSectionId) ?? null) : null;
 
   const reviewItems = useMemo(
@@ -208,6 +228,14 @@ export function AttemptReviewPage() {
                     : 'No passage for this section.'}
                 </p>
               )}
+              {activeSectionResult?.audio ? (
+                <div style={{ padding: '10px 12px 0' }}>
+                  <audio ref={audioRef} controls preload="metadata" src={activeSectionResult.audio.url} style={{ width: '100%' }} />
+                  <p className="tiny muted" style={{ margin: '6px 2px 0' }}>
+                    <Icon name="headphones" size={12} /> Press “Listen from here” on any question to jump to its part.
+                  </p>
+                </div>
+              ) : null}
               {activeSectionResult?.transcript ? (
                 <TranscriptView transcript={activeSectionResult.transcript} highlightSegmentId={null} />
               ) : null}
@@ -257,11 +285,7 @@ export function AttemptReviewPage() {
                               explanation={item.explanation}
                               correctAnswer={item.correctAnswer}
                               transcriptSegmentId={evidenceSegmentId(item.evidence)}
-                              onListenFrom={(segmentId) => {
-                                document
-                                  .getElementById(`transcript-segment-${segmentId}`)
-                                  ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                              }}
+                              onListenFrom={listenFrom}
                             />
                           </div>
                         );
@@ -305,6 +329,7 @@ export function AttemptReviewPage() {
                         explanation={item.explanation}
                         correctAnswer={item.correctAnswer}
                         transcriptSegmentId={evidenceSegmentId(item.evidence)}
+                        onListenFrom={listenFrom}
                       />
                     </div>
                   ))}

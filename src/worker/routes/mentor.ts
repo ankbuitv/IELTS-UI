@@ -23,6 +23,9 @@ import {
   getMentorReviews,
   joinClass,
   joinRoom,
+  confirmSession,
+  declineSession,
+  kickParticipant,
   leaveClass,
   leaveRoom,
   listClasses,
@@ -83,6 +86,38 @@ router.post('/mentor/:mentorId/book', async (c) => {
   );
   const session = await bookSession(c.env, user, c.req.param('mentorId'), body);
   return c.json({ session }, 201);
+});
+
+/** The mentor accepts a booking request (status REQUESTED → SCHEDULED). */
+router.post('/mentor/sessions/:sessionId/confirm', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const session = await confirmSession(c.env, user, c.req.param('sessionId'));
+  return c.json({ session });
+});
+
+/** Decline / cancel a booking; coins paid are refunded to the learner. */
+router.post('/mentor/sessions/:sessionId/decline', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ reason: z.string().max(500).optional() }).optional().default({}));
+  const session = await declineSession(c.env, user, c.req.param('sessionId'), body.reason);
+  return c.json({ session });
+});
+
+/** Room moderation: kick (or ban) a participant. Only the mentor or an admin. */
+router.post('/mentor/sessions/:sessionId/kick', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ userId: z.string().min(1).max(64), ban: z.boolean().optional() }));
+  const result = await kickParticipant(c.env, user, c.req.param('sessionId'), body.userId, body.ban ?? false);
+  // Tell everyone — especially the target — right away.
+  await postSignal(c.env, user, c.req.param('sessionId'), {
+    kind: 'KICK',
+    targetId: body.userId,
+    payload: body.ban ? 'banned' : 'kicked',
+  });
+  return c.json(result);
 });
 
 router.post('/mentor/sessions/:sessionId/cancel', async (c) => {
@@ -157,7 +192,7 @@ router.post('/mentor/sessions/:sessionId/signal', async (c) => {
   const body = await parseBody(
     c,
     z.object({
-      kind: z.enum(['OFFER', 'ANSWER', 'CANDIDATE', 'BYE']),
+      kind: z.enum(['OFFER', 'ANSWER', 'CANDIDATE', 'BYE', 'HAND', 'MUTE_MIC', 'UNMUTE_MIC', 'KICK', 'REACTION']),
       targetId: z.string().min(1).max(64).nullable().optional(),
       payload: z.string().max(120_000),
     }),

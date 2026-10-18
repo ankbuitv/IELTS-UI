@@ -17,6 +17,7 @@ describe('mentor shared vocabulary', () => {
 
   it('covers the session lifecycle', () => {
     expect([...MENTOR_SESSION_STATUSES]).toEqual([
+      'REQUESTED',
       'SCHEDULED',
       'ACTIVE',
       'COMPLETED',

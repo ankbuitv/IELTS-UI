@@ -47,7 +47,10 @@ export function CallRoomPage() {
   const [screenOn, setScreenOn] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
   const [panel, setPanel] = useState<'chat' | 'notes' | 'people'>('chat');
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 900);
+  const [reactions, setReactions] = useState<Array<{ key: number; emoji: string; name: string }>>([]);
+  const reactionSeqRef = useRef(0);
+  const [kicked, setKicked] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [notes, setNotes] = useState('');
   const [peers, setPeers] = useState<Peer[]>([]);
@@ -85,24 +88,56 @@ export function CallRoomPage() {
     if (!el) return;
     const stream = screenStreamRef.current ?? localStreamRef.current;
     if (el.srcObject !== stream) el.srcObject = stream;
+    // React renders `muted` as an attribute; the autoplay policy reads the DOM
+    // property. Setting it here (and starting playback explicitly) is what makes
+    // the local preview show up on desktop Chrome — without it the tile stays
+    // black even though the camera light is on.
+    el.muted = true;
+    void el.play().catch(() => undefined);
   }, []);
 
-  const startMedia = useCallback(async (): Promise<MediaStream | null> => {
-    if (localStreamRef.current) return localStreamRef.current;
+  const startMedia = useCallback(async (force = false): Promise<MediaStream | null> => {
+    if (localStreamRef.current && !force) {
+      // A stream whose tracks were stopped (device unplug, permission revoked)
+      // must be re-acquired, not reused.
+      const stale = localStreamRef.current.getTracks().every((track) => track.readyState === 'ended');
+      if (!stale) return localStreamRef.current;
+    }
+    if (force) {
+      localStreamRef.current?.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
+    }
+    const explain = (cause: unknown) => {
+      const name = (cause as { name?: string } | null)?.name ?? '';
+      if (name === 'NotAllowedError' || name === 'SecurityError') {
+        return 'Camera/microphone permission was blocked. Click the camera icon in the address bar to allow it — inside a previewed iframe the host must also allow camera access.';
+      }
+      if (name === 'NotReadableError' || name === 'AbortError') {
+        return 'Your camera or microphone is busy in another app. Close it there, then press “Try camera again”.';
+      }
+      return 'Camera and microphone are unavailable — you can still join and use chat.';
+    };
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
       localStreamRef.current = stream;
+      const [videoTrack] = stream.getVideoTracks();
+      if (videoTrack) videoTrack.onended = () => setCamOn(false);
+      setMediaError(null);
       return stream;
-    } catch {
+    } catch (cause) {
       try {
         const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true });
         localStreamRef.current = audioOnly;
         setCamOn(false);
+        setMediaError(explain(cause));
         return audioOnly;
-      } catch {
+      } catch (audioCause) {
         setMicOn(false);
         setCamOn(false);
-        setMediaError('Camera and microphone are unavailable — you can still join and use chat.');
+        setMediaError(explain(audioCause));
         return null;
       }
     }
@@ -114,6 +149,30 @@ export function CallRoomPage() {
     if (phase !== 'prejoin' && phase !== 'room') return;
     void startMedia().then(() => attachSelf());
   }, [phase, startMedia, attachSelf]);
+
+  /** "Try camera again" after a failure — re-acquires devices and re-attaches.
+   * The room poll re-syncs the peer senders with the fresh tracks within a beat. */
+  const retryMedia = async () => {
+    const stream = await startMedia(true);
+    if (stream) {
+      setCamOn(stream.getVideoTracks().length > 0);
+      setMicOn(stream.getAudioTracks().length > 0);
+    }
+    attachSelf();
+  };
+
+  // If the OS hands the camera to another app mid-call, come back automatically.
+  useEffect(() => {
+    const onDeviceChange = () => {
+      const stream = localStreamRef.current;
+      if (stream && stream.getTracks().every((track) => track.readyState === 'ended')) {
+        void retryMedia();
+      }
+    };
+    navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
+    return () => navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---------------------------------------------------------- WebRTC plumbing
   /** Create (or fetch) the peer connection for a remote user. */
@@ -247,6 +306,39 @@ export function CallRoomPage() {
           pc.close();
           pcsRef.current.delete(signal.senderId);
           setPeers((prev) => prev.filter((peer) => peer.userId !== signal.senderId));
+        } else if (signal.kind === 'MUTE_MIC' || signal.kind === 'UNMUTE_MIC') {
+          // The mentor is managing this mic — obey silently.
+          if (!signal.targetId || signal.targetId === selfId) {
+            const on = signal.kind === 'UNMUTE_MIC';
+            setMicOn(on);
+            localStreamRef.current?.getAudioTracks().forEach((track) => {
+              track.enabled = on;
+            });
+          }
+        } else if (signal.kind === 'KICK') {
+          if (!signal.targetId || signal.targetId === selfId) {
+            setKicked(signal.payload === 'banned' ? 'banned' : 'kicked');
+          } else {
+            // Everyone else just sees the tile disappear on the next poll.
+          }
+        } else if (signal.kind === 'REACTION') {
+          const emoji = signal.payload.slice(0, 8);
+          const name = participantsRef.current.find((p) => p.userId === signal.senderId)?.displayName ?? 'Guest';
+          const key = ++reactionSeqRef.current;
+          setReactions((prev) => [...prev.slice(-12), { key, emoji, name }]);
+          window.setTimeout(() => setReactions((prev) => prev.filter((item) => item.key !== key)), 3200);
+        } else if (signal.kind === 'HAND') {
+          // Presence carries the flag; a signal makes it visible within a beat.
+          setState((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  participants: prev.participants.map((p) =>
+                    p.userId === signal.senderId ? { ...p, handRaised: signal.payload === 'up' } : p,
+                  ),
+                }
+              : prev,
+          );
         }
       } catch {
         // A malformed or stale envelope is dropped: the next poll re-syncs.
@@ -452,8 +544,43 @@ export function CallRoomPage() {
     setHandRaised(next);
     try {
       await mentorApi.raiseHand(sessionId, next);
+      await mentorApi.signal(sessionId, { kind: 'HAND', targetId: null, payload: next ? 'up' : 'down' });
     } catch {
       setHandRaised(!next);
+    }
+  };
+
+  /** Fire a floating emoji everyone in the room sees. */
+  const sendReaction = async (emoji: string) => {
+    const key = ++reactionSeqRef.current;
+    setReactions((prev) => [...prev.slice(-12), { key, emoji, name: 'You' }]);
+    window.setTimeout(() => setReactions((prev) => prev.filter((item) => item.key !== key)), 3200);
+    try {
+      await mentorApi.signal(sessionId, { kind: 'REACTION', targetId: null, payload: emoji });
+    } catch {
+      // Reactions are best-effort.
+    }
+  };
+
+  /** Mentor-only: force-mute / restore a member's microphone. */
+  const forceMute = async (targetId: string, muted: boolean) => {
+    try {
+      await mentorApi.signal(sessionId, { kind: muted ? 'MUTE_MIC' : 'UNMUTE_MIC', targetId, payload: '' });
+    } catch {
+      setError('Could not reach that participant.');
+    }
+  };
+
+  /** Mentor-only: remove someone from the room, optionally banning them. */
+  const removeParticipant = async (targetId: string, ban: boolean) => {
+    const question = ban
+      ? 'Ban this person from the room? They cannot rejoin this session.'
+      : 'Remove this person from the room?';
+    if (!window.confirm(question)) return;
+    try {
+      await mentorApi.kick(sessionId, targetId, ban);
+    } catch (cause) {
+      setError(describeError(cause));
     }
   };
 
@@ -543,6 +670,18 @@ export function CallRoomPage() {
     );
   }
 
+  if (kicked) {
+    return (
+      <div className="stack" style={{ maxWidth: 520, margin: '80px auto', textAlign: 'center' }}>
+        <Notice tone="danger" title={kicked === 'banned' ? 'You were banned from this room' : 'You were removed from this room'}>
+          The mentor {kicked === 'banned' ? 'banned' : 'removed'} you from this session. If you think this is a mistake,
+          contact your mentor or an administrator.
+        </Notice>
+        <Button onClick={() => navigate('/my-sessions')}>Back to my sessions</Button>
+      </div>
+    );
+  }
+
   if (phase === 'prejoin') {
     return (
       <div className="room-prejoin">
@@ -576,7 +715,17 @@ export function CallRoomPage() {
                 ? `You are about to host this session with ${session?.studentName ?? 'your student'}.`
                 : `You are about to join ${session?.mentorName ?? 'your mentor'} for a live video session.`}
             </p>
-            {mediaError ? <Notice tone="warning">{mediaError}</Notice> : null}
+            {mediaError ? (
+              <div className="stack" style={{ gap: 8 }}>
+                <Notice tone="warning">{mediaError}</Notice>
+                <div>
+                  <Button size="sm" variant="secondary" onClick={() => void retryMedia()}>
+                    <Icon name="rotate" size={14} />
+                    Try camera again
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             <div className="room-prejoin__toggles">
               <button
                 type="button"
@@ -637,6 +786,22 @@ export function CallRoomPage() {
           <Notice tone="danger">{error}</Notice>
         </div>
       ) : null}
+      {mediaError ? (
+        <div className="room__media-error">
+          <span>{mediaError}</span>
+          <button type="button" onClick={() => void retryMedia()}>
+            Try camera again
+          </button>
+        </div>
+      ) : null}
+      <div className="room__reactions" aria-hidden="true">
+        {reactions.map((item) => (
+          <span key={item.key} className="room__reaction">
+            <b>{item.emoji}</b>
+            <i>{item.name}</i>
+          </span>
+        ))}
+      </div>
 
       <div className="room__body">
         <div className={`room__stage${peers.length === 0 ? ' room__stage--solo' : ''}`}>
@@ -700,6 +865,14 @@ export function CallRoomPage() {
         {panelOpen ? (
           <aside className="room__panel">
             <div className="room__panel-tabs" role="tablist">
+              <button
+                type="button"
+                className="room__panel-close"
+                onClick={() => setPanelOpen(false)}
+                aria-label="Close panel"
+              >
+                <Icon name="close" size={16} />
+              </button>
               {(['chat', 'notes', 'people'] as const).map((tab) => (
                 <button
                   key={tab}
@@ -784,36 +957,61 @@ export function CallRoomPage() {
 
             {panel === 'people' ? (
               <div className="room__roster">
-                {roster.map((participant) => (
-                  <div key={participant.userId} className="room-roster-item">
-                    <MentorAvatar
-                      name={participant.displayName}
-                      userId={participant.userId}
-                      avatarUpdatedAt={participant.avatarUpdatedAt}
-                      tone={participant.userId === user?.id ? 'sun' : 'violet'}
-                    />
-                    <div>
-                      <div className="room-roster-item__name">
-                        {participant.displayName}
-                        {participant.userId === user?.id ? ' (you)' : ''}
+                {[...roster]
+                  .sort((a, b) => Number(b.handRaised) - Number(a.handRaised))
+                  .map((participant) => {
+                    const isSelf = participant.userId === user?.id;
+                    const isHost = participant.userId === session?.mentorId;
+                    const peerMicLive = peers.find((p) => p.userId === participant.userId)?.stream
+                      .getAudioTracks()
+                      .some((track) => track.enabled && !track.muted);
+                    return (
+                      <div
+                        key={participant.userId}
+                        className={`room-roster-item${participant.handRaised ? ' room-roster-item--hand' : ''}`}
+                      >
+                        <MentorAvatar
+                          name={participant.displayName}
+                          userId={participant.userId}
+                          avatarUpdatedAt={participant.avatarUpdatedAt}
+                          tone={isSelf ? 'sun' : isHost ? 'violet' : 'coral'}
+                        />
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="room-roster-item__name">
+                            {participant.displayName}
+                            {isSelf ? ' (you)' : ''}
+                          </div>
+                          <div className="room-roster-item__role">
+                            {isHost ? 'mentor · host' : isClass ? 'member' : isSelf ? 'you' : 'student'}
+                            {' · '}
+                            {isSelf ? (micOn ? 'mic on' : 'muted') : peerMicLive === false ? 'muted' : 'mic on'}
+                          </div>
+                        </div>
+                        {participant.handRaised ? (
+                          <span className="room-roster-item__hand" title="Hand raised">
+                            ✋
+                          </span>
+                        ) : null}
+                        {isMentor && !isSelf && !isHost ? (
+                          <div className="room-roster-item__actions">
+                            <button
+                              type="button"
+                              title={peerMicLive === false ? 'Unmute their microphone' : 'Mute their microphone'}
+                              onClick={() => void forceMute(participant.userId, peerMicLive !== false)}
+                            >
+                              <Icon name={peerMicLive === false ? 'mic' : 'mic'} size={14} />
+                            </button>
+                            <button type="button" title="Remove from room" onClick={() => void removeParticipant(participant.userId, false)}>
+                              <Icon name="logout" size={14} />
+                            </button>
+                            <button type="button" title="Kick and ban" onClick={() => void removeParticipant(participant.userId, true)}>
+                              <Icon name="shieldCheck" size={14} />
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="room-roster-item__role">
-                        {participant.userId === session?.mentorId
-                          ? 'mentor'
-                          : participant.userId === user?.id
-                            ? 'you'
-                            : isClass
-                              ? 'member'
-                              : 'student'}
-                      </div>
-                    </div>
-                    {participant.handRaised ? (
-                      <span className="room-roster-item__hand" title="Hand raised">
-                        <Icon name="hand" size={17} />
-                      </span>
-                    ) : null}
-                  </div>
-                ))}
+                    );
+                  })}
               </div>
             ) : null}
           </aside>
@@ -899,6 +1097,15 @@ export function CallRoomPage() {
             <span className="room-btn__label">End session</span>
           </span>
         ) : null}
+        <span className="room-btn-wrap room-btn-wrap--reactions" aria-label="Send a reaction">
+          <span className="room__emoji-bar">
+            {['👍', '👏', '😄', '🎉', '❤️', '🔥', '🤔', '✋'].map((emoji) => (
+              <button key={emoji} type="button" className="room__emoji-btn" onClick={() => void sendReaction(emoji)} aria-label={`React ${emoji}`}>
+                {emoji}
+              </button>
+            ))}
+          </span>
+        </span>
         <button type="button" className="room-btn room-btn--leave" onClick={() => void leave()}>
           <Icon name="phoneOff" size={19} />
           Leave
@@ -924,7 +1131,10 @@ function RemoteTile({ peer, participant }: { peer: Peer; participant?: RoomParti
       setLive(videos.some((track) => track.readyState === 'live' && !track.muted && track.enabled));
     };
     const el = videoRef.current;
-    if (el && el.srcObject !== stream) el.srcObject = stream;
+    if (el) {
+      if (el.srcObject !== stream) el.srcObject = stream;
+      void el.play().catch(() => undefined);
+    }
     evaluate();
     const tracks = stream.getTracks();
     for (const track of tracks) {
@@ -967,7 +1177,7 @@ function RemoteTile({ peer, participant }: { peer: Peer; participant?: RoomParti
       ) : null}
       <span className="room-tile__name">
         {peer.displayName}
-        {participant?.handRaised ? <Icon name="hand" size={13} /> : null}
+        {participant?.handRaised ? <span className="room-tile__hand-inline">✋</span> : null}
       </span>
     </div>
   );

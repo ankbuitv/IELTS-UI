@@ -79,6 +79,7 @@ export function SpecialtyChip({ specialty }: { specialty: MentorSpecialty }) {
 }
 
 const STATUS_TONE: Record<MentorSessionStatus, string> = {
+  REQUESTED: 'mchip--sun',
   SCHEDULED: 'mchip--violet',
   ACTIVE: 'mchip--mint',
   COMPLETED: 'mchip',

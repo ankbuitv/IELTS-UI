@@ -635,3 +635,19 @@ table.data--zebra tbody tr:nth-child(even) { background: var(--paper-muted); }
 }
 .password-toggle:hover { background: var(--ink-100); color: var(--ink-900); }
 .password-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* ------------------------------------------------------ mobile safety net */
+@media (max-width: 640px) {
+  h1 { font-size: 1.55rem; letter-spacing: -0.025em; }
+  h2 { font-size: 1.22rem; }
+  .card { padding: 16px 16px; border-radius: 18px; }
+  .stack { gap: 14px; }
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  img, video, iframe { max-width: 100%; }
+  .btn { min-height: 42px; }
+  .btn--sm { min-height: 34px; }
+  .dash-hero { padding: 22px 18px; }
+  .dash-hero__stats { gap: 8px; }
+  .dash-stat { min-width: 84px; padding: 8px 11px; }
+  .dash-stat__value { font-size: 1.12rem; }
+}

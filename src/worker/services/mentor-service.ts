@@ -281,7 +281,7 @@ export async function bookSession(
   await env.DB.prepare(
     `INSERT INTO mentor_sessions
        (id, mentor_id, student_id, class_id, kind, status, topic, starts_at, ends_at, paid_coins, created_at, updated_at)
-     VALUES (?, ?, ?, NULL, 'ONE_ON_ONE', 'SCHEDULED', ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, NULL, 'ONE_ON_ONE', 'REQUESTED', ?, ?, ?, ?, ?, ?)`,
   )
     .bind(id, mentorId, viewer.id, input.topic.trim() || 'Coaching session', startsAt.toISOString(), endsAt.toISOString(), paidCoins, timestamp, timestamp)
     .run();
@@ -430,6 +430,9 @@ export interface RoomParticipant {
 }
 
 export async function joinRoom(env: Env, viewer: AuthUser, sessionId: string): Promise<{ ok: true }> {
+  if (await isRoomBanned(env, sessionId, viewer.id)) {
+    throw ApiError.forbidden('You were removed from this room by the mentor.');
+  }
   const session = await getSession(env, sessionId);
   await assertSessionAccess(env, session, viewer);
   if (session.status === 'CANCELLED') throw ApiError.conflict('That session was cancelled.');
@@ -508,7 +511,7 @@ export async function roomState(
 
   const presence = await env.DB.prepare(
     `SELECT pr.user_id, pr.joined_at, pr.hand_raised,
-            COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name,
+            COALESCE(NULLIF(p.display_name, ''), u.username, u.email) AS display_name,
             p.avatar_updated_at,
             u.role
        FROM mentor_room_presence pr
@@ -522,9 +525,10 @@ export async function roomState(
 
   const messages = await env.DB.prepare(
     `SELECT m.id, m.session_id, m.sender_id, m.kind, m.body, m.created_at,
-            COALESCE(NULLIF(p.display_name, ''), 'Someone') AS display_name,
+            COALESCE(NULLIF(p.display_name, ''), u.username, 'Someone') AS display_name,
             p.avatar_updated_at
        FROM mentor_messages m
+       JOIN users u ON u.id = m.sender_id
        LEFT JOIN user_profiles p ON p.user_id = m.sender_id
       WHERE m.session_id = ?
       ORDER BY m.created_at DESC
@@ -622,7 +626,7 @@ export async function postMessage(
     id,
     sessionId,
     senderId: viewer.id,
-    senderName: viewer.displayName,
+    senderName: viewer.displayName || viewer.username || 'Someone',
     senderAvatarUpdatedAt: null,
     kind,
     body: text,
@@ -634,7 +638,11 @@ export async function postSignal(
   env: Env,
   viewer: AuthUser,
   sessionId: string,
-  signal: { kind: 'OFFER' | 'ANSWER' | 'CANDIDATE' | 'BYE'; targetId: string | null; payload: string },
+  signal: {
+    kind: 'OFFER' | 'ANSWER' | 'CANDIDATE' | 'BYE' | 'HAND' | 'MUTE_MIC' | 'UNMUTE_MIC' | 'KICK' | 'REACTION';
+    targetId: string | null;
+    payload: string;
+  },
 ): Promise<{ ok: true; id: string }> {
   const session = await getSession(env, sessionId);
   await assertSessionAccess(env, session, viewer);
@@ -715,7 +723,7 @@ async function classMembers(env: Env, classIds: string[]): Promise<Map<string, M
   const placeholders = classIds.map(() => '?').join(', ');
   const rows = await env.DB.prepare(
     `SELECT m.class_id, m.user_id, m.joined_at,
-            COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name,
+            COALESCE(NULLIF(p.display_name, ''), u.username, u.email) AS display_name,
             p.avatar_updated_at
        FROM mentor_class_members m
        JOIN users u ON u.id = m.user_id
@@ -863,9 +871,10 @@ export async function classMessages(env: Env, viewer: AuthUser, classId: string)
   await classAccess(env, classId, viewer);
   const rows = await env.DB.prepare(
     `SELECT m.id, m.class_id, m.sender_id, m.body, m.created_at,
-            COALESCE(NULLIF(p.display_name, ''), 'Someone') AS display_name,
+            COALESCE(NULLIF(p.display_name, ''), u.username, 'Someone') AS display_name,
             p.avatar_updated_at
        FROM mentor_class_messages m
+       JOIN users u ON u.id = m.sender_id
        LEFT JOIN user_profiles p ON p.user_id = m.sender_id
       WHERE m.class_id = ?
       ORDER BY m.created_at DESC
@@ -901,7 +910,7 @@ export async function postClassMessage(env: Env, viewer: AuthUser, classId: stri
     id,
     classId,
     senderId: viewer.id,
-    senderName: viewer.displayName,
+    senderName: viewer.displayName || viewer.username || 'Someone',
     senderAvatarUpdatedAt: null,
     body: text,
     createdAt: timestamp,
@@ -1144,4 +1153,90 @@ export async function findUser(env: Env, userId: string): Promise<UserRow | null
   )
     .bind(userId)
     .first<UserRow>();
+}
+
+
+// ---------------------------------------------------------------- moderation
+
+/** The mentor (or an admin) accepts a booking request: REQUESTED → SCHEDULED. */
+export async function confirmSession(env: Env, viewer: AuthUser, sessionId: string): Promise<MentorSession> {
+  const session = await getSession(env, sessionId);
+  if (session.mentorId !== viewer.id && viewer.role !== 'ADMIN') throw ApiError.forbidden('Only the mentor can confirm this booking.');
+  if (session.status !== 'REQUESTED') throw ApiError.conflict('This booking is not waiting for confirmation.');
+  await env.DB.prepare(`UPDATE mentor_sessions SET status = 'SCHEDULED', updated_at = ? WHERE id = ?`)
+    .bind(nowIso(), sessionId)
+    .run();
+  await systemMessage(env, sessionId, viewer.id, 'Booking confirmed by the mentor.');
+  return getSession(env, sessionId);
+}
+
+/**
+ * The mentor (or the student of the session) cancels a booking. Any coins the
+ * learner paid go back to their wallet.
+ */
+export async function declineSession(env: Env, viewer: AuthUser, sessionId: string, reason?: string): Promise<MentorSession> {
+  const session = await getSession(env, sessionId);
+  const isMentor = session.mentorId === viewer.id || viewer.role === 'ADMIN';
+  const isStudent = session.studentId === viewer.id;
+  if (!isMentor && !isStudent) throw ApiError.forbidden('This is not your session.');
+  if (session.status === 'COMPLETED' || session.status === 'CANCELLED') {
+    throw ApiError.conflict('This session is already closed.');
+  }
+  if (isStudent && session.status === 'SCHEDULED' && session.mentorId !== viewer.id) {
+    // A confirmed session may still be cancelled by the learner — same refund.
+  }
+  await env.DB.prepare(`UPDATE mentor_sessions SET status = 'CANCELLED', updated_at = ? WHERE id = ?`)
+    .bind(nowIso(), sessionId)
+    .run();
+  if (session.paidCoins > 0) {
+    await env.DB.prepare('UPDATE learn_profiles SET coins = coins + ?, updated_at = ? WHERE user_id = ?')
+      .bind(session.paidCoins, nowIso(), session.studentId)
+      .run();
+  }
+  await systemMessage(env, sessionId, viewer.id, reason?.trim() ? `Booking cancelled — ${reason.trim()}` : 'Booking cancelled.');
+  await touchMentorCounters(env, session.mentorId);
+  return getSession(env, sessionId);
+}
+
+async function systemMessage(env: Env, sessionId: string, senderId: string, body: string): Promise<void> {
+  await env.DB.prepare(
+    'INSERT INTO mentor_messages (id, session_id, sender_id, kind, body, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+  )
+    .bind(newId('msg'), sessionId, senderId, 'SYSTEM', body, nowIso())
+    .run();
+}
+
+/** Remove someone from the room right now (their client receives a KICK signal too). */
+export async function kickParticipant(
+  env: Env,
+  viewer: AuthUser,
+  sessionId: string,
+  targetId: string,
+  ban: boolean,
+): Promise<{ ok: true }> {
+  const session = await getSession(env, sessionId);
+  if (session.mentorId !== viewer.id && viewer.role !== 'ADMIN') {
+    throw ApiError.forbidden('Only the mentor can manage this room.');
+  }
+  if (targetId === viewer.id) throw ApiError.validation('You cannot kick yourself.');
+  if (targetId === session.mentorId && viewer.role !== 'ADMIN') throw ApiError.validation('The mentor cannot be kicked.');
+  await env.DB.prepare('DELETE FROM mentor_room_presence WHERE session_id = ? AND user_id = ?')
+    .bind(sessionId, targetId)
+    .run();
+  if (ban) {
+    await env.DB.prepare(
+      'INSERT INTO mentor_room_bans (session_id, user_id, banned_by, created_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING',
+    )
+      .bind(sessionId, targetId, viewer.id, nowIso())
+      .run();
+  }
+  return { ok: true };
+}
+
+/** True when this user may not enter the room. */
+export async function isRoomBanned(env: Env, sessionId: string, userId: string): Promise<boolean> {
+  const row = await env.DB.prepare('SELECT 1 AS ok FROM mentor_room_bans WHERE session_id = ? AND user_id = ?')
+    .bind(sessionId, userId)
+    .first<{ ok: number }>();
+  return Boolean(row);
 }

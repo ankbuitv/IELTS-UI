@@ -77,7 +77,7 @@ function resolveTopicSet(topicSetId: string, topicJson?: string | null): Speakin
 export async function createSpeakingSession(
   env: Env,
   user: AuthUser,
-  input: { topicSetId?: string; mode?: 'PRACTICE' | 'MOCK'; topic?: SpeakingTopicSet },
+  input: { topicSetId?: string; mode?: 'PRACTICE' | 'MOCK'; topic?: SpeakingTopicSet; sourceAttemptId?: string },
 ): Promise<SpeakingSessionView> {
   const topic =
     input.topic ??
@@ -87,8 +87,8 @@ export async function createSpeakingSession(
   const timestamp = nowIso();
   const sessionId = newId('spk');
   await env.DB.prepare(
-    `INSERT INTO speaking_sessions (id, user_id, mode, status, topic_set_id, topic_title, part_count, topic_json, created_at, updated_at)
-     VALUES (?, ?, ?, 'IN_PROGRESS', ?, ?, 3, ?, ?, ?)`,
+    `INSERT INTO speaking_sessions (id, user_id, mode, status, topic_set_id, topic_title, part_count, topic_json, source_attempt_id, created_at, updated_at)
+     VALUES (?, ?, ?, 'IN_PROGRESS', ?, ?, 3, ?, ?, ?, ?)`,
   )
     .bind(
       sessionId,
@@ -97,6 +97,7 @@ export async function createSpeakingSession(
       topic.id,
       topic.title,
       JSON.stringify(topic),
+      input.sourceAttemptId ?? null,
       timestamp,
       timestamp,
     )
@@ -509,4 +510,21 @@ export function publicPanelLabel(stored: string | null): string | null {
   if (!stored) return null;
   const labels = stored.match(/Judge0[12]/g);
   return labels && labels.length > 0 ? [...new Set(labels)].join(' + ') : 'Judge01';
+}
+
+
+/** The speaking session linked to a full-mock attempt, if any. */
+export async function findSpeakingForAttempt(
+  env: Env,
+  attemptId: string,
+): Promise<{ id: string; status: string; overallBand: number | null; topicTitle: string } | null> {
+  const row = await env.DB.prepare(
+    `SELECT id, status, overall_band, topic_title FROM speaking_sessions
+      WHERE source_attempt_id = ? ORDER BY created_at DESC LIMIT 1`,
+  )
+    .bind(attemptId)
+    .first<{ id: string; status: string; overall_band: number | null; topic_title: string }>();
+  return row
+    ? { id: row.id, status: row.status, overallBand: row.overall_band, topicTitle: row.topic_title }
+    : null;
 }

@@ -50,6 +50,9 @@ function Row({ row }: { row: LeaderboardRow }) {
         <span className="board__who">
           <b className={playerNameClass(row.nameEffect)}>
             {row.name}
+            {row.bestBand !== null && row.bestBand !== undefined ? (
+              <span className="band-tag">Band {Number(row.bestBand).toFixed(1)}</span>
+            ) : null}
             {row.isMe ? <em className="board__you">you</em> : null}
             {row.role === 'ADMIN' ? <em className="board__role">Admin</em> : null}
           </b>

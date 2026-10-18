@@ -10,6 +10,7 @@ import { Icon, type IconName } from './Icon';
 import { SiteFooter } from './SiteFooter';
 import { Button, Loading } from './ui';
 import { UserAvatar } from './UserAvatar';
+import { SearchPalette } from './SearchPalette';
 
 /**
  * Application shell.
@@ -37,7 +38,7 @@ const LEARN_GROUP: NavGroup = {
   label: 'Learn',
   items: [
     { to: '/dashboard', label: 'Home', icon: 'home' },
-    { to: '/learn', label: 'Learn path', icon: 'target' },
+    { to: '/learn', label: 'Learning path', icon: 'target' },
     { to: '/practice', label: 'Practice', icon: 'book' },
     { to: '/history', label: 'Results', icon: 'award' },
     { to: '/vocabulary', label: 'Vocabulary', icon: 'layers' },
@@ -58,6 +59,7 @@ const COACHING_GROUP: NavGroup = {
 const GROW_GROUP: NavGroup = {
   label: 'Grow',
   items: [
+    { to: '/calendar', label: 'Calendar', icon: 'calendar' },
     { to: '/speaking', label: 'Speaking', icon: 'mic' },
     { to: '/analytics', label: 'My progress', icon: 'chart' },
     { to: '/learn/plan', label: 'Study plan', icon: 'calendar' },
@@ -144,7 +146,7 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
             { to: '/teacher/marking', label: 'Marking queue', icon: 'pen' },
             { to: '/training', label: 'Training', icon: 'bulb' },
             { to: '/practice', label: 'Practice', icon: 'book' },
-            { to: '/learn', label: 'Learn path', icon: 'target' },
+            { to: '/learn', label: 'Learning path', icon: 'target' },
           ],
         },
         COACHING_GROUP,
@@ -189,6 +191,7 @@ export function AppShell() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchOpen, setSearchOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelOrigin, setPanelOrigin] = useState<'sidebar' | 'topbar' | 'tabbar' | 'more'>('topbar');
   const [coins, setCoins] = useState<number | null>(null);
@@ -393,10 +396,10 @@ export function AppShell() {
             <div className="site-actions">
               {user ? (
                 <>
-                  <span className="site-search" aria-hidden="true">
+                  <button type="button" className="site-search" onClick={() => setSearchOpen(true)} aria-label="Search tests, lessons, mentors">
                     <Icon name="search" size={15} />
                     Search lessons, words, mentors…
-                  </span>
+                  </button>
                   {user.role === 'STUDENT' && coins !== null ? (
                     <>
                       <NavLink
@@ -452,7 +455,8 @@ export function AppShell() {
           <Outlet />
         </main>
 
-        <SiteFooter role={user?.role} compact={Boolean(user)} />
+        <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <SiteFooter role={user?.role} compact={Boolean(user)} />
       </div>
 
       {user ? (

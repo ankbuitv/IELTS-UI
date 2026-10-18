@@ -419,6 +419,11 @@ router.patch('/profile', async (c) => {
       displayName: z.string().trim().min(1).max(120).optional(),
       targetBand: z.number().min(0).max(9).nullable().optional(),
       timezone: z.string().trim().max(64).nullable().optional(),
+      bio: z.string().trim().max(600).optional(),
+      links: z
+        .array(z.object({ label: z.string().trim().min(1).max(32), url: z.string().trim().url().max(300) }))
+        .max(5)
+        .optional(),
     }),
   );
   await updateProfile(c.env, user.id, body);

@@ -7,6 +7,7 @@
  */
 
 export const MENTOR_SESSION_STATUSES = [
+  'REQUESTED',
   'SCHEDULED',
   'ACTIVE',
   'COMPLETED',
@@ -45,6 +46,7 @@ export const MENTOR_SPECIALTY_LABELS: Record<MentorSpecialty, string> = {
 };
 
 export const MENTOR_SESSION_STATUS_LABELS: Record<MentorSessionStatus, string> = {
+  REQUESTED: 'Waiting for confirmation',
   SCHEDULED: 'Scheduled',
   ACTIVE: 'Live now',
   COMPLETED: 'Completed',

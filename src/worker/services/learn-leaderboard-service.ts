@@ -25,7 +25,7 @@ const INSTANT_MAX = '9999-12-31T23:59:59.999Z';
 const ONLINE_WINDOW_MS = 5 * 60_000;
 const PROFILE_FIELDS = `
   u.id AS user_id,
-  COALESCE(NULLIF(up.display_name, ''), 'Learner') AS name,
+  COALESCE(NULLIF(up.display_name, ''), u.username, 'Learner') AS name,
   u.role AS role,
   up.avatar_id AS avatar_id,
   up.name_effect AS name_effect,
@@ -37,7 +37,8 @@ const PROFILE_FIELDS = `
   COALESCE((SELECT COUNT(*) FROM learn_lessons_done d WHERE d.user_id = u.id AND d.completions > 0), 0) AS lessons,
   COALESCE((SELECT COUNT(*) FROM learn_lessons_done d WHERE d.user_id = u.id AND d.completions > 0 AND d.best_accuracy >= 0.999), 0) AS perfect_lessons,
   COALESCE((SELECT COUNT(*) FROM friendships f WHERE f.status = 'ACCEPTED' AND (f.user_low_id = u.id OR f.user_high_id = u.id)), 0) AS friends,
-  COALESCE((SELECT COUNT(*) FROM attempts at WHERE at.user_id = u.id AND at.status = 'SUBMITTED'), 0) AS attempts`;
+  COALESCE((SELECT COUNT(*) FROM attempts at WHERE at.user_id = u.id AND at.status = 'SUBMITTED'), 0) AS attempts,
+  (SELECT MAX(atb.estimated_band) FROM attempts atb WHERE atb.user_id = u.id AND atb.status IN ('SUBMITTED', 'EXPIRED') AND atb.estimated_band IS NOT NULL) AS best_band`;
 const PROFILE_JOINS = `
   LEFT JOIN user_profiles up ON up.user_id = u.id
   LEFT JOIN learn_profiles lp ON lp.user_id = u.id
@@ -62,9 +63,10 @@ interface PlayerFields {
   perfect_lessons: number;
   friends: number;
   attempts: number;
+  best_band: number | null;
 }
 interface LearnRow extends PlayerFields { value: number }
-interface PracticeRow extends PlayerFields { value: number; best_band: number | null }
+interface PracticeRow extends PlayerFields { value: number }
 
 function playerFields(row: PlayerFields) {
   const stats: GamificationStats = {
@@ -96,6 +98,7 @@ function learnRow(row: LearnRow, rank: number, meId: string): LeaderboardRow {
     value: row.value,
     valueLabel: formatXp(row.value),
     secondary: row.streak > 0 ? `${row.streak} day streak` : 'No streak yet',
+    bestBand: row.best_band === null ? null : Math.round(row.best_band * 10) / 10,
   };
 }
 
@@ -108,6 +111,7 @@ function practiceRow(row: PracticeRow, rank: number, meId: string): LeaderboardR
     value: row.value,
     valueLabel: formatAttempts(row.value),
     secondary: row.best_band === null ? 'Not marked yet' : `Best band ${row.best_band.toFixed(1)}`,
+    bestBand: row.best_band === null ? null : Math.round(row.best_band * 10) / 10,
   };
 }
 

@@ -19,6 +19,13 @@ export interface AttemptResultPayload {
   testTitle: string;
   testType: string;
   testVersionId: string;
+  /** The AI-judged speaking session linked to a full mock (part of the paper). */
+  speaking?: {
+    sessionId: string;
+    status: string;
+    overallBand: number | null;
+    topicTitle: string;
+  } | null;
   versionNumber: number;
   mode: string;
   status: string;

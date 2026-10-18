@@ -646,6 +646,7 @@ export function AttemptResultPage() {
         </div>
       </div>
       <ResultSummary result={data} onRefresh={reload} />
+      <MockSpeakingCard result={data} />
     </div>
   );
 }
@@ -1246,4 +1247,59 @@ function truncateAgent(agent: string | null): string {
   if (!agent) return 'Unknown device';
   const short = agent.length > 72 ? `${agent.slice(0, 72)}…` : agent;
   return short;
+}
+
+
+/**
+ * Full mocks count Speaking as a fourth skill: submitting opens one linked,
+ * AI-judged speaking session. This card is the entry point and the band home.
+ */
+function MockSpeakingCard({ result }: { result: AttemptResultPayload }) {
+  const speaking = result.speaking ?? null;
+  const combined =
+    speaking?.overallBand !== null && speaking?.overallBand !== undefined && result.estimatedBand !== null && result.estimatedBand !== undefined
+      ? Math.round(((speaking.overallBand + result.estimatedBand) / 2) * 10) / 10
+      : null;
+
+  if (result.testType !== 'FULL_MOCK') return null;
+
+  return (
+    <Card
+      title="Speaking — part of this mock"
+      hint="AI-judged, like Writing. Reading and Listening use the scoring profile."
+    >
+      {!speaking ? (
+        <p className="small muted" style={{ margin: 0 }}>
+          The speaking task opens when the mock is submitted. Finish the written paper first.
+        </p>
+      ) : speaking.overallBand !== null ? (
+        <div className="row" style={{ gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="dash-stat__value" style={{ color: 'var(--ink-900)' }}>
+            Band {formatBand(speaking.overallBand)}
+          </span>
+          <span className="small muted">AI judgement · {speaking.topicTitle}</span>
+          {combined !== null ? (
+            <Badge tone="info" title="Average of the written band and the speaking band">
+              Written + speaking average {formatBand(combined)}
+            </Badge>
+          ) : null}
+          <Link className="btn btn--sm" to={`/speaking/${speaking.sessionId}`}>
+            See the feedback
+          </Link>
+        </div>
+      ) : (
+        <div className="row" style={{ gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="small">
+            {speaking.status === 'IN_PROGRESS'
+              ? 'Your speaking task is waiting — record your answers and the AI judges will mark them.'
+              : 'Submitted — the AI judges are marking your speaking now.'}
+          </span>
+          <Link className="btn btn--sm btn--primary" to={`/speaking/${speaking.sessionId}`}>
+            <Icon name="mic" size={13} />
+            {speaking.status === 'IN_PROGRESS' ? 'Start speaking' : 'Open speaking'}
+          </Link>
+        </div>
+      )}
+    </Card>
+  );
 }

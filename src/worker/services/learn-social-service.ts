@@ -30,6 +30,9 @@ const PROFILE_EFFECT_ITEMS: Partial<Record<ProfileEffect, string>> = {
 interface IdentityRow {
   user_id: string;
   display_name: string | null;
+  username: string | null;
+  bio: string | null;
+  links_json: string | null;
   role: 'STUDENT' | 'ADMIN';
   status: string;
   created_at: string;
@@ -44,7 +47,8 @@ interface IdentityRow {
 async function identityRow(env: Env, userId: string): Promise<IdentityRow | null> {
   return env.DB.prepare(
     `SELECT u.id AS user_id, u.role, u.status, u.created_at,
-            up.display_name, up.avatar_id, up.name_effect, up.profile_effect,
+            u.username,
+            up.display_name, up.bio, up.links_json, up.avatar_id, up.name_effect, up.profile_effect,
             COALESCE(lp.xp, 0) AS xp, COALESCE(lp.streak, 0) AS streak,
             COALESCE(lp.best_streak, 0) AS best_streak
        FROM users u
@@ -98,7 +102,7 @@ function cardFrom(row: IdentityRow, online: boolean, stats: GamificationStats): 
   const level = levelForXp(row.xp).level;
   return {
     userId: row.user_id,
-    displayName: row.display_name?.trim() || 'Learner',
+    displayName: row.display_name?.trim() || row.username || 'Learner',
     role: row.role,
     avatarId: isAvatarId(row.avatar_id) ? row.avatar_id : 'bo',
     nameEffect: isNameEffect(row.name_effect) ? row.name_effect : 'default',
@@ -118,15 +122,44 @@ async function playerCard(env: Env, userId: string): Promise<PlayerCard | null> 
   return cardFrom(row, online, stats);
 }
 
+
+/** Free-text profile extras shared by both profile builders. */
+async function profileExtras(
+  env: Env,
+  row: IdentityRow,
+): Promise<{ bio: string; links: Array<{ label: string; url: string }>; bestBand: number | null }> {
+  let links: Array<{ label: string; url: string }> = [];
+  try {
+    const parsed = row.links_json ? (JSON.parse(row.links_json) as unknown) : [];
+    if (Array.isArray(parsed)) {
+      links = parsed
+        .filter((item): item is { label: string; url: string } =>
+          Boolean(item) && typeof (item as { label?: unknown }).label === 'string' && typeof (item as { url?: unknown }).url === 'string')
+        .slice(0, 5);
+    }
+  } catch {
+    links = [];
+  }
+  const band = await env.DB.prepare(
+    `SELECT MAX(estimated_band) AS best FROM attempts
+      WHERE user_id = ? AND status IN ('SUBMITTED', 'EXPIRED') AND estimated_band IS NOT NULL`,
+  )
+    .bind(row.user_id)
+    .first<{ best: number | null }>();
+  return { bio: (row.bio ?? '').slice(0, 600), links, bestBand: band?.best ?? null };
+}
+
 export async function getGamificationProfile(env: Env, userId: string): Promise<GamificationProfile> {
   const row = await identityRow(env, userId);
   if (!row) throw ApiError.notFound('That player profile does not exist.');
   const [online, stats] = await Promise.all([onlineNow(env, userId), statsFor(env, userId, row)]);
   const card = cardFrom(row, online, stats);
   const level = levelForXp(row.xp);
+  const extras = await profileExtras(env, row);
   return {
     ...card,
     createdAt: row.created_at,
+    ...extras,
     currentLevelXp: level.currentThreshold,
     nextLevelXp: level.nextThreshold,
     levelProgress: level.progress,
@@ -164,9 +197,11 @@ export async function getPublicPlayerProfile(env: Env, viewerId: string, targetI
   ]);
   const card = cardFrom(row, online, stats);
   const level = levelForXp(row.xp);
+  const extras = await profileExtras(env, row);
   return {
     ...card,
     createdAt: row.created_at,
+    ...extras,
     currentLevelXp: level.currentThreshold,
     nextLevelXp: level.nextThreshold,
     levelProgress: level.progress,
@@ -244,7 +279,8 @@ export async function searchPlayers(env: Env, userId: string, query: string): Pr
   if (clean.length < 2) return [];
   const rows = await env.DB.prepare(
     `SELECT u.id AS user_id, u.role, u.status, u.created_at,
-            up.display_name, up.avatar_id, up.name_effect, up.profile_effect,
+            u.username,
+            up.display_name, up.bio, up.links_json, up.avatar_id, up.name_effect, up.profile_effect,
             COALESCE(lp.xp, 0) AS xp, COALESCE(lp.streak, 0) AS streak,
             COALESCE(lp.best_streak, 0) AS best_streak
        FROM users u

@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 68   Indexes: 84
+-- Tables: 70   Indexes: 86
 -- =============================================================================
 
 -- table: user_profiles
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   locale       TEXT NOT NULL DEFAULT 'en',
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
-, avatar_id TEXT NOT NULL DEFAULT 'bo', name_effect TEXT NOT NULL DEFAULT 'default', profile_effect TEXT NOT NULL DEFAULT 'none', avatar_updated_at TEXT, avatar_mime TEXT, totp_secret TEXT, totp_enabled INTEGER NOT NULL DEFAULT 0);
+, avatar_id TEXT NOT NULL DEFAULT 'bo', name_effect TEXT NOT NULL DEFAULT 'default', profile_effect TEXT NOT NULL DEFAULT 'none', avatar_updated_at TEXT, avatar_mime TEXT, totp_secret TEXT, totp_enabled INTEGER NOT NULL DEFAULT 0, bio TEXT NOT NULL DEFAULT '', links_json TEXT NOT NULL DEFAULT '');
 
 -- table: sessions
 CREATE TABLE IF NOT EXISTS sessions (
@@ -585,7 +585,7 @@ CREATE TABLE IF NOT EXISTS speaking_sessions (
   marked_at      TEXT,
   created_at     TEXT NOT NULL,
   updated_at     TEXT NOT NULL
-, score_source TEXT, scored_by TEXT REFERENCES users (id) ON DELETE SET NULL, scored_at TEXT, topic_json TEXT);
+, score_source TEXT, scored_by TEXT REFERENCES users (id) ON DELETE SET NULL, scored_at TEXT, topic_json TEXT, source_attempt_id TEXT);
 
 -- table: speaking_responses
 CREATE TABLE IF NOT EXISTS speaking_responses (
@@ -998,6 +998,26 @@ CREATE TABLE IF NOT EXISTS classroom_messages (
   sender_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   body       TEXT NOT NULL,
   created_at TEXT NOT NULL
+, attachment_url TEXT, attachment_name TEXT);
+
+-- table: mentor_room_bans
+CREATE TABLE IF NOT EXISTS mentor_room_bans (
+  session_id TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  banned_by  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (session_id, user_id)
+);
+
+-- table: calendar_events
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  title      TEXT NOT NULL,
+  note       TEXT NOT NULL DEFAULT '',
+  starts_at  TEXT NOT NULL,
+  ends_at    TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 
 -- index: idx_sessions_user
@@ -1253,3 +1273,11 @@ CREATE INDEX IF NOT EXISTS idx_login_otp_user ON login_otp_codes (user_id, purpo
 -- index: idx_classroom_messages_classroom
 CREATE INDEX IF NOT EXISTS idx_classroom_messages_classroom
   ON classroom_messages (classroom_id, created_at DESC);
+
+-- index: idx_calendar_events_user_starts
+CREATE INDEX IF NOT EXISTS idx_calendar_events_user_starts
+  ON calendar_events (user_id, starts_at);
+
+-- index: idx_speaking_sessions_attempt
+CREATE INDEX IF NOT EXISTS idx_speaking_sessions_attempt
+  ON speaking_sessions (source_attempt_id);
