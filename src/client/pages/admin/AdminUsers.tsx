@@ -48,6 +48,7 @@ export function AdminUsersPage() {
             <select value={role} onChange={(event) => setRole(event.target.value)}>
               <option value="">All roles</option>
               <option value="STUDENT">Student</option>
+              <option value="MENTOR">Mentor</option>
               <option value="TEACHER">Teacher</option>
               <option value="ADMIN">Administrator</option>
             </select>
@@ -84,7 +85,7 @@ export function AdminUsersPage() {
                     <div className="tiny muted">{user.email}</div>
                   </td>
                   <td>
-                    <Badge tone={user.role === 'ADMIN' ? 'accent' : user.role === 'TEACHER' ? 'info' : 'neutral'}>
+                    <Badge tone={user.role === 'ADMIN' ? 'accent' : user.role === 'TEACHER' ? 'info' : user.role === 'MENTOR' ? 'success' : 'neutral'}>
                       {user.role.toLowerCase()}
                     </Badge>
                   </td>
@@ -163,6 +164,7 @@ function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
         {(id) => (
           <Select id={id} value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
             <option value="STUDENT">Student</option>
+            <option value="MENTOR">Mentor</option>
             <option value="TEACHER">Teacher</option>
             <option value="ADMIN">Administrator</option>
           </Select>
@@ -213,6 +215,7 @@ function ManageUserForm({
         {(id) => (
           <Select id={id} value={role} onChange={(event) => setRole(event.target.value)}>
             <option value="STUDENT">Student</option>
+            <option value="MENTOR">Mentor</option>
             <option value="TEACHER">Teacher</option>
             <option value="ADMIN">Administrator</option>
           </Select>

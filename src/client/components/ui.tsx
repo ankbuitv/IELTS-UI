@@ -18,7 +18,7 @@ import { Icon, type IconName } from './Icon';
 // ---------------------------------------------------------------------------
 // Buttons
 // ---------------------------------------------------------------------------
-type ButtonVariant = 'default' | 'primary' | 'secondary' | 'success' | 'danger' | 'ghost';
+type ButtonVariant = 'default' | 'primary' | 'secondary' | 'success' | 'danger' | 'ghost' | 'sun' | 'glass';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;

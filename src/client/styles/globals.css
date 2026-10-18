@@ -1,39 +1,40 @@
 /* ==========================================================================
    Ai eo — design system
-   A confident exam-prep look: IELTS-style red on white, deep navy ink, one
-   golden accent for rewards, Be Vietnam Pro throughout (it carries Vietnamese
-   diacritics properly), friendly rounded shapes and tactile buttons. No
-   gradients, glass, glow or emoji. The identity is original to this project
+   A friendly, playful exam-prep look: violet brand, sunny yellow rewards,
+   soft lavender neutrals and big rounded shapes (the "learning playground"
+   language of modern language apps). Be Vietnam Pro throughout — it carries
+   Vietnamese diacritics properly. The identity is original to this project
    (see BrandLogo) and is not affiliated with IELTS, the British Council, IDP
    or Cambridge.
 
    Palette roles
-     brand    red 500/600/700       primary actions, current item, active nav
-     ink      navy-grey scale       text, rules, dark surfaces
-     sun      golden yellow         streaks, XP, stars, the dot of the logo
-     info     blue                  Reading, links in running text, "answered"
+     brand    violet 500/600/700    primary actions, current item, active nav
+     ink      violet-grey scale     text, rules, dark surfaces
+     sun      golden yellow         streaks, XP, stars, coins
+     coral    pink-red              highlights, streaks, hearts
+     info     blue                  Reading, links in running text
      teal     teal                  Listening
      amber    amber                 Writing, pending, flagged
-     violet   violet                Speaking
+     violet   violet                Speaking (same family as the brand)
      success  green                 correct, published, submitted
-     danger   red                   errors, destructive, overdue
+     danger   red-coral             errors, destructive, overdue
    ========================================================================== */
 
 @import './fonts.css';
 
 :root {
-  /* ---- brand (IELTS-style red) ---- */
-  --brand-50: #fff1f1;
-  --brand-100: #ffe1e2;
-  --brand-200: #ffc3c6;
-  --brand-300: #ff959a;
-  --brand-400: #f0585f;
-  --brand-500: #e23a41;
-  --brand-600: #d3222b;
-  --brand-700: #b21820;
-  --brand-800: #8c1219;
+  /* ---- brand (playful violet) ---- */
+  --brand-50: #f2efff;
+  --brand-100: #e7e1ff;
+  --brand-200: #d2c7ff;
+  --brand-300: #b3a0ff;
+  --brand-400: #9173ff;
+  --brand-500: #7c5cfc;
+  --brand-600: #6845f0;
+  --brand-700: #5433cf;
+  --brand-800: #42279f;
   /* The darker lip under a tactile button. */
-  --brand-edge: #a8131b;
+  --brand-edge: #4326b5;
 
   /* The kit and pages reference --accent; keep it pointing at the brand. */
   --accent: var(--brand-600);
@@ -44,106 +45,115 @@
   /* Text on a solid brand fill; the dark theme flips it for contrast. */
   --on-brand: #ffffff;
 
-  /* ---- golden accent: streaks, XP, stars ---- */
-  --sun-300: #ffe08a;
-  --sun-400: #ffd25e;
-  --sun-500: #ffc53d;
-  --sun-600: #f2a91c;
-  --sun-700: #c98400;
-  --sun-soft: #fff6dc;
-  --sun-border: #f6dd9c;
-  --sun-ink: #7a4a00;
+  /* ---- golden accent: streaks, XP, stars, coins ---- */
+  --sun-300: #ffe27a;
+  --sun-400: #ffd23e;
+  --sun-500: #ffc21c;
+  --sun-600: #f0a200;
+  --sun-700: #b97a00;
+  --sun-soft: #fff8de;
+  --sun-border: #ffe3a3;
+  --sun-ink: #7d5400;
 
-  /* ---- neutrals: a navy-leaning grey scale ---- */
-  --ink-950: #0e1a2b;
-  --ink-900: #14233a;
-  --ink-800: #243550;
-  --ink-700: #3a4b66;
-  --ink-600: #52617a;
-  --ink-500: #66738a;
-  --ink-400: #94a0b2;
-  --ink-300: #c5cdd9;
-  --ink-200: #e0e5ec;
-  --ink-100: #edf0f5;
-  --ink-50: #f6f8fb;
+  /* ---- coral accent: hearts, streak flames, warm highlights ---- */
+  --coral-400: #ff8a70;
+  --coral-500: #ff6b5e;
+  --coral-600: #f04c4c;
+  --coral-soft: #fff0ec;
+  --coral-border: #ffc9be;
+
+  /* ---- neutrals: a violet-leaning grey scale ---- */
+  --ink-950: #201b3e;
+  --ink-900: #2c2552;
+  --ink-800: #413a6d;
+  --ink-700: #585083;
+  --ink-600: #726a9c;
+  --ink-500: #8c85b0;
+  --ink-400: #aba4cc;
+  --ink-300: #cdc8e6;
+  --ink-200: #e6e2f4;
+  --ink-100: #f0edfa;
+  --ink-50: #f7f5fd;
 
   --paper: #ffffff;
-  --paper-muted: #f6f8fb;
-  --canvas: #f3f5f9;
-  /* The footer, dark bands and the exam top bar: deep navy. */
-  --bar: #14233a;
+  --paper-muted: #faf9ff;
+  --canvas: #f3f1fb;
+  /* The footer, dark bands and the exam top bar: deep indigo. */
+  --bar: #251d4f;
   /* A strong, always-dark surface (selected chips, score panels). Re-pointed in dark mode, where the ink scale inverts. */
-  --solid: var(--ink-900);
-  --solid-edge: var(--ink-950);
+  --solid: var(--brand-700);
+  --solid-edge: var(--brand-800);
   --on-solid: #ffffff;
   --bar-ink: #ffffff;
-  --bar-muted: #aab6c8;
+  --bar-muted: #b7b0d9;
   /* The logo in its "auto" theme follows these, so it reads on a white or a dark header. */
-  --logo-ink: #14233a;
+  --logo-ink: #2c2552;
   --logo-tile: #ffffff;
-  --logo-bars: #e1251b;
-  --logo-dot: #e1251b;
+  --logo-bars: #6845f0;
+  --logo-dot: #ffc21c;
 
   /* ---- states and skills ---- */
-  --success: #12805a;
-  --success-soft: #e6f6ee;
-  --success-border: #b0dcc5;
-  --warning: #b45f06;
-  --warning-soft: #fff4df;
-  --warning-border: #f3d9a4;
-  --danger: #d92d20;
-  --danger-soft: #fef0ee;
-  --danger-border: #fbc9c3;
-  --info: #1d55c0;
-  --info-soft: #e8f0fe;
-  --info-border: #bfd3f7;
-  --violet: #6b3fa8;
-  --violet-soft: #f1ebfe;
-  --violet-border: #d9c9f5;
-  --teal: #0b7a75;
-  --teal-soft: #e3f6f3;
-  --teal-border: #b6e3dd;
+  --success: #12a06b;
+  --success-soft: #e4f7ee;
+  --success-border: #a9e0c6;
+  --warning: #d97706;
+  --warning-soft: #fff3e0;
+  --warning-border: #f3d5a8;
+  --danger: #ec4a4a;
+  --danger-soft: #ffefee;
+  --danger-border: #ffc9c3;
+  --info: #3672e8;
+  --info-soft: #e9f0ff;
+  --info-border: #c3d5fb;
+  --violet: #7c5cfc;
+  --violet-soft: #f0ebff;
+  --violet-border: #d6c9fb;
+  --teal: #10a394;
+  --teal-soft: #e0f6f3;
+  --teal-border: #aee5de;
   --emerald: var(--success);
   --amber: var(--warning);
 
   /* Vivid skill colours for fills (icon tiles, path nodes, bars). Text uses the deeper tokens above. */
-  --fill-listening: #12a594;
-  --fill-reading: #3478f0;
-  --fill-writing: #f59a23;
-  --fill-speaking: #8f63f4;
-  --edge-listening: #0b7d70;
-  --edge-reading: #2255b8;
-  --edge-writing: #c07408;
-  --edge-speaking: #6d43cc;
+  --fill-listening: #12b3a2;
+  --fill-reading: #4d8bff;
+  --fill-writing: #ffab2e;
+  --fill-speaking: #8f6bff;
+  --edge-listening: #0b8e80;
+  --edge-reading: #2f62cf;
+  --edge-writing: #d07e06;
+  --edge-speaking: #6d45e0;
 
-  /* ---- shape: friendly, not bubbly ---- */
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  /* ---- shape: soft, rounded, friendly ---- */
+  --radius-sm: 9px;
+  --radius: 13px;
+  --radius-lg: 18px;
+  --radius-xl: 26px;
   --radius-pill: 999px;
 
-  --shadow-xs: 0 1px 2px rgba(14, 26, 43, 0.06);
-  --shadow-sm: 0 1px 2px rgba(14, 26, 43, 0.05), 0 4px 12px -4px rgba(14, 26, 43, 0.08);
-  --shadow: 0 2px 4px rgba(14, 26, 43, 0.04), 0 12px 28px -10px rgba(14, 26, 43, 0.14);
+  --shadow-xs: 0 1px 2px rgba(32, 27, 62, 0.05);
+  --shadow-sm: 0 2px 6px rgba(32, 27, 62, 0.05), 0 10px 24px -10px rgba(80, 55, 180, 0.12);
+  --shadow: 0 4px 12px rgba(32, 27, 62, 0.05), 0 22px 44px -18px rgba(80, 55, 180, 0.18);
   /* Things that float above the page (menus, dialogs). */
-  --shadow-lg: 0 18px 48px -12px rgba(14, 26, 43, 0.34);
-  --shadow-brand: 0 10px 24px -10px rgba(211, 34, 43, 0.55);
+  --shadow-lg: 0 28px 64px -16px rgba(50, 30, 130, 0.34);
+  --shadow-brand: 0 12px 28px -10px rgba(104, 69, 240, 0.55);
 
-  --gradient-brand: var(--brand-600);
-  --gradient-accent: var(--ink-900);
+  --gradient-brand: linear-gradient(135deg, #7c5cfc 0%, #5b3ce8 55%, #4b2dc4 100%);
+  --gradient-accent: linear-gradient(135deg, #2c2552 0%, #413a6d 100%);
+  --gradient-sun: linear-gradient(135deg, #ffd23e 0%, #ffab2e 100%);
+  --gradient-coral: linear-gradient(135deg, #ff8a70 0%, #ff5e7d 100%);
 
   --font-ui: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-reading: var(--font-ui);
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
-  --focus-color: #2f6fe4;
+  --focus-color: #6845f0;
   --focus-ring: 0 0 0 2px var(--paper), 0 0 0 4px var(--focus-color);
-  --focus-halo: rgba(20, 35, 58, 0.13);
+  --focus-halo: rgba(80, 55, 180, 0.14);
   --focus-border: var(--ink-900);
-  --topbar-height: 60px;
-  --speed: 140ms;
-  --ease: ease-out;
+  --topbar-height: 64px;
+  --speed: 160ms;
+  --ease: cubic-bezier(0.22, 0.9, 0.3, 1);
 }
 
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--ink-300) transparent; }
@@ -284,6 +294,13 @@ html { scroll-behavior: smooth; }
 .btn--ghost { --btn-bg: transparent; --btn-bd: transparent; --btn-edge: transparent; --btn-fg: var(--ink-700); box-shadow: none; }
 .btn--ghost:hover:not(:disabled) { --btn-bg: var(--ink-100); --btn-bd: transparent; --btn-edge: transparent; }
 .btn--ghost:active:not(:disabled) { transform: none; }
+/* Playful accents: sunny yellow and glassy white-on-gradient. */
+.btn--sun { --btn-bg: var(--sun-500); --btn-bd: var(--sun-500); --btn-fg: #402b00; --btn-edge: var(--sun-600); }
+.btn--sun:hover:not(:disabled) { --btn-bg: var(--sun-400); --btn-bd: var(--sun-400); --btn-edge: var(--sun-600); color: #402b00; }
+.btn--glass {
+  --btn-bg: rgba(255, 255, 255, 0.16); --btn-bd: rgba(255, 255, 255, 0.4); --btn-fg: #fff; --btn-edge: transparent;
+}
+.btn--glass:hover:not(:disabled) { --btn-bg: rgba(255, 255, 255, 0.28); --btn-bd: rgba(255, 255, 255, 0.55); color: #fff; }
 .btn--sm { min-height: 32px; padding: 3px 12px; font-size: 0.82rem; gap: 6px; border-radius: 10px; }
 .btn--lg { min-height: 48px; padding: 9px 26px; font-size: 1rem; border-radius: 14px; box-shadow: 0 3px 0 var(--btn-edge); }
 .btn--lg:active:not(:disabled) { transform: translateY(3px); }

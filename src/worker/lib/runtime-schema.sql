@@ -3,30 +3,12 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 55   Indexes: 69
+-- Tables: 64   Indexes: 80
 -- =============================================================================
-
--- table: users
-CREATE TABLE IF NOT EXISTS users (
-  id                  TEXT PRIMARY KEY,
-  email               TEXT NOT NULL UNIQUE,          -- stored lower-cased
-  role                TEXT NOT NULL CHECK (role IN ('STUDENT', 'TEACHER', 'ADMIN')),
-  status              TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'SUSPENDED', 'INVITED')),
-  password_algo       TEXT NOT NULL DEFAULT 'PBKDF2-SHA256',
-  password_hash       TEXT,                          -- base64url, never leaves the server
-  password_salt       TEXT,
-  password_iterations INTEGER,
-  created_by          TEXT REFERENCES users (id) ON DELETE SET NULL,
-  created_at          TEXT NOT NULL,
-  updated_at          TEXT NOT NULL,
-  last_login_at       TEXT,
-  failed_login_count  INTEGER NOT NULL DEFAULT 0,
-  locked_until        TEXT
-);
 
 -- table: user_profiles
 CREATE TABLE IF NOT EXISTS user_profiles (
@@ -840,8 +822,141 @@ CREATE TABLE IF NOT EXISTS ai_adjudications (
   PRIMARY KEY (entity_type, entity_id)
 );
 
--- index: idx_users_role
-CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
+-- table: users
+CREATE TABLE IF NOT EXISTS "users" (
+  id                  TEXT PRIMARY KEY,
+  email               TEXT NOT NULL UNIQUE,
+  role                TEXT NOT NULL CHECK (role IN ('STUDENT', 'TEACHER', 'ADMIN', 'MENTOR')),
+  status              TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'SUSPENDED', 'INVITED')),
+  password_algo       TEXT NOT NULL DEFAULT 'PBKDF2-SHA256',
+  password_hash       TEXT,
+  password_salt       TEXT,
+  password_iterations INTEGER,
+  created_by          TEXT REFERENCES users (id) ON DELETE SET NULL,
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL,
+  last_login_at       TEXT,
+  failed_login_count  INTEGER NOT NULL DEFAULT 0,
+  locked_until        TEXT
+);
+
+-- table: mentor_profiles
+CREATE TABLE IF NOT EXISTS mentor_profiles (
+  user_id           TEXT PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+  headline          TEXT NOT NULL DEFAULT '',
+  bio               TEXT NOT NULL DEFAULT '',
+  specialties       TEXT NOT NULL DEFAULT '[]',   -- JSON array of MentorSpecialty
+  languages         TEXT NOT NULL DEFAULT '[]',   -- JSON array of language names
+  hourly_rate_coins INTEGER NOT NULL DEFAULT 0,
+  years_experience  INTEGER NOT NULL DEFAULT 0,
+  rating_avg        REAL NOT NULL DEFAULT 0,
+  rating_count      INTEGER NOT NULL DEFAULT 0,
+  students_count    INTEGER NOT NULL DEFAULT 0,
+  sessions_count    INTEGER NOT NULL DEFAULT 0,
+  verified          INTEGER NOT NULL DEFAULT 0,
+  active            INTEGER NOT NULL DEFAULT 1,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+
+-- table: mentor_availability
+CREATE TABLE IF NOT EXISTS mentor_availability (
+  id           TEXT PRIMARY KEY,
+  mentor_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  weekday      INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+  start_minute INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1440),
+  end_minute   INTEGER NOT NULL CHECK (end_minute BETWEEN 0 AND 1440),
+  created_at   TEXT NOT NULL,
+  CHECK (start_minute < end_minute)
+);
+
+-- table: mentor_classes
+CREATE TABLE IF NOT EXISTS mentor_classes (
+  id          TEXT PRIMARY KEY,
+  mentor_id   TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  level       TEXT NOT NULL DEFAULT 'All levels',
+  capacity    INTEGER NOT NULL DEFAULT 10,
+  price_coins INTEGER NOT NULL DEFAULT 0,
+  status      TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('DRAFT', 'OPEN', 'LIVE', 'COMPLETED', 'CANCELLED')),
+  starts_at   TEXT NOT NULL,
+  ends_at     TEXT NOT NULL,
+  recurrence  TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+-- table: mentor_sessions
+CREATE TABLE IF NOT EXISTS mentor_sessions (
+  id              TEXT PRIMARY KEY,
+  mentor_id       TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  student_id      TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  class_id        TEXT REFERENCES mentor_classes (id) ON DELETE SET NULL,
+  kind            TEXT NOT NULL DEFAULT 'ONE_ON_ONE' CHECK (kind IN ('ONE_ON_ONE', 'CLASS')),
+  status          TEXT NOT NULL DEFAULT 'SCHEDULED' CHECK (status IN ('SCHEDULED', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'NO_SHOW')),
+  topic           TEXT NOT NULL DEFAULT '',
+  notes           TEXT,
+  starts_at       TEXT NOT NULL,
+  ends_at         TEXT NOT NULL,
+  started_at      TEXT,
+  ended_at        TEXT,
+  paid_coins      INTEGER NOT NULL DEFAULT 0,
+  student_rating  INTEGER,
+  mentor_feedback TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
+-- table: mentor_class_members
+CREATE TABLE IF NOT EXISTS mentor_class_members (
+  class_id   TEXT NOT NULL REFERENCES mentor_classes (id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  joined_at  TEXT NOT NULL,
+  PRIMARY KEY (class_id, user_id)
+);
+
+-- table: mentor_messages
+CREATE TABLE IF NOT EXISTS mentor_messages (
+  id         TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  sender_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL DEFAULT 'CHAT' CHECK (kind IN ('CHAT', 'SYSTEM', 'NOTE')),
+  body       TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- table: mentor_signals
+CREATE TABLE IF NOT EXISTS mentor_signals (
+  id         TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  sender_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  target_id  TEXT,
+  kind       TEXT NOT NULL CHECK (kind IN ('OFFER', 'ANSWER', 'CANDIDATE', 'BYE')),
+  payload    TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- table: mentor_reviews
+CREATE TABLE IF NOT EXISTS mentor_reviews (
+  id         TEXT PRIMARY KEY,
+  mentor_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  student_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  session_id TEXT REFERENCES mentor_sessions (id) ON DELETE SET NULL,
+  rating     INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  comment    TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+
+-- table: mentor_room_presence
+CREATE TABLE IF NOT EXISTS mentor_room_presence (
+  session_id  TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  user_id     TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  joined_at   TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  hand_raised INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (session_id, user_id)
+);
 
 -- index: idx_sessions_user
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
@@ -1046,3 +1161,39 @@ CREATE INDEX IF NOT EXISTS idx_learn_daily_lessons_user_day ON learn_daily_lesso
 
 -- index: idx_ai_adjudications_entity
 CREATE INDEX IF NOT EXISTS idx_ai_adjudications_entity ON ai_adjudications (entity_type, entity_id);
+
+-- index: idx_users_role
+CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
+
+-- index: idx_mentor_profiles_active
+CREATE INDEX IF NOT EXISTS idx_mentor_profiles_active ON mentor_profiles (active, rating_avg DESC);
+
+-- index: idx_mentor_availability_mentor
+CREATE INDEX IF NOT EXISTS idx_mentor_availability_mentor ON mentor_availability (mentor_id, weekday);
+
+-- index: idx_mentor_classes_mentor
+CREATE INDEX IF NOT EXISTS idx_mentor_classes_mentor ON mentor_classes (mentor_id, starts_at);
+
+-- index: idx_mentor_classes_status
+CREATE INDEX IF NOT EXISTS idx_mentor_classes_status ON mentor_classes (status, starts_at);
+
+-- index: idx_mentor_sessions_mentor
+CREATE INDEX IF NOT EXISTS idx_mentor_sessions_mentor ON mentor_sessions (mentor_id, starts_at);
+
+-- index: idx_mentor_sessions_student
+CREATE INDEX IF NOT EXISTS idx_mentor_sessions_student ON mentor_sessions (student_id, starts_at);
+
+-- index: idx_mentor_sessions_status
+CREATE INDEX IF NOT EXISTS idx_mentor_sessions_status ON mentor_sessions (status, starts_at);
+
+-- index: idx_mentor_class_members_user
+CREATE INDEX IF NOT EXISTS idx_mentor_class_members_user ON mentor_class_members (user_id);
+
+-- index: idx_mentor_messages_session
+CREATE INDEX IF NOT EXISTS idx_mentor_messages_session ON mentor_messages (session_id, created_at);
+
+-- index: idx_mentor_signals_session
+CREATE INDEX IF NOT EXISTS idx_mentor_signals_session ON mentor_signals (session_id, created_at);
+
+-- index: idx_mentor_reviews_mentor
+CREATE INDEX IF NOT EXISTS idx_mentor_reviews_mentor ON mentor_reviews (mentor_id, created_at DESC);

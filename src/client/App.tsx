@@ -36,8 +36,14 @@ import { AdminUsersPage } from './pages/admin/AdminUsers';
 import { AdminAttemptsPage } from './pages/admin/AdminAttempts';
 import { AdminSettingsPage } from './pages/admin/AdminSettings';
 import { AdminLearnPage } from './pages/admin/AdminLearn';
+import { MentorDirectoryPage } from './pages/mentor/MentorDirectoryPage';
+import { MentorProfilePage } from './pages/mentor/MentorProfilePage';
+import { MySessionsPage } from './pages/mentor/MySessionsPage';
+import { MentorConsolePage } from './pages/mentor/MentorConsolePage';
+import { ClassesPage } from './pages/mentor/ClassesPage';
+import { CallRoomPage } from './pages/mentor/CallRoomPage';
 
-function RequireAuth({ children, roles }: { children: ReactNode; roles?: Array<'STUDENT' | 'TEACHER' | 'ADMIN'> }) {
+function RequireAuth({ children, roles }: { children: ReactNode; roles?: Array<'STUDENT' | 'TEACHER' | 'ADMIN' | 'MENTOR'> }) {
   const { user, loading } = useAuth();
   const location = useLocation();
 
@@ -80,6 +86,16 @@ export function App() {
         element={
           <RequireAuth>
             <ReviewPage />
+          </RequireAuth>
+        }
+      />
+
+      {/* The call room is a full-screen experience, like the exam and the lesson player. */}
+      <Route
+        path="/sessions/:sessionId/room"
+        element={
+          <RequireAuth>
+            <CallRoomPage />
           </RequireAuth>
         }
       />
@@ -239,6 +255,48 @@ export function App() {
           element={
             <RequireAuth>
               <ProfilePage />
+            </RequireAuth>
+          }
+        />
+
+        {/* Mentor platform: directory, booking, live classes and the mentor console. */}
+        <Route
+          path="mentors"
+          element={
+            <RequireAuth>
+              <MentorDirectoryPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="mentors/:mentorId"
+          element={
+            <RequireAuth>
+              <MentorProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="my-sessions"
+          element={
+            <RequireAuth>
+              <MySessionsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="classes"
+          element={
+            <RequireAuth>
+              <ClassesPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="mentor"
+          element={
+            <RequireAuth roles={['MENTOR', 'ADMIN']}>
+              <MentorConsolePage />
             </RequireAuth>
           }
         />
