@@ -33,7 +33,7 @@ export function AttemptList({ attempts, limit }: { attempts: AttemptSummary[]; l
         const hasScore = attempt.rawScore !== null && attempt.totalQuestions;
         return (
           <li key={attempt.attemptId}>
-            <Link className="attempt-row" to={running ? `/exam/${attempt.attemptId}` : `/attempts/${attempt.attemptId}`}>
+            <Link className="attempt-row" to={running ? `/exam/${attempt.attemptId}` : `/exam/${attempt.attemptId}/review`}>
               <SkillGlyph type={attempt.testType} />
               <span className="attempt-row__main">
                 <span className="attempt-row__title">{attempt.testTitle}</span>

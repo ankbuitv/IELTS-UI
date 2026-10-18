@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiRequestError, api, describeError, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { useInputLockdown } from '../../hooks/useInputLockdown';
@@ -596,6 +596,12 @@ export function AttemptResultPage() {
   if (loading && !data) return <Loading label="Loading your result…" />;
   if (error && !data) return <Notice tone="danger">{error}</Notice>;
   if (!data) return null;
+
+  // "Xem kết quả" opens the review in the exam interface itself — the report
+  // below remains only for attempts whose review is not released yet.
+  if (data.release?.reviewAvailable) {
+    return <Navigate to={`/exam/${attemptId}/review`} replace />;
+  }
 
   const wrongSectionIds = [
     ...new Set(

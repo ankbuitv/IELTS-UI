@@ -46,6 +46,7 @@ export function AttemptReviewPage() {
 
   const sessions = result?.sessions ?? [];
   const [sessionIdx, setSessionIdx] = useState(0);
+  const [speakingTab, setSpeakingTab] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   /** "Listen from here": play the section recording from the evidence sentence. */
@@ -112,7 +113,7 @@ export function AttemptReviewPage() {
   const totalScore = `${result.rawScore ?? '—'}/${result.totalQuestions ?? '—'}`;
 
   return (
-    <div className="exam-root">
+    <div className="exam-root exam-root--review">
       <header className="exam-topbar">
         <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <button type="button" className="exam-icon" onClick={() => navigate('/history')} aria-label="Back to results">
@@ -157,16 +158,17 @@ export function AttemptReviewPage() {
         </div>
       </header>
 
-      {sessions.length > 1 ? (
+      {sessions.length > 1 || result.speaking ? (
         <div className="exam-seg" role="tablist" style={{ margin: '10px 16px 0' }}>
           {sessions.map((session, index) => (
             <button
               key={session.skillSessionId}
               type="button"
               role="tab"
-              aria-selected={index === sessionIdx}
-              className={`exam-seg__btn ${index === sessionIdx ? 'is-on' : ''}`}
+              aria-selected={!speakingTab && index === sessionIdx}
+              className={`exam-seg__btn ${!speakingTab && index === sessionIdx ? 'is-on' : ''}`}
               onClick={() => {
+                setSpeakingTab(false);
                 setSessionIdx(index);
                 setSectionId(null);
               }}
@@ -174,6 +176,17 @@ export function AttemptReviewPage() {
               {session.label || session.skill}
             </button>
           ))}
+          {result.speaking ? (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={speakingTab}
+              className={`exam-seg__btn ${speakingTab ? 'is-on' : ''}`}
+              onClick={() => setSpeakingTab(true)}
+            >
+              Speaking
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -194,7 +207,9 @@ export function AttemptReviewPage() {
         </div>
       ) : null}
 
-      {isWriting ? (
+      {speakingTab && result.speaking ? (
+        <SpeakingReview sessionId={result.speaking.sessionId} />
+      ) : isWriting ? (
         <WritingReview session={activeSession} />
       ) : (
         <div className="exam-body exam-body--split" style={{ '--passage-share': '46%' } as React.CSSProperties}>
@@ -341,7 +356,7 @@ export function AttemptReviewPage() {
       )}
 
       {/* Bottom: jump strip, green/red per question */}
-      {!isWriting && reviewItems.length > 0 ? (
+      {!isWriting && !speakingTab && reviewItems.length > 0 ? (
         <div className="exam-footer">
           <div className="nav-strip">
             {reviewItems.map((item) => (
@@ -373,6 +388,7 @@ export function AttemptReviewPage() {
 }
 
 function WritingReview({ session }: { session: AttemptResultPayload['sessions'][number] | null }) {
+  const [taskIdx, setTaskIdx] = useState(0);
   if (!session) return null;
   const tasks = session.writing ?? [];
   if (tasks.length === 0) {
@@ -382,14 +398,43 @@ function WritingReview({ session }: { session: AttemptResultPayload['sessions'][
       </div>
     );
   }
+  const task = tasks[Math.min(taskIdx, tasks.length - 1)]!;
   return (
-    <div className="stack" style={{ padding: '18px 20px', maxWidth: 900, margin: '0 auto', width: '100%' }}>
-      {tasks.map((task) => (
-        <article className="card" key={task.submissionId}>
-          <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-            <strong>{task.taskLabel}</strong>
-            <span className="row" style={{ gap: 8 }}>
-              <span className="mchip">{task.wordCount} words</span>
+    <div className="exam-body exam-body--split" style={{ '--passage-share': '42%' } as React.CSSProperties}>
+      {/* Left: the task prompt, exactly like the paper */}
+      <div className="exam-pane">
+        <div className="exam-pane__scroll">
+          {tasks.length > 1 ? (
+            <div className="exam-seg" role="tablist" style={{ margin: '10px 12px 0' }}>
+              {tasks.map((item, index) => (
+                <button
+                  key={item.submissionId}
+                  type="button"
+                  role="tab"
+                  aria-selected={index === taskIdx}
+                  className={`exam-seg__btn ${index === taskIdx ? 'is-on' : ''}`}
+                  onClick={() => setTaskIdx(index)}
+                >
+                  {item.taskLabel}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <article className="passage-article">
+            <div className="passage-article__head">
+              <h2>{task.taskLabel}</h2>
+              <span className="tiny muted nowrap">{task.wordCount} words</span>
+            </div>
+            <p className="small muted" style={{ whiteSpace: 'pre-wrap' }}>{task.prompt}</p>
+          </article>
+        </div>
+      </div>
+
+      {/* Right: the script with the examiner's marks inline */}
+      <div className="exam-pane">
+        <div className="exam-pane__scroll">
+          <div className="question-block">
+            <div className="row" style={{ gap: 8, marginBottom: 8 }}>
               {task.ai?.band !== null && task.ai?.band !== undefined ? (
                 <span className="mchip mchip--violet">AI band {task.ai.band}</span>
               ) : task.score?.band !== null && task.score?.band !== undefined ? (
@@ -397,41 +442,191 @@ function WritingReview({ session }: { session: AttemptResultPayload['sessions'][
               ) : (
                 <span className="mchip">Not marked</span>
               )}
-            </span>
-          </div>
-          <p className="small muted" style={{ whiteSpace: 'pre-wrap' }}>
-            {task.prompt}
-          </p>
-          <div
-            className="passage"
-            style={{ background: 'var(--ink-50)', borderRadius: 12, padding: '14px 16px', whiteSpace: 'pre-wrap' }}
-          >
-            {task.responseText || <span className="muted">(no response)</span>}
-          </div>
-          {(task.ai?.feedback || task.score?.feedback) ? (
-            <div className="explain">
-              <div className="explain__head">
-                <span className="explain__title">
-                  <Icon name="info" size={15} />
-                  Examiner feedback
-                </span>
-              </div>
-              <div className="explain__body">
-                <p className="explain__text">{task.ai?.feedback ?? task.score?.feedback}</p>
-                {task.ai?.criteria?.length ? (
-                  <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                    {task.ai.criteria.map((criterion) => (
-                      <span className="mchip" key={criterion.key} title={criterion.comment}>
-                        {criterion.label}: {criterion.band ?? '—'}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+              {task.score?.band !== null && task.score?.band !== undefined && task.ai?.band !== task.score?.band ? (
+                <span className="mchip">Teacher band {task.score.band}</span>
+              ) : null}
             </div>
-          ) : null}
-        </article>
-      ))}
+            <div
+              className="passage"
+              style={{ background: 'var(--ink-50)', borderRadius: 12, padding: '14px 16px', whiteSpace: 'pre-wrap' }}
+            >
+              {task.responseText || <span className="muted">(no response)</span>}
+            </div>
+            {(task.ai?.feedback || task.score?.feedback) ? (
+              <div className="explain" style={{ marginTop: 10 }}>
+                <div className="explain__head">
+                  <span className="explain__title">
+                    <Icon name="info" size={15} />
+                    Examiner feedback
+                  </span>
+                </div>
+                <div className="explain__body">
+                  <p className="explain__text">{task.ai?.feedback ?? task.score?.feedback}</p>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Speaking review inside the same exam chrome: the topic on the left, every
+ * recorded answer with its transcript and AI judgement on the right.
+ */
+function SpeakingReview({ sessionId }: { sessionId: string }) {
+  const detail = useAsync<{
+    session: {
+      topicTitle: string;
+      status: string;
+      overallBand: number | null;
+      feedback: string;
+      scoreSource: string | null;
+    };
+    topic: { title: string; part1: string[]; part2: { cue: string; bullets: string[] }; part3: string[] } | null;
+    responses: Array<{ part: number; promptText: string; transcript: string; durationSeconds: number; words: number; hasAudio: boolean }>;
+    score: {
+      band: number | null;
+      criteria: Array<{ key: string; label: string; band: number | null; comment: string }>;
+      feedback: string;
+      feedbackVi: string;
+      strengths: string[];
+      improvements: string[];
+    } | null;
+  }>(() => api.get(`/api/speaking/sessions/${encodeURIComponent(sessionId)}`), [sessionId]);
+
+  if (detail.loading && !detail.data) return <Loading label="Loading speaking review…" />;
+  if (detail.error && !detail.data) {
+    return (
+      <div className="stack" style={{ padding: 24 }}>
+        <Notice tone="danger">{detail.error}</Notice>
+      </div>
+    );
+  }
+  if (!detail.data) return null;
+
+  const { session, topic, responses, score } = detail.data;
+  const partLabel = (part: number) => (part === 1 ? 'Part 1' : part === 2 ? 'Part 2 · Long turn' : 'Part 3');
+
+  return (
+    <div className="exam-body exam-body--split" style={{ '--passage-share': '42%' } as React.CSSProperties}>
+      {/* Left: the speaking topic */}
+      <div className="exam-pane">
+        <div className="exam-pane__scroll">
+          <article className="passage-article">
+            <div className="passage-article__head">
+              <h2>{topic?.title ?? session.topicTitle}</h2>
+              <span className="tiny muted nowrap">Speaking</span>
+            </div>
+            {topic ? (
+              <div className="passage">
+                <div className="passage__paragraph">
+                  <span className="passage__label">1</span>
+                  <span className="passage__text">{topic.part1.map((q) => `• ${q}`).join('\n')}</span>
+                </div>
+                <div className="passage__paragraph">
+                  <span className="passage__label">2</span>
+                  <span className="passage__text">
+                    {topic.part2.cue}
+                    {'\n\n'}
+                    {topic.part2.bullets.map((b) => `• ${b}`).join('\n')}
+                  </span>
+                </div>
+                <div className="passage__paragraph">
+                  <span className="passage__label">3</span>
+                  <span className="passage__text">{topic.part3.map((q) => `• ${q}`).join('\n')}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="muted small" style={{ padding: 12 }}>Topic snapshot unavailable for this session.</p>
+            )}
+          </article>
+        </div>
+      </div>
+
+      {/* Right: answers + AI judgement */}
+      <div className="exam-pane">
+        <div className="exam-pane__scroll">
+          <div className="question-block">
+            <div className="row" style={{ gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+              <span className="mchip mchip--violet">
+                {score?.band !== null && score?.band !== undefined
+                  ? `AI band ${score.band}`
+                  : session.overallBand !== null
+                    ? `Band ${session.overallBand}`
+                    : session.status === 'IN_PROGRESS'
+                      ? 'Not recorded yet'
+                      : 'Marking…'}
+              </span>
+              {score?.criteria?.map((criterion) => (
+                <span key={criterion.key} className="mchip" title={criterion.comment}>
+                  {criterion.label} {criterion.band !== null ? criterion.band : '—'}
+                </span>
+              ))}
+            </div>
+
+            {responses.length === 0 ? (
+              <p className="muted small">
+                {session.status === 'IN_PROGRESS'
+                  ? 'The speaking task has not been recorded yet — open the Speaking tab to answer.'
+                  : 'No recordings were saved for this session.'}
+              </p>
+            ) : null}
+
+            {responses.map((response) => (
+              <div key={response.part} id={`speaking-part-${response.part}`} className="question-block">
+                <p className="small muted" style={{ whiteSpace: 'pre-wrap' }}>
+                  <b>{partLabel(response.part)}</b> · {response.promptText}
+                </p>
+                {response.hasAudio ? (
+                  <audio
+                    controls
+                    preload="none"
+                    src={`/api/speaking/sessions/${encodeURIComponent(sessionId)}/audio/${response.part}`}
+                    style={{ width: '100%', marginBottom: 6 }}
+                  />
+                ) : null}
+                <div
+                  className="passage"
+                  style={{ background: 'var(--ink-50)', borderRadius: 12, padding: '12px 14px', whiteSpace: 'pre-wrap' }}
+                >
+                  {response.transcript || <span className="muted">(no words recognised)</span>}
+                </div>
+                <p className="tiny muted" style={{ margin: '4px 2px 0' }}>
+                  {response.words} words · {Math.round(response.durationSeconds)}s
+                </p>
+              </div>
+            ))}
+
+            {(score?.feedback || score?.feedbackVi || session.feedback) ? (
+              <div className="explain">
+                <div className="explain__head">
+                  <span className="explain__title">
+                    <Icon name="info" size={15} />
+                    Speaking examiner feedback
+                  </span>
+                </div>
+                <div className="explain__body">
+                  <p className="explain__text">{score?.feedback || session.feedback}</p>
+                  {score?.feedbackVi ? <p className="explain__text">{score.feedbackVi}</p> : null}
+                  {score?.strengths?.length ? (
+                    <p className="explain__text">
+                      <b>Strengths:</b> {score.strengths.join(' · ')}
+                    </p>
+                  ) : null}
+                  {score?.improvements?.length ? (
+                    <p className="explain__text">
+                      <b>Improve:</b> {score.improvements.join(' · ')}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

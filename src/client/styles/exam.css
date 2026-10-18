@@ -593,3 +593,32 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
   /* No hover on touch: keep the enlarge affordance visible. */
   .exam-figure__hint { opacity: 1; transform: none; }
 }
+
+/* ------------------------------------------------------ compact review mode */
+/* Review is for scanning answers, not for reading under time pressure: the
+   same exam chrome, one notch denser so more fits on screen. */
+.exam-root--review { --reading-scale: 0.94; }
+.exam-root--review .question-block { gap: 6px; margin-bottom: 12px; }
+.exam-root--review .q-prompt { font-size: 0.93rem; line-height: 1.55; }
+.exam-root--review .q-body { font-size: 0.93rem; line-height: 1.7; }
+.exam-root--review .convo { gap: 8px; }
+.exam-root--review .convo__row { gap: 8px; }
+.exam-root--review .convo__avatar { width: 26px; height: 26px; font-size: 0.72rem; }
+.exam-root--review .convo__stack { max-width: 88%; }
+.exam-root--review .convo__bubble {
+  font-size: 0.85rem; line-height: 1.55; padding: 7px 11px; border-radius: 12px;
+}
+.exam-root--review .convo__speaker { font-size: 0.66rem; }
+.exam-root--review .explain { margin: 8px 0 2px 18px; }
+.exam-root--review .explain__head { padding: 7px 11px; }
+.exam-root--review .explain__title { font-size: 0.72rem; }
+.exam-root--review .explain__body { padding: 9px 11px; gap: 7px; }
+.exam-root--review .explain__text { font-size: 0.85rem; line-height: 1.58; }
+.exam-root--review .explain__answer { font-size: 0.82rem; padding: 5px 11px; }
+.exam-root--review .nav-strip__item { width: 34px; height: 34px; font-size: 0.82rem; }
+.exam-root--review .exam-pane__scroll { padding: 12px 14px; }
+.exam-root--review .passage__paragraph { margin-bottom: 10px; gap: 10px; }
+.exam-root--review .mchip { font-size: 0.72rem; padding: 3px 9px; }
+@media (max-width: 640px) {
+  .exam-root--review .nav-strip__item { width: 30px; height: 30px; }
+}
