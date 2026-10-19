@@ -14,6 +14,7 @@ import './styles/learn.css';
 import './styles/exam.css';
 import './styles/exam-tools.css';
 import './styles/mentor.css';
+import './styles/callroom.css';
 import './styles/notifications.css';
 import './styles/certificate.css';
 import { applyPrefs, loadPrefs } from './lib/display';

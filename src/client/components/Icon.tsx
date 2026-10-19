@@ -81,7 +81,10 @@ export type IconName =
   | 'send'
   | 'hand'
   | 'phoneOff'
-  | 'edit';
+  | 'edit'
+  | 'more'
+  | 'link'
+  | 'copy';
 
 const PATHS: Record<IconName, ReactElement> = {
   grid: (
@@ -481,6 +484,25 @@ const PATHS: Record<IconName, ReactElement> = {
     <>
       <path d="M5 5h3l1.6 4-2 1.6a12.5 12.5 0 0 0 5.8 5.8l1.6-2 4 1.6v3a1.5 1.5 0 0 1-1.7 1.5C9.6 20 4 14.4 3.5 6.7A1.5 1.5 0 0 1 5 5z" />
       <path d="M4 4l16 16" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect x="8.5" y="8.5" width="11" height="11" rx="2" />
+      <path d="M15.5 8.5V5.5a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="5.5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="18.5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="M10.5 13.5a3.6 3.6 0 0 0 5.1 0l2.4-2.4a3.6 3.6 0 0 0-5.1-5.1l-1.2 1.2" />
+      <path d="M13.5 10.5a3.6 3.6 0 0 0-5.1 0l-2.4 2.4a3.6 3.6 0 0 0 5.1 5.1l1.2-1.2" />
     </>
   ),
   edit: (
