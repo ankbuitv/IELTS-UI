@@ -26,6 +26,9 @@ import { LessonPage, ReviewPage } from './pages/student/LessonPages';
 import { DictionaryPage } from './pages/student/DictionaryPage';
 import { SpeakingPage } from './pages/student/SpeakingPage';
 import { SpeakingPartnerPage } from './pages/student/SpeakingPartnerPage';
+import { DrillsPage } from './pages/student/DrillsPage';
+import { DictationLabPage } from './pages/student/DictationLabPage';
+import { PronunciationPage } from './pages/student/PronunciationPage';
 import { TakeExamPage } from './pages/exam/TakeExam';
 import { AttemptReviewPage } from './pages/exam/ReviewExam';
 import { TeacherHomePage, ClassroomPage, AssignmentPage, StudentDetailPage } from './pages/teacher/TeacherPages';
@@ -187,6 +190,30 @@ export function App() {
           element={
             <RequireAuth>
               <StudentClassroomsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="lab/dictation"
+          element={
+            <RequireAuth>
+              <DictationLabPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="lab/pronunciation"
+          element={
+            <RequireAuth>
+              <PronunciationPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="drills"
+          element={
+            <RequireAuth>
+              <DrillsPage />
             </RequireAuth>
           }
         />

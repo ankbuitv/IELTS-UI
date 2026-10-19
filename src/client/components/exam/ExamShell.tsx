@@ -50,6 +50,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
   const [highlightSegmentId] = useState<string | null>(null);
   const [pickedTaskId, setPickedTaskId] = useState<string | null>(null);
   const warnedRef = useRef<string | null>(null);
+  const fiveMinuteWarnedRef = useRef(false);
 
   const mode: PaneMode = compact ? compactMode : paneMode;
   const setView = useCallback(
@@ -296,6 +297,21 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
       );
     }
   }, [state, toast]);
+
+  /**
+   * #11 Supervised mock: one clear warning at five minutes, next to the tab
+   * lock. Auto-submit on expiry and on the integrity threshold is enforced by
+   * the session layer and the server; this only makes the last five minutes
+   * impossible to miss.
+   */
+  useEffect(() => {
+    const remaining = session.sessionRemainingSeconds;
+    if (remaining === null) return;
+    if (remaining <= 300 && remaining > 0 && !fiveMinuteWarnedRef.current) {
+      fiveMinuteWarnedRef.current = true;
+      toast.push('5 minutes left. Check that every question has an answer before the paper closes.', 'warning');
+    }
+  }, [session.sessionRemainingSeconds, toast]);
 
   if (!state || !state.content) {
     // After the tab lock submits the attempt the server stops sending the paper, but the
