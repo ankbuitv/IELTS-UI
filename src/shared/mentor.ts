@@ -92,6 +92,11 @@ export interface MentorSession {
   id: string;
   kind: MentorSessionKind;
   status: MentorSessionStatus;
+  /**
+   * Whether the mentor accepted this booking. `REQUESTED` bookings are
+   * already SCHEDULED (the slot is held) but await the mentor's answer.
+   */
+  confirmation: 'REQUESTED' | 'CONFIRMED' | 'DECLINED' | 'NONE';
   mentorId: string;
   mentorName: string;
   studentId: string;

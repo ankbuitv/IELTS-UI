@@ -161,6 +161,7 @@ interface SessionRow {
   id: string;
   kind: string;
   status: string;
+  confirmation: string;
   mentor_id: string;
   mentor_name: string;
   mentor_avatar_at: string | null;
@@ -202,6 +203,7 @@ function toSession(row: SessionRow): MentorSession {
     id: row.id,
     kind: row.kind === 'CLASS' ? 'CLASS' : 'ONE_ON_ONE',
     status: row.status as MentorSessionStatus,
+    confirmation: (row.confirmation ?? 'CONFIRMED') as MentorSession['confirmation'],
     mentorId: row.mentor_id,
     mentorName: row.mentor_name,
     studentId: row.student_id,
@@ -281,10 +283,12 @@ export async function bookSession(
   await env.DB.prepare(
     `INSERT INTO mentor_sessions
        (id, mentor_id, student_id, class_id, kind, status, topic, starts_at, ends_at, paid_coins, created_at, updated_at)
-     VALUES (?, ?, ?, NULL, 'ONE_ON_ONE', 'REQUESTED', ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, NULL, 'ONE_ON_ONE', 'SCHEDULED', ?, ?, ?, ?, ?, ?)`,
   )
     .bind(id, mentorId, viewer.id, input.topic.trim() || 'Coaching session', startsAt.toISOString(), endsAt.toISOString(), paidCoins, timestamp, timestamp)
     .run();
+  // The request holds its slot immediately; the mentor still has to accept it.
+  await env.DB.prepare("UPDATE mentor_sessions SET confirmation = 'REQUESTED' WHERE id = ?").bind(id).run();
 
   await touchMentorCounters(env, mentorId);
   return getSession(env, id);
@@ -1158,12 +1162,12 @@ export async function findUser(env: Env, userId: string): Promise<UserRow | null
 
 // ---------------------------------------------------------------- moderation
 
-/** The mentor (or an admin) accepts a booking request: REQUESTED → SCHEDULED. */
+/** The mentor (or an admin) accepts a booking request. */
 export async function confirmSession(env: Env, viewer: AuthUser, sessionId: string): Promise<MentorSession> {
   const session = await getSession(env, sessionId);
   if (session.mentorId !== viewer.id && viewer.role !== 'ADMIN') throw ApiError.forbidden('Only the mentor can confirm this booking.');
-  if (session.status !== 'REQUESTED') throw ApiError.conflict('This booking is not waiting for confirmation.');
-  await env.DB.prepare(`UPDATE mentor_sessions SET status = 'SCHEDULED', updated_at = ? WHERE id = ?`)
+  if (session.confirmation !== 'REQUESTED') throw ApiError.conflict('This booking is not waiting for confirmation.');
+  await env.DB.prepare(`UPDATE mentor_sessions SET confirmation = 'CONFIRMED', updated_at = ? WHERE id = ?`)
     .bind(nowIso(), sessionId)
     .run();
   await systemMessage(env, sessionId, viewer.id, 'Booking confirmed by the mentor.');
@@ -1185,7 +1189,7 @@ export async function declineSession(env: Env, viewer: AuthUser, sessionId: stri
   if (isStudent && session.status === 'SCHEDULED' && session.mentorId !== viewer.id) {
     // A confirmed session may still be cancelled by the learner — same refund.
   }
-  await env.DB.prepare(`UPDATE mentor_sessions SET status = 'CANCELLED', updated_at = ? WHERE id = ?`)
+  await env.DB.prepare(`UPDATE mentor_sessions SET status = 'CANCELLED', confirmation = 'DECLINED', updated_at = ? WHERE id = ?`)
     .bind(nowIso(), sessionId)
     .run();
   if (session.paidCoins > 0) {

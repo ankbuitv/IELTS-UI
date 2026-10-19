@@ -125,7 +125,8 @@ export function MySessionsPage() {
           </div>
         ) : (
           upcoming.map((session) => {
-            const joinable = canJoinNow(session.startsAt, session.endsAt, session.status);
+            const pending = session.confirmation === 'REQUESTED';
+            const joinable = !pending && canJoinNow(session.startsAt, session.endsAt, session.status);
             const counterpart = isMentorSide ? session.studentName : session.mentorName;
             return (
               <article key={session.id} className={`session-card${joinable ? ' session-card--live' : ''}`}>
@@ -142,11 +143,11 @@ export function MySessionsPage() {
                     {session.paidCoins > 0 ? ` · ${session.paidCoins} coins` : ''}
                   </p>
                   <div style={{ marginTop: 8 }}>
-                    <SessionStatusChip status={session.status} />
+                    <SessionStatusChip status={pending ? 'REQUESTED' : session.status} />
                   </div>
                 </div>
                 <div className="session-card__actions">
-                  {isMentorSide && session.status === 'REQUESTED' ? (
+                  {isMentorSide && pending ? (
                     <Button variant="primary" disabled={busy} onClick={() => void confirmBooking(session)}>
                       <Icon name="check" size={14} />
                       Confirm booking
@@ -156,7 +157,7 @@ export function MySessionsPage() {
                       <Icon name="video" size={14} />
                       Join call
                     </Button>
-                  ) : session.status === 'REQUESTED' ? (
+                  ) : pending ? (
                     <Button variant="ghost" disabled>
                       <Icon name="hourglass" size={14} />
                       Waiting for mentor
@@ -169,10 +170,10 @@ export function MySessionsPage() {
                   )}
                   <Button
                     variant="danger"
-                    disabled={busy || (session.status !== 'SCHEDULED' && session.status !== 'REQUESTED')}
+                    disabled={busy || (session.status !== 'SCHEDULED' && session.status !== 'ACTIVE')}
                     onClick={() => cancel(session)}
                   >
-                    {isMentorSide && session.status === 'REQUESTED' ? 'Decline' : 'Cancel'}
+                    {isMentorSide && pending ? 'Decline' : 'Cancel'}
                   </Button>
                 </div>
               </article>
