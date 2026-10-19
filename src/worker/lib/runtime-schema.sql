@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql, 0038_speaking_partner.sql, 0039_question_drills.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql, 0038_speaking_partner.sql, 0039_question_drills.sql, 0040_social_billing.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 86   Indexes: 102
+-- Tables: 94   Indexes: 109
 -- =============================================================================
 
 -- table: user_profiles
@@ -1201,6 +1201,98 @@ CREATE TABLE IF NOT EXISTS drill_attempts (
   submitted_at  TEXT
 );
 
+-- table: billing_orders
+CREATE TABLE IF NOT EXISTS billing_orders (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  plan_id       TEXT NOT NULL,
+  provider      TEXT NOT NULL CHECK (provider IN ('CARD', 'BANK', 'DEMO')),
+  status        TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PAID', 'CANCELLED', 'EXPIRED')),
+  amount_vnd    INTEGER NOT NULL,
+  reference     TEXT NOT NULL UNIQUE,
+  checkout_url  TEXT,
+  provider_ref  TEXT,
+  instructions  TEXT NOT NULL DEFAULT '',
+  created_at    TEXT NOT NULL,
+  paid_at       TEXT,
+  expires_at    TEXT
+);
+
+-- table: user_subscriptions
+CREATE TABLE IF NOT EXISTS user_subscriptions (
+  user_id            TEXT PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+  plan_id            TEXT NOT NULL,
+  status             TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'CANCELLED', 'EXPIRED')),
+  provider           TEXT NOT NULL,
+  current_period_end TEXT NOT NULL,
+  started_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL,
+  order_id           TEXT REFERENCES billing_orders (id) ON DELETE SET NULL
+);
+
+-- table: learn_season_claims
+CREATE TABLE IF NOT EXISTS learn_season_claims (
+  user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  season_key TEXT NOT NULL,
+  tier       INTEGER NOT NULL,
+  coins      INTEGER NOT NULL DEFAULT 0,
+  item_key   TEXT,
+  claimed_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, season_key, tier)
+);
+
+-- table: study_groups
+CREATE TABLE IF NOT EXISTS study_groups (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  goal        TEXT NOT NULL DEFAULT '',
+  target_band REAL NOT NULL,
+  owner_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  created_at  TEXT NOT NULL
+);
+
+-- table: study_group_members
+CREATE TABLE IF NOT EXISTS study_group_members (
+  group_id  TEXT NOT NULL REFERENCES study_groups (id) ON DELETE CASCADE,
+  user_id   TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  joined_at TEXT NOT NULL,
+  PRIMARY KEY (group_id, user_id)
+);
+
+-- table: study_rooms
+CREATE TABLE IF NOT EXISTS study_rooms (
+  id               TEXT PRIMARY KEY,
+  owner_id         TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  name             TEXT NOT NULL,
+  topic            TEXT NOT NULL DEFAULT '',
+  focus_minutes    INTEGER NOT NULL DEFAULT 25,
+  break_minutes    INTEGER NOT NULL DEFAULT 5,
+  phase            TEXT NOT NULL DEFAULT 'IDLE' CHECK (phase IN ('IDLE', 'FOCUS', 'BREAK')),
+  phase_started_at TEXT,
+  phase_ends_at    TEXT,
+  season_key       TEXT NOT NULL DEFAULT '',
+  created_at       TEXT NOT NULL,
+  closed_at        TEXT
+);
+
+-- table: study_room_members
+CREATE TABLE IF NOT EXISTS study_room_members (
+  room_id      TEXT NOT NULL REFERENCES study_rooms (id) ON DELETE CASCADE,
+  user_id      TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  joined_at    TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  focus_seconds INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (room_id, user_id)
+);
+
+-- table: study_focus_days
+CREATE TABLE IF NOT EXISTS study_focus_days (
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  day     TEXT NOT NULL,
+  seconds INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, day)
+);
+
 -- index: idx_sessions_user
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
 
@@ -1515,3 +1607,24 @@ CREATE INDEX IF NOT EXISTS idx_speaking_partner_turns_session
 
 -- index: idx_drill_attempts_user
 CREATE INDEX IF NOT EXISTS idx_drill_attempts_user ON drill_attempts (user_id, created_at);
+
+-- index: idx_billing_orders_user
+CREATE INDEX IF NOT EXISTS idx_billing_orders_user ON billing_orders (user_id, created_at);
+
+-- index: idx_billing_orders_status
+CREATE INDEX IF NOT EXISTS idx_billing_orders_status ON billing_orders (status, created_at);
+
+-- index: idx_season_claims_user
+CREATE INDEX IF NOT EXISTS idx_season_claims_user ON learn_season_claims (user_id, season_key);
+
+-- index: idx_study_groups_target
+CREATE INDEX IF NOT EXISTS idx_study_groups_target ON study_groups (target_band, created_at);
+
+-- index: idx_study_group_members_user
+CREATE INDEX IF NOT EXISTS idx_study_group_members_user ON study_group_members (user_id);
+
+-- index: idx_study_rooms_open
+CREATE INDEX IF NOT EXISTS idx_study_rooms_open ON study_rooms (closed_at, created_at);
+
+-- index: idx_study_room_members_user
+CREATE INDEX IF NOT EXISTS idx_study_room_members_user ON study_room_members (user_id, last_seen_at);

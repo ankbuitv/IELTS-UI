@@ -30,13 +30,15 @@ import { PlayerAvatar, badgeName, playerNameClass } from '../../components/learn
 import { useAsync } from '../../hooks/useAsync';
 import { learnApi } from '../../lib/learn-api';
 
-const SCOPES: Array<{ id: LeaderboardScope; label: string; blurb: string; icon: 'target' | 'trophy' }> = [
+const SCOPES: Array<{ id: LeaderboardScope; label: string; blurb: string; icon: 'target' | 'trophy' | 'users' }> = [
   { id: 'learn', label: 'Learn', blurb: 'XP earned on the path.', icon: 'target' },
   { id: 'practice', label: 'Practice', blurb: 'Tests submitted, with the best band beside them.', icon: 'trophy' },
+  { id: 'class', label: 'Class', blurb: 'XP inside your classroom, against the people you actually study with.', icon: 'users' },
 ];
 
 const WINDOWS: Array<{ id: LeaderboardWindow; label: string }> = [
   { id: 'week', label: 'This week' },
+  { id: 'season', label: 'Season' },
   { id: 'all', label: 'All time' },
 ];
 
@@ -79,9 +81,22 @@ export function LeaderboardPage() {
         <Mascot mood="wow" size={116} />
         <div>
           <p className="board__kicker">Leaderboards</p>
-          <h1>{scope === 'learn' ? 'Who is putting the work in' : 'Who is sitting the tests'}</h1>
+          <h1>
+            {scope === 'learn'
+              ? 'Who is putting the work in'
+              : scope === 'class'
+                ? data?.classroom?.name ?? 'Your class board'
+                : 'Who is sitting the tests'}
+          </h1>
           <p className="muted">
-            {SCOPES.find((item) => item.id === scope)?.blurb} {window === 'week' ? 'Since Monday.' : 'Since the beginning.'}
+            {SCOPES.find((item) => item.id === scope)?.blurb}{' '}
+            {window === 'week'
+              ? 'Since Monday.'
+              : window === 'season'
+                ? data?.season
+                  ? `${data.season.label}: ${data.season.startsOn} → ${data.season.endsOn}.`
+                  : 'This season.'
+                : 'Since the beginning.'}
           </p>
         </div>
       </header>
@@ -152,12 +167,16 @@ export function LeaderboardPage() {
             </section>
           ) : (
             <Notice tone="info" title="You are not on this board yet">
-              {scope === 'learn'
-                ? 'Finish one lesson this week and you will appear here with an XP total.'
-                : 'Submit a practice test and you will appear here with your test count.'}
+              {scope === 'class'
+                ? data?.classroom
+                  ? 'Finish one lesson this week and you will appear on the class board.'
+                  : 'Join or create a classroom, and its members will race here each week.'
+                : scope === 'learn'
+                  ? 'Finish one lesson this week and you will appear here with an XP total.'
+                  : 'Submit a practice test and you will appear here with your test count.'}
               <div className="row" style={{ marginTop: 8 }}>
-                <Link className="btn btn--sm btn--primary" to={scope === 'learn' ? '/learn' : '/practice'}>
-                  {scope === 'learn' ? 'Open the path' : 'Start a test'}
+                <Link className="btn btn--sm btn--primary" to={scope === 'class' ? '/classrooms' : scope === 'learn' ? '/learn' : '/practice'}>
+                  {scope === 'class' ? 'Open classrooms' : scope === 'learn' ? 'Open the path' : 'Start a test'}
                 </Link>
               </div>
             </Notice>

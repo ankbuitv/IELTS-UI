@@ -3,6 +3,7 @@ import type { AuthUser } from '../lib/auth-types';
 import { ApiError } from '../lib/errors';
 import { newId, nowIso, parseJson } from '../lib/ids';
 import { enforceRateLimit } from '../lib/rate-limit';
+import { isPro } from './billing-service';
 import { completeJson, type ChatMessage } from '../ai/providers';
 import { z } from 'zod';
 import {
@@ -28,6 +29,8 @@ import {
  */
 
 const MAX_ANSWER = 1500;
+/** Free accounts get three new conversations a day; Pro has no daily cap. */
+export const FREE_PARTNER_SESSIONS_PER_DAY = 3;
 const HISTORY_TURNS = 12;
 
 const PARTNER_SYSTEM_PROMPT = `You are an IELTS speaking partner for a Vietnamese learner. You rehearse one Speaking part at a time.
@@ -178,6 +181,20 @@ export async function createSpeakingPartnerSession(
     { bucket: `speaking-partner-start:${user.id}`, windowSeconds: 3600, limit: 30 },
     'That is a lot of new speaking sessions in one hour. Finish one before starting another.',
   );
+
+  if (!(await isPro(env, user.id))) {
+    const dayStart = `${nowIso().slice(0, 10)}T00:00:00.000Z`;
+    const used = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM speaking_partner_sessions WHERE user_id = ? AND created_at >= ?',
+    )
+      .bind(user.id, dayStart)
+      .first<{ n: number }>();
+    if ((used?.n ?? 0) >= FREE_PARTNER_SESSIONS_PER_DAY) {
+      throw ApiError.conflict(
+        `The free plan includes ${FREE_PARTNER_SESSIONS_PER_DAY} AI speaking sessions a day. Pro makes them unlimited.`,
+      );
+    }
+  }
 
   const id = newId('sps');
   const timestamp = nowIso();

@@ -20,6 +20,8 @@ import mentorRoutes from './routes/mentor';
 import profileRoutes from './routes/profile';
 import notificationRoutes from './routes/notifications';
 import { dictionaryRouter, learnRouter } from './routes/learn';
+import { billingRouter } from './routes/billing';
+import { studyRouter } from './routes/study';
 
 export function createApp() {
   const app = new Hono<AppBindings>();
@@ -62,6 +64,8 @@ export function createApp() {
   app.route('/api/student', studentRoutes);
   app.route('/api/speaking', speakingRoutes);
   app.route('/api/learn', learnRouter);
+  app.route('/api/billing', billingRouter);
+  app.route('/api/study', studyRouter);
   app.route('/api/dictionary', dictionaryRouter);
   app.route('/api', mentorRoutes);
   app.route('/api/profile', profileRoutes);

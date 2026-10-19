@@ -1,6 +1,7 @@
 import type { Env } from '../env';
 import type { AuthUser } from '../lib/auth-types';
 import { ApiError } from '../lib/errors';
+import { isPro } from './billing-service';
 import { newId, nowIso, parseJson } from '../lib/ids';
 import { enforceRateLimit } from '../lib/rate-limit';
 import { gradeAnswer, type AnswerKey, type CandidateResponse } from '../../shared/answer-key';
@@ -113,6 +114,8 @@ async function contextFor(
   };
 }
 
+export const FREE_DRILLS_PER_DAY = 5;
+
 export async function startDrill(
   env: Env,
   user: AuthUser,
@@ -126,6 +129,16 @@ export async function startDrill(
     { bucket: `drill-start:${user.id}`, windowSeconds: 3600, limit: 30 },
     'That is a lot of drills in one hour. Review the last one before starting another.',
   );
+
+  if (!(await isPro(env, user.id))) {
+    const dayStart = `${nowIso().slice(0, 10)}T00:00:00.000Z`;
+    const used = await env.DB.prepare('SELECT COUNT(*) AS n FROM drill_attempts WHERE user_id = ? AND created_at >= ?')
+      .bind(user.id, dayStart)
+      .first<{ n: number }>();
+    if ((used?.n ?? 0) >= FREE_DRILLS_PER_DAY) {
+      throw ApiError.conflict(`The free plan includes ${FREE_DRILLS_PER_DAY} drills a day. Pro makes them unlimited.`);
+    }
+  }
 
   const groups = await env.DB.prepare(
     `SELECT qg.id, qg.section_id, qg.question_type, qg.instructions, qg.shared_options_json, qg.config_json

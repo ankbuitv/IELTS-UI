@@ -78,7 +78,11 @@ const REWARDS_GROUP: NavGroup = {
   items: [
     { to: '/learn/shop', label: 'Shop', icon: 'cart' },
     { to: '/learn/leaderboard', label: 'Leaderboard', icon: 'trophy' },
+    { to: '/season', label: 'Season pass', icon: 'crown' },
+    { to: '/study-groups', label: 'Study groups', icon: 'users' },
+    { to: '/study-room', label: 'Study room', icon: 'clock' },
     { to: '/learn/friends', label: 'Friends', icon: 'heart' },
+    { to: '/pricing', label: 'Plans & Pro', icon: 'coin' },
     { to: '/profile', label: 'Profile', icon: 'user' },
   ],
 };
@@ -138,9 +142,6 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
         { to: '/teacher', label: 'Teaching', icon: 'presentation' },
         { to: '/learn', label: 'Learn', icon: 'target' },
         { to: '/practice', label: 'Practice', icon: 'book' },
-    { to: '/drills', label: 'Type drills', icon: 'target' },
-    { to: '/lab/dictation', label: 'Dictation lab', icon: 'headphones' },
-    { to: '/lab/pronunciation', label: 'Pronunciation', icon: 'volume' },
       ],
       home: '/admin',
     };
@@ -155,9 +156,6 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
             { to: '/teacher/marking', label: 'Marking queue', icon: 'pen' },
             { to: '/training', label: 'Training', icon: 'bulb' },
             { to: '/practice', label: 'Practice', icon: 'book' },
-    { to: '/drills', label: 'Type drills', icon: 'target' },
-    { to: '/lab/dictation', label: 'Dictation lab', icon: 'headphones' },
-    { to: '/lab/pronunciation', label: 'Pronunciation', icon: 'volume' },
             { to: '/learn', label: 'Learning path', icon: 'target' },
           ],
         },
@@ -170,9 +168,6 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
         { to: '/teacher/marking', label: 'Marking', icon: 'pen' },
         { to: '/learn', label: 'Learn', icon: 'target' },
         { to: '/practice', label: 'Practice', icon: 'book' },
-    { to: '/drills', label: 'Type drills', icon: 'target' },
-    { to: '/lab/dictation', label: 'Dictation lab', icon: 'headphones' },
-    { to: '/lab/pronunciation', label: 'Pronunciation', icon: 'volume' },
       ],
       home: '/teacher',
     };
@@ -189,9 +184,6 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
         { to: '/my-sessions', label: 'Sessions', icon: 'video' },
         { to: '/classes', label: 'Classes', icon: 'users' },
         { to: '/practice', label: 'Practice', icon: 'book' },
-    { to: '/drills', label: 'Type drills', icon: 'target' },
-    { to: '/lab/dictation', label: 'Dictation lab', icon: 'headphones' },
-    { to: '/lab/pronunciation', label: 'Pronunciation', icon: 'volume' },
       ],
       home: '/mentor',
     };

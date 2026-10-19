@@ -536,3 +536,107 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
 .pron-word__ipa { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 0.8rem; color: var(--brand-700); }
 .pron-word__stress { font-size: 0.68rem; color: var(--ink-400); }
 .pron-answer { width: 100%; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper-50); font: inherit; font-size: 0.9rem; line-height: 1.6; color: var(--ink-800); resize: vertical; }
+
+/* ------------------------------------------------------- plans & billing */
+.billing-page { max-width: 1040px; }
+.billing-plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.billing-plan { display: flex; flex-direction: column; gap: 10px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.billing-plan.is-featured { border-color: var(--brand-300); box-shadow: 0 10px 30px -22px rgba(91, 61, 245, 0.55); }
+.billing-plan header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.billing-plan h2 { margin: 0; font-size: 1.05rem; }
+.billing-plan__price { margin: 0; font-size: 1.9rem; font-weight: 800; letter-spacing: -0.02em; color: var(--ink-900); }
+.billing-plan__perks { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; font-size: 0.86rem; color: var(--ink-600); }
+.billing-plan__perks li { display: flex; align-items: flex-start; gap: 8px; }
+.billing-plan__actions { margin-top: auto; display: grid; gap: 8px; padding-top: 6px; }
+.billing-current { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.billing-current__plan { margin: 0; font-size: 1.1rem; font-weight: 750; }
+.billing-methods { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.billing-method { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.billing-method.is-on { border-color: var(--brand-400); background: var(--brand-50); }
+.billing-method.is-disabled { opacity: 0.55; cursor: not-allowed; }
+.billing-method span { display: flex; flex-direction: column; gap: 2px; }
+.billing-method input { margin-top: 3px; accent-color: var(--brand-600); }
+.billing-orders { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.billing-order { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-50); }
+.billing-order__main { min-width: 0; }
+.billing-order__top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.billing-order__amount { margin-left: auto; font-weight: 700; }
+.billing-order__instructions { margin: 6px 0 0; color: var(--ink-600); }
+.billing-order code { font-size: 0.78rem; background: var(--ink-100); padding: 1px 5px; border-radius: 5px; }
+
+/* --------------------------------------------------------------- season */
+.season-page { max-width: 1040px; }
+.season-stats { display: flex; gap: 26px; flex-wrap: wrap; margin-top: 14px; }
+.season-stats div { display: flex; flex-direction: column; gap: 2px; }
+.season-stats b { font-size: 1.25rem; color: var(--ink-900); }
+.season-tiers { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.season-tier { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.season-tier.is-unlocked { border-color: var(--brand-300); background: linear-gradient(180deg, var(--brand-50), var(--surface)); }
+.season-tier.is-claimed { opacity: 0.72; }
+.season-tier header { display: flex; align-items: flex-start; gap: 10px; }
+.season-tier header h2 { margin: 0; font-size: 0.98rem; }
+.season-tier__number { flex: none; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; color: var(--brand-700); background: var(--brand-100); }
+.season-tier__rewards { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; font-size: 0.84rem; color: var(--ink-600); }
+.season-tier__rewards li { display: flex; align-items: center; gap: 6px; }
+.season-tier__foot { margin-top: auto; }
+
+/* --------------------------------------------------------- study groups */
+.sg-page { max-width: 1040px; }
+.sg-form { display: grid; grid-template-columns: 1.2fr 140px; gap: 10px 12px; align-items: end; }
+.sg-form__goal { grid-column: 1 / -1; }
+.sg-form > button { justify-self: start; }
+.sg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.sg-card { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper-50); min-height: 132px; }
+.sg-card header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.sg-card h3 { margin: 0; font-size: 0.95rem; }
+.sg-card__goal { margin: 0; color: var(--ink-600); }
+.sg-members, .sg-buddies { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.sg-members li, .sg-buddies li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper-50); }
+.sg-members li.is-me { border-color: var(--brand-300); background: var(--brand-50); }
+.sg-members__who { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.sg-members__who a { color: var(--ink-900); font-weight: 650; text-decoration: none; }
+.sg-members__who a:hover { color: var(--brand-700); }
+.sg-members__xp { font-variant-numeric: tabular-nums; }
+
+/* ----------------------------------------------------------- study rooms */
+.sr-page { max-width: 1040px; }
+.sr-form { display: grid; grid-template-columns: 1.2fr 1.2fr 110px 110px; gap: 10px 12px; align-items: end; }
+.sr-form > button { justify-self: start; }
+.sr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.sr-card { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper-50); }
+.sr-card header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.sr-card h3 { margin: 0; font-size: 0.95rem; }
+.sr-card__topic { margin: 0; color: var(--ink-600); }
+.sr-card__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; }
+.sr-card__clock { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--brand-700); }
+.sr-roomhead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sr-roomhead h1 { margin: 0; font-size: 1.4rem; }
+.sr-roomhead > div { flex: 1; min-width: 200px; }
+.sr-room { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.sr-dial { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+.sr-dial svg { width: min(280px, 100%); height: auto; }
+.sr-dial__track { fill: none; stroke: var(--ink-100); stroke-width: 9; }
+.sr-dial__progress { fill: none; stroke: var(--brand-500); stroke-width: 9; stroke-linecap: round; transition: stroke-dasharray 0.9s linear; }
+.sr-dial__center { position: absolute; top: 22px; left: 0; right: 0; height: min(280px, 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.sr-dial__center strong { font-size: 2.6rem; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.sr-dial__center span { font-size: 0.78rem; color: var(--ink-500); }
+.sr-dial__hint { margin: 0; text-align: center; max-width: 320px; }
+.sr-controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.sr-people { display: flex; flex-direction: column; gap: 8px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.sr-people h2 { margin: 4px 0 0; font-size: 1rem; }
+.sr-people ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.sr-people li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper-50); }
+.sr-people li.is-me { border-color: var(--brand-300); background: var(--brand-50); }
+.sr-people__who { display: flex; flex-direction: column; gap: 1px; }
+.sr-today { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 12px; background: var(--brand-50); }
+.sr-today b { font-size: 1.5rem; color: var(--brand-700); }
+
+@media (max-width: 780px) {
+  .billing-plans { grid-template-columns: 1fr; }
+  .sr-form { grid-template-columns: 1fr 1fr; }
+  .sr-form__topic { grid-column: 1 / -1; }
+  .sg-form { grid-template-columns: 1fr 1fr; }
+  .sr-room { grid-template-columns: 1fr; }
+  .billing-order { flex-direction: column; }
+  .sr-dial__center { top: 50%; transform: translateY(-50%); height: auto; }
+}

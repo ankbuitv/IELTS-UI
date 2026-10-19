@@ -213,6 +213,11 @@ export function SpeakingPartnerPage() {
               'Rehearse one IELTS speaking part at a time. Every answer gets short coaching, and the session ends with a summary.'
             )}
           </p>
+          {!session ? (
+            <p className="tiny muted">
+              Free plan: 3 new conversations a day. <Link to="/pricing">Pro makes them unlimited</Link>.
+            </p>
+          ) : null}
         </div>
         {session ? (
           <div className="sp-head__actions">

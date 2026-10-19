@@ -72,28 +72,28 @@ Migration `0035` (cam_on/mic_on). Chi tiết: `docs/CALL-ROOM.md`.
 | 36 | **AI generate đề** | ✅ Reading 1–3 bài, 5–14 câu/bài, chọn band; prompt chống đạo văn; vào thẳng **Review** (`POST /api/admin/imports/generate`), audit `IMPORT_AI_GENERATED` |
 | 35 | **AI speaking partner** | ✅ `/speaking/partner`: 9 chủ đề Part 1–3, hỏi từng câu, coaching sau mỗi câu trả lời, dictation bằng Web Speech API, tổng kết cuối; AI lỗi/không có provider → chấm theo luật (`RULES`) chứ không chặn |
 
-## Đợt 4 — Luyện thi nâng cao
+## Đợt 4 — Luyện thi nâng cao ✅ `d8d03a3` · `be54701` · `f6cde90`
 
 | # | Tính năng | Ghi chú |
 |---|---|---|
 | 2 | **Inline sentence diff** | Dựa trên corrections của judge + diff theo câu |
 | 5 | **Band predictor** | Hồi quy đơn giản trên lịch sử band, mô phỏng ngày thi |
 | 9 | **Time analytics** | Đã có `attempt_events`/thời gian từng câu — chỉ cần tổng hợp |
-| 10 | **Dictation & shadowing** | Audio lesson + transcript; chấm theo từ |
+| 10 | **Dictation & shadowing** | `/lab/dictation`: nghe từng câu, gõ lại, diff theo từ (LCS), đổi accent UK/AU/US, shadowing |
 | 11 | **Mock có giám sát** | `integrity` đã có; thêm auto-submit + cảnh báo 5 phút |
 | 6 | **Question-type drills** | Gắn tag dạng bài cho ngân hàng câu hỏi + blueprint |
 | 4 | **Fluency metrics** | WPM/filler từ transcript speaking đã lưu |
-| 3 | **Pronunciation coach** | ⚠️ Cần model audio (forced alignment). V1: chấm theo transcript + IPA/trọng âm từ điển, shadowing với TTS; phoneme-level để sau khi chọn provider |
+| 3 | **Pronunciation coach** | ✅ V1 `/lab/pronunciation`: IPA + trọng âm từ điển, shadowing chấm theo từ nghe được; phoneme-level để sau khi có model audio |
 
-## Đợt 5 — Thanh toán & xã hội
+## Đợt 5 — Thanh toán & xã hội ✅
 
 | # | Tính năng | Ghi chú |
 |---|---|---|
-| 31 | **Subscription/payment** | Stripe + VNPay/MoMo, gói Pro; cần tài khoản merchant của bạn |
-| 44 | **Leaderboard theo lớp + mùa giải** | Có `learn_leaderboard`; thêm scope lớp và season |
-| 43 | **Study buddy/group** | Dựa trên `friendships` + presence sẵn có |
-| 46 | **Season pass** | Mở rộng shop/quest hiện tại |
-| 50 | **Virtual study room** | Presence + pomodoro; tái dùng room state |
+| 31 | **Subscription/payment** | ✅ `/pricing`: Pro tháng/năm, Stripe Checkout (cần key), chuyển khoản + admin xác nhận (đường VNPay/MoMo khi chưa có merchant), demo local |
+| 44 | **Leaderboard theo lớp + mùa giải** | ✅ tab **Class** (theo classroom) + cửa sổ **Season** 8 tuần |
+| 43 | **Study buddy/group** | ✅ `/study-groups`: nhóm tối đa 12, bảng XP tuần, gợi ý bạn/classmate/cùng target band |
+| 46 | **Season pass** | ✅ `/season`: 5 mốc XP, thưởng coin + item, claim idempotent |
+| 50 | **Virtual study room** | ✅ `/study-room`: pomodoro chung do server giữ, heartbeat presence, phút focus theo ngày |
 
 ---
 
@@ -107,4 +107,15 @@ Migration `0035` (cam_on/mic_on). Chi tiết: `docs/CALL-ROOM.md`.
 | 4 | Luyện thi nâng cao | ~2 tuần |
 | 5 | Thanh toán & xã hội | ~1.5–2 tuần |
 
-> **Đợt 3 đã xong.** Đợt 4 là đợt tiếp theo (2 → 5 → 9 → 10 → 11 → 6 → 4 → 3).
+> **Cả 5 đợt đã xong.** 31/31 tính năng đã có code chạy được; phần cần tài khoản
+> bên ngoài (Stripe/VNPay/MoMo) đã có đường thủ công để dùng ngay: tạo đơn chuyển
+> khoản, admin xác nhận. Xem `docs/BILLING.md` để bật Stripe.
+
+### Ghi chú sau đợt 4–5
+
+- **#3 pronunciation** là V1: chấm theo transcript + IPA/trọng âm từ điển, không chấm phoneme.
+- **#31** chỉ thu tiền thật khi có `STRIPE_SECRET_KEY`; nếu không, dùng BANK + admin duyệt.
+- Giới hạn Pro đang áp dụng: 3 phiên AI speaking partner/ngày và 5 drills/ngày cho tài khoản free.
+- **#2** diff theo câu dùng lại `corrections` của judge; **#5** dự phóng band có damping;
+  **#9** thống kê thời gian theo section/câu từ snapshot attempt.
+

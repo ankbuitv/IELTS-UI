@@ -270,7 +270,10 @@ export function DrillsPage() {
             affect your band history.
           </p>
         </div>
-        <Badge tone="accent">4–8 questions · no timer</Badge>
+        <div className="row">
+          <Badge tone="accent">4–8 questions · no timer</Badge>
+          <Link className="tiny muted" to="/pricing">Free plan: 5 drills a day</Link>
+        </div>
       </div>
 
       {error ? <Notice tone="danger">{error}</Notice> : null}

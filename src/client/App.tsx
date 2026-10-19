@@ -28,6 +28,10 @@ import { SpeakingPage } from './pages/student/SpeakingPage';
 import { SpeakingPartnerPage } from './pages/student/SpeakingPartnerPage';
 import { DrillsPage } from './pages/student/DrillsPage';
 import { DictationLabPage } from './pages/student/DictationLabPage';
+import { PricingPage } from './pages/student/PricingPage';
+import { SeasonPassPage } from './pages/student/SeasonPassPage';
+import { StudyGroupsPage } from './pages/student/StudyGroupsPage';
+import { StudyRoomPage } from './pages/student/StudyRoomPage';
 import { PronunciationPage } from './pages/student/PronunciationPage';
 import { TakeExamPage } from './pages/exam/TakeExam';
 import { AttemptReviewPage } from './pages/exam/ReviewExam';
@@ -43,6 +47,7 @@ import { AdminUsersPage } from './pages/admin/AdminUsers';
 import { AdminAttemptsPage } from './pages/admin/AdminAttempts';
 import { AdminSettingsPage } from './pages/admin/AdminSettings';
 import { AdminLearnPage } from './pages/admin/AdminLearn';
+import { AdminBillingPage } from './pages/admin/AdminBillingPage';
 import { MentorDirectoryPage } from './pages/mentor/MentorDirectoryPage';
 import { MentorProfilePage } from './pages/mentor/MentorProfilePage';
 import { MySessionsPage } from './pages/mentor/MySessionsPage';
@@ -206,6 +211,38 @@ export function App() {
           element={
             <RequireAuth>
               <PronunciationPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="pricing"
+          element={
+            <RequireAuth>
+              <PricingPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="season"
+          element={
+            <RequireAuth>
+              <SeasonPassPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="study-groups"
+          element={
+            <RequireAuth>
+              <StudyGroupsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="study-room"
+          element={
+            <RequireAuth>
+              <StudyRoomPage />
             </RequireAuth>
           }
         />
@@ -480,6 +517,7 @@ export function App() {
           <Route path="attempts" element={<AdminAttemptsPage />} />
           <Route path="writing" element={<AdminWritingQueuePage />} />
           <Route path="learn" element={<AdminLearnPage />} />
+          <Route path="billing" element={<AdminBillingPage />} />
           <Route path="settings" element={<AdminSettingsPage />} />
         </Route>
 

@@ -17,6 +17,7 @@ import {
   type LeaderboardScope,
   type LeaderboardWindow,
 } from '../../shared/leaderboard';
+import { seasonOf } from '../../shared/season';
 
 const DAY_MIN = '0000-01-01';
 const DAY_MAX = '9999-12-31';
@@ -115,22 +116,116 @@ function practiceRow(row: PracticeRow, rank: number, meId: string): LeaderboardR
   };
 }
 
+function valueLabelFor(window: LeaderboardWindow): string {
+  if (window === 'week') return 'XP this week';
+  if (window === 'season') return 'XP this season';
+  return 'XP earned';
+}
+
+interface ClassroomRef {
+  id: string;
+  name: string;
+}
+
+/**
+ * The class a board is for: the requested one when the learner belongs to it,
+ * otherwise the first class they teach or attend.
+ */
+async function resolveClassroom(env: Env, userId: string, classroomId?: string): Promise<ClassroomRef | null> {
+  if (classroomId) {
+    return env.DB.prepare(
+      `SELECT c.id, c.name FROM classrooms c
+        WHERE c.id = ? AND c.status = 'ACTIVE'
+          AND (c.teacher_id = ? OR EXISTS (
+            SELECT 1 FROM classroom_members m WHERE m.classroom_id = c.id AND m.user_id = ? AND m.status = 'ACTIVE'
+          ))`,
+    )
+      .bind(classroomId, userId, userId)
+      .first<ClassroomRef>();
+  }
+  return env.DB.prepare(
+    `SELECT DISTINCT c.id, c.name, c.created_at FROM classrooms c
+       LEFT JOIN classroom_members m ON m.classroom_id = c.id AND m.user_id = ? AND m.status = 'ACTIVE'
+      WHERE c.status = 'ACTIVE' AND (c.teacher_id = ? OR m.user_id IS NOT NULL)
+      ORDER BY c.created_at DESC
+      LIMIT 1`,
+  )
+    .bind(userId, userId)
+    .first<ClassroomRef>();
+}
+
 export async function getLeaderboard(
   env: Env,
   userId: string,
   scope: LeaderboardScope,
   window: LeaderboardWindow,
   day: string,
+  options: { classroomId?: string } = {},
 ): Promise<LeaderboardResponse> {
+  const season = seasonOf(day);
   const weekStart = window === 'week' ? weekStartOf(day) : null;
-  const weekEnd = weekStart ? new Date(Date.parse(`${weekStart}T00:00:00Z`) + 7 * 86_400_000) : null;
-  const dayFrom = weekStart ?? DAY_MIN;
-  const dayTo = weekEnd ? new Date(weekEnd.getTime() - 86_400_000).toISOString().slice(0, 10) : DAY_MAX;
-  const instantFrom = weekStart ? `${weekStart}T00:00:00.000Z` : INSTANT_MIN;
-  const instantTo = weekEnd ? new Date(weekEnd.getTime() - 1).toISOString() : INSTANT_MAX;
+  const rangeStart = window === 'week' ? weekStartOf(day) : window === 'season' ? season.startsOn : null;
+  const rangeEnd =
+    window === 'week'
+      ? new Date(Date.parse(`${weekStartOf(day)}T00:00:00Z`) + 6 * 86_400_000).toISOString().slice(0, 10)
+      : window === 'season'
+        ? season.endsOn
+        : null;
+  const dayFrom = rangeStart ?? DAY_MIN;
+  const dayTo = rangeEnd ?? DAY_MAX;
+  const instantFrom = rangeStart ? `${rangeStart}T00:00:00.000Z` : INSTANT_MIN;
+  const instantTo = rangeEnd
+    ? new Date(Date.parse(`${rangeEnd}T00:00:00.000Z`) + 86_400_000 - 1).toISOString()
+    : INSTANT_MAX;
   const now = new Date().toISOString();
   const onlineCutoff = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString();
   const roles = "u.role IN ('STUDENT', 'ADMIN') AND u.status = 'ACTIVE'";
+
+  if (scope === 'class') {
+    const classroom = await resolveClassroom(env, userId, options.classroomId);
+    if (!classroom) {
+      return {
+        scope,
+        window,
+        rows: [],
+        me: null,
+        total: 0,
+        weekStart,
+        valueLabel: valueLabelFor(window),
+        classroom: null,
+        season,
+      };
+    }
+    const valueExpression = window === 'all' ? 'COALESCE(lp.xp, 0)' : 'COALESCE(SUM(x.xp), 0)';
+    const rows = await env.DB.prepare(
+      `SELECT ${PROFILE_FIELDS}, ${valueExpression} AS value
+         FROM users u${PROFILE_JOINS}
+         LEFT JOIN learn_xp_log x ON x.user_id = u.id AND x.day >= ? AND x.day <= ?
+        WHERE ${roles}
+          AND u.id IN (
+            SELECT user_id FROM classroom_members WHERE classroom_id = ? AND status = 'ACTIVE'
+            UNION SELECT teacher_id FROM classrooms WHERE id = ?
+          )
+     GROUP BY u.id
+       HAVING value > 0
+     ORDER BY value DESC, streak DESC, u.id
+        LIMIT 500`,
+    )
+      .bind(onlineCutoff, now, dayFrom, dayTo, classroom.id, classroom.id)
+      .all<LearnRow>();
+    const mapped = (rows.results ?? []).map((row, index) => learnRow(row, index + 1, userId));
+    return {
+      scope,
+      window,
+      rows: mapped.slice(0, LEADERBOARD_LIMIT),
+      me: mapped.find((row) => row.isMe) ?? null,
+      total: mapped.length,
+      weekStart,
+      valueLabel: valueLabelFor(window),
+      classroom,
+      season,
+    };
+  }
 
   if (scope === 'learn') {
     const valueExpression = window === 'all' ? 'COALESCE(lp.xp, 0)' : 'COALESCE(SUM(x.xp), 0)';
@@ -193,7 +288,9 @@ export async function getLeaderboard(
       me: meRow && meRow.value > 0 ? learnRow(meRow, (ahead?.ahead ?? 0) + 1, userId) : null,
       total: total?.total ?? 0,
       weekStart,
-      valueLabel: 'XP earned',
+      valueLabel: valueLabelFor(window),
+      classroom: null,
+      season,
     };
   }
 
@@ -254,6 +351,8 @@ export async function getLeaderboard(
     me: meRow ? practiceRow(meRow, (ahead?.ahead ?? 0) + 1, userId) : null,
     total: total?.total ?? 0,
     weekStart,
-    valueLabel: window === 'week' ? 'Tests this week' : 'Tests taken',
+    valueLabel: window === 'week' ? 'Tests this week' : window === 'season' ? 'Tests this season' : 'Tests taken',
+    classroom: null,
+    season,
   };
 }
