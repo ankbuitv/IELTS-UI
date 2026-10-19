@@ -2,7 +2,10 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "types": ["node"],
-    "lib": ["ES2022"]
+    "lib": ["ES2022", "DOM"],
+    // tests/unit/page-kit.test.ts renders the client page kit, so it needs the
+    // same JSX setting the client project uses to read those .tsx modules.
+    "jsx": "react-jsx"
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "eslint.config.js"]
+  "include": ["vite.config.ts", "vitest.config.ts", "eslint.config.js", "tests/unit/page-kit.test.ts"]
 }

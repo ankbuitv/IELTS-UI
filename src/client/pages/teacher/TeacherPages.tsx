@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
+import { Icon } from '../../components/Icon';
+import { PageHead, StatPill } from '../../components/page';
 import {
   Badge,
   Button,
@@ -71,18 +73,32 @@ export function TeacherHomePage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Teaching</h1>
-          <p className="page-head__meta">Classrooms, assignments, class analytics and integrity summaries.</p>
+      <PageHead
+        eyebrow="Workspace"
+        title="Teaching"
+        meta="Classrooms, assignments, class analytics and integrity summaries — everything you publish lands on your students' dashboards."
+        actions={
+          <>
+            <Button onClick={() => navigate('/teacher/marking')}>
+              <Icon name="pen" size={14} />
+              Mark writing
+            </Button>
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              <Icon name="plus" size={14} />
+              New classroom
+            </Button>
+          </>
+        }
+      />
+
+      {data && data.classrooms.length > 0 ? (
+        <div className="pill-strip">
+          <StatPill label="classrooms" value={data.classrooms.length} icon="layers" />
+          <StatPill label="students taught" value={data.classrooms.reduce((n, c) => n + c.studentCount, 0)} icon="users" tone="info" />
+          <StatPill label="assignments out" value={data.classrooms.reduce((n, c) => n + c.assignmentCount, 0)} icon="calendar" tone="teal" />
+          <StatPill label="active" value={data.classrooms.filter((c) => c.status !== 'ARCHIVED').length} icon="checkCircle" tone="success" />
         </div>
-        <div className="row">
-          <Button onClick={() => navigate('/teacher/marking')}>Mark writing</Button>
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            New classroom
-          </Button>
-        </div>
-      </div>
+      ) : null}
 
       {data?.classrooms.length === 0 ? (
         <Card>
@@ -91,9 +107,9 @@ export function TeacherHomePage() {
           </EmptyState>
         </Card>
       ) : (
-        <div className="grid grid--3">
-          {data?.classrooms.map((classroom) => (
-            <div className="card card--link" key={classroom.id}>
+        <div className="grid grid--3 stagger">
+          {data?.classrooms.map((classroom, index) => (
+            <div className="card card--link" key={classroom.id} style={{ ['--i' as string]: index }}>
               <div className="row row--between">
                 <h3 style={{ margin: 0 }}>{classroom.name}</h3>
                 {classroom.status === 'ARCHIVED' ? <Badge tone="dim">Archived</Badge> : <Badge tone="success">Active</Badge>}
@@ -243,23 +259,29 @@ export function ClassroomPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <Link to="/teacher" className="small">
-            ← All classrooms
-          </Link>
-          <h1>{data.classroom.name}</h1>
-          <p className="page-head__meta">
-            {data.analytics.studentCount} students · {data.analytics.assignmentCount} assignments
-          </p>
-        </div>
-        <div className="row">
-          <Button onClick={() => setInviteOpen(true)}>Invite students</Button>
-          <Button variant="primary" onClick={() => setAssignOpen(true)}>
-            New assignment
-          </Button>
-        </div>
-      </div>
+      <PageHead
+        eyebrow={
+          <>
+            <Link to="/teacher" className="ph__back">
+              All classrooms
+            </Link>
+          </>
+        }
+        title={data.classroom.name}
+        meta={`${data.analytics.studentCount} students · ${data.analytics.assignmentCount} assignments`}
+        actions={
+          <>
+            <Button onClick={() => setInviteOpen(true)}>
+              <Icon name="users" size={14} />
+              Invite students
+            </Button>
+            <Button variant="primary" onClick={() => setAssignOpen(true)}>
+              <Icon name="calendar" size={14} />
+              New assignment
+            </Button>
+          </>
+        }
+      />
 
       <Tabs
         tabs={[
@@ -274,7 +296,7 @@ export function ClassroomPage() {
 
       {tab === 'overview' ? (
         <>
-          <div className="grid grid--4">
+          <div className="grid grid--4 stagger">
             <Stat label="Students" value={data.analytics.studentCount} />
             <Stat label="Assignments" value={data.analytics.assignmentCount} />
             <Stat
@@ -288,7 +310,7 @@ export function ClassroomPage() {
             />
           </div>
 
-          <div className="grid grid--2">
+          <div className="grid grid--2 stagger">
             <Card title="Average raw score by assignment">
               <BarChart
                 bars={data.analytics.assignments.map((assignment) => ({
@@ -311,7 +333,7 @@ export function ClassroomPage() {
             </Card>
           </div>
 
-          <div className="grid grid--2">
+          <div className="grid grid--2 stagger">
             <Card title="Skill performance">
               <AccuracyList
                 items={data.analytics.skillPerformance.map((skill) => ({
@@ -682,6 +704,10 @@ function CreateAssignmentModal({
     timingPolicy: 'EXAM_DURATION',
     requireFullscreen: false,
     monitorVisibility: true,
+    // 'inherit' keeps the exam mode's own window policy; only an explicit choice
+    // becomes an override, so the preset is never silently switched off.
+    windowGuard: 'inherit' as 'inherit' | 'on' | 'off',
+    clipboardLock: 'inherit' as 'inherit' | 'on' | 'off',
     autoSubmitAtEvents: '',
     maxTabAwayEvents: '',
   });
@@ -713,6 +739,23 @@ function CreateAssignmentModal({
                   integrityOverrides: {
                     requireFullscreen: form.requireFullscreen,
                     monitorVisibility: form.monitorVisibility,
+                    ...(form.clipboardLock === 'inherit'
+                      ? {}
+                      : {
+                          allowCopy: form.clipboardLock === 'off',
+                          allowPaste: form.clipboardLock === 'off',
+                          allowContextMenu: form.clipboardLock === 'off',
+                          blockTextSelection: form.clipboardLock === 'on',
+                        }),
+                    ...(form.windowGuard === 'inherit'
+                      ? {}
+                      : {
+                          requireFullscreen: form.windowGuard === 'on',
+                          autoFullscreen: form.windowGuard === 'on',
+                          lockOnFullscreenExit: form.windowGuard === 'on',
+                          blockPopups: form.windowGuard === 'on',
+                          blockTranslatorOverlays: form.windowGuard === 'on',
+                        }),
                     ...(form.autoSubmitAtEvents ? { autoSubmitAtEvents: Number(form.autoSubmitAtEvents) } : {}),
                     ...(form.maxTabAwayEvents ? { maxTabAwayEvents: Number(form.maxTabAwayEvents) } : {}),
                   },
@@ -743,7 +786,7 @@ function CreateAssignmentModal({
         )}
       </Field>
 
-      <div className="grid grid--2">
+      <div className="grid grid--2 stagger">
         <Field label="Assignment title" hint="Defaults to the test title.">
           {(id) => <TextInput id={id} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />}
         </Field>
@@ -796,6 +839,27 @@ function CreateAssignmentModal({
             </Select>
           )}
         </Field>
+        <Field label="Window lock" hint="Fullscreen, pop-up and translation-overlay blocking during the test.">
+          {(id) => (
+            <Select id={id} value={form.windowGuard} onChange={(event) => setForm({ ...form, windowGuard: event.target.value as 'inherit' | 'on' | 'off' })}>
+              <option value="inherit">Follow the exam mode (practice: off · standard and strict: on)</option>
+              <option value="on">Force on — fullscreen, no pop-ups, no translation overlays</option>
+              <option value="off">Force off — monitoring only, nothing is blocked</option>
+            </Select>
+          )}
+        </Field>
+        <Field
+          label="Clipboard lock"
+          hint="Right-click, copy and cut on the paper. Selecting text stays allowed so candidates can highlight and annotate; forcing this on also takes the highlighter away. The candidate's own answer box always stays editable."
+        >
+          {(id) => (
+            <Select id={id} value={form.clipboardLock} onChange={(event) => setForm({ ...form, clipboardLock: event.target.value as 'inherit' | 'on' | 'off' })}>
+              <option value="inherit">Follow the exam mode (practice: off · standard and strict: on)</option>
+              <option value="on">Force on — no right-click, no copy or cut, and no highlights or notes</option>
+              <option value="off">Force off — text can be selected and copied</option>
+            </Select>
+          )}
+        </Field>
         <Field label="Max tab-away events" hint="Leave empty for the mode default.">
           {(id) => (
             <TextInput
@@ -829,7 +893,7 @@ function CreateAssignmentModal({
         <Checkbox
           checked={form.requireFullscreen}
           onChange={(checked) => setForm({ ...form, requireFullscreen: checked })}
-          label="Request fullscreen (browsers only allow this after a click and may refuse it)"
+          label="Request fullscreen (browsers only allow this after a click and may refuse it) — overridden by the window lock above"
         />
       </div>
     </Modal>
@@ -893,18 +957,20 @@ export function AssignmentPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <Link to={`/teacher/classrooms/${data.classroomId}`} className="small">
-            ← {data.classroomName}
+      <PageHead
+        eyebrow={
+          <Link to={`/teacher/classrooms/${data.classroomId}`} className="ph__back">
+            {data.classroomName}
           </Link>
-          <h1>{data.title}</h1>
-          <p className="page-head__meta">
+        }
+        title={data.title}
+        meta={
+          <>
             {data.testTitle} · {TEST_TYPE_LABELS[data.testType]} · v{data.versionNumber} · {MODE_LABELS[data.mode]} · results{' '}
             {data.resultVisibility.toLowerCase().replace(/_/g, ' ')}
-          </p>
-        </div>
-        <div className="row">
+          </>
+        }
+        actions={<div className="row">
           <Button
             onClick={() => {
               setDeadline(data.deadlineAt ? toLocalInput(data.deadlineAt) : '');
@@ -926,10 +992,10 @@ export function AssignmentPage() {
           >
             Close assignment
           </ConfirmButton>
-        </div>
-      </div>
+        </div>}
+      />
 
-      <div className="grid grid--4">
+      <div className="grid grid--4 stagger">
         <Stat label="Assigned" value={data.report.length} />
         <Stat label="Submitted" value={submitted} hint={`${data.report.length ? Math.round((submitted / data.report.length) * 100) : 0}% completion`} />
         <Stat label="Deadline" value={data.deadlineAt ? formatDateTime(data.deadlineAt) : 'None'} />
@@ -1098,17 +1164,18 @@ export function StudentDetailPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>{data.student.displayName}</h1>
-          <p className="page-head__meta">
+      <PageHead
+        eyebrow="Student record"
+        title={data.student.displayName}
+        meta={
+          <>
             {data.student.email} · joined {formatDateTime(data.student.createdAt)} · last sign-in{' '}
             {data.student.lastLoginAt ? formatDateTime(data.student.lastLoginAt) : 'never'}
-          </p>
-        </div>
-      </div>
+          </>
+        }
+      />
 
-      <div className="grid grid--3">
+      <div className="grid grid--3 stagger">
         {data.skillPerformance.map((skill) => (
           <Stat
             key={skill.skill}

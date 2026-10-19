@@ -18,6 +18,8 @@ import {
 } from '../../components/ui';
 import { formatDateTime, SKILL_LABELS, TEST_TYPE_LABELS } from '../../lib/format';
 import { DEFAULT_LISTENING_PROFILE_ID, DEFAULT_READING_PROFILE_ID } from '@shared/default-scoring-profiles';
+import { Icon } from '../../components/Icon';
+import { PageHead } from '../../components/page';
 
 function isBuiltinProfile(id: string): boolean {
   return id === DEFAULT_READING_PROFILE_ID || id === DEFAULT_LISTENING_PROFILE_ID;
@@ -49,18 +51,17 @@ export function AdminScoringProfilesPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Scoring profiles</h1>
-          <p className="page-head__meta">
-            Versioned raw-score → band conversion tables. Bands derived from them are practice estimates, labelled
-            &ldquo;Estimated band&rdquo; everywhere in the product.
-          </p>
-        </div>
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          New profile
-        </Button>
-      </div>
+      <PageHead
+        eyebrow="Marking"
+        title="Scoring profiles"
+        meta="Versioned raw-score → band conversion tables. Bands derived from them are practice estimates, labelled “Estimated band” everywhere in the product."
+        actions={
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            <Icon name="plus" size={14} />
+            New profile
+          </Button>
+        }
+      />
 
       <Notice tone="info" title="Default Reading and Listening tables are created automatically">
         A fresh database seeds two built-in practice conversion tables (40 questions). They are estimates only — not
@@ -260,7 +261,7 @@ function CreateProfileForm({
         refused by the server if the ranges overlap or leave gaps inside the covered span.
       </Notice>
 
-      <div className="grid grid--2">
+      <div className="grid grid--2 stagger">
         <Field label="Profile name" required hint="Reusing a name creates the next version of that profile.">
           {(id) => <TextInput id={id} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />}
         </Field>

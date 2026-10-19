@@ -5,6 +5,7 @@ import { useAsync } from '../../hooks/useAsync';
 import { Badge, Button, Card, EmptyState, Loading, Modal, Notice, Stat } from '../../components/ui';
 import { WritingMarkForm } from '../../components/ResultView';
 import { formatBand, formatDateTime, TEST_TYPE_LABELS } from '../../lib/format';
+import { PageHead } from '../../components/page';
 
 interface WritingQueueItem {
   submissionId: string;
@@ -37,19 +38,18 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Writing to mark</h1>
-          <p className="page-head__meta">
-            Essays are marked automatically by the AI judges. Award a practice band and feedback here and your band replaces their estimate.
-          </p>
-        </div>
-        <Button onClick={() => setUnmarkedOnly((value) => !value)}>
-          {unmarkedOnly ? 'Show teacher-marked as well' : 'No teacher band only'}
-        </Button>
-      </div>
+      <PageHead
+        eyebrow="Marking"
+        title="Writing to mark"
+        meta="Essays are marked automatically by the AI judges. Award a practice band and feedback here and your band replaces their estimate."
+        actions={
+          <Button onClick={() => setUnmarkedOnly((value) => !value)}>
+            {unmarkedOnly ? 'Show teacher-marked as well' : 'No teacher band only'}
+          </Button>
+        }
+      />
 
-      <div className="grid grid--3">
+      <div className="grid grid--3 stagger">
         <Stat label="In this list" value={data?.submissions.length ?? 0} />
         <Stat label="No teacher band" value={data?.unmarkedCount ?? 0} hint="Marked by the AI judges only so far" />
         <Stat label="Filter" value={unmarkedOnly ? 'No teacher band' : 'All submitted'} />

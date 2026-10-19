@@ -1,0 +1,752 @@
+{
+  "testTitle": "Listening - Part 1: Beginner bookbinding courses",
+  "testType": "LISTENING",
+  "durationSeconds": 600,
+  "sections": [
+    {
+      "skill": "LISTENING",
+      "type": "LISTENING_PART",
+      "label": "Part 1",
+      "title": "Beginner bookbinding courses",
+      "subtitle": "A phone call to an adult learning centre",
+      "instructions": "You will hear a woman called Ella ringing an adult learning centre to ask about bookbinding courses. Answer Questions 1-10 and complete the table. In the real test this recording is played once only; this practice part is set to play twice.",
+      "durationSeconds": 600,
+      "audioUrl": "https://cms.youpass.vn/assets/3f05bffe-4166-4413-9f88-187d2e0259c3",
+      "playback": {
+        "maxPlays": 2,
+        "prepSeconds": 0,
+        "allowPause": true,
+        "allowSeekAfterPlay": true
+      },
+      "transcript": {
+        "segments": [
+          {
+            "id": "bp01",
+            "speaker": "Narrator",
+            "text": "Part 1. You will hear a woman called Ella ringing an adult learning centre to ask about bookbinding courses. First, you have some time to look at questions one to five."
+          },
+          {
+            "id": "bp02",
+            "speaker": "Narrator",
+            "text": "Now listen carefully and answer questions one to five."
+          },
+          {
+            "id": "bp03",
+            "speaker": "Declan",
+            "text": "Good morning. Calderwood Learning Centre. Declan speaking."
+          },
+          {
+            "id": "bp04",
+            "speaker": "Ella",
+            "text": "Oh, hello. I'm ringing about your bookbinding courses. I saw a poster in the library, but it didn't give many details."
+          },
+          {
+            "id": "bp05",
+            "speaker": "Declan",
+            "text": "Right. Well, I can help with that. Have you done any bookbinding before?"
+          },
+          {
+            "id": "bp06",
+            "speaker": "Ella",
+            "text": "No. Nothing at all. I just like the idea of making my own books rather than buying them."
+          },
+          {
+            "id": "bp07",
+            "speaker": "Declan",
+            "text": "Then you've got three courses to choose from, and they're all for complete beginners. Shall I start with the Saturday taster?"
+          },
+          {
+            "id": "bp08",
+            "speaker": "Ella",
+            "text": "Yes, please."
+          },
+          {
+            "id": "bp09",
+            "speaker": "Declan",
+            "text": "It's just one day, a Saturday, from morning till late afternoon. It's a good way to find out whether you enjoy it."
+          },
+          {
+            "id": "bp10",
+            "speaker": "Ella",
+            "text": "Okay. And what do you actually make? A notebook, I suppose?"
+          },
+          {
+            "id": "bp11",
+            "speaker": "Declan",
+            "text": "Not on the taster. No. The notebook's on the longer course. On the Saturday, you make a small album for photographs, that kind of thing. It's simple, but you finish it in a day."
+          },
+          {
+            "id": "bp12",
+            "speaker": "Ella",
+            "text": "Oh, lovely. That would make a nice present."
+          },
+          {
+            "id": "bp13",
+            "speaker": "Declan",
+            "text": "A lot of people say that. And you don't need to be good at drawing or anything like that. It's mostly folding and sewing."
+          },
+          {
+            "id": "bp14",
+            "speaker": "Ella",
+            "text": "Good. And how much is the taster?"
+          },
+          {
+            "id": "bp15",
+            "speaker": "Declan",
+            "text": "It's forty-five pounds, and that includes all the materials, the paper, the card, the thread."
+          },
+          {
+            "id": "bp16",
+            "speaker": "Ella",
+            "text": "Very reasonable."
+          },
+          {
+            "id": "bp17",
+            "speaker": "Declan",
+            "text": "It is. We try to keep the short courses cheap so that people give it a go."
+          },
+          {
+            "id": "bp18",
+            "speaker": "Ella",
+            "text": "And who's the tutor?"
+          },
+          {
+            "id": "bp19",
+            "speaker": "Declan",
+            "text": "That's Lydia Pinnock. She's been making books for years, and she's very patient with beginners."
+          },
+          {
+            "id": "bp20",
+            "speaker": "Ella",
+            "text": "Sorry. Could you spell her surname?"
+          },
+          {
+            "id": "bp21",
+            "speaker": "Declan",
+            "text": "Of course. P I n n o c k."
+          },
+          {
+            "id": "bp22",
+            "speaker": "Ella",
+            "text": "Thanks. I like to know who I'll be learning from."
+          },
+          {
+            "id": "bp23",
+            "speaker": "Declan",
+            "text": "Fair enough. Now the next course is the evening course. That runs for six weeks on Tuesday evenings."
+          },
+          {
+            "id": "bp24",
+            "speaker": "Ella",
+            "text": "Right."
+          },
+          {
+            "id": "bp25",
+            "speaker": "Ella",
+            "text": "And that's where you make the notebook?"
+          },
+          {
+            "id": "bp26",
+            "speaker": "Declan",
+            "text": "Yes. A proper notebook with a hard cover. You sew the pages together in the early weeks, then you learn to cover the boards with cloth."
+          },
+          {
+            "id": "bp27",
+            "speaker": "Ella",
+            "text": "That sounds more like what I want, actually."
+          },
+          {
+            "id": "bp28",
+            "speaker": "Declan",
+            "text": "And in the final week, you make a box, so you've got somewhere to keep the notebook. People are always pleased with that."
+          },
+          {
+            "id": "bp29",
+            "speaker": "Ella",
+            "text": "What a good idea. I've got a friend who'd love that. How much is the evening course?"
+          },
+          {
+            "id": "bp30",
+            "speaker": "Declan",
+            "text": "A hundred and twenty pounds for the whole course. We do ask for a deposit when you book though, and then you pay the rest when the course starts."
+          },
+          {
+            "id": "bp31",
+            "speaker": "Ella",
+            "text": "Fine. That's no problem at all."
+          },
+          {
+            "id": "bp32",
+            "speaker": "Narrator",
+            "text": "Before you hear the rest of the conversation, you have some time to look at questions six to 10. Now listen and answer questions six to 10."
+          },
+          {
+            "id": "bp33",
+            "speaker": "Declan",
+            "text": "The last one is the summer school. That's five days, Monday to Friday, all day. So you get a lot done."
+          },
+          {
+            "id": "bp34",
+            "speaker": "Ella",
+            "text": "In July, is it? I've got some time off then."
+          },
+          {
+            "id": "bp35",
+            "speaker": "Declan",
+            "text": "It was in July last year, but this year, it's August, near the start of the month."
+          },
+          {
+            "id": "bp36",
+            "speaker": "Ella",
+            "text": "Ah, right. I see."
+          },
+          {
+            "id": "bp37",
+            "speaker": "Declan",
+            "text": "It's very relaxed. You work at your own pace, and there's a garden where people sit with their coffee when they need a break."
+          },
+          {
+            "id": "bp38",
+            "speaker": "Ella",
+            "text": "Sounds nice. Is it a big group?"
+          },
+          {
+            "id": "bp39",
+            "speaker": "Declan",
+            "text": "No. We keep it small. The maximum is eight people, so everyone gets plenty of help from the tutor."
+          },
+          {
+            "id": "bp40",
+            "speaker": "Ella",
+            "text": "Good. I like that."
+          },
+          {
+            "id": "bp41",
+            "speaker": "Declan",
+            "text": "Yes. The tutor can spend time with everyone, so nobody's left waiting."
+          },
+          {
+            "id": "bp42",
+            "speaker": "Ella",
+            "text": "That's what I'd want. And the cost for the week?"
+          },
+          {
+            "id": "bp43",
+            "speaker": "Declan",
+            "text": "The summer school's a hundred and seventy-five pounds and that includes lunch every day in the cafe downstairs."
+          },
+          {
+            "id": "bp44",
+            "speaker": "Ella",
+            "text": "Oh, that's handy. It saves people rushing out at midday."
+          },
+          {
+            "id": "bp45",
+            "speaker": "Declan",
+            "text": "Most of them just carry on chatting about their books."
+          },
+          {
+            "id": "bp46",
+            "speaker": "Ella",
+            "text": "Do I need to bring anything with me?"
+          },
+          {
+            "id": "bp47",
+            "speaker": "Declan",
+            "text": "Not tools. We provide all of those and you leave them here. But do bring an apron because there's a lot of glue and paint involved."
+          },
+          {
+            "id": "bp48",
+            "speaker": "Ella",
+            "text": "I'll remember that. I've ruined enough clothes already. And how do I book?"
+          },
+          {
+            "id": "bp49",
+            "speaker": "Declan",
+            "text": "Well, for most courses, you can book on the website. But for the summer school, you need to book by phone so we can check there's still a place."
+          },
+          {
+            "id": "bp50",
+            "speaker": "Ella",
+            "text": "Right. Then I'd better decide quickly. Can I ring you back this afternoon?"
+          },
+          {
+            "id": "bp51",
+            "speaker": "Declan",
+            "text": "Of course. Just ask for Declan."
+          },
+          {
+            "id": "bp52",
+            "speaker": "Ella",
+            "text": "I will. Thanks very much for your help."
+          },
+          {
+            "id": "bp53",
+            "speaker": "Declan",
+            "text": "Bye for now."
+          },
+          {
+            "id": "bp54",
+            "speaker": "Narrator",
+            "text": "That is the end of part one. You now have half a minute to check your answers."
+          }
+        ]
+      },
+      "groups": [
+        {
+          "type": "TABLE_COMPLETION",
+          "instructions": "Complete the table below. Write ONE WORD AND/OR A NUMBER for each answer.",
+          "sharedOptions": [],
+          "config": {
+            "wordLimit": {
+              "max": 1
+            }
+          },
+          "rangeFrom": 1,
+          "rangeTo": 10,
+          "questions": [
+            {
+              "number": 1,
+              "prompt": "Saturday Taster: one day / make a small _____",
+              "options": [],
+              "config": {},
+              "body": {
+                "kind": "TABLE",
+                "rows": [
+                  [
+                    "Course",
+                    "Details",
+                    "Cost",
+                    "Notes"
+                  ],
+                  [
+                    "Saturday Taster",
+                    "one day\nmake a small [[1]]",
+                    "£[[2]] (includes materials)",
+                    "tutor: Lydia [[3]]"
+                  ],
+                  [
+                    "Evening Course",
+                    "six weeks\nmake a notebook with a hard cover\nlast session: make a [[4]]",
+                    "£120 ([[5]] required when booking)",
+                    "Tuesday evenings"
+                  ],
+                  [
+                    "Summer School",
+                    "five days in [[6]]\nup to [[7]] people",
+                    "£175 (covers [[8]] each day)",
+                    "own [[9]] needed\nbooking: by [[10]] only"
+                  ]
+                ]
+              },
+              "answerKey": {
+                "kind": "TEXT",
+                "accept": [
+                  "album"
+                ],
+                "ignoreLeadingArticle": true
+              },
+              "evidence": "segment:bp11",
+              "explanation": "Declan says that on the Saturday course you make a small album for photographs. The notebook is made on the longer course, so writing 'notebook' here is the trap."
+            },
+            {
+              "number": 2,
+              "prompt": "Saturday Taster: £_____ (includes materials)",
+              "options": [],
+              "config": {},
+              "body": {
+                "kind": "TABLE",
+                "rows": [
+                  [
+                    "Course",
+                    "Details",
+                    "Cost",
+                    "Notes"
+                  ],
+                  [
+                    "Saturday Taster",
+                    "one day\nmake a small [[1]]",
+                    "£[[2]] (includes materials)",
+                    "tutor: Lydia [[3]]"
+                  ],
+                  [
+                    "Evening Course",
+                    "six weeks\nmake a notebook with a hard cover\nlast session: make a [[4]]",
+                    "£120 ([[5]] required when booking)",
+                    "Tuesday evenings"
+                  ],
+                  [
+                    "Summer School",
+                    "five days in [[6]]\nup to [[7]] people",
+                    "£175 (covers [[8]] each day)",
+                    "own [[9]] needed\nbooking: by [[10]] only"
+                  ]
+                ]
+              },
+              "answerKey": {
+                "kind": "TEXT",
+                "accept": [
+                  "45",
+                  "forty-five"
+                ],
+                "numeric": true
+              },
+              "evidence": "segment:bp15",
+              "explanation": "Forty-five pounds, and the price includes the materials. A number is enough; the currency is already printed in the table."
+            },
+            {
+              "number": 3,
+              "prompt": "Saturday Taster: tutor: Lydia _____",
+              "options": [],
+              "config": {},
+              "body": {
+                "kind": "TABLE",
+                "rows": [
+                  [
+                    "Course",
+                    "Details",
+                    "Cost",
+                    "Notes"
+                  ],
+                  [
+                    "Saturday Taster",
+                    "one day\nmake a small [[1]]",
+                    "£[[2]] (includes materials)",
+                    "tutor: Lydia [[3]]"
+                  ],
+                  [
+                    "Evening Course",
+                    "six weeks\nmake a notebook with a hard cover\nlast session: make a [[4]]",
+                    "£120 ([[5]] required when booking)",
+                    "Tuesday evenings"
+                  ],
+                  [
+                    "Summer School",
+                    "five days in [[6]]\nup to [[7]] people",
+                    "£175 (covers [[8]] each day)",
+                    "own [[9]] needed\nbooking: by [[10]] only"
+                  ]
+                ]
+              },
+              "answerKey": {
+                "kind": "TEXT",
+                "accept": [
+                  "Pinnock"
+                ]
+              },
+              "evidence": "segment:bp19",
+              "explanation": "Declan names the tutor as Lydia Pinnock and then spells it (P I n n o c k) when Ella asks, so the gap takes the surname, not the first name."
+            },
+            {
+              "number": 4,
+              "prompt": "Evening Course: six weeks / make a notebook with a hard cover / last session: make a _____",
+              "options": [],
+              "config": {},
+              "body": {
+                "kind": "TABLE",
+                "rows": [
+                  [
+                    "Course",
+                    "Details",
+                    "Cost",
+                    "Notes"
+                  ],
+                  [
+                    "Saturday Taster",
+                    "one day\nmake a small [[1]]",
+                    "£[[2]] (includes materials)",
+                    "tutor: Lydia [[3]]"
+                  ],
+                  [
+                    "Evening Course",
+                    "six weeks\nmake a notebook with a hard cover\nlast session: make a [[4]]",
+                    "£120 ([[5]] required when booking)",
+                    "Tuesday evenings"
+                  ],
+                  [
+                    "Summer School",
+                    "five days in [[6]]\nup to [[7]] people",
+                    "£175 (covers [[8]] each day)",
+                    "own [[9]] needed\nbooking: by [[10]] only"
+                  ]
+                ]
+              },
+              "answerKey": {
+                "kind": "TEXT",
+                "accept": [
+                  "box"
+                ],
+                "ignoreLeadingArticle": true
+              },
+              "evidence": "segment:bp28",
+              "explanation": "In the final week of the evening course they make a box to keep the notebook in. 'Notebook' belongs to the second bullet of the same row."
+            },
+            {
+              "number": 5,
+              "prompt": "Evening Course: £120 (_____ required when booking)",
+              "options": [],
+              "config": {},
+              "body": {
+                "kind": "TABLE",
+                "rows": [
+                  [
+                    "Course",
+                    "Details",
+                    "Cost",
+                    "Notes"
+                  ],
+                  [
+                    "Saturday Taster",
+                    "one day\nmake a small [[1]]",
+                    "£[[2]] (includes materials)",
+                    "tutor: Lydia [[3]]"
+                  ],
+                  [
+                    "Evening Course",
+                    "six weeks\nmake a notebook with a hard cover\nlast session: make a [[4]]",
+                    "£120 ([[5]] required when booking)",
+                    "Tuesday evenings"
+                  ],
+                  [
+                    "Summer School",
+                    "five days in [[6]]\nup to [[7]] people",
+                    "£175 (covers [[8]] each day)",
+                    "own [[9]] needed\nbooking: by [[10]] only"
+                  ]
+                ]
+              },
+              "answerKey": {
+                "kind": "TEXT",
+                "accept": [
+                  "deposit"
+                ],
+                "ignoreLeadingArticle": true
+              },
+              "evidence": "segment:bp30",
+              "explanation": "A deposit is asked for at booking and the balance is paid when the course starts. The figure 120 is already printed, so writing it again would miss the point of the gap."
+            },
+            {
+              "number": 6,
+              "prompt": "Summer School: five days in _____ / up to [[7]] people",
+              "options": [],
+              "config": {},
+              "body": {
+                "kind": "TABLE",
+                "rows": [
+                  [
+                    "Course",
+                    "Details",
+                    "Cost",
+                    "Notes"
+                  ],
+                  [
+                    "Saturday Taster",
+                    "one day\nmake a small [[1]]",
+                    "£[[2]] (includes materials)",
+                    "tutor: Lydia [[3]]"
+                  ],
+                  [
+                    "Evening Course",
+                    "six weeks\nmake a notebook with a hard cover\nlast session: make a [[4]]",
+                    "£120 ([[5]] required when booking)",
+                    "Tuesday evenings"
+                  ],
+                  [
+                    "Summer School",
+                    "five days in [[6]]\nup to [[7]] people",
+                    "£175 (covers [[8]] each day)",
+                    "own [[9]] needed\nbooking: by [[10]] only"
+                  ]
+                ]
+              },
+              "answerKey": {
+                "kind": "TEXT",
+                "accept": [
+                  "August"
+                ]
+              },
+              "evidence": "segment:bp35",
+              "explanation": "The speaker first hears July and is corrected: last year it was July, this year it is August near the start of the month."
+            },
+            {
+              "number": 7,
+              "prompt": "Summer School: five days in [[6]] / up to _____ people",
+              "options": [],
+              "config": {},
+              "body": {
+                "kind": "TABLE",
+                "rows": [
+                  [
+                    "Course",
+                    "Details",
+                    "Cost",
+                    "Notes"
+                  ],
+                  [
+                    "Saturday Taster",
+                    "one day\nmake a small [[1]]",
+                    "£[[2]] (includes materials)",
+                    "tutor: Lydia [[3]]"
+                  ],
+                  [
+                    "Evening Course",
+                    "six weeks\nmake a notebook with a hard cover\nlast session: make a [[4]]",
+                    "£120 ([[5]] required when booking)",
+                    "Tuesday evenings"
+                  ],
+                  [
+                    "Summer School",
+                    "five days in [[6]]\nup to [[7]] people",
+                    "£175 (covers [[8]] each day)",
+                    "own [[9]] needed\nbooking: by [[10]] only"
+                  ]
+                ]
+              },
+              "answerKey": {
+                "kind": "TEXT",
+                "accept": [
+                  "8",
+                  "eight"
+                ],
+                "numeric": true
+              },
+              "evidence": "segment:bp39",
+              "explanation": "The maximum is eight people. Either the digit or the word is accepted because the instruction allows one word and/or a number."
+            },
+            {
+              "number": 8,
+              "prompt": "Summer School: £175 (covers _____ each day)",
+              "options": [],
+              "config": {},
+              "body": {
+                "kind": "TABLE",
+                "rows": [
+                  [
+                    "Course",
+                    "Details",
+                    "Cost",
+                    "Notes"
+                  ],
+                  [
+                    "Saturday Taster",
+                    "one day\nmake a small [[1]]",
+                    "£[[2]] (includes materials)",
+                    "tutor: Lydia [[3]]"
+                  ],
+                  [
+                    "Evening Course",
+                    "six weeks\nmake a notebook with a hard cover\nlast session: make a [[4]]",
+                    "£120 ([[5]] required when booking)",
+                    "Tuesday evenings"
+                  ],
+                  [
+                    "Summer School",
+                    "five days in [[6]]\nup to [[7]] people",
+                    "£175 (covers [[8]] each day)",
+                    "own [[9]] needed\nbooking: by [[10]] only"
+                  ]
+                ]
+              },
+              "answerKey": {
+                "kind": "TEXT",
+                "accept": [
+                  "lunch"
+                ]
+              },
+              "evidence": "segment:bp43",
+              "explanation": "The 175 pounds includes lunch every day in the cafe downstairs; the distractors are the garden and the coffee."
+            },
+            {
+              "number": 9,
+              "prompt": "Summer School: own _____ needed / booking: by [[10]] only",
+              "options": [],
+              "config": {},
+              "body": {
+                "kind": "TABLE",
+                "rows": [
+                  [
+                    "Course",
+                    "Details",
+                    "Cost",
+                    "Notes"
+                  ],
+                  [
+                    "Saturday Taster",
+                    "one day\nmake a small [[1]]",
+                    "£[[2]] (includes materials)",
+                    "tutor: Lydia [[3]]"
+                  ],
+                  [
+                    "Evening Course",
+                    "six weeks\nmake a notebook with a hard cover\nlast session: make a [[4]]",
+                    "£120 ([[5]] required when booking)",
+                    "Tuesday evenings"
+                  ],
+                  [
+                    "Summer School",
+                    "five days in [[6]]\nup to [[7]] people",
+                    "£175 (covers [[8]] each day)",
+                    "own [[9]] needed\nbooking: by [[10]] only"
+                  ]
+                ]
+              },
+              "answerKey": {
+                "kind": "TEXT",
+                "accept": [
+                  "apron"
+                ],
+                "ignoreLeadingArticle": true
+              },
+              "evidence": "segment:bp47",
+              "explanation": "Tools are provided and left at the centre, so the only thing to bring is an apron, because of the glue and paint."
+            },
+            {
+              "number": 10,
+              "prompt": "Summer School: own [[9]] needed / booking: by _____ only",
+              "options": [],
+              "config": {},
+              "body": {
+                "kind": "TABLE",
+                "rows": [
+                  [
+                    "Course",
+                    "Details",
+                    "Cost",
+                    "Notes"
+                  ],
+                  [
+                    "Saturday Taster",
+                    "one day\nmake a small [[1]]",
+                    "£[[2]] (includes materials)",
+                    "tutor: Lydia [[3]]"
+                  ],
+                  [
+                    "Evening Course",
+                    "six weeks\nmake a notebook with a hard cover\nlast session: make a [[4]]",
+                    "£120 ([[5]] required when booking)",
+                    "Tuesday evenings"
+                  ],
+                  [
+                    "Summer School",
+                    "five days in [[6]]\nup to [[7]] people",
+                    "£175 (covers [[8]] each day)",
+                    "own [[9]] needed\nbooking: by [[10]] only"
+                  ]
+                ]
+              },
+              "answerKey": {
+                "kind": "TEXT",
+                "accept": [
+                  "phone",
+                  "telephone"
+                ]
+              },
+              "evidence": "segment:bp49",
+              "explanation": "Most courses can be booked online, but the summer school is phone only so that the centre can confirm a place is free."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

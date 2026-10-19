@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ApiRequestError, api, describeError, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { useInputLockdown } from '../../hooks/useInputLockdown';
+import { requestExamFullscreen } from '../../components/exam/window-guard';
+import { PageHead, Row, Section, StatPill } from '../../components/page';
 import {
   Badge,
   Button,
@@ -132,6 +134,9 @@ export function PracticePage() {
     }
     setStarting(sectionIds ? `${test.id}:${sectionIds.join(',')}` : test.id);
     setCodeError(null);
+    // Exam mode owns the window: ask for fullscreen while this click still counts
+    // as a user gesture, because the browser refuses the request later on.
+    if (strict) void requestExamFullscreen();
     try {
       const result = await api.post<{ attemptId: string }>('/api/attempts', {
         testId: test.id,
@@ -179,12 +184,19 @@ export function PracticePage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Practice tests</h1>
-          <p className="page-head__meta">Published and frozen by an administrator, newest first. A version never changes underneath you.</p>
-        </div>
-      </div>
+      <PageHead
+        eyebrow="Catalogue"
+        title="Practice tests"
+        meta="Published and frozen by an administrator, newest first. A version never changes underneath you — a retake is the same paper, marked the same way."
+        actions={
+          <span
+            className="switch-chip"
+            title="Exam mode opens the test in fullscreen by itself, refuses pop-ups and new tabs, and hides translation or dictionary overlays the browser adds. Copy attempts and fullscreen exits are recorded for your teacher. The tab lock (three strikes, then the attempt is submitted) applies in every mode. Practice mode blocks nothing and records only what your teacher asked for."
+          >
+            <Checkbox checked={strict} onChange={setStrict} label="Exam mode" />
+          </span>
+        }
+      />
 
       <div className="skill-tiles" role="group" aria-label="Filter by paper">
         {SKILL_TILES.filter((tile) => tile.type !== 'FULL_MOCK' || (counts.FULL_MOCK ?? 0) > 0).map((tile) => {
@@ -240,9 +252,6 @@ export function PracticePage() {
               </option>
             ))}
           </select>
-          <span title="Exam mode also blocks copy and paste and records fullscreen exits for your teacher. The tab lock (three strikes, then the attempt is submitted) applies in every mode.">
-            <Checkbox checked={strict} onChange={setStrict} label="Exam mode" />
-          </span>
         </div>
       </div>
 
@@ -255,14 +264,14 @@ export function PracticePage() {
           </EmptyState>
         </Card>
       ) : (
-        <div className="test-grid">
-          {tests.map((test) => {
+        <div className="test-grid stagger">
+          {tests.map((test, index) => {
             const age = daysSince(test.publishedAt ?? test.updatedAt);
             const isNew = age !== null && age <= 14;
             const locked = test.requiresAccessCode && !test.unlocked;
             const sections = test.sections ?? [];
             return (
-              <article className={`test-card ${skillClass(test.type)}`} key={test.id}>
+              <article className={`test-card ${skillClass(test.type)}`} key={test.id} style={{ ['--i' as string]: index }}>
                 <header className="test-card__head">
                   <SkillGlyph type={test.type} size={17} />
                   <div className="test-card__titles">
@@ -455,12 +464,17 @@ export function AttemptHistoryPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>My attempts</h1>
-          <p className="page-head__meta">Most recent first. Raw scores are facts; bands are practice estimates.</p>
-        </div>
-      </div>
+      <PageHead
+        eyebrow="History"
+        title="My attempts"
+        meta="Most recent first. Raw scores are facts; bands are practice estimates drawn from every kind of marking on the account."
+        actions={
+          <Link className="btn btn--sm" to="/analytics">
+            <Icon name="chart" size={14} />
+            Progress
+          </Link>
+        }
+      />
 
       <div className="toolbar">
         <Chips label="Test type" value={type} onChange={setType} options={typeOptions} />
@@ -602,12 +616,30 @@ export function StudentAnalyticsPage() {
 
   return (
     <div className="stack">
-      <h1>Your analytics</h1>
-      <div className="grid grid--2">
+      <PageHead
+        eyebrow="Progress"
+        title="Your analytics"
+        meta="Every submitted attempt measured the same way, so a rising line really means you are improving."
+        actions={
+          <Link className="btn btn--secondary" to="/student/dashboard">
+            <Icon name="home" size={14} />
+            Dashboard
+          </Link>
+        }
+      />
+
+      <div className="pill-strip">
+        <StatPill label="attempts taken" value={data.totals.attempts} icon="layers" />
+        <StatPill label="marked" value={data.totals.submitted} icon="checkCircle" tone="success" />
+        <StatPill label="in progress" value={data.totals.inProgress} icon="hourglass" tone="amber" />
+        <StatPill label="full mocks" value={data.totals.fullMocks} icon="award" tone="violet" />
+      </div>
+
+      <Section title="Signals" hint="Raw scores and the question types behind them." layout="grid" cols={2}>
         <Card title="Raw score trend" hint="Each bar is a submitted attempt">
           <TrendBars trends={data.trends} />
         </Card>
-        <Card title="Task-type accuracy">
+        <Card title="Task-type accuracy" hint="Weakest types first">
           <AccuracyList
             items={data.taskTypes.map((taskType) => ({
               label: taskType.label,
@@ -617,10 +649,13 @@ export function StudentAnalyticsPage() {
             }))}
           />
         </Card>
-      </div>
-      <Card title="Skill performance" flush>
-        <SkillPerformanceTable items={data.skillPerformance} />
-      </Card>
+      </Section>
+
+      <Section title="Skill performance" hint="Band estimate per skill, with the coverage it was computed from.">
+        <Card flush>
+          <SkillPerformanceTable items={data.skillPerformance} />
+        </Card>
+      </Section>
       <p className="tiny muted">{BAND_DISCLAIMER}</p>
     </div>
   );
@@ -639,8 +674,12 @@ export function StudentClassroomsPage() {
 
   return (
     <div className="stack">
-      <h1>Your classrooms</h1>
-      <Card>
+      <PageHead
+        eyebrow="Class"
+        title="Your classrooms"
+        meta="Groups your teacher set up for you. Assignments they publish land on your dashboard."
+      />
+      <Card title="Join with a code">
         <JoinByCode />
       </Card>
       {data && data.classrooms.length === 0 ? (
@@ -648,17 +687,20 @@ export function StudentClassroomsPage() {
           <EmptyState title="You are not enrolled yet" icon="users">Use an invitation link or class code to join.</EmptyState>
         </Card>
       ) : (
-        <div className="grid grid--3">
-          {data?.classrooms.map((classroom) => (
-            <div className="card" key={classroom.id}>
-              <h3>{classroom.name}</h3>
-              <p className="small muted">{classroom.description || 'No description.'}</p>
-              <Badge tone="neutral">
-                {classroom.activeAssignments} active assignment{classroom.activeAssignments === 1 ? '' : 's'}
-              </Badge>
-            </div>
+        <Section title="Enrolled" hint={`${data?.classrooms.length ?? 0} classroom${data?.classrooms.length === 1 ? '' : 's'}`} layout="list">
+          {data?.classrooms.map((classroom, index) => (
+            <Row
+              key={classroom.id}
+              index={index}
+              icon="users"
+              tone="brand"
+              title={classroom.name}
+              meta={classroom.description || 'No description.'}
+              right={<Badge tone={classroom.activeAssignments > 0 ? 'warning' : 'neutral'}>{classroom.activeAssignments} due</Badge>}
+              chevron
+            />
           ))}
-        </div>
+        </Section>
       )}
     </div>
   );
@@ -716,7 +758,11 @@ export function ProfilePage() {
 
   return (
     <div className="stack">
-      <h1>Your profile</h1>
+      <PageHead
+        eyebrow="Account"
+        title="Your profile"
+        meta="How you appear to your teacher and on the class board, plus the details IELTS Support needs to reach you."
+      />
       <Tabs
         tabs={[
           { id: 'profile', label: 'Profile' },

@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   COUNTED_EVENT_TYPES,
+  EVENT_LABELS,
   EVENT_SEVERITY,
   INTEGRITY_EVENT_TYPES,
   INTEGRITY_PRESETS,
   TAB_LOCK_STRIKES,
+  countedEventTypes,
   countEvents,
   describeIntegrity,
+  fullscreenLimitReached,
   isCountedEvent,
   resolvePolicy,
 } from '../../src/shared/integrity';
@@ -96,12 +99,94 @@ describe('countEvents', () => {
     expect(isCountedEvent('COPY_ATTEMPT')).toBe(false);
     expect(isCountedEvent('TAB_HIDDEN')).toBe(true);
     expect(isCountedEvent('FULLSCREEN_EXIT')).toBe(true);
-    expect(COUNTED_EVENT_TYPES).toEqual(['TAB_HIDDEN', 'FULLSCREEN_EXIT']);
+    expect(COUNTED_EVENT_TYPES).toEqual(['TAB_HIDDEN', 'FULLSCREEN_EXIT', 'POPUP_BLOCKED']);
   });
 
   it('assigns a severity to every supported event type', () => {
     for (const type of INTEGRITY_EVENT_TYPES) {
       expect(EVENT_SEVERITY[type]).toBeDefined();
+    }
+  });
+});
+
+describe('window, popup and overlay policy', () => {
+  const WINDOW_FLAGS = ['autoFullscreen', 'lockOnFullscreenExit', 'blockPopups', 'blockTranslatorOverlays'] as const;
+  // Selecting text is what the highlighter needs, so it is not part of the lock
+  // in either exam mode; these are the flags that would remove it if a centre wants
+  // a paper with no marks at all.
+  const SELECTION_LOCK_FLAGS = ['blockTextSelection'] as const;
+
+  it('leaves practice mode completely unblocked', () => {
+    // Practice is a study tool: no fullscreen demand, no popup refusal, and
+    // translation stays available to someone learning the language.
+    const practice = INTEGRITY_PRESETS.PRACTICE;
+    for (const flag of WINDOW_FLAGS) expect(practice[flag]).toBe(false);
+    for (const flag of SELECTION_LOCK_FLAGS) expect(practice[flag]).toBe(false);
+    expect(practice.requireFullscreen).toBe(false);
+    expect(practice.countExtensionStrikes).toBe(false);
+    // Copy, paste and the right-click menu stay available: practice is a study tool.
+    expect(practice.allowCopy).toBe(true);
+    expect(practice.allowPaste).toBe(true);
+    expect(practice.allowContextMenu).toBe(true);
+  });
+
+  it('locks the window in both exam modes while leaving the highlighter usable', () => {
+    for (const mode of ['STANDARD_EXAM', 'STRICT_EXAM'] as const) {
+      const preset = INTEGRITY_PRESETS[mode];
+      for (const flag of WINDOW_FLAGS) expect(preset[flag]).toBe(true);
+      expect(preset.requireFullscreen).toBe(true);
+      expect(preset.allowCopy).toBe(false);
+      expect(preset.allowPaste).toBe(false);
+      expect(preset.allowContextMenu).toBe(false);
+      // Text can be selected — that is the input to the mark-up tool — but the
+      // selection cannot leave the page.
+      for (const flag of SELECTION_LOCK_FLAGS) expect(preset[flag]).toBe(false);
+    }
+  });
+
+  it('still lets a centre lock selection away completely', () => {
+    const policy = resolvePolicy('STRICT_EXAM', { blockTextSelection: true });
+    expect(policy.blockTextSelection).toBe(true);
+    expect(policy.allowCopy).toBe(false);
+  });
+
+  it('lets a teacher switch the guard off for one assignment without gutting the mode', () => {
+    const policy = resolvePolicy('STANDARD_EXAM', { autoFullscreen: false, blockPopups: false });
+    expect(policy.blockPopups).toBe(false);
+    expect(policy.lockOnFullscreenExit).toBe(true);
+    // The tab lock, which is not part of the window guard, survives untouched.
+    expect(policy.autoSubmitAtEvents).toBe(INTEGRITY_PRESETS.STANDARD_EXAM.autoSubmitAtEvents);
+  });
+
+  it('counts an extension overlay only where the institution asked for it', () => {
+    expect(countedEventTypes(INTEGRITY_PRESETS.STANDARD_EXAM)).not.toContain('EXTENSION_OVERLAY');
+    expect(countedEventTypes(INTEGRITY_PRESETS.STRICT_EXAM)).toContain('EXTENSION_OVERLAY');
+    expect(isCountedEvent('EXTENSION_OVERLAY')).toBe(false);
+    expect(isCountedEvent('EXTENSION_OVERLAY', INTEGRITY_PRESETS.STRICT_EXAM)).toBe(true);
+    const events = [{ type: 'EXTENSION_OVERLAY' }, { type: 'POPUP_BLOCKED' }];
+    expect(countEvents(events, INTEGRITY_PRESETS.STANDARD_EXAM).counted).toBe(1);
+    expect(countEvents(events, INTEGRITY_PRESETS.STRICT_EXAM).counted).toBe(2);
+    const counts = countEvents(events, INTEGRITY_PRESETS.STRICT_EXAM);
+    expect(counts.popupsBlocked).toBe(1);
+    expect(counts.overlaysSuppressed).toBe(1);
+  });
+
+  it('names and rates the new events so the teacher report can read them', () => {
+    for (const type of ['POPUP_BLOCKED', 'EXTENSION_OVERLAY'] as const) {
+      expect(INTEGRITY_EVENT_TYPES).toContain(type);
+      expect(EVENT_LABELS[type].length).toBeGreaterThan(0);
+      expect(EVENT_SEVERITY[type]).toBe('WARNING');
+    }
+  });
+
+  it('treats the fullscreen allowance as a lock and never as a submission', () => {
+    expect(fullscreenLimitReached(INTEGRITY_PRESETS.STRICT_EXAM, 2)).toBe(false);
+    expect(fullscreenLimitReached(INTEGRITY_PRESETS.STRICT_EXAM, 3)).toBe(true);
+    // null means unlimited, which is what practice and standard exam use: leaving
+    // fullscreen is also what a screensaver or an OS update does.
+    expect(fullscreenLimitReached(INTEGRITY_PRESETS.PRACTICE, 99)).toBe(false);
+    for (const mode of ['PRACTICE', 'STANDARD_EXAM', 'STRICT_EXAM'] as const) {
+      expect(INTEGRITY_PRESETS[mode].autoSubmitAtEvents).not.toBe(0);
     }
   });
 });

@@ -14,6 +14,7 @@
     "tests/unit/json-leading.test.ts",
     "tests/unit/version-editor-import.test.ts",
     "tests/unit/client-*.test.ts",
+    "tests/unit/page-kit.test.ts",
     "tests/unit/exam-sync.test.ts"
   ]
 }

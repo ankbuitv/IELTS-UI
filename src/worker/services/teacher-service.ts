@@ -436,6 +436,12 @@ export interface AssignmentInput {
 export const INTEGRITY_OVERRIDE_KEYS = [
   'requireFullscreen',
   'monitorVisibility',
+  'autoFullscreen',
+  'lockOnFullscreenExit',
+  'blockPopups',
+  'blockTranslatorOverlays',
+  'blockTextSelection',
+  'countExtensionStrikes',
   'maxTabAwayEvents',
   'maxFullscreenExits',
   'allowCopy',
@@ -687,7 +693,8 @@ export async function getAssignmentDetail(
             (SELECT x.id FROM attempts x WHERE x.assignment_id = ? AND x.user_id = m.user_id ORDER BY x.started_at DESC LIMIT 1) AS latest_attempt_id,
             (SELECT MAX(x.submitted_at) FROM attempts x WHERE x.assignment_id = ? AND x.user_id = m.user_id) AS latest_submitted_at,
             (SELECT COUNT(*) FROM integrity_events e JOIN attempts x ON x.id = e.attempt_id
-              WHERE x.assignment_id = ? AND x.user_id = m.user_id AND e.type IN ('TAB_HIDDEN','FULLSCREEN_EXIT','COPY_ATTEMPT','PASTE_ATTEMPT')) AS integrity_count,
+              WHERE x.assignment_id = ? AND x.user_id = m.user_id
+                AND e.type IN ('TAB_HIDDEN','FULLSCREEN_EXIT','COPY_ATTEMPT','PASTE_ATTEMPT','POPUP_BLOCKED','EXTENSION_OVERLAY')) AS integrity_count,
             (SELECT COUNT(*) FROM writing_submissions w JOIN attempts x ON x.id = w.attempt_id
               WHERE x.assignment_id = ? AND x.user_id = m.user_id AND TRIM(w.response_text) != '') AS writing_count,
             (SELECT COUNT(*) FROM attempts x WHERE x.assignment_id = ? AND x.user_id = m.user_id AND x.status = 'IN_PROGRESS') AS in_progress

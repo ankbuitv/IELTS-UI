@@ -53,11 +53,20 @@ export function assertSameOrigin(c: Context<AppBindings>): void {
   // keeps the check correct behind proxies, on preview hostnames, and for
   // `wrangler dev`.
   const selfOrigin = new URL(c.req.url).origin;
-  const forwardedHost = (c.req.header('host') ?? '').trim();
+  // A proxy that terminates TLS usually also rewrites `Host`, so the name the
+  // browser used is taken from X-Forwarded-Host when the proxy supplied it.
+  const forwardedHost = (c.req.header('x-forwarded-host') ?? c.req.header('host') ?? '').trim().split(',')[0]?.trim() ?? '';
+  // Behind a TLS-terminating proxy (Cloudflare, a sandbox live preview) the Worker
+  // is reached over http: while the browser sent an https: Origin. The host still
+  // has to match exactly, so honouring X-Forwarded-Proto for the scheme keeps the
+  // check meaningful without rejecting legitimate same-site mutations.
+  const forwardedProto = (c.req.header('x-forwarded-proto') ?? '').split(',')[0]?.trim().toLowerCase();
+  const protocol =
+    forwardedProto === 'https' || forwardedProto === 'http' ? `${forwardedProto}:` : new URL(c.req.url).protocol;
   const allowed = new Set([
     expected,
     selfOrigin,
-    forwardedHost ? `${new URL(c.req.url).protocol}//${forwardedHost}` : '',
+    forwardedHost ? `${protocol}//${forwardedHost}` : '',
     'http://localhost:8787',
     'http://127.0.0.1:8787',
   ]);

@@ -161,7 +161,7 @@ export function AudioPlayer({
         <p className="audio-panel__error" role="alert">
           {error}{' '}
           {audio.url ? (
-            <a href={audio.url} target="_blank" rel="noreferrer">
+            <a className="audio-panel__raw-link" href={audio.url} target="_blank" rel="noreferrer">
               Open the audio file
             </a>
           ) : null}

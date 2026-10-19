@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
@@ -19,6 +19,7 @@ import {
 import { recordAudit } from '../lib/audit';
 import { currentUser } from '../middleware/auth';
 import { parseBody } from '../lib/validate';
+import { TURNSTILE_FAILURE_MESSAGE, turnstileEnabled, verifyTurnstile } from '../lib/turnstile';
 import { loadPlatformSettings } from '../lib/settings';
 import { resolveSession } from '../services/auth-service';
 import { getSessionToken } from '../lib/http';
@@ -35,12 +36,34 @@ function devSessionToken(c: { env: { APP_ENV?: string } }, token: string): strin
 
 const router = new Hono<AppBindings>();
 
+/**
+ * Check the widget token for one auth action. A rejection is reported as a plain
+ * validation error carrying `code`, so the form can re-arm the widget without
+ * leaking what the token got wrong.
+ */
+async function guardTurnstile(c: Context<AppBindings>, token: string | null | undefined, action: 'LOGIN' | 'REGISTER') {
+  if (!turnstileEnabled(c.env)) return;
+  const outcome = await verifyTurnstile(c.env, token, { action, ip: clientIp(c) });
+  if (outcome.status !== 'rejected') return;
+  // A Turnstile site key is bound to the hostnames it was issued for, so a
+  // preview or staging domain outside that list can only ever produce rejects.
+  // Development logs the rejection and lets the sign-in through — the rate
+  // limiter, the origin check and the password still apply — while production
+  // refuses it. Set APP_ENV=production to get the strict behaviour anywhere.
+  if (c.env.APP_ENV !== 'production') {
+    console.warn(`[turnstile] rejected ${action} outside production (codes: ${outcome.codes.join(', ')}); allowing it.`);
+    return;
+  }
+  throw new ApiError('TURNSTILE_FAILED', TURNSTILE_FAILURE_MESSAGE);
+}
+
 const registerSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   password: z.string().min(1).max(200),
   displayName: z.string().trim().min(1).max(120),
   /** Only honoured when the platform has no administrator yet (bootstrap). */
   bootstrapAdmin: z.boolean().optional(),
+  turnstileToken: z.string().max(4096).nullish(),
 });
 
 router.get('/status', async (c) => {
@@ -52,6 +75,9 @@ router.get('/status', async (c) => {
     environment: c.env.APP_ENV,
     registrationEnabled: settings.registrationEnabled,
     integrityNotice: settings.integrityNotice,
+    // The widget renders only when the platform has Turnstile configured; the
+    // secret key never leaves the worker.
+    turnstileSiteKey: turnstileEnabled(c.env) ? c.env.TURNSTILE_SITE_KEY! : null,
   });
 });
 
@@ -64,6 +90,7 @@ router.post('/register', async (c) => {
   );
 
   const body = await parseBody(c, registerSchema);
+  await guardTurnstile(c, body.turnstileToken, 'REGISTER');
   const adminExists = await hasAnyUserWithRole(c.env, 'ADMIN');
 
   if (body.bootstrapAdmin && adminExists) {
@@ -114,7 +141,11 @@ router.post('/login', async (c) => {
   assertSameOrigin(c);
   const body = await parseBody(
     c,
-    z.object({ email: z.string().trim().toLowerCase().email().max(254), password: z.string().min(1).max(200) }),
+    z.object({
+      email: z.string().trim().toLowerCase().email().max(254),
+      password: z.string().min(1).max(200),
+      turnstileToken: z.string().max(4096).nullish(),
+    }),
   );
 
   await enforceRateLimit(
@@ -128,7 +159,11 @@ router.post('/login', async (c) => {
     'Too many sign-in attempts for this account. Please try again later.',
   );
 
-  const result = await login(c.env, body, { ip: clientIp(c), userAgent: userAgent(c) });
+  // The human check runs after the rate limiters (a bot should be stopped as
+  // cheaply as possible) and before the password is ever looked at.
+  await guardTurnstile(c, body.turnstileToken, 'LOGIN');
+
+  const result = await login(c.env, { email: body.email, password: body.password }, { ip: clientIp(c), userAgent: userAgent(c) });
   setSessionCookie(c, result.token, result.session.expiresAt);
   return c.json({ user: result.user, csrfToken: result.session.csrfToken, sessionToken: devSessionToken(c, result.token) });
 });

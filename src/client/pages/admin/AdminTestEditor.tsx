@@ -48,6 +48,7 @@ import {
   type EditableQuestion,
   type EditableSection,
 } from './content-types';
+import { PageHead } from '../../components/page';
 
 const SECTION_TYPE_LABELS: Record<string, string> = Object.fromEntries(
   SECTION_TYPES.map((type) => [type, SECTION_TYPE_META[type].label]),
@@ -89,7 +90,7 @@ function SectionPolicyEditor({
         <span className="field__label">Section / part policy</span>
         <span className="tiny muted">Applies within each skill; the server enforces the timers.</span>
       </div>
-      <div className="grid grid--2" style={{ marginTop: 8 }}>
+      <div className="grid grid--2 stagger" style={{ marginTop: 8 }}>
         <Field label="Navigation" hint="Sequential parts advance in order; free navigation allows moving between all parts.">
           {(id) => (
             <Select
@@ -300,18 +301,20 @@ export function AdminTestEditorPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <Link to="/admin/tests" className="small">
-            ← All tests
+      <PageHead
+        eyebrow={
+          <Link to="/admin/tests" className="ph__back">
+            All tests
           </Link>
-          <h1>{test.title}</h1>
-          <p className="page-head__meta">
+        }
+        title={test.title}
+        meta={
+          <>
             {test.slug} · {TEST_TYPE_LABELS[test.type] ?? test.type} · content origin{' '}
             {test.content_origin.replace(/_/g, ' ').toLowerCase()}
-          </p>
-        </div>
-        <div className="row">
+          </>
+        }
+        actions={<div className="row">
           <Badge tone={test.status === 'PUBLISHED' ? 'success' : test.status === 'REVIEW' ? 'warning' : test.status === 'ARCHIVED' ? 'dim' : 'neutral'}>
             {test.status.toLowerCase()}
           </Badge>
@@ -360,10 +363,10 @@ export function AdminTestEditorPage() {
           >
             New version
           </ConfirmButton>
-        </div>
-      </div>
+        </div>}
+      />
 
-      <div className="grid grid--2">
+      <div className="grid grid--2 stagger">
         <Card title="Test summary">
           <p className="small">{test.summary || 'No summary yet.'}</p>
           <KeyValue
@@ -1097,7 +1100,7 @@ function VersionEditorBody({
       ) : (
         <div className="stack">
           <Card title="Version settings">
-            <div className="grid grid--3">
+            <div className="grid grid--3 stagger">
               <Field label="Total duration (seconds)">
                 {(id) => (
                   <TextInput
@@ -1220,7 +1223,7 @@ function VersionEditorBody({
                 </div>
               }
             >
-              <div className="grid grid--3">
+              <div className="grid grid--3 stagger">
                 <Field label="Skill" hint={`Structural type: ${sectionTypeName}`}>
                   {(id) => (
                     <Select
@@ -1306,7 +1309,7 @@ function VersionEditorBody({
                       />
                     )}
                   </Field>
-                  <div className="grid grid--2">
+                  <div className="grid grid--2 stagger">
                     <Field label="Audio asset">
                       {(id) => (
                         <Select
@@ -1343,7 +1346,7 @@ function VersionEditorBody({
               ) : null}
 
               {section.skill === 'LISTENING' ? (
-                <div className="grid grid--4">
+                <div className="grid grid--4 stagger">
                   <Field label="Max plays">
                     {(id) => (
                       <TextInput
@@ -1400,7 +1403,7 @@ function VersionEditorBody({
 
               {section.skill === 'READING' ? (
                 <div className="stack">
-                  <div className="grid grid--2">
+                  <div className="grid grid--2 stagger">
                     <Field label="Passage title">
                       {(id) => (
                         <TextInput
@@ -1614,7 +1617,7 @@ function VersionEditorBody({
           {testType === 'FULL_MOCK' ? (
             <Card title="Mock components" hint="Ordered skill sequence: duration, break and the version that supplies each skill.">
               {(draft.mockComponents ?? []).map((component, index) => (
-                <div key={`mock-${index}`} className="grid grid--4" style={{ alignItems: 'end', marginBottom: 10 }}>
+                <div key={`mock-${index}`} className="grid grid--4 stagger" style={{ alignItems: 'end', marginBottom: 10 }}>
                   <Field label="Skill">
                     {(id) => (
                       <Select
@@ -1876,7 +1879,7 @@ function GroupEditor({
         </div>
       </div>
 
-      <div className="grid grid--3">
+      <div className="grid grid--3 stagger">
         <Field label="Question type">
           {(id) => (
             <Select id={id} value={group.type} disabled={readOnly} onChange={(event) => onChange({ type: event.target.value as QuestionType })}>
@@ -1930,7 +1933,7 @@ function GroupEditor({
         </Field>
       ) : null}
 
-      <div className="grid grid--2">
+      <div className="grid grid--2 stagger">
         <Field label="Select count (checkbox groups)">
           {(id) => (
             <TextInput
@@ -2047,7 +2050,7 @@ function QuestionEditor({
 
   return (
     <div className="card card--nested">
-      <div className="grid grid--3">
+      <div className="grid grid--3 stagger">
         <Field label="Number">
           {(id) => (
             <TextInput
@@ -2150,7 +2153,7 @@ function QuestionEditor({
         </Field>
       ) : null}
 
-      <div className="grid grid--3">
+      <div className="grid grid--3 stagger">
         <Field label="Word limit (min)">
           {(id) => (
             <TextInput
@@ -2196,7 +2199,7 @@ function QuestionEditor({
         </div>
       </div>
 
-      <div className="grid grid--2">
+      <div className="grid grid--2 stagger">
         <Field label="Evidence (server-side only)">
           {(id) => (
             <TextArea id={id} rows={2} value={question.evidence ?? ''} disabled={readOnly} onChange={(event) => onChange({ evidence: event.target.value || null })} />

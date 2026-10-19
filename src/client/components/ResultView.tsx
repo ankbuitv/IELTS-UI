@@ -12,6 +12,7 @@ import { Icon } from './Icon';
 import { useAiMarking } from '../hooks/useAiMarking';
 import { BAND_BASIS_LABELS, meanBand, roundHalfBand } from '@shared/bands';
 import type { AiMarkView } from '@shared/judges';
+import { EVENT_LABELS, type IntegrityEventType } from '@shared/integrity';
 
 export interface AttemptResultPayload {
   attemptId: string;
@@ -100,11 +101,13 @@ export interface AttemptResultPayload {
     counted: number;
     tabAway: number;
     fullscreenExits: number;
+    popupsBlocked?: number;
+    overlaysSuppressed?: number;
     copies: number;
     pastes: number;
     interruptions: number;
     total: number;
-    events: Array<{ type: string; occurredAt: string; severity: string }>;
+    events: Array<{ type: string; occurredAt: string; severity: string; metadata?: Record<string, unknown> | null }>;
     statement: string;
   };
   student?: { id: string; email?: string; displayName?: string | null };
@@ -411,6 +414,10 @@ export function ResultSummary({
             ['Tab lock', `${result.integrity.tabAway} time${result.integrity.tabAway === 1 ? '' : 's'} away from the exam tab (fullscreen exits: ${result.integrity.fullscreenExits})`],
             ['Counted events', String(result.integrity.counted)],
             ['Copy / paste attempts', `${result.integrity.copies} / ${result.integrity.pastes}`],
+            [
+              'Window lock',
+              `${result.integrity.popupsBlocked ?? 0} new window/tab request(s) refused · ${result.integrity.overlaysSuppressed ?? 0} injected overlay(s) hidden`,
+            ],
             ['Connection interruptions', String(result.integrity.interruptions)],
             ['Total events logged', String(result.integrity.total)],
           ]}
@@ -424,7 +431,11 @@ export function ResultSummary({
             <ul className="small" style={{ marginTop: 8 }}>
               {result.integrity.events.map((event, index) => (
                 <li key={`${event.type}-${index}`}>
-                  <span className="mono">{event.type}</span> · {formatDateTime(event.occurredAt)} · {event.severity}
+                  <span className="mono">{event.type}</span> · {EVENT_LABELS[event.type as IntegrityEventType] ?? event.type} ·{' '}
+                  {formatDateTime(event.occurredAt)} · {event.severity}
+                  {event.metadata && Object.keys(event.metadata).length > 0 ? (
+                    <span className="muted"> · {JSON.stringify(event.metadata)}</span>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -749,7 +760,11 @@ function SectionReview({
           <Card title="Why these answers" hint="Evidence and explanations released with this result">
             <div className="stack">
               {explainable.map((item) => (
-                <div key={item.questionId} className="review-q" id={`review-q-${item.number}`}>
+                <div
+                  key={item.questionId}
+                  className={`review-q${item.isCorrect === false ? ' is-wrong' : item.isCorrect ? ' is-right' : ''}`}
+                  id={`review-q-${item.number}`}
+                >
                   <div className="review-q__head">
                     <span className="review-q__number">{item.number}</span>
                     <span className="review-q__prompt">{item.prompt}</span>

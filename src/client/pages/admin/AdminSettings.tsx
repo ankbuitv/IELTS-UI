@@ -21,6 +21,7 @@ import {
 import { formatDateTime } from '../../lib/format';
 import { AiProvidersPanel } from './AdminAiProviders';
 import { Icon } from '../../components/Icon';
+import { PageHead } from '../../components/page';
 
 interface AssetRow {
   id: string;
@@ -45,14 +46,11 @@ export function AdminSettingsPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Settings &amp; operations</h1>
-          <p className="page-head__meta">
-            Platform switches are enforced on the server; media is linked by URL and every admin action is audited.
-          </p>
-        </div>
-      </div>
+      <PageHead
+        eyebrow="Operations"
+        title="Settings & operations"
+        meta="Platform switches are enforced on the server; media is linked by URL and every admin action is audited."
+      />
 
       <Tabs
         tabs={[
@@ -338,7 +336,7 @@ function AssetsPanel() {
         title="Hoặc dùng link ngoài"
         hint="Chỉ dùng khi file đã nằm ở nơi khác và bạn có quyền sử dụng."
       >
-        <div className="grid grid--2">
+        <div className="grid grid--2 stagger">
           <Field label="HTTPS media URL" required hint="Audio for Listening, images and charts for Reading/Writing.">
             {(id) => (
               <TextInput

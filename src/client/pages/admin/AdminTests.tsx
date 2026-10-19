@@ -5,6 +5,7 @@ import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Button, Card, ConfirmButton, EmptyState, Field, Loading, Modal, Notice, Select, TextArea, TextInput, useToast } from '../../components/ui';
 import { formatDateTime, TEST_TYPE_LABELS } from '../../lib/format';
+import { PageHead } from '../../components/page';
 
 interface AdminTestRow {
   id: string;
@@ -53,17 +54,17 @@ export function AdminTestsPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Tests &amp; content</h1>
-          <p className="page-head__meta">
-            Publishing freezes an immutable version. Editing a published test requires creating a new version.
-          </p>
-        </div>
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          New test
-        </Button>
-      </div>
+      <PageHead
+        eyebrow="Content"
+        title="Tests & content"
+        meta="Publishing freezes an immutable version. Editing a published test means creating a new version."
+        actions={
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            <Icon name="plus" size={14} />
+            New test
+          </Button>
+        }
+      />
 
       <Card>
         <div className="filter-bar">

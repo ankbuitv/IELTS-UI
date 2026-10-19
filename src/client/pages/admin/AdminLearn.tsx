@@ -12,6 +12,7 @@ import { api, describeError, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Button, Card, EmptyState, Field, Loading, Notice, Select, Stat, TextInput, useToast } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
+import { PageHead } from '../../components/page';
 
 type AdminLesson = CatalogueLessonRef & { band: LearnBand; updatedAt: string };
 
@@ -114,7 +115,18 @@ export function AdminLearnPage() {
 
   return (
     <div className="stack">
-      <section className="grid grid--3">
+      <PageHead
+        eyebrow="Learn content"
+        title="Lessons on the path"
+        meta="Generate, edit and publish the band-by-band lessons the Learn path serves. A draft stays invisible to learners until you publish it."
+        actions={
+          <Badge tone={drafts > 0 ? 'warning' : 'success'}>
+            {drafts > 0 ? `${drafts} waiting to be published` : 'Nothing waiting'}
+          </Badge>
+        }
+      />
+
+      <section className="grid grid--3 stagger">
         <Stat label="Lessons shown" value={String(lessons.length)} />
         <Stat label="Waiting to be published" value={String(drafts)} />
         <Stat label="Bands with content" value={String(LEARN_BANDS.filter((value) => bandCount(value) > 0).length)} />
@@ -124,7 +136,7 @@ export function AdminLearnPage() {
         title="Generate lessons"
         hint="Uses the provider configured under Settings. Nothing reaches a learner until you publish it."
       >
-        <div className="grid grid--3">
+        <div className="grid grid--3 stagger">
           <Field label="Band">
             {(id) => (
               <Select id={id} value={String(genBand)} onChange={(event) => setGenBand(Number(event.target.value) as LearnBand)}>

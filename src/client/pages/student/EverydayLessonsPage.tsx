@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { LEARN_BANDS, LEARN_BAND_LABELS, LESSON_KIND_LABELS, type EverydayLessonsResponse, type LearnBand } from '@shared/learn';
 import { Mascot, mascotForQuestion } from '../../components/learn/Mascot';
 import { Icon } from '../../components/Icon';
+import { Section } from '../../components/page';
 import { Button, Loading, Notice } from '../../components/ui';
 import { describeError } from '../../lib/api';
 import { learnApi } from '../../lib/learn-api';
@@ -98,29 +99,31 @@ export function EverydayLessonsPage() {
       ) : null}
 
       {!loading && !error && data ? (
-        <section className="everyday-set" aria-label="Today’s lessons">
-          <div className="everyday-set__heading">
-            <div><p className="eyebrow">{data.day}</p><h2>Today’s six</h2></div>
-            <span className="everyday-set__progress">{data.lessons.filter((lesson) => lesson.completed).length}/6 complete</span>
-          </div>
-          <ol className="everyday-list">
-            {data.lessons.map((lesson) => (
-              <li key={lesson.id} className={`everyday-item${lesson.completed ? ' is-done' : ''}${!lesson.unlocked ? ' is-locked' : ''}`}>
-                <div className="everyday-item__number" aria-hidden="true">{lesson.completed ? <Icon name="check" size={19} strokeWidth={3} /> : String(lesson.slot + 1).padStart(2, '0')}</div>
-                <div className="everyday-item__body">
-                  <div className="everyday-item__meta"><span>{LESSON_KIND_LABELS[lesson.kind]}</span><span>{lesson.questionCount} questions</span></div>
-                  <h3>{lesson.title}</h3>
-                  <p>{lesson.blurb}</p>
-                  <span className="everyday-item__quote">“{lesson.quote}”</span>
-                </div>
-                <Button variant={lesson.completed ? 'secondary' : lesson.unlocked ? 'primary' : 'secondary'} disabled={!lesson.unlocked} onClick={() => start(lesson)}>
-                  {!lesson.unlocked ? <><Icon name="lock" size={15} /> Locked</> : lesson.completed ? 'Practise again' : <><Icon name="play" size={14} filled /> Start</>}
-                </Button>
-              </li>
-            ))}
-          </ol>
-          <p className="everyday-set__note muted small">The next lesson unlocks as soon as the current one is completed. A new set is made when the day changes.</p>
-        </section>
+        <Section
+          title="Today’s six"
+          hint={data.day}
+          actions={<span className="everyday-set__progress">{data.lessons.filter((lesson) => lesson.completed).length}/6 complete</span>}
+        >
+          <section className="everyday-set" aria-label="Today’s lessons">
+            <ol className="everyday-list">
+              {data.lessons.map((lesson) => (
+                <li key={lesson.id} className={`everyday-item${lesson.completed ? ' is-done' : ''}${!lesson.unlocked ? ' is-locked' : ''}`}>
+                  <div className="everyday-item__number" aria-hidden="true">{lesson.completed ? <Icon name="check" size={19} strokeWidth={3} /> : String(lesson.slot + 1).padStart(2, '0')}</div>
+                  <div className="everyday-item__body">
+                    <div className="everyday-item__meta"><span>{LESSON_KIND_LABELS[lesson.kind]}</span><span>{lesson.questionCount} questions</span></div>
+                    <h3>{lesson.title}</h3>
+                    <p>{lesson.blurb}</p>
+                    <span className="everyday-item__quote">“{lesson.quote}”</span>
+                  </div>
+                  <Button variant={lesson.completed ? 'secondary' : lesson.unlocked ? 'primary' : 'secondary'} disabled={!lesson.unlocked} onClick={() => start(lesson)}>
+                    {!lesson.unlocked ? <><Icon name="lock" size={15} /> Locked</> : lesson.completed ? 'Practise again' : <><Icon name="play" size={14} filled /> Start</>}
+                  </Button>
+                </li>
+              ))}
+            </ol>
+            <p className="everyday-set__note muted small">The next lesson unlocks as soon as the current one is completed. A new set is made when the day changes.</p>
+          </section>
+        </Section>
       ) : null}
     </main>
   );

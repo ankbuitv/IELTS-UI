@@ -546,6 +546,25 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
 .tablock__pips span.is-hit { background: var(--brand-600); }
 .tablock__foot { padding: 8px 20px 20px; display: flex; justify-content: flex-end; }
 
+/* ------------------------------------------------- clipboard lock on paper */
+/* `user-select` inherits, so one rule covers the whole paper; the answer fields
+   switch it back on because an essay cannot be edited without a selection. */
+.exam-noselect .exam-root {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+.exam-noselect :is(input, textarea, [contenteditable='true']) {
+  -webkit-user-select: text; user-select: text; -webkit-touch-callout: default;
+}
+
+/* While the window guard is on, an affordance it would refuse is not offered. */
+.exam-window-lock .audio-panel__raw-link { display: none; }
+
+/* Fullscreen lock: same shell, warning accent, two actions on the ends. */
+.tablock--fullscreen .tablock__card { border-top-color: var(--warning); }
+.tablock--fullscreen .tablock__head { background: var(--warning); color: var(--on-solid); }
+.tablock--fullscreen .tablock__pips span.is-hit { background: var(--warning); }
+.tablock--fullscreen .tablock__foot { justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
 /* ------------------------------------------------------ practice dictionary */
 .exam-dict {
   position: fixed; z-index: 120; top: 56px; right: 10px; width: min(420px, calc(100vw - 20px));
@@ -592,4 +611,117 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
 @media (pointer: coarse) {
   /* No hover on touch: keep the enlarge affordance visible. */
   .exam-figure__hint { opacity: 1; transform: none; }
+}
+
+/* ------------------------------------------------- 12. Highlights and notes */
+/* The candidate's markup of the paper. Selection is allowed in exam mode on
+   purpose: it is the input to the highlighter (see shared/annotations.ts), and
+   copy, cut, drag and the context menu are still refused. */
+.passage .annotated {
+  /* `.passage__text` is not on this element, so it takes the two properties that
+     matter for the paper: the preserved line breaks and the justified reading. */
+  text-align: start;
+  white-space: pre-wrap;
+}
+.annotated__mark {
+  border-radius: 3px;
+  padding: 1px 1px 2px;
+  color: inherit;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition: box-shadow 140ms var(--ease, ease), background-color 140ms var(--ease, ease);
+}
+.annotated--interactive .annotated__mark { cursor: pointer; }
+.annotated__mark:hover { box-shadow: 0 0 0 2px rgba(20, 35, 58, 0.14); }
+.annotated__mark--flash { animation: mark-flash 1.2s var(--ease, ease); }
+@keyframes mark-flash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(211, 34, 43, 0); }
+  25%, 65% { box-shadow: 0 0 0 4px rgba(211, 34, 43, 0.42); }
+}
+.mark--yellow { background: #ffe9a3; }
+.mark--green { background: #bff0cf; }
+.mark--blue { background: #c9e0ff; }
+.mark--pink { background: #ffd4e6; }
+html[data-theme='dark'] .mark--yellow { background: rgba(255, 197, 61, 0.34); }
+html[data-theme='dark'] .mark--green { background: rgba(76, 195, 138, 0.32); }
+html[data-theme='dark'] .mark--blue { background: rgba(124, 176, 245, 0.32); }
+html[data-theme='dark'] .mark--pink { background: rgba(255, 145, 178, 0.32); }
+
+/* The bar that floats over a selection. Fixed because the paper scrolls under it. */
+.annot-bar {
+  position: fixed; z-index: 960; transform: translate(-50%, -100%);
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--solid); color: var(--on-solid);
+  border-radius: 999px; padding: 6px 8px; box-shadow: var(--shadow-lg);
+  animation: annot-bar-in 130ms var(--ease, ease);
+}
+@keyframes annot-bar-in { from { opacity: 0; transform: translate(-50%, -94%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -100%) scale(1); } }
+.annot-bar--wide { border-radius: var(--radius-lg); padding: 10px; width: min(340px, calc(100vw - 24px)); }
+.annot-bar__row { display: flex; align-items: center; gap: 5px; }
+.annot-bar__row--end { justify-content: flex-end; }
+.annot-bar__sep { width: 1px; height: 18px; background: rgba(255, 255, 255, 0.22); margin: 0 3px; }
+.annot-bar__swatch {
+  width: 25px; height: 25px; flex: none; border-radius: 50%; cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.5); padding: 0;
+  transition: transform 120ms var(--ease, ease), border-color 120ms var(--ease, ease);
+}
+.annot-bar__swatch:hover { transform: scale(1.14); border-color: #fff; }
+.annot-bar__action {
+  display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; cursor: pointer;
+  color: inherit; font: inherit; font-size: 0.78rem; font-weight: 620; padding: 5px 9px; border-radius: 999px;
+}
+.annot-bar__action:hover { background: rgba(255, 255, 255, 0.14); }
+.annot-bar__action--primary { background: var(--brand-600); color: #fff; }
+.annot-bar__action--primary:hover { background: var(--brand-500); }
+.annot-bar__action--danger:hover { background: rgba(217, 45, 32, 0.32); }
+.annot-bar__action--quiet { opacity: 0.66; padding: 5px 6px; }
+.annot-bar__note { display: flex; flex-direction: column; gap: 8px; }
+.annot-bar__input {
+  width: 100%; resize: vertical; min-height: 62px; font: inherit; font-size: 0.84rem; line-height: 1.5;
+  color: var(--on-solid); background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius); padding: 8px 10px;
+}
+.annot-bar__input::placeholder { color: rgba(255, 255, 255, 0.55); }
+
+.exam-icon--marks { position: relative; }
+.exam-icon__badge {
+  position: absolute; top: -2px; right: -3px; min-width: 15px; height: 15px; padding: 0 3px;
+  border-radius: 999px; background: var(--brand-500); color: #fff;
+  font-size: 0.6rem; font-weight: 750; line-height: 15px; text-align: center;
+}
+.exam-icon__dot { position: absolute; bottom: 1px; left: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--sun-500); }
+
+/* The note pad: a drawer over the question pane on a wide screen, a sheet on a phone. */
+.annot-panel {
+  position: fixed; z-index: 940; right: 14px; top: 104px; bottom: 78px;
+  width: min(346px, calc(100vw - 28px));
+  display: flex; flex-direction: column; gap: 0;
+  background: var(--paper); color: var(--ink-800);
+  border: 1px solid var(--ink-200); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  animation: annot-panel-in 160ms var(--ease, ease); overflow: hidden;
+}
+@keyframes annot-panel-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+.annot-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--ink-100); }
+.annot-panel__head h2 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 0.96rem; font-weight: 700; color: var(--ink-950); }
+.annot-panel__count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--brand-50); color: var(--brand-700); font-size: 0.7rem; font-weight: 750; line-height: 20px; text-align: center; }
+.annot-panel__close { border: 0; background: transparent; color: var(--ink-500); cursor: pointer; padding: 4px; border-radius: 8px; }
+.annot-panel__close:hover { background: var(--ink-100); color: var(--ink-900); }
+.annot-panel__hint { margin: 0; padding: 10px 14px; font-size: 0.76rem; line-height: 1.5; color: var(--ink-500); border-bottom: 1px solid var(--ink-100); }
+.annot-panel__empty { padding: 18px 14px; color: var(--ink-500); font-size: 0.84rem; line-height: 1.55; }
+.annot-panel__empty p { margin: 0; }
+.annot-panel__list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.annot-item { display: flex; align-items: stretch; gap: 4px; border-radius: var(--radius); }
+.annot-item:hover { background: var(--paper-muted); }
+.annot-item__body { flex: 1; display: flex; gap: 9px; align-items: flex-start; text-align: start; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 9px 6px 9px 8px; }
+.annot-item__chip { width: 10px; height: 10px; flex: none; margin-top: 5px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(20, 35, 58, 0.12); }
+.annot-item__text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.annot-item__excerpt { font-size: 0.84rem; line-height: 1.45; color: var(--ink-800); }
+.annot-item__excerpt b { color: var(--brand-700); font-weight: 750; }
+.annot-item__note { font-size: 0.8rem; line-height: 1.45; color: var(--ink-600); white-space: pre-wrap; }
+.annot-item__meta { font-size: 0.7rem; color: var(--ink-400); }
+.annot-item__remove { flex: none; align-self: center; border: 0; background: transparent; color: var(--ink-400); cursor: pointer; padding: 6px; border-radius: 8px; }
+.annot-item__remove:hover { color: var(--danger); background: var(--danger-soft); }
+@media (max-width: 719px) {
+  .annot-panel { right: 8px; left: 8px; bottom: 72px; top: auto; width: auto; max-height: 54vh; animation-name: annot-panel-up; }
+  @keyframes annot-panel-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 }

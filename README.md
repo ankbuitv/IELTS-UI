@@ -35,6 +35,24 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
 
 **Exam delivery**
 
+- **Two navigation shapes**: a left sidebar on desktop (collapsible to an icon rail,
+  remembered across visits, account + coins + display controls pinned at the bottom) and,
+  below 1024px, a slim top strip with a floating tab dock whose "More" opens a tiled sheet.
+  Signed-out pages keep a translucent top bar so the landing page uses its full width.
+- **One page kit** (`components/page.tsx` + "page kit" in `styles/app.css`): `PageHead`,
+  `Section`, `Row`/`RowList`, `Ring`, `StatPill` and `Hero` are the five shapes every screen
+  is assembled from, so a student dashboard, a class report and the admin console open the
+  same way and share spacing, tone accents and entry motion. Pages stay dumb: they pass data,
+  the kit owns the geometry. `tests/unit/page-kit.test.ts` renders each piece and
+  fails if a class it emits has no rule in the stylesheets.
+- **Motion system** (`styles/app.css`): one easing family and three speeds; every route
+  re-keys its content column, so a page entry rises once and its card grids stagger by
+  position (`.stagger` numbers its children in CSS, so no per-item index is needed in the
+  markup); cards/tiles/dock items lift on hover, marks and meters animate on change, and
+  the whole thing collapses to nothing under "reduce motion" (both the reader's own
+  preference and `prefers-reduced-motion`). Entrance animations use `backwards` fill, never
+  `both`, so a finished animation cannot leave a `transform` that pins an element away from
+  where the layout put it.
 - Reusable exam shell: server-authoritative countdown, section/component
   sequencing, autosave, resume after disconnect, and attempt recovery.
 - Full mock exams built from configurable component sequences (skill order,
@@ -45,6 +63,26 @@ or diagram images are registered as external HTTPS URLs rather than uploaded.
   cannot stop OS-level switching (Alt+Tab, another device), so the lock counts,
   blocks on return and says so on screen. Copy/paste, blur and fullscreen exits
   are recorded as observable events and are not proof of misconduct.
+- **Window lock in exam modes** (`STANDARD_EXAM`, `STRICT_EXAM`; never in practice mode).
+  Entering an exam takes the browser fullscreen, and the paper stays covered until
+  fullscreen is re-entered. Pop-ups are refused: `window.open`, Ctrl/Cmd-click,
+  middle-click and `target="_blank"` links; so are the layers translation and
+  dictionary extensions inject, with the document marked `notranslate` while the
+  attempt is open. Every refusal is an integrity event, and the focus loss a popup or
+  a translation window causes is counted as a tab-away strike too. Ctrl+T/Ctrl+N
+  belong to the browser and cannot be stopped from a page. The fullscreen allowance
+  (`maxFullscreenExits`) raises the teacher's warning level — it never submits an
+  attempt, because a screensaver or an OS update also leaves fullscreen.
+- **Highlights and notes on the paper**, like the real CBT screen. Selecting words in a
+  passage opens a small bar: four mark colours (highlight / key point / vocabulary /
+  come back) plus a note attached to that mark. The Notes panel lists every mark, jumps
+  to it in the text and deletes it. Marks are anchored to `section + paragraph label +
+  character offsets`, saved to `localStorage` immediately and pushed to the server in a
+  debounced queue, so they survive a refresh, a dropped connection and a device switch;
+  a re-sent save updates the same row instead of duplicating it. Selection is deliberately
+  *allowed* in exam modes (`blockTextSelection: false`) — copy, cut, drag and the context
+  menu are still refused, and a centre that wants a paper with no marks at all can still
+  lock selection per assignment, which also takes the highlighter away.
 
 **Question engine**
 
@@ -229,6 +267,8 @@ npm install
 #   OLLAMA_API_KEYS=<key>,<key>      # AI marking: Ollama Cloud keys, comma-separated
 #   OLLAMA_MODEL=gpt-oss:120b        # Judge01. Bare name for ollama.com (no -cloud suffix); also a wrangler.jsonc var
 #   OLLAMA_MODEL_2=gemma4:31b        # Judge02 (second opinion); same endpoint and key
+#   TURNSTILE_SECRET_KEY=<secret>    # optional: human check on the auth forms.
+#                                    #   Its pair, TURNSTILE_SITE_KEY, is a public wrangler.jsonc var.
 
 # 2. Build the SPA and start the Worker (serves API + SPA on :8787)
 npm run dev
@@ -402,6 +442,20 @@ for the same-origin check, absolute links and cookie attributes.
   Hiding a button in the client is never the control.
 - **Rate limiting**: fixed-window counters in D1 for registration, login (per
   address and per account), import uploads and the paid AI call.
+- **Human check (Cloudflare Turnstile)** on sign-in and sign-up. The widget is
+  rendered explicitly (`src/client/lib/turnstile.ts`) with
+  `appearance: "interaction-only"`, and it sits inside the site's own card
+  (`.turnstile` in `styles/app.css`) whose box shows the state — spinner while the
+  browser is checked, tick when it passes, retry when it expires — so it reads as
+  part of the form rather than a foreign iframe. The server verifies the token with
+  `siteverify` (`src/worker/lib/turnstile.ts`) and checks the `action`, so a token
+  minted on the registration form cannot be replayed on the login form. Both keys
+  must be present for the check to exist at all; with either missing the widget is
+  not rendered and the endpoint does not ask. A `TURNSTILE_FAILED` response re-arms
+  the widget instead of forcing a page reload. Verification rejects in
+  `APP_ENV=production` only, because a site key is bound to the hostnames it was
+  issued for — outside production a reject is logged and the attempt is still
+  limited by the rate limiter, the origin check and the password.
 - **Answer material**: keys, evidence and explanations live in a dedicated table
   and are never included in candidate-facing payloads; marking happens on the
   server with the frozen version snapshot.

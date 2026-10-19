@@ -4,10 +4,12 @@ import { api, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Chips, EmptyState, Loading, Notice, ProgressBar, SkillGlyph } from '../../components/ui';
+import { Hero, Ring, Section, StatPill } from '../../components/page';
 import { AccuracyList, BarChart, LineChart } from '../../components/charts';
 import { AttemptList, newestFirst } from '../../components/AttemptList';
 import { Icon } from '../../components/Icon';
 import { BandEstimatesPanel } from '../../components/BandEstimates';
+import { requestExamFullscreen } from '../../components/exam/window-guard';
 import { LearnStrip } from '../../components/learn/LearnStrip';
 import {
   BAND_DISCLAIMER,
@@ -74,61 +76,120 @@ export function StudentDashboardPage() {
     }));
   const hasTrend = trendPoints.some((point) => point.value !== null);
 
+  const nextDeadline = data.upcomingDeadlines[0] ?? null;
+  const overallBand = data.estimates.overall.band;
+
+  const SKILL_TILES = [
+    { cls: 'module-tile--reading', icon: 'book', label: 'Reading', hint: '3 passages, 40 questions, 60 minutes', to: '/practice?skill=READING' },
+    { cls: 'module-tile--listening', icon: 'headphones', label: 'Listening', hint: '4 parts, one audio track, 40 questions', to: '/practice?skill=LISTENING' },
+    { cls: 'module-tile--writing', icon: 'pen', label: 'Writing', hint: 'Task 1 and Task 2, two AI judges', to: '/practice?skill=WRITING' },
+    { cls: 'module-tile--speaking', icon: 'mic', label: 'Speaking', hint: 'Recorded parts with a band estimate', to: '/speaking' },
+  ] as const;
+
   return (
     <div className="stack dash">
-      <section className="dash-hero">
-        <span className="dash-hero__bars" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        <div className="dash-hero__text">
-          <p className="dash-hero__kicker">{greeting()}</p>
-          <h1>Welcome back{firstName ? `, ${firstName}` : ''}</h1>
-          <p>
-            {data.totals.submitted === 0
-              ? 'Take your first practice test to start tracking your progress.'
-              : `${data.totals.submitted} attempt${data.totals.submitted === 1 ? '' : 's'} finished${
-                  data.totals.inProgress > 0 ? ` · ${data.totals.inProgress} in progress` : ''
-                }${data.totals.fullMocks > 0 ? ` · ${data.totals.fullMocks} full mock${data.totals.fullMocks === 1 ? '' : 's'}` : ''}`}
-          </p>
-        </div>
-        <div className="dash-hero__actions">
-          {running ? (
-            <Link className="btn btn--primary" to={`/exam/${running.attemptId}`}>
-              <Icon name="play" size={14} />
-              Continue “{truncateTitle(running.testTitle)}”
+      <Hero
+        bars
+        kicker={greeting()}
+        title={`Welcome back${firstName ? `, ${firstName}` : ''}`}
+        lede={
+          data.totals.submitted === 0
+            ? 'Take your first practice test — Reading and Listening are marked the moment you submit, Writing and Speaking within a minute.'
+            : `${data.totals.submitted} attempt${data.totals.submitted === 1 ? '' : 's'} finished${
+                data.totals.inProgress > 0 ? `, ${data.totals.inProgress} still open` : ''
+              }${data.totals.fullMocks > 0 ? `, ${data.totals.fullMocks} full mock${data.totals.fullMocks === 1 ? '' : 's'}` : ''}.`
+        }
+        actions={
+          <>
+            {running ? (
+              <Link className="btn btn--primary" to={`/exam/${running.attemptId}`}>
+                <Icon name="play" size={14} />
+                Continue “{truncateTitle(running.testTitle)}”
+              </Link>
+            ) : (
+              <Link className="btn btn--primary" to="/practice">
+                <Icon name="play" size={14} />
+                Start a test
+              </Link>
+            )}
+            <Link className="btn" to="/learn">
+              <Icon name="target" size={14} />
+              Continue learning
             </Link>
-          ) : (
-            <Link className="btn btn--primary" to="/practice">
-              <Icon name="play" size={14} />
-              Start a test
-            </Link>
-          )}
-          <Link className="btn" to="/learn">
-            <Icon name="target" size={14} />
-            Continue learning
-          </Link>
-        </div>
-      </section>
+          </>
+        }
+        aside={
+          <>
+            <Ring
+              value={overallBand ?? 0}
+              max={9}
+              size={112}
+              label="Overall band"
+              display={formatBand(overallBand)}
+              sub={data.estimates.overall.kind === 'PROVISIONAL' ? 'provisional' : undefined}
+              tone={overallBand === null ? 'info' : 'brand'}
+            />
+            <span className="hero-panel__stats">
+              <StatPill icon="checkCircle" label="finished" value={data.totals.submitted} />
+              <StatPill icon="hourglass" label="open now" value={data.totals.inProgress} />
+              {nextDeadline?.deadlineAt ? (
+                <StatPill icon="clock" label={`due ${relativeTime(nextDeadline.deadlineAt)}`} value={truncateTitle(nextDeadline.title, 22)} tone="amber" />
+              ) : null}
+            </span>
+          </>
+        }
+      />
 
       <LearnStrip />
 
-      <BandEstimatesPanel estimates={data.estimates} />
+      <Section
+        title="Practise a skill"
+        hint="Every set runs on the exam clock and is scored server-side."
+        layout="tiles"
+        actions={
+          <Link to="/practice">
+            All tests
+            <Icon name="chevronRight" size={13} />
+          </Link>
+        }
+      >
+        {SKILL_TILES.map((tile, index) => (
+          <Link key={tile.label} to={tile.to} className={`module-tile ${tile.cls}`} style={{ ['--i' as string]: index }}>
+            <span className="module-tile__icon">
+              <Icon name={tile.icon} size={18} />
+            </span>
+            <span className="module-tile__label">{tile.label}</span>
+            <span className="module-tile__hint">{tile.hint}</span>
+            <span className="module-tile__go" aria-hidden="true">
+              <Icon name="arrowRight" size={15} />
+            </span>
+          </Link>
+        ))}
+      </Section>
 
       {upNext.length > 0 ? (
-        <Card title={dueSoon.length > 0 ? 'Due soon' : 'Your assignments'} hint="From your classrooms">
-          <div className="stack" style={{ gap: 8 }}>
-            {upNext.map((assignment) => (
-              <AssignmentRow key={assignment.assignmentId} assignment={assignment} compact />
+        <Section
+          title={dueSoon.length > 0 ? 'Due soon' : 'Your assignments'}
+          hint={dueSoon.length > 0 ? `${dueSoon.length} assignment${dueSoon.length === 1 ? '' : 's'} with a deadline ahead.` : 'From your classrooms.'}
+          tone="amber"
+          actions={
+            <Link className="small" to="/classrooms">
+              Classrooms
+            </Link>
+          }
+        >
+          <div className="rowlist">
+            {upNext.map((assignment, index) => (
+              <AssignmentRow key={assignment.assignmentId} assignment={assignment} compact index={index} />
             ))}
           </div>
-        </Card>
+        </Section>
       ) : null}
 
       <div className="dash-grid">
         <Card
           title="Recent attempts"
+          hint="Newest first, every mode"
           actions={
             <Link className="small" to="/history">
               View all
@@ -179,6 +240,8 @@ export function StudentDashboardPage() {
         </Card>
       </div>
 
+      <BandEstimatesPanel estimates={data.estimates} />
+
       <details className="disclosure">
         <summary>
           <Icon name="chart" size={15} />
@@ -220,7 +283,7 @@ export function StudentDashboardPage() {
             </Button>
           </div>
 
-          <div className="grid grid--2">
+          <div className="grid grid--2 stagger">
             <Card title="Skill breakdown">
               <div className="stack" style={{ gap: 10 }}>
                 {data.skillPerformance.map((skill) => (
@@ -308,13 +371,16 @@ function truncateTitle(title: string, max = 28): string {
   return title.length > max ? `${title.slice(0, max - 1).trimEnd()}…` : title;
 }
 
-export function AssignmentRow({ assignment, compact }: { assignment: AssignmentSummary; compact?: boolean }) {
+export function AssignmentRow({ assignment, compact, index = 0 }: { assignment: AssignmentSummary; compact?: boolean; index?: number }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const overdue = assignment.status === 'OVERDUE';
 
   const start = async () => {
     setBusy(true);
+    // The teacher's assignment decides the window policy; when it is an exam mode,
+    // fullscreen is requested from this click so the exam screen opens already covered.
+    if (assignment.mode !== 'PRACTICE') void requestExamFullscreen();
     try {
       const result = await api.post<{ attemptId: string }>('/api/attempts', { assignmentId: assignment.assignmentId });
       navigate(`/exam/${result.attemptId}`);
@@ -325,7 +391,7 @@ export function AssignmentRow({ assignment, compact }: { assignment: AssignmentS
 
   const used = `${assignment.attemptsUsed}/${assignment.maxAttempts} attempts`;
   return (
-    <div className={`assign-row${overdue ? ' assign-row--overdue' : ''}`}>
+    <div className={`assign-row${overdue ? ' assign-row--overdue' : ''}`} style={{ ['--i' as string]: index }}>
       <SkillGlyph type={assignment.testType} />
       <div className="assign-row__main">
         <div className="assign-row__title">

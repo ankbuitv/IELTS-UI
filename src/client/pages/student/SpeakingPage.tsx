@@ -4,6 +4,7 @@ import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Button, Card, EmptyState, Loading, Notice, TextArea, useToast } from '../../components/ui';
 import { Icon } from '../../components/Icon';
+import { PageHead, Row, Section } from '../../components/page';
 import { formatBand, formatDateTime } from '../../lib/format';
 import { BAND_DESCRIPTORS_NOTE } from '@shared/ai-rubric';
 import { SPEAKING_PART_META } from '@shared/speaking';
@@ -108,16 +109,17 @@ function SpeakingLobby({ onStarted }: { onStarted: (sessionId: string) => void }
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Speaking practice</h1>
-          <p className="page-head__meta">
-            Record a full three-part speaking test and get an instant <strong>estimated</strong> band with
-            criterion-by-criterion feedback. Your recording stays private to you and your teacher.
-          </p>
-        </div>
-        <Badge tone="accent">3 parts · ~11 minutes</Badge>
-      </div>
+      <PageHead
+        eyebrow="Speaking"
+        title="Speaking practice"
+        meta={
+          <>
+            Record a full three-part speaking test and get an instant <strong>estimated</strong> band with criterion-by-criterion
+            feedback. Your recording stays private to you and your teacher.
+          </>
+        }
+        actions={<Badge tone="accent">3 parts · ~11 minutes</Badge>}
+      />
 
       <Notice tone="info" title="Cách chấm điểm">
         <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
@@ -130,67 +132,73 @@ function SpeakingLobby({ onStarted }: { onStarted: (sessionId: string) => void }
       {topics.loading ? <Loading label="Đang tải chủ đề…" /> : null}
       {topics.error ? <Notice tone="danger">{topics.error}</Notice> : null}
 
-      <div className="speaking-topic-grid">
-        {(topics.data?.topics ?? []).map((topic) => (
-          <button
-            key={topic.id}
-            type="button"
-            className="topic-card"
-            onClick={() => void start(topic.id)}
-            disabled={starting !== null}
-          >
+      <Section title="Chủ đề đang mở" hint="Mỗi chủ đề có đủ ba phần như thi thật: hỏi đáp ngắn, nói một mình 2 phút, rồi thảo luận sâu hơn.">
+        <div className="speaking-topic-grid">
+          {(topics.data?.topics ?? []).map((topic) => (
+            <button
+              key={topic.id}
+              type="button"
+              className="topic-card"
+              onClick={() => void start(topic.id)}
+              disabled={starting !== null}
+            >
+              <span className="topic-card__icon">
+                <Icon name="mic" size={20} strokeWidth={2} />
+              </span>
+              <span className="topic-card__title">{topic.title}</span>
+              <span className="topic-card__summary">{topic.summary}</span>
+              <span className="topic-card__meta">
+                <Badge tone="neutral">Part 1 · 2 · 3</Badge>
+                {starting === topic.id ? (
+                  <Badge tone="accent">Đang tạo…</Badge>
+                ) : (
+                  <Icon name="arrowRight" size={16} strokeWidth={2.2} className="topic-card__go" />
+                )}
+              </span>
+            </button>
+          ))}
+          <button type="button" className="topic-card topic-card--random" onClick={() => void start()} disabled={starting !== null}>
             <span className="topic-card__icon">
-              <Icon name="mic" size={20} strokeWidth={2} />
+              <Icon name="wand" size={20} strokeWidth={2} />
             </span>
-            <span className="topic-card__title">{topic.title}</span>
-            <span className="topic-card__summary">{topic.summary}</span>
-            <span className="topic-card__meta">
-              <Badge tone="neutral">Part 1 · 2 · 3</Badge>
-              {starting === topic.id ? (
-                <Badge tone="accent">Đang tạo…</Badge>
-              ) : (
-                <Icon name="arrowRight" size={16} strokeWidth={2.2} className="topic-card__go" />
-              )}
+            <span className="topic-card__text">
+              <span className="topic-card__title">Chủ đề ngẫu nhiên</span>
+              <span className="topic-card__summary">Không chọn gì cả: hệ thống lấy một bộ đề bất kỳ cho bạn.</span>
             </span>
+            {starting === 'custom' ? <Badge tone="accent">Đang tạo…</Badge> : <Icon name="arrowRight" size={18} strokeWidth={2.2} className="topic-card__go" />}
           </button>
-        ))}
-        <button type="button" className="topic-card topic-card--random" onClick={() => void start()} disabled={starting !== null}>
-          <span className="topic-card__icon">
-            <Icon name="wand" size={20} strokeWidth={2} />
-          </span>
-          <span className="topic-card__text">
-            <span className="topic-card__title">Chủ đề ngẫu nhiên</span>
-            <span className="topic-card__summary">Không chọn gì cả: hệ thống lấy một bộ đề bất kỳ cho bạn.</span>
-          </span>
-          {starting === 'custom' ? <Badge tone="accent">Đang tạo…</Badge> : <Icon name="arrowRight" size={18} strokeWidth={2.2} className="topic-card__go" />}
-        </button>
-      </div>
+        </div>
+      </Section>
 
-      <Card title="Lịch sử luyện nói" hint="Mỗi lần luyện được lưu lại cùng bản chép lời và nhận xét.">
+      <Section
+        title="Lịch sử luyện nói"
+        hint="Mỗi lần luyện được lưu lại cùng bản chép lời và nhận xét của hai giám khảo AI."
+        layout="list"
+      >
         {history.loading ? <Loading label="Đang tải…" /> : null}
         {history.data && history.data.sessions.length === 0 ? (
           <EmptyState title="Chưa có buổi luyện nói nào" icon="mic">Chọn một chủ đề ở trên để bắt đầu.</EmptyState>
         ) : (
-          <div className="stack" style={{ gap: 8 }}>
-            {(history.data?.sessions ?? []).map((session) => (
-              <div key={session.id} className="row row--between" style={{ gap: 10 }}>
-                <div>
-                  <Link to={`/speaking/${session.id}`} style={{ fontWeight: 620 }}>
-                    {session.topicTitle}
-                  </Link>
-                  <div className="tiny muted">
-                    {formatDateTime(session.createdAt)} ·{' '}
-                    {session.status === 'MARKED' ? 'đã chấm' : session.status === 'SUBMITTED' ? 'đã nộp' : 'đang làm'}
-                  </div>
-                </div>
+          (history.data?.sessions ?? []).map((session, index) => (
+            <Row
+              key={session.id}
+              index={index}
+              href={`/speaking/${session.id}`}
+              icon="mic"
+              tone={session.overallBand === null ? 'brand' : 'success'}
+              title={session.topicTitle}
+              meta={`${formatDateTime(session.createdAt)} · ${
+                session.status === 'MARKED' ? 'đã chấm' : session.status === 'SUBMITTED' ? 'đã nộp' : 'đang làm'
+              }`}
+              right={
                 <Badge tone={session.overallBand === null ? 'neutral' : 'success'}>
                   {session.overallBand === null ? '—' : `~${formatBand(session.overallBand)}`}
                 </Badge>
-              </div>
-            ))}
-          </div>
+              }
+            />
+          ))
         )}
-      </Card>
+      </Section>
     </div>
   );
 }
@@ -287,28 +295,37 @@ function SpeakingSessionView({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <p className="page-head__meta" style={{ marginBottom: 4 }}>
-            <Link to="/speaking">← Danh sách chủ đề</Link>
-          </p>
-          <h1>{session.topicTitle}</h1>
-          <p className="page-head__meta">
-            {recordedParts}/3 phần đã ghi · {session.status === 'MARKED' ? 'đã được hai giám khảo AI chấm' : submittedUnmarked ? 'đã nộp, chờ chấm' : 'chưa nộp'}
-          </p>
-        </div>
-        {marked ? (
-          <Badge tone="success">~{formatBand(data.score?.band ?? null)}</Badge>
-        ) : submittedUnmarked ? (
-          <Button variant="primary" loading={submitting} onClick={() => void retryMarking()}>
-            <Icon name="rotate" size={15} /> Chấm lại
-          </Button>
-        ) : (
-          <Button variant="primary" loading={submitting} disabled={!canSubmit} onClick={() => void submit()}>
-            <Icon name="sparkle" size={15} /> Nộp &amp; chấm tự động
-          </Button>
-        )}
-      </div>
+      <PageHead
+        eyebrow={
+          <Link to="/speaking" className="ph__back">
+            Danh sách chủ đề
+          </Link>
+        }
+        title={session.topicTitle}
+        meta={
+          <>
+            {recordedParts}/3 phần đã ghi ·{' '}
+            {session.status === 'MARKED'
+              ? 'đã được hai giám khảo AI chấm'
+              : submittedUnmarked
+                ? 'đã nộp, chờ chấm'
+                : 'chưa nộp'}
+          </>
+        }
+        actions={
+          marked ? (
+            <Badge tone="success">~{formatBand(data.score?.band ?? null)}</Badge>
+          ) : submittedUnmarked ? (
+            <Button variant="primary" loading={submitting} onClick={() => void retryMarking()}>
+              <Icon name="rotate" size={15} /> Chấm lại
+            </Button>
+          ) : (
+            <Button variant="primary" loading={submitting} disabled={!canSubmit} onClick={() => void submit()}>
+              <Icon name="sparkle" size={15} /> Nộp &amp; chấm tự động
+            </Button>
+          )
+        }
+      />
 
       {submitting ? (
         <div className="ai-running" role="status" aria-live="polite">

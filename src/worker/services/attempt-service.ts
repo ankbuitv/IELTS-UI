@@ -9,12 +9,13 @@ import { PROJECTION_DISCLAIMER } from '../../shared/scoring';
 import { assertPracticeAccess } from './access-code-service';
 import { loadCandidateTest, type CandidateTestPayload } from './content-service';
 import {
+  fullscreenLimitReached,
+  isCountedEvent,
   resolvePolicy,
   type IntegrityEventType,
   type IntegrityPolicy,
   EVENT_SEVERITY,
 } from '../../shared/integrity';
-import { isCountedEvent } from '../../shared/integrity';
 import type { CandidateResponse } from '../../shared/answer-key';
 import { countWords } from '../../shared/answer-key';
 import { isQuestionType } from '../../shared/question-types';
@@ -1057,6 +1058,12 @@ export interface CandidateAttemptState {
     counted: number;
     tabAway: number;
     fullscreenExits: number;
+    /** Windows/tabs the guard refused to open from the exam page. */
+    popupsBlocked: number;
+    /** Translation/dictionary layers hidden during the attempt. */
+    overlaysSuppressed: number;
+    /** The mode's fullscreen allowance is used up (a lock, never an auto-submit). */
+    allowanceUsed: boolean;
     warningLevel: 'NONE' | 'WARNING' | 'CRITICAL';
     /** Candidate-facing integrity statement, configurable in platform settings. */
     notice: string;
@@ -1130,8 +1137,8 @@ export async function loadCandidateAttemptState(
     if (row.is_flagged === 1) flagged.push(row.question_id);
   }
 
-  const counts = countIntegrity(integrity.results.map((row) => row.type));
   const policy = resolvePolicy(current.mode, parseJson<Partial<IntegrityPolicy>>(current.integrity_policy_json, {}));
+  const counts = countIntegrity(integrity.results.map((row) => row.type), policy);
 
   const totalQuestions = content
     ? content.sections
@@ -1205,7 +1212,10 @@ export async function loadCandidateAttemptState(
       counted: counts.counted,
       tabAway: counts.tabAway,
       fullscreenExits: counts.fullscreenExits,
-      warningLevel: warningLevel(policy, counts.counted),
+      popupsBlocked: counts.popupsBlocked,
+      overlaysSuppressed: counts.overlaysSuppressed,
+      allowanceUsed: fullscreenLimitReached(policy, counts.fullscreenExits),
+      warningLevel: warningLevel(policy, counts.counted, counts.fullscreenExits),
       notice: settings.integrityNotice,
     },
     submitted: current.status !== 'IN_PROGRESS',
@@ -1225,8 +1235,15 @@ function isNonEmptyResponse(response: CandidateResponse): boolean {
   return false;
 }
 
-function warningLevel(policy: IntegrityPolicy, counted: number): 'NONE' | 'WARNING' | 'CRITICAL' {
+function warningLevel(
+  policy: IntegrityPolicy,
+  counted: number,
+  fullscreenExits = 0,
+): 'NONE' | 'WARNING' | 'CRITICAL' {
   if (policy.autoSubmitAtEvents !== null && counted >= policy.autoSubmitAtEvents) return 'CRITICAL';
+  // The fullscreen allowance is a lock, not a submission: crossing it is critical
+  // for the teacher's report, but a screensaver must not end an attempt.
+  if (fullscreenLimitReached(policy, fullscreenExits)) return 'CRITICAL';
   if (policy.warnAtEvents !== null && counted >= policy.warnAtEvents) return 'WARNING';
   return 'NONE';
 }
@@ -1498,11 +1515,28 @@ export async function applyIntegrityPolicy(
   attemptId: string,
   events: IntegrityEventInput[],
   context: { userAgent?: string } = {},
-): Promise<{ recorded: number; counted: number; warningLevel: 'NONE' | 'WARNING' | 'CRITICAL'; autoSubmitted: boolean }> {
+): Promise<{
+  recorded: number;
+  counted: number;
+  fullscreenExits: number;
+  popupsBlocked: number;
+  /** The fullscreen allowance is used up: keep the paper covered, never submit it. */
+  allowanceUsed: boolean;
+  warningLevel: 'NONE' | 'WARNING' | 'CRITICAL';
+  autoSubmitted: boolean;
+}> {
   const attempt = await requireOwnedAttempt(env, user, attemptId);
   if (attempt.user_id !== user.id) throw ApiError.forbidden('This attempt belongs to another user.');
   if (attempt.status !== 'IN_PROGRESS') {
-    return { recorded: 0, counted: 0, warningLevel: 'NONE', autoSubmitted: false };
+    return {
+      recorded: 0,
+      counted: 0,
+      fullscreenExits: 0,
+      popupsBlocked: 0,
+      allowanceUsed: false,
+      warningLevel: 'NONE',
+      autoSubmitted: false,
+    };
   }
 
   const activeSession = await env.DB.prepare(
@@ -1519,9 +1553,9 @@ export async function applyIntegrityPolicy(
   const all = await env.DB.prepare('SELECT type FROM integrity_events WHERE attempt_id = ?')
     .bind(attemptId)
     .all<{ type: string }>();
-  const counts = countIntegrity(all.results.map((row) => row.type));
   const policy = resolvePolicy(attempt.mode, parseJson<Partial<IntegrityPolicy>>(attempt.integrity_policy_json, {}));
-  const level = warningLevel(policy, counts.counted);
+  const counts = countIntegrity(all.results.map((row) => row.type), policy);
+  const level = warningLevel(policy, counts.counted, counts.fullscreenExits);
 
   let autoSubmitted = false;
   if (policy.autoSubmitAtEvents !== null && counts.counted >= policy.autoSubmitAtEvents) {
@@ -1529,15 +1563,30 @@ export async function applyIntegrityPolicy(
     autoSubmitted = true;
   }
 
-  return { recorded: result.recorded, counted: counts.counted, warningLevel: autoSubmitted ? 'CRITICAL' : level, autoSubmitted };
+  return {
+    recorded: result.recorded,
+    counted: counts.counted,
+    fullscreenExits: counts.fullscreenExits,
+    popupsBlocked: counts.popupsBlocked,
+    // Exceeding the fullscreen allowance raises the warning level for the teacher
+    // and keeps the paper covered for the candidate; it never submits an attempt.
+    allowanceUsed: fullscreenLimitReached(policy, counts.fullscreenExits),
+    warningLevel: autoSubmitted ? 'CRITICAL' : level,
+    autoSubmitted,
+  };
 }
 
-function countIntegrity(types: string[]) {
-  const counted = types.filter((type) => isCountedEvent(type)).length;
+function countIntegrity(
+  types: string[],
+  policy?: Pick<IntegrityPolicy, 'countExtensionStrikes'> | null,
+) {
+  const counted = types.filter((type) => isCountedEvent(type, policy)).length;
   return {
     counted,
     tabAway: types.filter((type) => type === 'TAB_HIDDEN').length,
     fullscreenExits: types.filter((type) => type === 'FULLSCREEN_EXIT').length,
+    popupsBlocked: types.filter((type) => type === 'POPUP_BLOCKED').length,
+    overlaysSuppressed: types.filter((type) => type === 'EXTENSION_OVERLAY').length,
     copies: types.filter((type) => type === 'COPY_ATTEMPT').length,
     pastes: types.filter((type) => type === 'PASTE_ATTEMPT').length,
     interruptions: types.filter((type) => type === 'CONNECTION_INTERRUPTION').length,
@@ -1747,11 +1796,13 @@ export interface AttemptResultView {
     counted: number;
     tabAway: number;
     fullscreenExits: number;
+    popupsBlocked: number;
+    overlaysSuppressed: number;
     copies: number;
     pastes: number;
     interruptions: number;
     total: number;
-    events: Array<{ type: string; occurredAt: string; severity: string }>;
+    events: Array<{ type: string; occurredAt: string; severity: string; metadata: Record<string, unknown> | null }>;
     statement: string;
   };
 }
@@ -1806,10 +1857,10 @@ export async function buildResultView(
       .bind(attempt.id)
       .all<SkillSessionRow & { is_complete_test: number; version_profile_id: string | null }>(),
     env.DB.prepare(
-      'SELECT type, occurred_at, severity FROM integrity_events WHERE attempt_id = ? ORDER BY recorded_at',
+      'SELECT type, occurred_at, severity, metadata_json FROM integrity_events WHERE attempt_id = ? ORDER BY recorded_at',
     )
       .bind(attempt.id)
-      .all<{ type: string; occurred_at: string; severity: string }>(),
+      .all<{ type: string; occurred_at: string; severity: string; metadata_json: string | null }>(),
   ]);
 
   const assignment = attempt.assignment_id
@@ -1914,7 +1965,10 @@ export async function buildResultView(
     });
   }
 
-  const counts = countIntegrity(integrityRows.results.map((row) => row.type));
+  const counts = countIntegrity(
+    integrityRows.results.map((row) => row.type),
+    resolvePolicy(attempt.mode, parseJson<Partial<IntegrityPolicy>>(attempt.integrity_policy_json, {})),
+  );
   const submittedAt = attempt.submitted_at;
   const durationSeconds =
     submittedAt && attempt.started_at
@@ -1951,9 +2005,10 @@ export async function buildResultView(
         type: row.type,
         occurredAt: row.occurred_at,
         severity: row.severity,
+        metadata: row.metadata_json ? parseJson<Record<string, unknown>>(row.metadata_json, {}) : null,
       })),
       statement:
-        'These are observable browser events recorded during the attempt. They do not by themselves demonstrate misconduct, and the platform cannot block operating-system actions such as Alt+Tab or detect the use of another device.',
+        'These are observable browser events recorded during the attempt. They do not by themselves demonstrate misconduct, and the platform cannot block operating-system actions such as Alt+Tab, browser shortcuts (Ctrl+T) or the use of another device. Pop-ups and injected translation layers were refused or hidden by the exam page itself, so those events say what the page stopped, not what the candidate read.',
     },
   };
 }

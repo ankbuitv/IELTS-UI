@@ -26,6 +26,8 @@ export interface Env {
   OPENAI_TRANSCRIBE_MODEL: string;
   MAX_UPLOAD_BYTES: string;
   LOGIN_RATE_LIMIT_PER_15MIN: string;
+  /** Cloudflare Turnstile site key (public). Paired with the secret below. */
+  TURNSTILE_SITE_KEY?: string;
   AI_RATE_LIMIT_PER_HOUR: string;
 
   // --- Secrets (wrangler secret put ...) ----------------------------------

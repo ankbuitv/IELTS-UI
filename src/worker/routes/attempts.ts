@@ -23,6 +23,8 @@ import { markWritingSubmission } from '../services/ai-marking-service';
 import { enforceRateLimit } from '../lib/rate-limit';
 import type { AiMarkView } from '../../shared/judges';
 import { INTEGRITY_EVENT_TYPES } from '../../shared/integrity';
+import { ANNOTATION_COLORS, ANNOTATION_SCOPES } from '../../shared/annotations';
+import { deleteAnnotation, listAnnotations, replaceAnnotations, saveAnnotation } from '../services/annotation-service';
 import { EXAM_MODES } from '../../shared/types';
 import { recordAudit } from '../lib/audit';
 
@@ -227,6 +229,76 @@ router.post('/:id/integrity', async (c) => {
     userAgent: userAgent(c),
   });
   return c.json(result);
+});
+
+// ---------------------------------------------------------------------------
+// Highlighter and notes (34-series UI): the candidate's own mark-up of the paper.
+const annotationSchema = z.object({
+  id: z.string().regex(/^[A-Za-z0-9_-]{6,40}$/).optional(),
+  scope: z.enum(ANNOTATION_SCOPES).optional(),
+  sectionId: z.string().min(1).max(40),
+  anchor: z.string().max(16).default(''),
+  startOffset: z.number().int().min(0).max(100_000),
+  endOffset: z.number().int().min(1).max(100_000),
+  excerpt: z.string().min(2).max(800),
+  color: z.enum(ANNOTATION_COLORS),
+  note: z.string().max(800).nullable().optional(),
+});
+
+router.get('/:id/annotations', async (c) => {
+  const user = currentUser(c);
+  const annotations = await listAnnotations(c.env, user, c.req.param('id'));
+  return c.json({ annotations });
+});
+
+router.put('/:id/annotations', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, annotationSchema);
+  if (body.endOffset <= body.startOffset) throw ApiError.validation('A highlight needs to cover some text.');
+  const annotation = await saveAnnotation(c.env, user, c.req.param('id'), {
+    scope: body.scope ?? 'PASSAGE',
+    sectionId: body.sectionId,
+    anchor: body.anchor,
+    startOffset: body.startOffset,
+    endOffset: body.endOffset,
+    excerpt: body.excerpt,
+    color: body.color,
+    ...(body.id ? { id: body.id } : {}),
+    ...(body.note !== undefined ? { note: body.note } : {}),
+  });
+  return c.json({ annotation }, 201);
+});
+
+/** Bulk write used when a device that was offline comes back with its local marks. */
+router.put('/:id/annotations/replace', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ annotations: z.array(annotationSchema).max(400) }));
+  const annotations = await replaceAnnotations(
+    c.env,
+    user,
+    c.req.param('id'),
+    body.annotations.map((row) => ({
+      scope: row.scope ?? 'PASSAGE',
+      sectionId: row.sectionId,
+      anchor: row.anchor,
+      startOffset: row.startOffset,
+      endOffset: row.endOffset,
+      excerpt: row.excerpt,
+      color: row.color,
+      ...(row.id ? { id: row.id } : {}),
+      ...(row.note !== undefined ? { note: row.note } : {}),
+    })),
+  );
+  return c.json({ annotations });
+});
+
+router.delete('/:id/annotations/:annotationId', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  await deleteAnnotation(c.env, user, c.req.param('id'), c.req.param('annotationId'));
+  return c.json({ ok: true });
 });
 
 router.post('/:id/advance', async (c) => {
