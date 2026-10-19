@@ -668,7 +668,7 @@ function WritingReview({
           </div>
 
           {/* Full AI judgement: criteria, feedback (EN + VI), strengths, next steps */}
-          {ai ? <AiMarkPanel mark={ai} heading="AI marking" /> : null}
+          {ai ? <AiMarkPanel mark={ai} originalText={submission.responseText} heading="AI marking" /> : null}
           {teacher ? (
             <div className="explain" style={{ marginTop: 10 }}>
               <div className="explain__head">

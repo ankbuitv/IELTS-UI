@@ -27,6 +27,9 @@ import { AccuracyList } from '../../components/charts';
 import { SkillPerformanceTable, TrendBars } from './Dashboard';
 import { AttemptList, newestFirst } from '../../components/AttemptList';
 import type { AttemptSummary, CatalogTest, StudentDashboard } from './types';
+import type { StudentInsights } from '@shared/insights';
+import { projectBand } from '@shared/projection';
+import { CORE_SKILLS } from '@shared/bands';
 import {
   BAND_DISCLAIMER,
   daysSince,
@@ -662,6 +665,14 @@ export function AttemptResultPage() {
 // ---------------------------------------------------------------------------
 export function StudentAnalyticsPage() {
   const { data, loading, error } = useAsync<StudentDashboard>(() => api.get('/api/student/dashboard'), []);
+  const insightsQ = useAsync<StudentInsights>(() => api.get('/api/student/insights'), []);
+  const insights = insightsQ.data;
+  const defaultExamDate = useMemo(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 30);
+    return date.toISOString().slice(0, 10);
+  }, []);
+  const [examDate, setExamDate] = useState(defaultExamDate);
 
   if (loading) return <Loading label="Loading analytics…" />;
   if (error) return <Notice tone="danger">{error}</Notice>;
@@ -688,8 +699,165 @@ export function StudentAnalyticsPage() {
       <Card title="Skill performance" flush>
         <SkillPerformanceTable items={data.skillPerformance} />
       </Card>
+
+      {insights ? <BandPredictorCard history={insights.history} examDate={examDate} onExamDate={setExamDate} /> : null}
+      {insightsQ.error ? <Notice tone="warning">{insightsQ.error}</Notice> : null}
+      {insights ? <TimeAnalyticsCard time={insights.time} /> : null}
+
       <p className="tiny muted">{BAND_DISCLAIMER}</p>
     </div>
+  );
+}
+
+/**
+ * #5 Predict where the recent trend lands on the learner's exam date. The model
+ * is deliberately conservative and the card states its own limits.
+ */
+function BandPredictorCard({
+  history,
+  examDate,
+  onExamDate,
+}: {
+  history: StudentInsights['history'];
+  examDate: string;
+  onExamDate: (value: string) => void;
+}) {
+  const target = examDate ? new Date(`${examDate}T00:00:00`) : new Date();
+  const rows = history.map((entry) => ({
+    skill: entry.skill,
+    points: entry.points,
+    projection: projectBand(entry.points, target),
+  }));
+  const withData = rows.filter((row) => row.projection.projected !== null);
+  const overall =
+    withData.length > 0
+      ? Math.round((withData.reduce((total, row) => total + (row.projection.projected ?? 0), 0) / withData.length) * 2) / 2
+      : null;
+  const missing = CORE_SKILLS.filter((skill) => !withData.some((row) => row.skill === skill));
+
+  return (
+    <Card
+      title="Band predictor"
+      hint="Projected from your recent results — an estimate, not a promise"
+      actions={
+        <label className="predictor__date">
+          <span>Exam date</span>
+          <input type="date" value={examDate} min={new Date().toISOString().slice(0, 10)} onChange={(event) => onExamDate(event.target.value)} />
+        </label>
+      }
+    >
+      <div className="predictor">
+        <div className="predictor__overall">
+          <strong>{overall === null ? '—' : formatBand(overall)}</strong>
+          <span>projected overall</span>
+        </div>
+        <div className="table-wrap grow">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Skill</th>
+                <th className="num">Now</th>
+                <th className="num">Per week</th>
+                <th className="num">At exam</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.skill}>
+                  <td>{SKILL_LABELS[row.skill] ?? row.skill}</td>
+                  <td className="num">{row.projection.current === null ? '—' : formatBand(row.projection.current)}</td>
+                  <td className="num">
+                    {row.projection.samples < 2
+                      ? '—'
+                      : `${row.projection.slopePerWeek > 0 ? '+' : ''}${row.projection.slopePerWeek.toFixed(2)}`}
+                  </td>
+                  <td className="num">
+                    <b>{row.projection.projected === null ? '—' : formatBand(row.projection.projected)}</b>
+                  </td>
+                  <td>
+                    <span className={`confidence confidence--${row.projection.confidence.toLowerCase()}`}>
+                      {row.projection.confidence.toLowerCase()} · {row.projection.samples} result{row.projection.samples === 1 ? '' : 's'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="tiny muted" style={{ margin: '10px 0 0' }}>
+        Fitted on your last six results per skill, capped at ±0.5 band per week and damped by half so one lucky mock cannot
+        promise a 9.0.{missing.length > 0 ? ` No ${missing.map((skill) => SKILL_LABELS[skill]).join(', ')} result yet — that skill is left out of the overall.` : ''}
+      </p>
+    </Card>
+  );
+}
+
+/**
+ * #9 Where the clock went, from the gap between saved answers. The method note
+ * travels with the data because this is an estimate, not a stopwatch.
+ */
+function TimeAnalyticsCard({ time }: { time: StudentInsights['time'] }) {
+  if (time.attempts.length === 0) {
+    return (
+      <Card title="Time analytics">
+        <p className="muted small">Finish a timed practice set to see how long each question took.</p>
+      </Card>
+    );
+  }
+  return (
+    <Card title="Time analytics" hint="Seconds per question, estimated from when each answer was saved">
+      <div className="time-summary">
+        <div>
+          <strong>{Math.round(time.overall.averageSeconds / 60 * 10) / 10 || '—'}</strong>
+          <span>avg min / question</span>
+        </div>
+        <div>
+          <strong>{time.overall.answered}</strong>
+          <span>timed answers</span>
+        </div>
+        <div>
+          <strong>{time.overall.hasAccuracySignal && time.overall.correctAverage !== null ? `${time.overall.correctAverage}s` : '—'}</strong>
+          <span>avg on correct</span>
+        </div>
+        <div>
+          <strong>{time.overall.hasAccuracySignal && time.overall.incorrectAverage !== null ? `${time.overall.incorrectAverage}s` : '—'}</strong>
+          <span>avg on wrong</span>
+        </div>
+      </div>
+      <div className="stack" style={{ gap: 10, marginTop: 12 }}>
+        {time.attempts.map((attempt) => (
+          <div key={attempt.attemptId} className="time-attempt">
+            <div className="time-attempt__head">
+              <strong>{attempt.title}</strong>
+              <span className="tiny muted">
+                {TEST_TYPE_LABELS[attempt.testType] ?? attempt.testType}
+                {attempt.submittedAt ? ` · ${formatDateTime(attempt.submittedAt)}` : ''}
+              </span>
+            </div>
+            <div className="time-attempt__stats">
+              <span>{attempt.answered} answered</span>
+              <span>{attempt.unanswered} blank</span>
+              <span>avg {attempt.averageSeconds}s</span>
+              {attempt.correctAverage !== null ? <span>{attempt.correctAverage}s on correct</span> : null}
+              {attempt.incorrectAverage !== null ? <span>{attempt.incorrectAverage}s on wrong</span> : null}
+            </div>
+            {attempt.slowest.length > 0 ? (
+              <ul className="time-slowest">
+                {attempt.slowest.map((question) => (
+                  <li key={question.number}>
+                    <b>Q{question.number}</b> {question.seconds}s
+                    <span>{question.prompt}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <p className="tiny muted" style={{ margin: '10px 0 0' }}>{time.method}</p>
+    </Card>
   );
 }
 

@@ -311,7 +311,11 @@ export function ResultSummary({
                   ) : null}
 
                   {writing.ai ? (
-                    <AiMarkPanel mark={writing.ai} heading={isOwner ? 'AI judges' : 'AI judges (estimate, not a teacher band)'} />
+                    <AiMarkPanel
+                      mark={writing.ai}
+                      originalText={writing.responseText}
+                      heading={isOwner ? 'AI judges' : 'AI judges (estimate, not a teacher band)'}
+                    />
                   ) : null}
 
                   {isOwner ? (

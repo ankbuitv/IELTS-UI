@@ -29,6 +29,8 @@ import {
   updateVocabularyEntry,
 } from '../services/vocabulary-service';
 import { getActionPlan, setActionPlanTaskDone } from '../services/action-plan-service';
+import { getStudentInsights } from '../services/insights-service';
+import { listDrillTypes, startDrill, submitDrill } from '../services/drill-service';
 import {
   createTutorConversation,
   deleteTutorConversation,
@@ -273,6 +275,42 @@ router.get('/export', async (c) => {
     vocabulary: vocabulary.results,
     learn,
   });
+});
+
+// -------------------------------------------------------- #6 question drills
+router.get('/drills/types', async (c) => {
+  return c.json({ types: await listDrillTypes(c.env) });
+});
+
+router.post('/drills', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ questionType: z.string().trim().min(3).max(40) }));
+  return c.json(await startDrill(c.env, user, body), 201);
+});
+
+router.post('/drills/:drillId/submit', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      answers: z.record(
+        z.string().max(60),
+        z.object({
+          value: z.string().max(4000).optional(),
+          values: z.array(z.string().max(200)).max(20).optional(),
+        }),
+      ),
+    }),
+  );
+  return c.json(await submitDrill(c.env, user, c.req.param('drillId'), body.answers));
+});
+
+// ------------------------------------------------- #5 + #9 student insights
+router.get('/insights', async (c) => {
+  const user = currentUser(c);
+  return c.json(await getStudentInsights(c.env, user.id));
 });
 
 // ---------------------------------------------------------------- AI tutor

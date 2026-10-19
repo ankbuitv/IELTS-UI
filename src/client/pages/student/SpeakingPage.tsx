@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
+import { analyseFluency } from '@shared/fluency';
 import { detectSpeechRecognition, getSpeechRecognition, type SpeechRecognitionLike } from '../../lib/dictation';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Button, Card, EmptyState, Loading, Notice, TextArea, useToast } from '../../components/ui';
@@ -771,9 +772,63 @@ function PartRecorder({
 // Result view
 // ---------------------------------------------------------------------------
 function SpeakingResult({ score, responses }: { score: AiMarkView; responses: SpeakingPartResponse[] }) {
+  const reports = responses
+    .filter((response) => response.transcript.trim() || response.durationSeconds > 0)
+    .map((response) => ({
+      part: response.part,
+      report: analyseFluency({ transcript: response.transcript, durationSeconds: response.durationSeconds }),
+    }));
+  const totalWords = reports.reduce((total, item) => total + item.report.words, 0);
+  const totalSeconds = reports.reduce((total, item) => total + item.report.seconds, 0);
+  const overallWpm = totalSeconds > 0 ? Math.round((totalWords / totalSeconds) * 60) : 0;
+  const fillers = reports.reduce((total, item) => total + item.report.fillerCount, 0);
+  const variety =
+    reports.length > 0
+      ? Math.round((reports.reduce((total, item) => total + item.report.lexicalVariety, 0) / reports.length) * 100)
+      : 0;
+
   return (
     <div className="stack">
       <AiMarkPanel mark={score} heading="Kết quả từ hai giám khảo AI" />
+
+      {reports.length > 0 ? (
+        <Card title="Fluency (from your transcript)" hint="Pace, fillers and vocabulary range — not pronunciation">
+          <div className="fluency-summary">
+            <div>
+              <strong>{overallWpm || '—'}</strong>
+              <span>words / minute</span>
+            </div>
+            <div>
+              <strong>{totalWords}</strong>
+              <span>words spoken</span>
+            </div>
+            <div>
+              <strong>{fillers}</strong>
+              <span>filler words</span>
+            </div>
+            <div>
+              <strong>{variety}%</strong>
+              <span>content-word variety</span>
+            </div>
+          </div>
+          <div className="stack" style={{ gap: 8, marginTop: 12 }}>
+            {reports.map(({ part, report }) => (
+              <div key={part} className="fluency-row">
+                <Badge tone="neutral">Part {part}</Badge>
+                <span className="small">
+                  {report.wordsPerMinute || '—'} wpm · {report.fillerCount} filler{report.fillerCount === 1 ? '' : 's'} · variety{' '}
+                  {Math.round(report.lexicalVariety * 100)}%
+                </span>
+                <span className="tiny muted">{report.advice}</span>
+              </div>
+            ))}
+          </div>
+          <p className="tiny muted" style={{ margin: '10px 0 0' }}>
+            Measured from the transcript and the length of your recording. Pronunciation needs a listener, so it stays with
+            your teacher — this card does not change your band.
+          </p>
+        </Card>
+      ) : null}
       {responses.some((response) => response.hasAudio) ? (
         <Card title="Nghe lại và tự sửa">
           <div className="stack" style={{ gap: 10 }}>
