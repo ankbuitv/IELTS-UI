@@ -19,7 +19,8 @@ export type NotificationKind =
   | 'BOOKING'
   | 'CLASS'
   | 'ASSIGNMENT'
-  | 'ACHIEVEMENT';
+  | 'ACHIEVEMENT'
+  | 'BILLING';
 
 export interface NotifyInput {
   userId: string;

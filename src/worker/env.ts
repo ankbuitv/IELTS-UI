@@ -52,6 +52,14 @@ export interface Env {
   EMAIL_FROM?: string;
   /** Optional Reply-To for transactional mail. */
   EMAIL_REPLY_TO?: string;
+  /** Stripe secret key. When absent, card checkout reports itself unavailable. */
+  STRIPE_SECRET_KEY?: string;
+  /** Stripe endpoint secret for `/api/billing/stripe/webhook` signature checks. */
+  STRIPE_WEBHOOK_SECRET?: string;
+  /** Manual bank-transfer details shown on a pending order (VNPay/MoMo style). */
+  BILLING_BANK_NAME?: string;
+  BILLING_BANK_ACCOUNT?: string;
+  BILLING_BANK_HOLDER?: string;
 }
 
 export interface ImportQueueMessage {

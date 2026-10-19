@@ -38,6 +38,8 @@ import { aiStatus } from '../ai/openai';
 import { listPublicProviders, saveProviders, testProvider } from '../ai/providers';
 import { AI_PROVIDER_KINDS, type AiProviderConfig } from '../../shared/ai';
 import { validateConversionRanges } from '../../shared/scoring';
+import { listAllOrders, markOrderPaid } from '../services/billing-service';
+import { ORDER_STATUSES, type OrderStatus } from '../../shared/billing';
 import { QUESTION_TYPES } from '../../shared/question-types';
 import { TEST_TYPES, SKILLS, ROLES, CONTENT_ORIGINS } from '../../shared/types';
 import { kindForMime } from '../extract';
@@ -49,6 +51,26 @@ router.use('*', requireAuth, requireRole('ADMIN'));
 router.use('*', async (c, next) => {
   assertSameOrigin(c);
   await next();
+});
+
+// ---------------------------------------------------------------------------
+// Billing
+// ---------------------------------------------------------------------------
+router.get('/billing/orders', async (c) => {
+  const query = parseQuery(c, z.object({ status: z.enum(ORDER_STATUSES).optional() }));
+  return c.json(await listAllOrders(c.env, query.status as OrderStatus | undefined));
+});
+
+router.post('/billing/orders/:orderId/approve', async (c) => {
+  const actor = currentUser(c);
+  const subscription = await markOrderPaid(c.env, c.req.param('orderId'), 'admin');
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'billing.order.approve',
+    entityType: 'billing_order',
+    entityId: c.req.param('orderId'),
+  });
+  return c.json({ subscription });
 });
 
 // ---------------------------------------------------------------------------
