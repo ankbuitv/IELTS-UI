@@ -127,7 +127,6 @@ export function EarningsPage() {
     <div className="stack earnings">
       <div className="page-head">
         <div>
-          <p className="eyebrow">Mentor console</p>
           <h1>Earnings &amp; invoices</h1>
           <p className="muted">
             Every completed session, what it paid, and a printable invoice. Pending sessions are listed but not yet

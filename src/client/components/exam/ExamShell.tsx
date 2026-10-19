@@ -17,6 +17,7 @@ import { useToast } from '../ui';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { ExamSessionApi } from './useExamSession';
 import { ExamDictionary } from './ExamDictionary';
+import { missingQuestionIds } from './answer-coverage';
 import { TabLockOverlay } from './TabLockOverlay';
 import { useExamViewportLock } from './useExamViewport';
 import { useInputLockdown } from '../../hooks/useInputLockdown';
@@ -92,15 +93,11 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
   const answeredQuestionIds = useMemo(() => {
     const ids = new Set<string>();
     if (!state) return ids;
+    const essayIds = new Set(sections.flatMap((section) => section.writingTasks.map((task) => task.id)));
+    const writing = Object.fromEntries(state.writing.map((entry) => [entry.questionId, entry.text]));
+    const missing = new Set(missingQuestionIds(allQuestions, { answers: state.answers, writing, essayIds }));
     for (const question of allQuestions) {
-      if (isEssay(question, sections)) continue;
-      const response = state.answers[question.id];
-      if (!response) continue;
-      const values = 'values' in response ? response.values : [response.value];
-      if (values.some((value) => String(value ?? '').trim().length > 0)) ids.add(question.id);
-    }
-    for (const writing of state.writing) {
-      if (writing.text.trim().length > 0) ids.add(writing.questionId);
+      if (!missing.has(question.id)) ids.add(question.id);
     }
     return ids;
   }, [state, allQuestions, sections]);
@@ -1026,10 +1023,6 @@ function storePassageWidth(value: number): void {
   } catch {
     // Not fatal.
   }
-}
-
-function isEssay(question: CandidateQuestion, sections: CandidateSection[]): boolean {
-  return sections.some((section) => section.writingTasks.some((task) => task.id === question.id));
 }
 
 /**

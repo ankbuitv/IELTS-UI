@@ -2249,9 +2249,8 @@ function WhiteboardPanel({
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
-            onPointerLeave={(event) => {
+            onPointerLeave={() => {
               if (drawingRef.current) onPointerUp();
-              else event.currentTarget.releasePointerCapture?.(event.pointerId);
             }}
           />
           {strokes.length === 0 ? <p className="jr-board__hint">Draw here — everyone in the room sees it.</p> : null}
