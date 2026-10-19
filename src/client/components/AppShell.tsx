@@ -63,6 +63,7 @@ const GROW_GROUP: NavGroup = {
   items: [
     { to: '/calendar', label: 'Calendar', icon: 'calendar' },
     { to: '/speaking', label: 'Speaking', icon: 'mic' },
+    { to: '/speaking/partner', label: 'Speaking partner', icon: 'sparkle' },
     { to: '/analytics', label: 'My progress', icon: 'chart' },
     { to: '/learn/plan', label: 'Study plan', icon: 'calendar' },
     { to: '/classrooms', label: 'Classrooms', icon: 'presentation' },

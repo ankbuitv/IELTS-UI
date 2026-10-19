@@ -37,6 +37,14 @@ import {
   sendTutorMessage,
 } from '../services/tutor-service';
 import { TUTOR_FOCUS } from '../../shared/tutor';
+import {
+  createSpeakingPartnerSession,
+  getSpeakingPartnerSession,
+  listSpeakingPartnerSessions,
+  sendSpeakingPartnerTurn,
+  speakingPartnerTopics,
+  summariseSpeakingPartnerSession,
+} from '../services/speaking-partner-service';
 
 const router = new Hono<AppBindings>();
 
@@ -303,6 +311,41 @@ router.delete('/tutor/:conversationId', async (c) => {
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   await deleteTutorConversation(c.env, user, c.req.param('conversationId'));
   return c.json({ ok: true });
+});
+
+// ---------------------------------------------------- AI speaking partner (#35)
+router.get('/speaking-partner/topics', (c) => {
+  return c.json({ topics: speakingPartnerTopics() });
+});
+
+router.get('/speaking-partner/sessions', async (c) => {
+  const user = currentUser(c);
+  return c.json({ sessions: await listSpeakingPartnerSessions(c.env, user.id) });
+});
+
+router.post('/speaking-partner/sessions', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ topicId: z.string().trim().min(1).max(40) }));
+  return c.json(await createSpeakingPartnerSession(c.env, user, body), 201);
+});
+
+router.get('/speaking-partner/sessions/:sessionId', async (c) => {
+  const user = currentUser(c);
+  return c.json(await getSpeakingPartnerSession(c.env, user, c.req.param('sessionId')));
+});
+
+router.post('/speaking-partner/sessions/:sessionId/turns', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ content: z.string().trim().min(1).max(1500) }));
+  return c.json(await sendSpeakingPartnerTurn(c.env, user, c.req.param('sessionId'), body.content));
+});
+
+router.post('/speaking-partner/sessions/:sessionId/summary', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  return c.json(await summariseSpeakingPartnerSession(c.env, user, c.req.param('sessionId')));
 });
 
 // -------------------------------------------------------- weekly action plan

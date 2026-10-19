@@ -58,7 +58,7 @@ và mute/kick trước đây bị SQLite từ chối), chat tách theo phòng. C
 
 Migration `0035` (cam_on/mic_on). Chi tiết: `docs/CALL-ROOM.md`.
 
-## Đợt 3 — AI & nội dung (đang làm)
+## Đợt 3 — AI & nội dung ✅
 
 | # | Tính năng | Trạng thái |
 |---|---|---|
@@ -70,7 +70,7 @@ Migration `0035` (cam_on/mic_on). Chi tiết: `docs/CALL-ROOM.md`.
 | 38 | **Word-level transcript** | ✅ `src/shared/transcript-timing.ts` chia từ theo anchor + độ dài audio; click từ → menu "Play from here"/tra từ; "Listen from here" nhảy đúng câu evidence (`findEvidenceStart`), 7 test |
 | 37 | **OCR import đề** | ✅ tab **Scan or photo (OCR)**: tối đa 8 ảnh PNG/JPEG/WebP ≤8 MB, vision model đọc + cấu trúc, vào **Review**, audit `IMPORT_OCR` (`POST /api/admin/imports/ocr`) |
 | 36 | **AI generate đề** | ✅ Reading 1–3 bài, 5–14 câu/bài, chọn band; prompt chống đạo văn; vào thẳng **Review** (`POST /api/admin/imports/generate`), audit `IMPORT_AI_GENERATED` |
-| 35 | **AI speaking partner** | ⬜ |
+| 35 | **AI speaking partner** | ✅ `/speaking/partner`: 9 chủ đề Part 1–3, hỏi từng câu, coaching sau mỗi câu trả lời, dictation bằng Web Speech API, tổng kết cuối; AI lỗi/không có provider → chấm theo luật (`RULES`) chứ không chặn |
 
 ## Đợt 4 — Luyện thi nâng cao
 
@@ -107,4 +107,4 @@ Migration `0035` (cam_on/mic_on). Chi tiết: `docs/CALL-ROOM.md`.
 | 4 | Luyện thi nâng cao | ~2 tuần |
 | 5 | Thanh toán & xã hội | ~1.5–2 tuần |
 
-> **Đợt 3 là đợt tiếp theo** (41 → 42 → 34 → 40 → 39 → 38 → 37 → 36 → 35).
+> **Đợt 3 đã xong.** Đợt 4 là đợt tiếp theo (2 → 5 → 9 → 10 → 11 → 6 → 4 → 3).

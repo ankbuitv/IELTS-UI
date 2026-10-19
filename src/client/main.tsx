@@ -19,6 +19,7 @@ import './styles/callroom.css';
 import './styles/notifications.css';
 import './styles/action-plan.css';
 import './styles/tutor.css';
+import './styles/speaking-partner.css';
 import './styles/certificate.css';
 import { applyPrefs, loadPrefs } from './lib/display';
 

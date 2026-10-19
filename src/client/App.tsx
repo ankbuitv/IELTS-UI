@@ -25,6 +25,7 @@ import { FriendPage, PublicPlayerProfilePage } from './pages/student/SocialPages
 import { LessonPage, ReviewPage } from './pages/student/LessonPages';
 import { DictionaryPage } from './pages/student/DictionaryPage';
 import { SpeakingPage } from './pages/student/SpeakingPage';
+import { SpeakingPartnerPage } from './pages/student/SpeakingPartnerPage';
 import { TakeExamPage } from './pages/exam/TakeExam';
 import { AttemptReviewPage } from './pages/exam/ReviewExam';
 import { TeacherHomePage, ClassroomPage, AssignmentPage, StudentDetailPage } from './pages/teacher/TeacherPages';
@@ -194,6 +195,22 @@ export function App() {
           element={
             <RequireAuth>
               <SpeakingPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="speaking/partner"
+          element={
+            <RequireAuth>
+              <SpeakingPartnerPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="speaking/partner/:sessionId"
+          element={
+            <RequireAuth>
+              <SpeakingPartnerPage />
             </RequireAuth>
           }
         />

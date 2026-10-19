@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
+import { detectSpeechRecognition, getSpeechRecognition, type SpeechRecognitionLike } from '../../lib/dictation';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Button, Card, EmptyState, Loading, Notice, TextArea, useToast } from '../../components/ui';
 import { Icon } from '../../components/Icon';
@@ -145,6 +146,16 @@ function SpeakingLobby({ onStarted }: { onStarted: (sessionId: string) => void }
 
       {topics.loading ? <Loading label="Đang tải chủ đề…" /> : null}
       {topics.error ? <Notice tone="danger">{topics.error}</Notice> : null}
+
+      <Link className="partner-banner" to="/speaking/partner">
+        <span className="partner-banner__icon">
+          <Icon name="sparkle" size={18} />
+        </span>
+        <span className="partner-banner__text">
+          <strong>Practise with the AI speaking partner</strong>
+          <span>One question at a time, coaching after every answer, no recording needed →</span>
+        </span>
+      </Link>
 
       <div className="speaking-topic-grid">
         <button
@@ -784,36 +795,6 @@ function SpeakingResult({ score, responses }: { score: AiMarkView; responses: Sp
 // ---------------------------------------------------------------------------
 // Media helpers
 // ---------------------------------------------------------------------------
-interface SpeechRecognitionLike {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: unknown) => void) | null;
-  onend: (() => void) | null;
-}
-
-interface SpeechRecognitionEventLike {
-  resultIndex: number;
-  results: ArrayLike<{ isFinal: boolean; 0?: { transcript?: string } } & { length: number }>;
-}
-
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-
-function getSpeechRecognition(): SpeechRecognitionCtor | null {
-  const scope = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionCtor;
-    webkitSpeechRecognition?: SpeechRecognitionCtor;
-  };
-  return scope.SpeechRecognition ?? scope.webkitSpeechRecognition ?? null;
-}
-
-function detectSpeechRecognition(): boolean {
-  return getSpeechRecognition() !== null;
-}
-
 function pickMimeType(): string | undefined {
   if (typeof MediaRecorder === 'undefined') return undefined;
   const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
