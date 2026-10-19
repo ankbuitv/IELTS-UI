@@ -260,3 +260,59 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
 .set-chip:disabled { opacity: 0.5; cursor: not-allowed; }
 .set-chip--all { border-color: var(--brand-300); background: var(--brand-50); color: var(--brand-700); }
 .set-chip__count { font-size: 0.72rem; color: var(--ink-400); }
+
+/* ---------------------------------------------------------- quick marking */
+
+.draft-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px dashed var(--brand-200);
+  border-radius: var(--radius);
+  background: var(--brand-50);
+}
+.draft-strip__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.draft-strip__text strong { font-size: 0.84rem; color: var(--ink-900); }
+.draft-strip__text span { font-size: 0.76rem; line-height: 1.45; color: var(--ink-600); }
+
+.draft-preview {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius);
+  background: var(--paper-muted);
+}
+.draft-preview > div:first-child { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.draft-preview strong { font-size: 0.92rem; }
+.draft-preview span { font-size: 0.74rem; color: var(--ink-500); line-height: 1.45; }
+.draft-preview__actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.quick-notes { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.quick-notes__label {
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+  margin-right: 2px;
+}
+.quick-notes button {
+  border: 1px solid var(--ink-200);
+  background: var(--paper);
+  color: var(--ink-600);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.quick-notes button:hover { background: var(--brand-50); border-color: var(--brand-200); color: var(--brand-700); }

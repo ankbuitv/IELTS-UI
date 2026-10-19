@@ -28,6 +28,15 @@ import {
   saveVocabularyEntry,
   updateVocabularyEntry,
 } from '../services/vocabulary-service';
+import { getActionPlan, setActionPlanTaskDone } from '../services/action-plan-service';
+import {
+  createTutorConversation,
+  deleteTutorConversation,
+  getTutorThread,
+  listTutorConversations,
+  sendTutorMessage,
+} from '../services/tutor-service';
+import { TUTOR_FOCUS } from '../../shared/tutor';
 
 const router = new Hono<AppBindings>();
 
@@ -256,6 +265,63 @@ router.get('/export', async (c) => {
     vocabulary: vocabulary.results,
     learn,
   });
+});
+
+// ---------------------------------------------------------------- AI tutor
+router.get('/tutor', async (c) => {
+  const user = currentUser(c);
+  return c.json({ conversations: await listTutorConversations(c.env, user.id) });
+});
+
+router.post('/tutor', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      title: z.string().trim().max(80).optional(),
+      focusSkill: z.enum(TUTOR_FOCUS).optional(),
+    }),
+  );
+  return c.json(await createTutorConversation(c.env, user, body), 201);
+});
+
+router.get('/tutor/:conversationId', async (c) => {
+  const user = currentUser(c);
+  return c.json(await getTutorThread(c.env, user, c.req.param('conversationId')));
+});
+
+router.post('/tutor/:conversationId/messages', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ content: z.string().trim().min(1).max(4000) }));
+  return c.json(await sendTutorMessage(c.env, user, c.req.param('conversationId'), body.content));
+});
+
+router.delete('/tutor/:conversationId', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  await deleteTutorConversation(c.env, user, c.req.param('conversationId'));
+  return c.json({ ok: true });
+});
+
+// -------------------------------------------------------- weekly action plan
+router.get('/action-plan', async (c) => {
+  const user = currentUser(c);
+  return c.json(await getActionPlan(c.env, user));
+});
+
+router.post('/action-plan/refresh', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  return c.json(await getActionPlan(c.env, user, true));
+});
+
+router.patch('/action-plan/tasks/:taskId', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ done: z.boolean() }));
+  return c.json(await setActionPlanTaskDone(c.env, user, c.req.param('taskId'), body.done));
 });
 
 router.get('/vocabulary', async (c) => {

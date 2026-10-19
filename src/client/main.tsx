@@ -17,6 +17,8 @@ import './styles/mentor.css';
 import './styles/earnings.css';
 import './styles/callroom.css';
 import './styles/notifications.css';
+import './styles/action-plan.css';
+import './styles/tutor.css';
 import './styles/certificate.css';
 import { applyPrefs, loadPrefs } from './lib/display';
 

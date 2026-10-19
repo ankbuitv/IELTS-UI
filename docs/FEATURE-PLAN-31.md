@@ -58,19 +58,19 @@ và mute/kick trước đây bị SQLite từ chối), chat tách theo phòng. C
 
 Migration `0035` (cam_on/mic_on). Chi tiết: `docs/CALL-ROOM.md`.
 
-## Đợt 3 — AI & nội dung
+## Đợt 3 — AI & nội dung (đang làm)
 
-| # | Tính năng | Ghi chú |
+| # | Tính năng | Trạng thái |
 |---|---|---|
-| 41 | **Quick-mark rubric** | Tag nhận xét có sẵn + AI điền nháp, lưu vào `writing_scores.feedback` |
-| 42 | **Weekly action plan** | Tổng hợp lỗi từ `ai_judgements` + review, 3 việc/tuần, hiện trên dashboard |
-| 34 | **AI tutor** | Chat dùng Ollama sẵn có, RAG nhẹ từ lesson + đáp án |
-| 40 | **Vocab auto-extract + SRS** | Bảng `vocab_reviews`, lịch SM-2; nối trang Vocabulary |
-| 39 | **TTS nhiều giọng** | `speech_cache` + provider TTS; chọn UK/AU/US |
-| 38 | **Word-level transcript** | Lưu timestamp từng từ khi import; "listen from here" chính xác |
-| 37 | **OCR import đề** | Nối pipeline `import-service` + vision model đã có |
-| 36 | **AI generate đề** | Sinh passage/câu hỏi theo band, bắt buộc admin duyệt |
-| 35 | **AI speaking partner** | Hội thoại theo lượt, chấm bằng judge pipeline hiện tại |
+| 41 | **Quick-mark rubric** | ✅ 10 nhận xét một chạm + nút **Lấy bản nháp** (đọc `ai_scores`, điền band/criteria/feedback, giáo viên sửa trước khi lưu). Endpoint `GET /api/{teacher,admin}/writing-submissions/:id/ai-draft` |
+| 42 | **Weekly action plan** | ✅ bảng `weekly_action_plans`, 3 việc/tuần, tiêu chí yếu nhất từ điểm Writing/Speaking, từ đến hạn, ôn lỗi; checkbox lưu trạng thái; thẻ trên dashboard |
+| 34 | **AI tutor** | ✅ `/tutor`, `tutor_conversations`/`tutor_messages`, system prompt chống bịa band, giới hạn 60 tin/giờ, giao diện 2 cột + mobile |
+| 40 | **Vocab auto-extract + SRS** | ✅ đã có từ trước: `saveAiVocabulary` khi chấm, Leitner `box`/`due_at`, `/learn/review`, thẻ due trên Vocabulary |
+| 39 | **TTS nhiều giọng** | 🟡 đã có `speech_cache`, 13 giọng server + fallback giọng thiết bị; còn thiếu bộ chọn accent UK/AU/US rõ ràng |
+| 38 | **Word-level transcript** | ⬜ cần timestamp từng từ (provider phải trả word timings); segment-level đã có |
+| 37 | **OCR import đề** | ⬜ vision model đã nhận ảnh nhưng pipeline import chưa lưu/đọc ảnh scan |
+| 36 | **AI generate đề** | ⬜ |
+| 35 | **AI speaking partner** | ⬜ |
 
 ## Đợt 4 — Luyện thi nâng cao
 

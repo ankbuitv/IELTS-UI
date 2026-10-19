@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 80   Indexes: 96
+-- Tables: 83   Indexes: 99
 -- =============================================================================
 
 -- table: user_profiles
@@ -1132,6 +1132,37 @@ CREATE TABLE IF NOT EXISTS "mentor_signals" (
   created_at TEXT NOT NULL
 );
 
+-- table: weekly_action_plans
+CREATE TABLE IF NOT EXISTS weekly_action_plans (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  week_start  TEXT NOT NULL,
+  plan_json   TEXT NOT NULL,
+  source      TEXT NOT NULL DEFAULT 'RULES' CHECK (source IN ('RULES', 'AI')),
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  UNIQUE (user_id, week_start)
+);
+
+-- table: tutor_conversations
+CREATE TABLE IF NOT EXISTS tutor_conversations (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  title       TEXT NOT NULL DEFAULT 'New chat',
+  focus_skill TEXT NOT NULL DEFAULT 'ANY' CHECK (focus_skill IN ('ANY', 'WRITING', 'SPEAKING', 'READING', 'LISTENING', 'VOCABULARY')),
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+-- table: tutor_messages
+CREATE TABLE IF NOT EXISTS tutor_messages (
+  id              TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES tutor_conversations (id) ON DELETE CASCADE,
+  role            TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content         TEXT NOT NULL,
+  created_at      TEXT NOT NULL
+);
+
 -- index: idx_sessions_user
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
 
@@ -1426,3 +1457,12 @@ CREATE INDEX IF NOT EXISTS idx_mentor_presence_room ON mentor_room_presence (ses
 
 -- index: idx_mentor_messages_room
 CREATE INDEX IF NOT EXISTS idx_mentor_messages_room ON mentor_messages (session_id, room_key, created_at);
+
+-- index: idx_weekly_plan_user
+CREATE INDEX IF NOT EXISTS idx_weekly_plan_user ON weekly_action_plans (user_id, week_start);
+
+-- index: idx_tutor_conversations_user
+CREATE INDEX IF NOT EXISTS idx_tutor_conversations_user ON tutor_conversations (user_id, updated_at);
+
+-- index: idx_tutor_messages_conversation
+CREATE INDEX IF NOT EXISTS idx_tutor_messages_conversation ON tutor_messages (conversation_id, created_at);

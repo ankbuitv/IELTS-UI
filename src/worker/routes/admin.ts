@@ -26,6 +26,7 @@ import {
 import { replaceVersionContent, type EditableContent } from '../services/content-write-service';
 import { purgeTest, purgeVersion } from '../services/content-delete-service';
 import { listWritingQueue, markQuestionManually, setWritingScore } from '../services/marking-service';
+import { loadWritingMarks } from '../services/ai-marking-service';
 import { ensureDefaultScoringProfiles } from '../services/scoring-profile-service';
 import { clearTestAccessCode, setTestAccessCode } from '../services/access-code-service';
 import { schemaReport } from '../lib/ensure-schema';
@@ -1115,6 +1116,17 @@ router.get('/attempts/:attemptId', async (c) => {
     .first<{ email: string; display_name: string | null }>();
 
   return c.json({ ...view, student: { id: attempt.user_id, email: student?.email, displayName: student?.display_name } });
+});
+
+/** The judges' latest estimate for one essay, used to prefill the quick-mark form. */
+router.get('/writing-submissions/:submissionId/ai-draft', async (c) => {
+  const submissionId = c.req.param('submissionId');
+  const submission = await c.env.DB.prepare('SELECT id FROM writing_submissions WHERE id = ?')
+    .bind(submissionId)
+    .first<{ id: string }>();
+  if (!submission) throw ApiError.notFound('Writing submission not found.');
+  const marks = await loadWritingMarks(c.env, [submissionId]);
+  return c.json({ mark: marks.get(submissionId) ?? null });
 });
 
 router.get('/writing-queue', async (c) => {

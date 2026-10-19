@@ -9,6 +9,7 @@ import { AttemptList, newestFirst } from '../../components/AttemptList';
 import { Icon } from '../../components/Icon';
 import { BandEstimatesPanel } from '../../components/BandEstimates';
 import { LearnStrip } from '../../components/learn/LearnStrip';
+import { ActionPlanCard } from '../../components/ActionPlanCard';
 import {
   BAND_DISCLAIMER,
   formatBand,
@@ -137,6 +138,8 @@ export function StudentDashboardPage() {
           </Link>
         </div>
       </section>
+
+      <ActionPlanCard />
 
       <LearnStrip />
 

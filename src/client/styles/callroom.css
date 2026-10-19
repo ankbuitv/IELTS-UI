@@ -18,7 +18,7 @@
   overflow: hidden;
 }
 .jr * { box-sizing: border-box; }
-.jr video { background: #000; }
+.jr video { background: #0f1116; }
 
 /* ------------------------------------------------------------------ top bar */
 
@@ -159,10 +159,10 @@
   width: 100%; min-height: 0; max-height: 100%;
   border-radius: 12px; overflow: hidden; background: #161920; border: 1px solid #262b36;
 }
-.jr-solo__tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.jr-solo__tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .jr-solo__tile video,
 .jr-prejoin__video { transform: scaleX(-1); }
-.jr-solo__tile.is-screen video { transform: none; }
+.jr-solo__tile.is-screen video { transform: none; object-fit: contain; }
 
 .jr-waiting {
   flex: none;

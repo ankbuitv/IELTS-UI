@@ -43,6 +43,7 @@ const LEARN_GROUP: NavGroup = {
     { to: '/practice', label: 'Practice', icon: 'book' },
     { to: '/history', label: 'Results', icon: 'award' },
     { to: '/vocabulary', label: 'Vocabulary', icon: 'layers' },
+    { to: '/tutor', label: 'AI Tutor', icon: 'sparkle' },
     { to: '/dictionary', label: 'Dictionary', icon: 'search' },
   ],
 };

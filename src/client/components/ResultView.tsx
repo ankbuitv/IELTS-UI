@@ -508,6 +508,28 @@ function roundHalf(value: number): number {
   return Math.round(value * 2) / 2;
 }
 
+/** One-click comments a marker can drop in while reading. */
+const QUICK_NOTES: Array<{ label: string; text: string }> = [
+  { label: 'Clear position', text: 'Your position is clear and stays consistent.' },
+  { label: 'Overview missing', text: 'The overview is missing: state the two main trends in one sentence.' },
+  { label: 'Ideas underdeveloped', text: 'Each main idea needs one concrete example or explanation.' },
+  { label: 'Linking repeated', text: 'Linking words repeat (and, but, also). Vary them and start sentences differently.' },
+  { label: 'Good vocabulary', text: 'Good range of vocabulary; keep checking collocations.' },
+  { label: 'Imprecise word', text: 'Some word choices are imprecise. Use a dictionary and write the example sentence too.' },
+  { label: 'Articles/agreement', text: 'Check articles (a/an/the) and subject–verb agreement — the most frequent errors here.' },
+  { label: 'Complex sentences', text: 'Try more complex sentences, but keep them accurate rather than long.' },
+  { label: 'Word count', text: 'You are below the word limit; develop each body paragraph by one more sentence.' },
+  { label: 'Off-topic parts', text: 'Some parts drift from the question. Re-read the task before writing the conclusion.' },
+];
+
+/** Canonical AI keys → the short keys this form stores. */
+const AI_KEY_TO_FORM: Record<string, string> = {
+  TASK_ACHIEVEMENT: 'TA',
+  COHERENCE_COHESION: 'CC',
+  LEXICAL_RESOURCE: 'LR',
+  GRAMMATICAL_RANGE: 'GRA',
+};
+
 export function WritingMarkForm({
   apiBase,
   submissionId,
@@ -540,6 +562,50 @@ export function WritingMarkForm({
     return initial;
   });
   const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState<AiMarkView | null>(null);
+  const [draftBusy, setDraftBusy] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+
+  const loadAiDraft = async () => {
+    setDraftBusy(true);
+    setDraftError(null);
+    try {
+      const { mark } = await api.get<{ mark: AiMarkView | null }>(
+        `${apiBase}/writing-submissions/${encodeURIComponent(submissionId)}/ai-draft`,
+      );
+      if (!mark) {
+        setDraftError('The judges have not marked this essay yet. Run AI marking first, or just mark it yourself.');
+        return;
+      }
+      setDraft(mark);
+    } catch (cause) {
+      setDraftError(describeError(cause));
+    } finally {
+      setDraftBusy(false);
+    }
+  };
+
+  const useDraft = () => {
+    if (!draft) return;
+    setBand(draft.band != null ? String(draft.band) : '');
+    const next = { ...criteria };
+    for (const item of draft.criteria) {
+      const key = AI_KEY_TO_FORM[item.key];
+      if (key && visibleCriteria.some((criterion) => criterion.key === key) && item.band !== null) {
+        next[key] = String(item.band);
+      }
+    }
+    setCriteria(next);
+    const parts = [draft.feedback];
+    if (draft.feedbackVi) parts.push(`Tóm tắt (VI): ${draft.feedbackVi}`);
+    if (draft.improvements.length > 0) parts.push(`Next steps:\n${draft.improvements.map((item) => `• ${item}`).join('\n')}`);
+    setFeedback(parts.filter(Boolean).join('\n\n'));
+    setDraft(null);
+  };
+
+  const addQuickNote = (text: string) => {
+    setFeedback((current) => (current.trim() ? `${current.trimEnd()}\n• ${text}` : `• ${text}`));
+  };
 
   const applyCriteriaAverage = (next: Record<string, string>) => {
     const numbers = visibleCriteria
@@ -584,6 +650,34 @@ export function WritingMarkForm({
           </Field>
         ))}
       </div>
+      <div className="draft-strip">
+        <div className="draft-strip__text">
+          <strong>AI draft</strong>
+          <span>Both judges already marked this essay. Prefill the form, adjust anything you disagree with, then save.</span>
+        </div>
+        <Button size="sm" variant="secondary" loading={draftBusy} onClick={() => void loadAiDraft()}>
+          <Icon name="sparkle" size={13} /> Lấy bản nháp
+        </Button>
+      </div>
+      {draftError ? <p className="tiny muted">{draftError}</p> : null}
+      {draft ? (
+        <div className="draft-preview">
+          <div>
+            <strong>Band {formatBand(draft.band)}</strong>
+            <span>
+              {draft.criteria.map((item) => `${item.label} ${item.band === null ? '—' : formatBand(item.band)}`).join(' · ')}
+            </span>
+          </div>
+          <div className="draft-preview__actions">
+            <Button size="sm" variant="primary" onClick={useDraft}>
+              Dùng bản nháp
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setDraft(null)}>
+              Bỏ
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <Field label="Overall band" hint="Filled from the criteria when all are set. Half bands allowed. Leave empty to clear.">
         {(id) => (
           <TextInput
@@ -598,8 +692,16 @@ export function WritingMarkForm({
         )}
       </Field>
       <Field label="Feedback to the student">
-        {(id) => <TextArea id={id} rows={4} value={feedback} onChange={(event) => setFeedback(event.target.value)} />}
+        {(id) => <TextArea id={id} rows={5} value={feedback} onChange={(event) => setFeedback(event.target.value)} />}
       </Field>
+      <div className="quick-notes" aria-label="Quick comments">
+        <span className="quick-notes__label">Thêm nhanh</span>
+        {QUICK_NOTES.map((note) => (
+          <button key={note.label} type="button" onClick={() => addQuickNote(note.text)} title={note.text}>
+            + {note.label}
+          </button>
+        ))}
+      </div>
       <Button
         variant="primary"
         size="sm"

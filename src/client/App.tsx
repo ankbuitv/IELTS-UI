@@ -15,6 +15,7 @@ import {
 } from './pages/student/StudentPages';
 import { StudentDashboardPage } from './pages/student/Dashboard';
 import { VocabularyPage } from './pages/student/VocabularyPage';
+import { TutorPage } from './pages/student/TutorPage';
 import { LearnPage } from './pages/student/LearnPage';
 import { PlanPage } from './pages/student/PlanPage';
 import { ShopPage } from './pages/student/ShopPage';
@@ -281,6 +282,14 @@ export function App() {
           element={
             <RequireAuth>
               <DictionaryPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="tutor"
+          element={
+            <RequireAuth>
+              <TutorPage />
             </RequireAuth>
           }
         />
