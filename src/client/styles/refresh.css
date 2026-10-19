@@ -415,3 +415,26 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
   cursor: pointer;
 }
 .convo__bubble-text:disabled { cursor: default; }
+
+/* #39 accent picker in lessons */
+.lesson__accent {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--paper-100);
+  border: 1px solid var(--line);
+}
+.lesson__accent-btn {
+  border: 0;
+  background: none;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--ink-500);
+  cursor: pointer;
+}
+.lesson__accent-btn.is-on { background: var(--surface); color: var(--brand-800); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12); }
+.lesson__accent-btn:hover { color: var(--brand-700); }

@@ -19,7 +19,22 @@ import {
 } from '@shared/learn-engine';
 import type { ShopState } from '@shared/shop';
 import { HINT_REMOVES_OPTIONS, boostState } from '@shared/shop';
-import { canSpeak, getPreferredVoiceURI, isServerVoice, listEnglishVoices, listServerVoices, serverVoiceOf, setPreferredVoiceURI, speak, speakWithServer } from '../../lib/speech';
+import {
+  SPEECH_ACCENTS,
+  accentMatchesLang,
+  canSpeak,
+  getPreferredAccent,
+  getPreferredVoiceURI,
+  isServerVoice,
+  listEnglishVoices,
+  listServerVoices,
+  serverVoiceOf,
+  setPreferredAccent,
+  setPreferredVoiceURI,
+  speak,
+  speakWithServer,
+  type SpeechAccent,
+} from '../../lib/speech';
 import { learnApi } from '../../lib/learn-api';
 import type { TranslationResult } from '@shared/learn';
 import { Icon } from '../Icon';
@@ -777,6 +792,7 @@ function OptionExercise({ exercise, disabled, hinted, verdict, registerSubmit, o
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [serverVoices, setServerVoices] = useState<string[]>([]);
   const [voiceURI, setVoiceURI] = useState<string | null>(getPreferredVoiceURI());
+  const [accent, setAccent] = useState<SpeechAccent>(getPreferredAccent());
   const [audioFailed, setAudioFailed] = useState(false);
   const options = exercise.kind === 'choose' || exercise.kind === 'fill' || exercise.kind === 'listen' ? exercise.options : [];
   const answer = exercise.kind === 'choose' || exercise.kind === 'fill' || exercise.kind === 'listen' ? exercise.answer : -1;
@@ -786,12 +802,28 @@ function OptionExercise({ exercise, disabled, hinted, verdict, registerSubmit, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [exercise, hinted],
   );
-  const speakWith = (text: string, rate: number, choice: string | null) =>
-    isServerVoice(choice) ? speakWithServer(text, serverVoiceOf(choice as string)) : speak(text, rate, choice);
+  const speakWith = (text: string, rate: number, choice: string | null, chosenAccent: SpeechAccent = accent) =>
+    isServerVoice(choice)
+      ? speakWithServer(text, serverVoiceOf(choice as string), chosenAccent)
+      : speak(text, rate, choice, chosenAccent);
 
   const play = (rate = 0.9) => {
     setAudioFailed(false);
     void speakWith(exercise.kind === 'listen' ? exercise.speak : '', rate, voiceURI).then((ok) => setAudioFailed(!ok));
+  };
+
+  /** Switching accent re-speaks the word immediately, so the difference is audible. */
+  const chooseAccent = (next: SpeechAccent) => {
+    setAccent(next);
+    setPreferredAccent(next);
+    setAudioFailed(false);
+    if (voiceURI && !isServerVoice(voiceURI)) {
+      const deviceVoice = voices.find((voice) => voice.voiceURI === voiceURI);
+      if (deviceVoice && !accentMatchesLang(next, deviceVoice.lang)) setVoiceURI(null);
+    }
+    if (exercise.kind === 'listen') {
+      void speakWith(exercise.speak, 0.9, voiceURI, next).then((ok) => setAudioFailed(!ok));
+    }
   };
 
   useEffect(() => {
@@ -850,6 +882,20 @@ function OptionExercise({ exercise, disabled, hinted, verdict, registerSubmit, o
             <button type="button" className="lesson__speaker lesson__speaker--slow" onClick={() => play(0.55)} aria-label="Play slowly">
               <Icon name="rotate" size={20} />
             </button>
+            <div className="lesson__accent" role="group" aria-label="Accent">
+              {SPEECH_ACCENTS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`lesson__accent-btn ${accent === item.id ? 'is-on' : ''}`}
+                  aria-pressed={accent === item.id}
+                  title={`${item.id === 'UK' ? 'British' : item.id === 'AU' ? 'Australian' : 'American'} English`}
+                  onClick={() => chooseAccent(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
             {serverVoices.length > 0 || voices.length > 1 ? (
               <select
                 className="lesson__voice"

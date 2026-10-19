@@ -66,7 +66,7 @@ Migration `0035` (cam_on/mic_on). Chi tiết: `docs/CALL-ROOM.md`.
 | 42 | **Weekly action plan** | ✅ bảng `weekly_action_plans`, 3 việc/tuần, tiêu chí yếu nhất từ điểm Writing/Speaking, từ đến hạn, ôn lỗi; checkbox lưu trạng thái; thẻ trên dashboard |
 | 34 | **AI tutor** | ✅ `/tutor`, `tutor_conversations`/`tutor_messages`, system prompt chống bịa band, giới hạn 60 tin/giờ, giao diện 2 cột + mobile |
 | 40 | **Vocab auto-extract + SRS** | ✅ đã có từ trước: `saveAiVocabulary` khi chấm, Leitner `box`/`due_at`, `/learn/review`, thẻ due trên Vocabulary |
-| 39 | **TTS nhiều giọng** | 🟡 đã có `speech_cache`, 13 giọng server + fallback giọng thiết bị; còn thiếu bộ chọn accent UK/AU/US rõ ràng |
+| 39 | **TTS nhiều giọng** | ✅ accent **UK / AU / US** trong lesson: server gửi `instructions` theo accent và cache theo `voice:accent:hash`; giọng thiết bị được chọn theo language tag; lựa chọn lưu trên máy |
 | 38 | **Word-level transcript** | ✅ `src/shared/transcript-timing.ts` chia từ theo anchor + độ dài audio; click từ → menu "Play from here"/tra từ; "Listen from here" nhảy đúng câu evidence (`findEvidenceStart`), 7 test |
 | 37 | **OCR import đề** | ✅ tab **Scan or photo (OCR)**: tối đa 8 ảnh PNG/JPEG/WebP ≤8 MB, vision model đọc + cấu trúc, vào **Review**, audit `IMPORT_OCR` (`POST /api/admin/imports/ocr`) |
 | 36 | **AI generate đề** | ✅ Reading 1–3 bài, 5–14 câu/bài, chọn band; prompt chống đạo văn; vào thẳng **Review** (`POST /api/admin/imports/generate`), audit `IMPORT_AI_GENERATED` |
