@@ -40,20 +40,33 @@ export const mentorApi = {
     api.post<{ ok: true }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/review`, { rating, comment }),
 
   // Live room
-  room: (sessionId: string, since?: string, room = 'main') => {
+  room: (sessionId: string, since?: string, room = 'main', media?: { cam: boolean; mic: boolean }) => {
     const params = new URLSearchParams();
     if (since) params.set('since', since);
     if (room && room !== 'main') params.set('room', room);
+    // Presence is the heartbeat, so the device flags ride along with it.
+    if (media) {
+      params.set('cam', media.cam ? '1' : '0');
+      params.set('mic', media.mic ? '1' : '0');
+    }
     const query = params.toString();
     return api.get<MentorRoomState>(
       `/api/mentor/sessions/${encodeURIComponent(sessionId)}/room${query ? `?${query}` : ''}`,
     );
   },
-  join: (sessionId: string, room = 'main') =>
-    api.post<{ ok: true }>(
-      `/api/mentor/sessions/${encodeURIComponent(sessionId)}/join${room && room !== 'main' ? `?room=${encodeURIComponent(room)}` : ''}`,
+  join: (sessionId: string, room = 'main', media?: { cam: boolean; mic: boolean }) => {
+    const params = new URLSearchParams();
+    if (room && room !== 'main') params.set('room', room);
+    if (media) {
+      params.set('cam', media.cam ? '1' : '0');
+      params.set('mic', media.mic ? '1' : '0');
+    }
+    const query = params.toString();
+    return api.post<{ ok: true }>(
+      `/api/mentor/sessions/${encodeURIComponent(sessionId)}/join${query ? `?${query}` : ''}`,
       {},
-    ),
+    );
+  },
   leave: (sessionId: string) => api.post<{ ok: true }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/leave`, {}),
   confirm: (sessionId: string) =>
     api.post<{ session: MentorSession }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/confirm`, {}),

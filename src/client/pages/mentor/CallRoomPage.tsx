@@ -67,6 +67,7 @@ export function CallRoomPage() {
   const [state, setState] = useState<MentorRoomState | null>(null);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+  const [hasCamera, setHasCamera] = useState(false);
   const [screenOn, setScreenOn] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
   const [panel, setPanel] = useState<'chat' | 'notes' | 'people'>('chat');
@@ -102,6 +103,11 @@ export function CallRoomPage() {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const pcsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  /** One stable MediaStream per remote peer. Tiles exist as soon as the person is
+   * in the room; tracks land in this stream when WebRTC connects. */
+  const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
+  /** Device flags for the presence heartbeat (read inside the poll interval). */
+  const mediaRef = useRef({ cam: true, mic: true });
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const participantsRef = useRef<MentorRoomState['participants']>([]);
   const lastSignalIdRef = useRef<string | null>(null);
@@ -125,9 +131,14 @@ export function CallRoomPage() {
 
   const selfId = user?.id ?? '';
 
+  useEffect(() => {
+    mediaRef.current = { cam: camOn, mic: micOn };
+  }, [camOn, micOn]);
+
   // ---------------------------------------------------------------- media
   const stopMedia = useCallback(() => {
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    setHasCamera(false);
     screenStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
     screenStreamRef.current = null;
@@ -278,6 +289,7 @@ export function CallRoomPage() {
       });
 
       localStreamRef.current = stream;
+      setHasCamera(stream.getVideoTracks().length > 0);
       setCamOn(stream.getVideoTracks().length > 0);
       setMicOn(stream.getAudioTracks().length > 0);
       void refreshDevices();
@@ -328,6 +340,11 @@ export function CallRoomPage() {
       pcsRef.current.set(userId, pc);
 
       const remoteStream = new MediaStream();
+      remoteStreamsRef.current.set(userId, remoteStream);
+      // A tile exists the moment someone is present — before media negotiates.
+      setPeers((prev) =>
+        prev.some((peer) => peer.userId === userId) ? prev : [...prev, { userId, displayName, stream: remoteStream }],
+      );
       pc.ontrack = (event) => {
         // Reuse the same track objects so <video> keeps playing across renegotiations.
         if (!remoteStream.getTracks().includes(event.track)) remoteStream.addTrack(event.track);
@@ -350,6 +367,7 @@ export function CallRoomPage() {
         if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
           pc.close();
           pcsRef.current.delete(userId);
+          remoteStreamsRef.current.delete(userId);
           setPeers((prev) => prev.filter((peer) => peer.userId !== userId));
         }
       };
@@ -534,7 +552,12 @@ export function CallRoomPage() {
     let alive = true;
     const tick = async () => {
       try {
-        const next = await mentorApi.room(sessionId, lastSignalIdRef.current ?? undefined, room);
+        const next = await mentorApi.room(
+          sessionId,
+          lastSignalIdRef.current ?? undefined,
+          room,
+          mediaRef.current,
+        );
         if (!alive) return;
         participantsRef.current = next.participants;
         setState(next);
@@ -553,12 +576,21 @@ export function CallRoomPage() {
             void negotiate(participant.userId);
           }
         }
-        // A peer that vanished from presence has really left: drop the tile now.
-        setPeers((prev) => prev.filter((peer) => presentIds.has(peer.userId)));
+        // One tile per person present — names and avatars are visible even
+        // while their camera is off or the first frame has not arrived yet.
+        const others = next.participants.filter((participant) => participant.userId !== selfId);
+        setPeers(
+          others.map((participant) => ({
+            userId: participant.userId,
+            displayName: participant.displayName,
+            stream: remoteStreamsRef.current.get(participant.userId) ?? new MediaStream(),
+          })),
+        );
         for (const [peerId, pc] of pcsRef.current) {
           if (!presentIds.has(peerId)) {
             pc.close();
             pcsRef.current.delete(peerId);
+            remoteStreamsRef.current.delete(peerId);
             pendingCandidatesRef.current.delete(peerId);
           }
         }
@@ -615,14 +647,21 @@ export function CallRoomPage() {
     return () => window.clearTimeout(timer);
   }, [breakoutEndsAt, room, sessionId]);
 
-  // Session clock.
+  // Time in this call. The session's `started_at` can be hours (or days) old —
+  // a mentor who opened the room early left every later visitor with a
+  // nonsensical 1391:00 clock. Jitsi counts from the moment you joined, so we
+  // use this participant's presence row (the poll keeps it fresh).
+  const selfJoinedAt = state?.participants.find((item) => item.userId === selfId)?.joinedAt ?? null;
   useEffect(() => {
     if (phase !== 'room') return;
-    const started = state?.session.startedAt ?? state?.session.startsAt;
-    const base = started ? new Date(started).getTime() : Date.now();
-    const timer = window.setInterval(() => setElapsed(Math.max(0, Math.floor((Date.now() - base) / 1000))), 1000);
+    const parsed = selfJoinedAt ? Date.parse(selfJoinedAt) : NaN;
+    const base = Number.isFinite(parsed) ? parsed : Date.now();
+    const tick = () =>
+      setElapsed(Math.max(0, Math.min(6 * 60 * 60, Math.floor((Date.now() - base) / 1000))));
+    tick();
+    const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
-  }, [phase, state?.session.startedAt, state?.session.startsAt]);
+  }, [phase, selfJoinedAt]);
 
   // First load: fetch the room (authz happens server side) to reach prejoin.
   useEffect(() => {
@@ -685,7 +724,7 @@ export function CallRoomPage() {
     setJoinBusy(true);
     const stream = await startMedia();
     try {
-      await mentorApi.join(sessionId, room);
+      await mentorApi.join(sessionId, room, { cam: camOn, mic: micOn });
       setPhase('room');
       // Tracks are attached by the effect/callback refs on mount; make sure the
       // connection to an already-present peer renegotiates with the real media.
@@ -833,10 +872,17 @@ export function CallRoomPage() {
   }, [state?.messages.length]);
 
   const clock = useMemo(() => {
-    const minutes = Math.floor(elapsed / 60);
+    const hours = Math.floor(elapsed / 3600);
+    const minutes = Math.floor((elapsed % 3600) / 60);
     const seconds = elapsed % 60;
-    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    const mm = String(minutes).padStart(2, '0');
+    const ss = String(seconds).padStart(2, '0');
+    return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
   }, [elapsed]);
+
+  // Show the local preview only when there is a real camera frame; otherwise the
+  // avatar sits on top of the black <video> box (the "empty box" on phones).
+  const selfVideoVisible = screenOn || (camOn && hasCamera);
 
   const roomLink =
     typeof window === 'undefined' ? '' : `${window.location.origin}/sessions/${sessionId}/room`;
@@ -869,6 +915,8 @@ export function CallRoomPage() {
           avatarUpdatedAt: null,
           handRaised: false,
           joinedAt: '',
+          camOn: true,
+          micOn: true,
         });
       }
     }
@@ -880,10 +928,12 @@ export function CallRoomPage() {
         avatarUpdatedAt: null,
         handRaised,
         joinedAt: '',
+        camOn,
+        micOn,
       });
     }
     return [...byId.values()];
-  }, [state?.participants, peers, selfId, user?.displayName, handRaised]);
+  }, [state?.participants, peers, selfId, user?.displayName, handRaised, camOn, micOn]);
 
   if (phase === 'loading') {
     return <Loading label="Opening the call room…" />;
@@ -1132,7 +1182,7 @@ export function CallRoomPage() {
                         }`}
                       >
                         <span className="jr-msg__who">{message.senderName}</span>
-                        <div className="jr-msg__bubble">{message.body}</div>
+                        <ChatMessageBody body={message.body} />
                       </div>
                     ))}
                   {(state?.messages ?? []).filter((message) => message.kind !== 'NOTE').length === 0 ? (
@@ -1267,7 +1317,7 @@ export function CallRoomPage() {
                   playsInline
                   muted
                 />
-                {!camOn && !screenOn ? (
+                {!selfVideoVisible ? (
                   <div className="jr-tile__avatar">
                     <UserAvatar src={user?.avatarUrl ?? null} userId={user?.id} name={user?.displayName ?? 'Me'} size={110} />
                   </div>
@@ -1285,10 +1335,8 @@ export function CallRoomPage() {
               <div className="jr-waiting">
                 <span className="jr-waiting__pulse" />
                 <div>
-                  <strong>
-                    Waiting for {isClass ? 'class members' : isMentor ? 'your student' : 'your mentor'} to join…
-                  </strong>
-                  <span>The call connects automatically when they arrive. Keep this tab open.</span>
+                  <strong>Waiting for {isClass ? 'class members' : isMentor ? 'your student' : 'your mentor'}…</strong>
+                  <span>The call connects automatically when they arrive.</span>
                 </div>
               </div>
             </div>
@@ -1318,7 +1366,7 @@ export function CallRoomPage() {
                   playsInline
                   muted
                 />
-                {!camOn && !screenOn ? (
+                {!selfVideoVisible ? (
                   <div className="jr-tile__avatar jr-tile__avatar--small">
                     <UserAvatar src={user?.avatarUrl ?? null} userId={user?.id} name={user?.displayName ?? 'Me'} size={48} />
                   </div>
@@ -2397,6 +2445,32 @@ function BreakoutPanel({
   );
 }
 
+/** Chat bubbles: plain text, clickable links, and inline GIFs/images. */
+function ChatMessageBody({ body }: { body: string }) {
+  const parts = body.split(/(https?:\/\/[^\s<>"']+)/g);
+  return (
+    <div className="jr-msg__bubble">
+      {parts.map((part, index) => {
+        if (!/^https?:\/\//i.test(part)) return <span key={index}>{part}</span>;
+        const url = part.replace(/[.,!?)\]]+$/, '');
+        const isImage = /\.(gif|png|jpe?g|webp|avif)(\?[^\s]*)?$/i.test(url);
+        if (isImage) {
+          return (
+            <a key={index} className="jr-msg__media" href={url} target="_blank" rel="noopener noreferrer">
+              <img src={url} alt="Shared image" loading="lazy" />
+            </a>
+          );
+        }
+        return (
+          <a key={index} href={url} target="_blank" rel="noopener noreferrer">
+            {url}
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
 function RemoteTile({ peer, participant }: { peer: Peer; participant?: RoomParticipant }) {
   const [live, setLive] = useState(false);
   const [micLive, setMicLive] = useState(true);
@@ -2404,39 +2478,63 @@ function RemoteTile({ peer, participant }: { peer: Peer; participant?: RoomParti
 
   useEffect(() => {
     const stream = peer.stream;
+    const el = videoRef.current;
     const evaluate = () => {
       const videos = stream.getVideoTracks();
-      setLive(videos.some((track) => track.readyState === 'live' && !track.muted && track.enabled));
+      // A track can exist and still carry no frames (camera switched off by the
+      // sender). Presence says whether their camera is really on; the track
+      // events cover the moment frames start or stop.
+      const playing = !!el && el.readyState >= 2 && el.videoWidth > 0;
+      setLive(
+        videos.some((track) => track.readyState === 'live' && track.enabled && !track.muted) ||
+          (playing && videos.some((track) => track.readyState === 'live')),
+      );
       const audios = stream.getAudioTracks();
       setMicLive(audios.length === 0 ? true : audios.some((track) => !track.muted && track.enabled));
     };
-    const el = videoRef.current;
-    if (el) {
+    // The tile mounts with an empty stream: when the first track lands the
+    // element has to be pointed at the stream and kicked into playback again,
+    // otherwise the <video> stays black even though frames are arriving.
+    const attach = () => {
+      if (!el) return;
       if (el.srcObject !== stream) el.srcObject = stream;
       void el.play().catch(() => undefined);
-    }
-    evaluate();
+      window.setTimeout(evaluate, 150);
+    };
+    attach();
     const tracks = stream.getTracks();
     for (const track of tracks) {
       track.addEventListener('mute', evaluate);
       track.addEventListener('unmute', evaluate);
       track.addEventListener('ended', evaluate);
     }
-    stream.addEventListener('addtrack', evaluate);
+    stream.addEventListener('addtrack', attach);
     stream.addEventListener('removetrack', evaluate);
+    el?.addEventListener('loadeddata', evaluate);
+    el?.addEventListener('playing', evaluate);
+    // First frame can arrive without a track event after renegotiation.
+    const retry = window.setTimeout(evaluate, 1200);
     return () => {
+      window.clearTimeout(retry);
       for (const track of tracks) {
         track.removeEventListener('mute', evaluate);
         track.removeEventListener('unmute', evaluate);
         track.removeEventListener('ended', evaluate);
       }
-      stream.removeEventListener('addtrack', evaluate);
+      stream.removeEventListener('addtrack', attach);
       stream.removeEventListener('removetrack', evaluate);
+      el?.removeEventListener('loadeddata', evaluate);
+      el?.removeEventListener('playing', evaluate);
     };
   }, [peer.stream]);
 
+  // Presence is authoritative for "camera is off"; default to on until it loads.
+  const cameraOn = participant?.camOn !== false;
+  const showVideo = live && cameraOn;
+  const muted = participant ? !participant.micOn : !micLive;
+
   return (
-    <div className="jr-tile">
+    <div className={`jr-tile${showVideo ? '' : ' is-avatar'}`}>
       <video
         ref={(el) => {
           videoRef.current = el;
@@ -2447,8 +2545,9 @@ function RemoteTile({ peer, participant }: { peer: Peer; participant?: RoomParti
         }}
         autoPlay
         playsInline
+        className={showVideo ? undefined : 'is-hidden'}
       />
-      {!live ? (
+      {!showVideo ? (
         <div className="jr-tile__avatar">
           <UserAvatar
             userId={peer.userId}
@@ -2456,12 +2555,16 @@ function RemoteTile({ peer, participant }: { peer: Peer; participant?: RoomParti
             name={peer.displayName}
             size={92}
           />
+          <span className="jr-tile__avatar-note">
+            <Icon name="video" size={12} />
+            Camera off
+          </span>
         </div>
       ) : null}
       <span className="jr-tile__label">
         {peer.displayName}
-        {!micLive ? (
-          <i className="jr-tile__muted">
+        {muted ? (
+          <i className="jr-tile__muted" title="Microphone off">
             <Icon name="mic" size={11} />
           </i>
         ) : null}

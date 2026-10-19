@@ -194,6 +194,9 @@ export interface RoomParticipant {
   joinedAt: string;
   handRaised: boolean;
   avatarUpdatedAt: string | null;
+  /** Presence heartbeat flags: false means the tile should show an avatar. */
+  camOn: boolean;
+  micOn: boolean;
 }
 
 export interface MentorRoomState {

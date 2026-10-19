@@ -56,6 +56,25 @@ Checklist khi vẫn lỗi:
 - macOS: Settings → Privacy & Security → Camera/Microphone → bật cho trình duyệt.
 - Windows: Settings → Privacy → Camera → cho phép app desktop truy cập.
 
+## Tile, presence và giao diện điện thoại
+
+- **Tile xuất hiện ngay khi người kia vào phòng**, không đợi WebRTC: presence
+  (poll 1,5 giây) mang theo `camOn`/`micOn`, nên mọi người luôn thấy tên, avatar,
+  nhãn "Camera off" và biểu tượng mic tắt kể cả khi track chưa tới.
+- **Video thật** được gắn lại và `play()` mỗi khi track đầu tiên tới — đây là lỗi
+  làm tile đen dù camera vẫn sáng.
+- **Self view**: toàn stage khi ở một mình; thu thành tile nhỏ góc phải dưới khi
+  có người khác (filmstrip). Nếu chưa có frame camera thật, hiển thị avatar thay
+  vì ô đen.
+- **Stage không bao giờ đè lên toolbar**: stage là flex item có `min-height: 0`
+  và `overflow: hidden`; gợi ý "Waiting for…" nằm gọn trong stage.
+- **Điện thoại**: header 2 dòng cho tiêu đề (line-clamp), ẩn nút copy/invite,
+  grid 2 cột cho tới 6 người, toolbar cuộn ngang, self tile 104–122px.
+- **Đồng hồ**: đếm từ lúc *bạn* vào phòng (giống Jitsi), không lấy
+  `session.started_at` (buổi mở từ hôm trước sẽ ra 1391:00). Hiển thị `MM:SS`,
+  qua 1 giờ thành `H:MM:SS`.
+- **Chat** nhận diện link và ảnh/GIF đuôi `.gif/.png/.jpg/.webp` và render inline.
+
 ## Kiến trúc
 
 WebRTC mesh (mỗi cặp peer một `RTCPeerConnection`), SDP/ICE đi qua D1

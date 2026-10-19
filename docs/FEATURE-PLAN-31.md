@@ -42,6 +42,22 @@ Kèm theo: sửa **câu báo thiếu oan** (đếm theo question id + liệt kê
 và mute/kick trước đây bị SQLite từ chối), chat tách theo phòng. Chi tiết:
 `docs/LIVE-CLASSROOM.md`. Migration `0033`, `0034`.
 
+## Đợt 2.5 — Sửa UI phòng call + trang review ✅
+
+| Việc | Kết quả |
+|---|---|
+| Tile người khác hiện ngay khi vào phòng | presence mang `camOn`/`micOn`; tile + tên + avatar + "Camera off" không đợi WebRTC |
+| Video remote đen dù camera sáng | gắn lại `srcObject` + `play()` khi track đầu tiên tới (lỗi chính) |
+| Self view / filmstrip | to stage khi ở một mình, thu nhỏ góc phải dưới khi có người; avatar thay ô đen |
+| Gợi ý "Waiting…" đè toolbar | stage `min-height:0` + `overflow:hidden`, gợi ý nằm trong stage |
+| Điện thoại | tiêu đề 2 dòng, không tile đen, không ô trống, toolbar cuộn ngang |
+| Đồng hồ 1391:00 | đếm từ lúc **bạn** vào phòng, `MM:SS` (qua 1 giờ `H:MM:SS`) |
+| Chat GIF/link | render ảnh `.gif/.png/.jpg/.webp` inline, link bấm được |
+| Grid tiêu chí review | đúng **2 box/dòng**, box cao bằng nhau, nhãn không bị bóp |
+| Nhãn lạ dưới band | bỏ caption trùng "Consensus", chỉ còn "Band" + tab |
+
+Migration `0035` (cam_on/mic_on). Chi tiết: `docs/CALL-ROOM.md`.
+
 ## Đợt 3 — AI & nội dung
 
 | # | Tính năng | Ghi chú |
@@ -91,5 +107,4 @@ và mute/kick trước đây bị SQLite từ chối), chat tách theo phòng. C
 | 4 | Luyện thi nâng cao | ~2 tuần |
 | 5 | Thanh toán & xã hội | ~1.5–2 tuần |
 
-> **Đợt 2 là đợt tiếp theo.** Muốn đổi thứ tự (ví dụ nhảy sang đợt 3 vì AI
-> tutor đang hot), chỉ cần nói — kiến trúc không bị phụ thuộc.
+> **Đợt 3 là đợt tiếp theo** (41 → 42 → 34 → 40 → 39 → 38 → 37 → 36 → 35).

@@ -184,18 +184,25 @@ router.post('/mentor/sessions/:sessionId/review', async (c) => {
 
 // ------------------------------------------------------------------------------ room
 
+function mediaFromQuery(c: { req: { query: (key: string) => string | undefined } }) {
+  const cam = c.req.query('cam');
+  const mic = c.req.query('mic');
+  // Older clients send no flags: assume both devices are on.
+  return { cam: cam === undefined ? true : cam !== '0', mic: mic === undefined ? true : mic !== '0' };
+}
+
 router.get('/mentor/sessions/:sessionId/room', async (c) => {
   const user = currentUser(c);
   const since = c.req.query('since') || null;
   const room = c.req.query('room') || 'main';
-  const state = await roomState(c.env, user, c.req.param('sessionId'), since, room);
+  const state = await roomState(c.env, user, c.req.param('sessionId'), since, room, mediaFromQuery(c));
   return c.json(state);
 });
 
 router.post('/mentor/sessions/:sessionId/join', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
-  await joinRoom(c.env, user, c.req.param('sessionId'), c.req.query('room') || 'main');
+  await joinRoom(c.env, user, c.req.param('sessionId'), c.req.query('room') || 'main', mediaFromQuery(c));
   return c.json({ ok: true });
 });
 

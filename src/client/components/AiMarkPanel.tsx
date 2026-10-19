@@ -39,7 +39,7 @@ export function AiMarkPanel({ mark, heading }: { mark: AiMarkView; heading?: str
       <header className="aimark__head">
         <div className="aimark__band" aria-label={`Band ${formatBand(bandShown)}`}>
           <span className="aimark__band-value">{formatBand(bandShown)}</span>
-          <span className="aimark__band-label">{view === 'CONSENSUS' ? 'Consensus' : view}</span>
+          <span className="aimark__band-caption">Band</span>
         </div>
         <div className="aimark__who">
           <strong>{heading ?? 'AI marking'}</strong>

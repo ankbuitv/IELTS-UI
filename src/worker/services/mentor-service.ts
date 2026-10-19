@@ -456,6 +456,15 @@ export interface RoomParticipant {
   joinedAt: string;
   handRaised: boolean;
   avatarUpdatedAt: string | null;
+  camOn: boolean;
+  micOn: boolean;
+}
+
+/** What a participant's devices are doing right now. Presence is the heartbeat,
+ * so the flags travel with every room poll — no extra round-trip. */
+export interface RoomMediaState {
+  cam: boolean;
+  mic: boolean;
 }
 
 export async function joinRoom(
@@ -463,6 +472,7 @@ export async function joinRoom(
   viewer: AuthUser,
   sessionId: string,
   roomKey = 'main',
+  media: RoomMediaState = { cam: true, mic: true },
 ): Promise<{ ok: true }> {
   if (await isRoomBanned(env, sessionId, viewer.id)) {
     throw ApiError.forbidden('You were removed from this room by the mentor.');
@@ -475,14 +485,16 @@ export async function joinRoom(
 
   const timestamp = nowIso();
   await env.DB.prepare(
-    `INSERT INTO mentor_room_presence (session_id, user_id, joined_at, last_seen_at, hand_raised, room_key)
-     VALUES (?, ?, ?, ?, 0, ?)
+    `INSERT INTO mentor_room_presence (session_id, user_id, joined_at, last_seen_at, hand_raised, room_key, cam_on, mic_on)
+     VALUES (?, ?, ?, ?, 0, ?, ?, ?)
      ON CONFLICT (session_id, user_id) DO UPDATE SET
        last_seen_at = excluded.last_seen_at,
        hand_raised = 0,
-       room_key = excluded.room_key`,
+       room_key = excluded.room_key,
+       cam_on = excluded.cam_on,
+       mic_on = excluded.mic_on`,
   )
-    .bind(sessionId, viewer.id, timestamp, timestamp, roomKey)
+    .bind(sessionId, viewer.id, timestamp, timestamp, roomKey, media.cam ? 1 : 0, media.mic ? 1 : 0)
     .run();
 
   // The mentor opening the room puts the session live.
@@ -518,6 +530,7 @@ export async function roomState(
   sessionId: string,
   sinceSignalId: string | null,
   roomKey = 'main',
+  media: RoomMediaState = { cam: true, mic: true },
 ): Promise<{
   session: MentorSession;
   roomKey: string;
@@ -538,13 +551,15 @@ export async function roomState(
   // everyone timed out while still talking — the counter said "0 in room" next
   // to live tiles.)
   await env.DB.prepare(
-    `INSERT INTO mentor_room_presence (session_id, user_id, joined_at, last_seen_at, hand_raised, room_key)
-     VALUES (?, ?, ?, ?, 0, ?)
+    `INSERT INTO mentor_room_presence (session_id, user_id, joined_at, last_seen_at, hand_raised, room_key, cam_on, mic_on)
+     VALUES (?, ?, ?, ?, 0, ?, ?, ?)
      ON CONFLICT (session_id, user_id) DO UPDATE SET
        last_seen_at = excluded.last_seen_at,
-       room_key = excluded.room_key`,
+       room_key = excluded.room_key,
+       cam_on = excluded.cam_on,
+       mic_on = excluded.mic_on`,
   )
-    .bind(sessionId, viewer.id, timestamp, timestamp, roomKey)
+    .bind(sessionId, viewer.id, timestamp, timestamp, roomKey, media.cam ? 1 : 0, media.mic ? 1 : 0)
     .run();
   await env.DB.prepare(
     'DELETE FROM mentor_room_presence WHERE session_id = ? AND last_seen_at < ?',
@@ -553,7 +568,7 @@ export async function roomState(
     .run();
 
   const presence = await env.DB.prepare(
-    `SELECT pr.user_id, pr.joined_at, pr.hand_raised,
+    `SELECT pr.user_id, pr.joined_at, pr.hand_raised, pr.cam_on, pr.mic_on,
             COALESCE(NULLIF(p.display_name, ''), u.username, u.email) AS display_name,
             p.avatar_updated_at,
             u.role
@@ -564,7 +579,16 @@ export async function roomState(
       ORDER BY pr.joined_at`,
   )
     .bind(sessionId, roomKey)
-    .all<{ user_id: string; joined_at: string; hand_raised: number; display_name: string; role: string; avatar_updated_at: string | null }>();
+    .all<{
+      user_id: string;
+      joined_at: string;
+      hand_raised: number;
+      cam_on: number;
+      mic_on: number;
+      display_name: string;
+      role: string;
+      avatar_updated_at: string | null;
+    }>();
 
   const messages = await env.DB.prepare(
     `SELECT m.id, m.session_id, m.sender_id, m.kind, m.body, m.created_at,
@@ -623,6 +647,8 @@ export async function roomState(
       joinedAt: row.joined_at,
       handRaised: row.hand_raised === 1,
       avatarUpdatedAt: row.avatar_updated_at,
+      camOn: row.cam_on !== 0,
+      micOn: row.mic_on !== 0,
     })),
     messages: messages.results
       .map((row) => ({
