@@ -52,3 +52,18 @@ chấm bởi judge pipeline; tutor chỉ giải thích, sửa câu và gợi ý 
   từng tiêu chí; bấm **Dùng bản nháp** để điền form. Giáo viên vẫn phải bấm lưu,
   và band giáo viên thay thế band AI như trước.
 - Không có bản nháp (chưa chấm AI) thì nút báo rõ, không chặn việc chấm tay.
+
+## Tạo đề Reading bằng AI (#36)
+
+- Admin → Imports → tab **Generate with AI**: nhập brief (chủ đề, góc nhìn, dạng câu
+  hỏi), band mục tiêu, số section (1–3) và số câu mỗi section (5–14).
+- `POST /api/admin/imports/generate` gọi model với system prompt bắt buộc **nội
+  dung gốc**, không sao chép đề thật, không nhắc tới IELTS/BC/IDP trong bài; mỗi
+  câu phải có đáp án, trích dẫn nguyên văn và giải thích.
+- Kết quả đi qua đúng pipeline `createStructuredImport` (validate, draft,
+  issue list), `content_origin = 'AI_GENERATED'`, `ai_used = 1`, `ai_model` lưu
+  lại, trạng thái **REVIEW**. Không có đường nào tự động publish.
+- Giới hạn 12 đề/giờ/admin. Listening/Writing generation chưa mở vì thiếu audio
+  và tiêu chí chấm tương ứng.
+- Test: `tests/unit/ai-generation.test.ts` (brief đầy đủ band/section/câu hỏi;
+  không có dòng trống khi thiếu title).

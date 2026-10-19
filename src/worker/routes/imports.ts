@@ -12,6 +12,7 @@ import {
   convertAiPayload,
   createImport,
   createTextImport,
+  generateReadingImport,
   loadImportDetail,
   runImportPipelineInline,
 } from '../services/import-service';
@@ -177,6 +178,32 @@ router.post('/', async (c) => {
   });
 
   return c.json(result, 201);
+});
+
+/**
+ * #36 Generate an original Reading test from an administrator's brief.
+ * The result is a normal import in REVIEW: nothing is published automatically,
+ * and every passage/answer still has to be checked by a human.
+ */
+router.post('/generate', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  await enforceRateLimit(
+    c.env,
+    { bucket: `import-generate:${user.id}`, windowSeconds: 3600, limit: 12 },
+    'That is a lot of generated tests in one hour. Review the drafts already created before generating more.',
+  );
+  const body = await parseBody(
+    c,
+    z.object({
+      prompt: z.string().trim().min(20).max(2000),
+      title: z.string().trim().max(160).optional(),
+      band: z.number().min(4).max(9).default(6.5),
+      sections: z.number().int().min(1).max(3).default(1),
+      questionsPerSection: z.number().int().min(5).max(14).default(10),
+    }),
+  );
+  return c.json(await generateReadingImport(c.env, user, body), 201);
 });
 
 /**

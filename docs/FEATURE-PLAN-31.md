@@ -69,7 +69,7 @@ Migration `0035` (cam_on/mic_on). Chi tiết: `docs/CALL-ROOM.md`.
 | 39 | **TTS nhiều giọng** | 🟡 đã có `speech_cache`, 13 giọng server + fallback giọng thiết bị; còn thiếu bộ chọn accent UK/AU/US rõ ràng |
 | 38 | **Word-level transcript** | ⬜ cần timestamp từng từ (provider phải trả word timings); segment-level đã có |
 | 37 | **OCR import đề** | ⬜ vision model đã nhận ảnh nhưng pipeline import chưa lưu/đọc ảnh scan |
-| 36 | **AI generate đề** | ⬜ |
+| 36 | **AI generate đề** | ✅ Reading 1–3 bài, 5–14 câu/bài, chọn band; prompt chống đạo văn; vào thẳng **Review** (`POST /api/admin/imports/generate`), audit `IMPORT_AI_GENERATED` |
 | 35 | **AI speaking partner** | ⬜ |
 
 ## Đợt 4 — Luyện thi nâng cao

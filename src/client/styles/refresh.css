@@ -316,3 +316,17 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 .quick-notes button:hover { background: var(--brand-50); border-color: var(--brand-200); color: var(--brand-700); }
+
+/* AI generation callout in Admin → Imports */
+.gen-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px dashed var(--brand-200);
+  border-radius: var(--radius);
+  background: var(--brand-50);
+}
+.gen-callout strong { font-size: 0.86rem; color: var(--ink-900); }
+.gen-callout span { font-size: 0.78rem; line-height: 1.5; color: var(--ink-600); }

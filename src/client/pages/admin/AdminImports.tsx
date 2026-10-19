@@ -254,7 +254,8 @@ function ImportStartForm({
   onCreated: (importId: string) => void | Promise<void>;
   onError: (message: string) => void;
 }) {
-  const [mode, setMode] = useState<'paste' | 'file'>('paste');
+  const [mode, setMode] = useState<'paste' | 'file' | 'generate'>('paste');
+  const [gen, setGen] = useState({ prompt: '', title: '', band: '6.5', sections: '1', questions: '10' });
   const [busy, setBusy] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -299,6 +300,7 @@ function ImportStartForm({
         tabs={[
           { id: 'paste', label: 'Paste text or JSON' },
           { id: 'file', label: 'Upload a document' },
+          { id: 'generate', label: 'Generate with AI' },
         ]}
       />
 
@@ -356,7 +358,7 @@ function ImportStartForm({
             Create import from pasted content
           </Button>
         </>
-      ) : (
+      ) : mode === 'file' ? (
         <>
           <Field label="Source file" required hint="PDF, DOCX, TXT, Markdown or CSV up to 25 MB.">
             {(id) => (
@@ -399,6 +401,95 @@ function ImportStartForm({
             }}
           >
             Upload for review
+          </Button>
+        </>
+      ) : (
+        <>
+          <div className="gen-callout">
+            <strong>AI generates an original Reading test</strong>
+            <span>
+              Every passage is invented for this platform. The draft lands in <b>Review</b> — read the passages and check
+              every answer before publishing. Listening and Writing generation are not enabled in this version.
+            </span>
+          </div>
+          <Field
+            label="Brief for the AI"
+            required
+            hint="Topic, level and any constraints. Example: “Two contrasting opinions on remote work, with a summary-completion and True/False/Not Given set.”"
+          >
+            {(id) => (
+              <TextArea
+                id={id}
+                rows={5}
+                value={gen.prompt}
+                onChange={(event) => setGen({ ...gen, prompt: event.target.value })}
+                placeholder="Topic, angle, question types you want…"
+              />
+            )}
+          </Field>
+          <div className="grid grid--2">
+            <Field label="Working title">
+              {(id) => <TextInput id={id} value={gen.title} onChange={(event) => setGen({ ...gen, title: event.target.value })} />}
+            </Field>
+            <Field label="Target band">
+              {(id) => (
+                <Select id={id} value={gen.band} onChange={(event) => setGen({ ...gen, band: event.target.value })}>
+                  {['5', '5.5', '6', '6.5', '7', '7.5', '8'].map((value) => (
+                    <option key={value} value={value}>
+                      Band {value}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field label="Sections" hint="1–3 passages.">
+              {(id) => (
+                <TextInput
+                  id={id}
+                  type="number"
+                  min={1}
+                  max={3}
+                  value={gen.sections}
+                  onChange={(event) => setGen({ ...gen, sections: event.target.value })}
+                />
+              )}
+            </Field>
+            <Field label="Questions per section" hint="5–14.">
+              {(id) => (
+                <TextInput
+                  id={id}
+                  type="number"
+                  min={5}
+                  max={14}
+                  value={gen.questions}
+                  onChange={(event) => setGen({ ...gen, questions: event.target.value })}
+                />
+              )}
+            </Field>
+          </div>
+          <Button
+            variant="primary"
+            loading={busy}
+            disabled={gen.prompt.trim().length < 20}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const result = await api.post<{ importId: string }>('/api/admin/imports/generate', {
+                  prompt: gen.prompt,
+                  title: gen.title || undefined,
+                  band: Number(gen.band),
+                  sections: Number(gen.sections),
+                  questionsPerSection: Number(gen.questions),
+                });
+                await onCreated(result.importId);
+              } catch (generateError) {
+                onError(describeError(generateError));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Generate the test
           </Button>
         </>
       )}
