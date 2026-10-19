@@ -11,6 +11,7 @@ import { SiteFooter } from './SiteFooter';
 import { Button, Loading } from './ui';
 import { UserAvatar } from './UserAvatar';
 import { SearchPalette } from './SearchPalette';
+import { NotificationBell } from './NotificationBell';
 
 /**
  * Application shell.
@@ -418,6 +419,7 @@ export function AppShell() {
                       </span>
                     </>
                   ) : null}
+                  <NotificationBell />
                   <DisplayMenu compact label="Display" />
                   <NavLink to="/practice" className="btn btn--sm btn--primary site-cta">
                     <Icon name="play" size={12} />

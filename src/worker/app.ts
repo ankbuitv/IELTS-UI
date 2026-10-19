@@ -18,6 +18,7 @@ import importRoutes from './routes/imports';
 import speakingRoutes from './routes/speaking';
 import mentorRoutes from './routes/mentor';
 import profileRoutes from './routes/profile';
+import notificationRoutes from './routes/notifications';
 import { dictionaryRouter, learnRouter } from './routes/learn';
 
 export function createApp() {
@@ -69,6 +70,7 @@ export function createApp() {
   app.route('/api/admin', adminRoutes);
   app.route('/api/admin/imports', importRoutes);
   app.route('/api/files', fileRoutes);
+  app.route('/api/notifications', notificationRoutes);
 
   app.notFound((c) => {
     if (c.req.path.startsWith('/api/')) {

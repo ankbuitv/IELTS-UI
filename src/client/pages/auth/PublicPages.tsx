@@ -593,7 +593,7 @@ export function LandingPage() {
  * says what the account is for, next to a quiet form panel. One source of truth
  * so sign in, sign up and joining a classroom all look the same.
  */
-function AuthScreen({
+export function AuthScreen({
   eyebrow,
   title,
   lede,
@@ -653,12 +653,13 @@ function AuthScreen({
 }
 
 export function LoginPage() {
-  const { login, verifyTwoFactor, requestOtp, loginWithOtp, user } = useAuth();
+  const { login, verifyTwoFactor, requestOtp, loginWithOtp, requestMagicLink, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<'password' | 'otp'>('password');
+  const [mode, setMode] = useState<'password' | 'otp' | 'magic'>('password');
+  const [magicSent, setMagicSent] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [devCode, setDevCode] = useState<string | null>(null);
@@ -689,6 +690,9 @@ export function LoginPage() {
       if (twoFactor) {
         const next = await verifyTwoFactor(twoFactor, twoFactorCode.trim());
         goHome(next.role);
+      } else if (mode === 'magic') {
+        await requestMagicLink(identifier.trim());
+        setMagicSent(true);
       } else if (mode === 'otp') {
         if (!otpSent) {
           const result = await requestOtp(identifier.trim());
@@ -769,12 +773,27 @@ export function LoginPage() {
                 />
               )}
             </Field>
-            {mode === 'password' ? (
-              <Field label="Password" required>
-                {(id) => (
-                  <PasswordInput id={id} value={password} onChange={setPassword} autoComplete="current-password" required />
-                )}
-              </Field>
+            {mode === 'magic' ? (
+              magicSent ? (
+                <Notice tone="success" title="Check your inbox">
+                  We sent a sign-in link to the email on this account. It expires in 15 minutes and works once.
+                </Notice>
+              ) : (
+                <p className="small muted" style={{ margin: '0 0 14px' }}>
+                  We&apos;ll email a single-use link — no password to remember. It expires in 15 minutes.
+                </p>
+              )
+            ) : mode === 'password' ? (
+              <>
+                <Field label="Password" required>
+                  {(id) => (
+                    <PasswordInput id={id} value={password} onChange={setPassword} autoComplete="current-password" required />
+                  )}
+                </Field>
+                <p className="small muted" style={{ margin: '-4px 0 14px' }}>
+                  <Link to="/reset-password">Forgot your password?</Link>
+                </p>
+              </>
             ) : (
               <>
                 {otpSent ? (
@@ -803,7 +822,15 @@ export function LoginPage() {
               </>
             )}
             <Button type="submit" variant="primary" size="lg" block loading={busy}>
-              {mode === 'password' ? 'Sign in' : otpSent ? 'Verify code and sign in' : 'Send one-time code'}
+              {mode === 'magic'
+                ? magicSent
+                  ? 'Send another link'
+                  : 'Email me a sign-in link'
+                : mode === 'password'
+                  ? 'Sign in'
+                  : otpSent
+                    ? 'Verify code and sign in'
+                    : 'Send one-time code'}
             </Button>
             <div style={{ height: 8 }} />
             <Button
@@ -812,13 +839,28 @@ export function LoginPage() {
               size="sm"
               block
               onClick={() => {
-                setMode(mode === 'password' ? 'otp' : 'password');
+                setMode(mode === 'otp' ? 'password' : 'otp');
                 setOtpSent(false);
                 setOtpCode('');
                 setDevCode(null);
+                setMagicSent(false);
               }}
             >
-              {mode === 'password' ? 'Sign in with a one-time code instead' : 'Sign in with password instead'}
+              {mode === 'otp' ? 'Sign in with password instead' : 'Sign in with a one-time code instead'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              block
+              onClick={() => {
+                setMode(mode === 'magic' ? 'password' : 'magic');
+                setMagicSent(false);
+                setOtpSent(false);
+                setOtpCode('');
+              }}
+            >
+              {mode === 'magic' ? 'Sign in with a password instead' : 'Email me a sign-in link instead'}
             </Button>
             <div className="auth__divider"><span>or</span></div>
             <a className="btn btn--lg btn--block auth__sso" href="/api/auth/sso/google/start">
@@ -857,7 +899,7 @@ const POLICY_RULES: Array<{ id: string; label: string; test: (password: string, 
   },
 ];
 
-function PasswordPolicy({ password, email }: { password: string; email: string }) {
+export function PasswordPolicy({ password, email }: { password: string; email: string }) {
   const results = POLICY_RULES.map((rule) => ({ ...rule, ok: rule.test(password, email) }));
   const satisfied = results.filter((result) => result.ok).length;
   const percent = password.length === 0 ? 0 : Math.round((satisfied / results.length) * 100);

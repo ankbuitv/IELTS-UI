@@ -11,9 +11,13 @@ import {
   disableTotp,
   enableTotp,
   hasAnyUserWithRole,
+  consumeMagicLink,
   login,
   loginFederated,
   loginWithOtp,
+  requestMagicLink,
+  requestPasswordReset,
+  resetPasswordWithToken,
   normaliseEmail,
   requestLoginOtp,
   revokeAllSessions,
@@ -29,6 +33,7 @@ import { parseBody } from '../lib/validate';
 import { newId, nowIso } from '../lib/ids';
 import { loadPlatformSettings } from '../lib/settings';
 import { resolveSession } from '../services/auth-service';
+import { notify } from '../services/notification-service';
 import { getSessionToken } from '../lib/http';
 
 /**
@@ -119,6 +124,14 @@ router.post('/register', async (c) => {
       userAgent: userAgent(c),
     });
   }
+
+  await notify(c.env, {
+    userId: user.id,
+    kind: 'SYSTEM',
+    title: 'Welcome to AI Eo 👋',
+    body: 'Start with a quick practice test to see where you stand, then let the study plan map the rest.',
+    href: '/practice',
+  });
 
   setSessionCookie(c, session.token, session.session.expiresAt);
   return c.json({ user: session.user, csrfToken: session.session.csrfToken, sessionToken: devSessionToken(c, session.token) }, 201);
@@ -243,7 +256,7 @@ router.post('/2fa/verify', async (c) => {
   assertSameOrigin(c);
   const body = await parseBody(
     c,
-    z.object({ ticket: z.string().min(8).max(200), code: z.string().trim().min(6).max(8) }),
+    z.object({ ticket: z.string().min(8).max(200), code: z.string().trim().min(6).max(16) }),
   );
   await enforceRateLimit(
     c.env,
@@ -460,6 +473,75 @@ router.get('/identities', async (c) => {
     .bind(user.id)
     .all<{ provider: string; email: string | null; created_at: string }>();
   return c.json({ identities: rows.results ?? [] });
+});
+
+// --------------------------------------------------------- Email links
+
+/** Sends a magic sign-in link. The response never discloses whether the account exists. */
+router.post('/magic/request', async (c) => {
+  assertSameOrigin(c);
+  const body = await parseBody(c, z.object({ email: z.string().trim().min(3).max(254) }));
+  await enforceRateLimit(
+    c.env,
+    { bucket: `magic-request:${clientIp(c)}`, windowSeconds: 900, limit: 10 },
+    'Too many link requests. Please try again later.',
+  );
+  await enforceRateLimit(
+    c.env,
+    { bucket: `magic-account:${body.email.toLowerCase()}`, windowSeconds: 900, limit: 5 },
+    'Too many link requests for this account. Please try again later.',
+  );
+  return c.json(await requestMagicLink(c.env, body.email));
+});
+
+/** Exchanges the emailed token for a session (or a 2FA challenge). */
+router.post('/magic/consume', async (c) => {
+  assertSameOrigin(c);
+  const body = await parseBody(c, z.object({ token: z.string().trim().min(16).max(200) }));
+  await enforceRateLimit(
+    c.env,
+    { bucket: `magic-consume:${clientIp(c)}`, windowSeconds: 900, limit: 20 },
+    'Too many attempts. Please try again later.',
+  );
+  const result = await consumeMagicLink(c.env, body.token, { ip: clientIp(c), userAgent: userAgent(c) });
+  if ('twoFactorRequired' in result) {
+    return c.json({ twoFactorRequired: true, ticket: result.ticket, expiresAt: result.expiresAt });
+  }
+  setSessionCookie(c, result.token, result.session.expiresAt);
+  return c.json({ user: result.user, csrfToken: result.session.csrfToken, sessionToken: devSessionToken(c, result.token) });
+});
+
+/** Starts a password reset. Always `{ sent: true }`. */
+router.post('/password/forgot', async (c) => {
+  assertSameOrigin(c);
+  const body = await parseBody(c, z.object({ email: z.string().trim().min(3).max(254) }));
+  await enforceRateLimit(
+    c.env,
+    { bucket: `forgot:${clientIp(c)}`, windowSeconds: 900, limit: 8 },
+    'Too many reset requests. Please try again later.',
+  );
+  await enforceRateLimit(
+    c.env,
+    { bucket: `forgot-account:${body.email.toLowerCase()}`, windowSeconds: 900, limit: 5 },
+    'Too many reset requests for this account. Please try again later.',
+  );
+  return c.json(await requestPasswordReset(c.env, body.email));
+});
+
+/** Completes a reset; every existing session is revoked. */
+router.post('/password/reset', async (c) => {
+  assertSameOrigin(c);
+  const body = await parseBody(
+    c,
+    z.object({ token: z.string().trim().min(16).max(200), password: z.string().min(1).max(200) }),
+  );
+  await enforceRateLimit(
+    c.env,
+    { bucket: `reset:${clientIp(c)}`, windowSeconds: 900, limit: 12 },
+    'Too many attempts. Please try again later.',
+  );
+  const result = await resetPasswordWithToken(c.env, body.token, body.password);
+  return c.json({ ok: true, email: result.email });
 });
 
 router.post('/logout', async (c) => {

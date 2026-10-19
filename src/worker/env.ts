@@ -46,6 +46,12 @@ export interface Env {
   /** Vision model for marking tasks that come with an image (default gemma4:31b). */
   OLLAMA_VISION_MODEL?: string;
   OLLAMA_BASE_URL?: string;
+  /** Resend API key — when absent, email stays in the outbox (status QUEUED). */
+  RESEND_API_KEY?: string;
+  /** From address, e.g. `AI Eo <no-reply@ielts.example.com>`. Required to send. */
+  EMAIL_FROM?: string;
+  /** Optional Reply-To for transactional mail. */
+  EMAIL_REPLY_TO?: string;
 }
 
 export interface ImportQueueMessage {

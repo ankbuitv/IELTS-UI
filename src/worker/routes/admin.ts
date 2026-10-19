@@ -32,6 +32,7 @@ import { schemaReport } from '../lib/ensure-schema';
 import { buildResultView } from '../services/attempt-service';
 import type { AttemptRow } from '../services/attempt-service';
 import { getAdminAnalytics } from '../services/analytics-service';
+import { notifyMany } from '../services/notification-service';
 import { aiStatus } from '../ai/openai';
 import { listPublicProviders, saveProviders, testProvider } from '../ai/providers';
 import { AI_PROVIDER_KINDS, type AiProviderConfig } from '../../shared/ai';
@@ -1756,6 +1757,66 @@ router.post('/assets/:id/reingest', async (c) => {
     ip: clientIp(c),
   });
   return c.json({ stored: result.stored, reason: result.reason ?? null });
+});
+
+/** Broadcast to the bell of every active account (optionally one role), with optional email. */
+router.post('/notifications/broadcast', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      title: z.string().trim().min(3).max(120),
+      body: z.string().trim().max(600).default(''),
+      href: z.string().trim().max(200).optional(),
+      role: z.enum(['STUDENT', 'TEACHER', 'MENTOR', 'ADMIN']).optional(),
+      email: z.boolean().optional(),
+    }),
+  );
+
+  const rows = body.role
+    ? await c.env.DB.prepare('SELECT id FROM users WHERE status = ? AND role = ?').bind('ACTIVE', body.role).all<{ id: string }>()
+    : await c.env.DB.prepare('SELECT id FROM users WHERE status = ?').bind('ACTIVE').all<{ id: string }>();
+  const recipients = (rows.results ?? []).map((row) => row.id);
+
+  const delivered = await notifyMany(c.env, recipients, {
+    kind: 'SYSTEM',
+    title: body.title,
+    body: body.body,
+    href: body.href,
+    email: body.email ?? false,
+  });
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'NOTIFICATION_BROADCAST',
+    entityType: 'notification',
+    entityId: null,
+    metadata: { title: body.title, recipients: delivered, role: body.role ?? 'ALL' },
+    ip: clientIp(c),
+    userAgent: c.req.header('user-agent') ?? '',
+  });
+  return c.json({ ok: true, recipients: delivered });
+});
+
+/** Recent transactional email (subject + status only — bodies can contain links). */
+router.get('/emails', async (c) => {
+  const rows = await c.env.DB.prepare(
+    `SELECT id, to_email, subject, status, provider, error, created_at, sent_at
+       FROM email_outbox ORDER BY created_at DESC LIMIT 50`,
+  ).all<{
+    id: string;
+    to_email: string;
+    subject: string;
+    status: string;
+    provider: string | null;
+    error: string | null;
+    created_at: string;
+    sent_at: string | null;
+  }>();
+  return c.json({
+    providerConfigured: Boolean(c.env.RESEND_API_KEY && c.env.EMAIL_FROM),
+    items: rows.results ?? [],
+  });
 });
 
 async function uniqueSlug(env: AppBindings['Bindings'], title: string): Promise<string> {

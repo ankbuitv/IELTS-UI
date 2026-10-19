@@ -4,6 +4,7 @@ import { AppShell } from './components/AppShell';
 import { Loading, Notice } from './components/ui';
 import { useAuth } from './context/AuthContext';
 import { JoinPage, LandingPage, LoginPage, NotFoundPage, RegisterPage } from './pages/auth/PublicPages';
+import { MagicLinkPage, ResetPasswordPage } from './pages/auth/EmailLinks';
 import {
   AttemptHistoryPage,
   AttemptResultPage,
@@ -46,6 +47,8 @@ import { TrainingPage } from './pages/staff/TrainingPage';
 import { CalendarPage } from './pages/student/CalendarPage';
 import { ClassDetailPage } from './pages/mentor/ClassDetailPage';
 import { CallRoomPage } from './pages/mentor/CallRoomPage';
+import { NotificationsPage } from './components/NotificationBell';
+import { CertificatePage } from './pages/student/CertificatePage';
 
 function RequireAuth({ children, roles }: { children: ReactNode; roles?: Array<'STUDENT' | 'TEACHER' | 'ADMIN' | 'MENTOR'> }) {
   const { user, loading } = useAuth();
@@ -115,6 +118,8 @@ export function App() {
       <Route element={<AppShell />}>
         <Route index element={<LandingPage />} />
         <Route path="login" element={<LoginPage />} />
+        <Route path="auth/magic" element={<MagicLinkPage />} />
+        <Route path="reset-password" element={<ResetPasswordPage />} />
         <Route path="register" element={<RegisterPage />} />
         <Route path="join" element={<JoinPage />} />
 
@@ -131,6 +136,22 @@ export function App() {
           element={
             <RequireAuth>
               <PracticePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="certificate/:attemptId"
+          element={
+            <RequireAuth>
+              <CertificatePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="notifications"
+          element={
+            <RequireAuth>
+              <NotificationsPage />
             </RequireAuth>
           }
         />

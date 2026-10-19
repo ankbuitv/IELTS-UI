@@ -19,6 +19,14 @@ interface AuthState {
   requestOtp: (identifier: string) => Promise<{ sent: true; devCode?: string }>;
   /** Sign in with the one-time code instead of a password. */
   loginWithOtp: (identifier: string, code: string) => Promise<ApiUser | TwoFactorChallenge>;
+  /** Emails a single-use sign-in link. Always resolves — no account enumeration. */
+  requestMagicLink: (email: string) => Promise<void>;
+  /** Completes a magic-link sign-in from the token in the URL. */
+  consumeMagicLink: (token: string) => Promise<ApiUser | TwoFactorChallenge>;
+  /** Emails a password-reset link. Always resolves. */
+  requestPasswordReset: (email: string) => Promise<void>;
+  /** Sets a new password from the reset token and revokes old sessions. */
+  resetPassword: (token: string, password: string) => Promise<void>;
   register: (input: {
     email: string;
     password: string;
@@ -103,6 +111,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [finishLogin],
   );
 
+  const requestMagicLink = useCallback(async (email: string) => {
+    await api.post('/api/auth/magic/request', { email });
+  }, []);
+
+  const consumeMagicLink = useCallback(
+    async (token: string) => {
+      const result = await api.post<LoginResponse | { twoFactorRequired: true; ticket: string }>(
+        '/api/auth/magic/consume',
+        { token },
+      );
+      if ('twoFactorRequired' in result) return { twoFactorRequired: true, ticket: result.ticket } as const;
+      return finishLogin(result);
+    },
+    [finishLogin],
+  );
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    await api.post('/api/auth/password/forgot', { email });
+  }, []);
+
+  const resetPassword = useCallback(async (token: string, password: string) => {
+    await api.post('/api/auth/password/reset', { token, password });
+  }, []);
+
   const register = useCallback(
     async (input: { email: string; password: string; displayName: string; username?: string; bootstrapAdmin?: boolean }) => {
       const result = await api.post<LoginResponse>('/api/auth/register', input);
@@ -122,8 +154,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthState>(
-    () => ({ user, loading, refresh, login, verifyTwoFactor, requestOtp, loginWithOtp, register, logout, setUser }),
-    [user, loading, refresh, login, verifyTwoFactor, requestOtp, loginWithOtp, register, logout],
+    () => ({
+      user,
+      loading,
+      refresh,
+      login,
+      verifyTwoFactor,
+      requestOtp,
+      loginWithOtp,
+      requestMagicLink,
+      consumeMagicLink,
+      requestPasswordReset,
+      resetPassword,
+      register,
+      logout,
+      setUser,
+    }),
+    [
+      user,
+      loading,
+      refresh,
+      login,
+      verifyTwoFactor,
+      requestOtp,
+      loginWithOtp,
+      requestMagicLink,
+      consumeMagicLink,
+      requestPasswordReset,
+      resetPassword,
+      register,
+      logout,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -41,6 +41,7 @@ import {
   setHandRaised,
   upsertMentorProfile,
 } from '../services/mentor-service';
+import { notify } from '../services/notification-service';
 
 const router = new Hono<AppBindings>();
 
@@ -85,6 +86,14 @@ router.post('/mentor/:mentorId/book', async (c) => {
     }),
   );
   const session = await bookSession(c.env, user, c.req.param('mentorId'), body);
+  await notify(c.env, {
+    userId: session.mentorId,
+    kind: 'BOOKING',
+    title: 'New booking request',
+    body: `${user.displayName} asked for a session: ${session.topic || 'IELTS coaching'}.`,
+    href: '/mentor/console',
+    email: true,
+  });
   return c.json({ session }, 201);
 });
 
@@ -93,6 +102,14 @@ router.post('/mentor/sessions/:sessionId/confirm', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const session = await confirmSession(c.env, user, c.req.param('sessionId'));
+  await notify(c.env, {
+    userId: session.studentId,
+    kind: 'BOOKING',
+    title: 'Your session is confirmed',
+    body: `${session.topic || 'Your mentor session'} starts ${new Date(session.startsAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}.`,
+    href: '/my-sessions',
+    email: true,
+  });
   return c.json({ session });
 });
 
@@ -102,6 +119,15 @@ router.post('/mentor/sessions/:sessionId/decline', async (c) => {
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const body = await parseBody(c, z.object({ reason: z.string().max(500).optional() }).optional().default({}));
   const session = await declineSession(c.env, user, c.req.param('sessionId'), body.reason);
+  const counterpartId = user.id === session.mentorId ? session.studentId : session.mentorId;
+  await notify(c.env, {
+    userId: counterpartId,
+    kind: 'BOOKING',
+    title: 'A session was cancelled',
+    body: body.reason?.trim() ? `Reason: ${body.reason.trim()}` : 'The booking was cancelled and any coins were refunded.',
+    href: '/my-sessions',
+    email: true,
+  });
   return c.json({ session });
 });
 

@@ -140,6 +140,12 @@ export function AttemptReviewPage() {
               Band {formatBand(result.estimatedBand)}
             </span>
           ) : null}
+          {result.release?.scoreAvailable && result.estimatedBand !== null ? (
+            <Link className="btn btn--sm btn--secondary" to={`/certificate/${attemptId}`} title="Printable practice certificate">
+              <Icon name="award" size={13} />
+              Certificate
+            </Link>
+          ) : null}
           <button
             type="button"
             className="btn btn--sm btn--primary"
@@ -478,8 +484,22 @@ function WritingReview({
   onRefresh?: () => Promise<void> | void;
 }) {
   const [taskIdx, setTaskIdx] = useState(0);
+  // Hooks must run before any early return, so every value below is derived
+  // defensively from a session that may still be loading.
+  const submissions = session?.writing ?? [];
+  const idx = submissions.length > 0 ? Math.min(taskIdx, submissions.length - 1) : 0;
+  const submission = submissions[idx] ?? null;
+  const needsAi = submissions.some(
+    (item) => item.responseText.trim().length > 0 && !item.ai && !(item.score && item.score.source !== 'AI'),
+  );
+  const marker = useAiMarking({
+    path: `/api/attempts/${encodeURIComponent(attemptId)}/ai-mark`,
+    enabled: Boolean(session) && submissions.length > 0,
+    needed: needsAi,
+    ...(onRefresh ? { onDone: onRefresh } : {}),
+  });
+
   if (!session) return null;
-  const submissions = session.writing ?? [];
   if (submissions.length === 0) {
     return (
       <div className="stack" style={{ padding: 24 }}>
@@ -487,17 +507,7 @@ function WritingReview({
       </div>
     );
   }
-  const idx = Math.min(taskIdx, submissions.length - 1);
-  const submission = submissions[idx]!;
-  const needsAi = submissions.some(
-    (item) => item.responseText.trim().length > 0 && !item.ai && !(item.score && item.score.source !== 'AI'),
-  );
-  const marker = useAiMarking({
-    path: `/api/attempts/${encodeURIComponent(attemptId)}/ai-mark`,
-    enabled: true,
-    needed: needsAi,
-    ...(onRefresh ? { onDone: onRefresh } : {}),
-  });
+  if (!submission) return null;
   // The prompt exactly as the exam showed it (rubric, requirements, chart).
   const paperTasks = writingTasksOf(sections);
   const ref: WritingTaskRef | null = paperTasks.find((item) => item.task.id === submission.questionId) ?? paperTasks[idx] ?? null;

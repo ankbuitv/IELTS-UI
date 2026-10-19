@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 71   Indexes: 87
+-- Tables: 74   Indexes: 91
 -- =============================================================================
 
 -- table: user_profiles
@@ -1031,6 +1031,43 @@ CREATE TABLE IF NOT EXISTS user_identities (
   UNIQUE (provider, subject)
 );
 
+-- table: notifications
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  href TEXT,
+  read_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+-- table: email_outbox
+CREATE TABLE IF NOT EXISTS email_outbox (
+  id TEXT PRIMARY KEY,
+  to_email TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  html TEXT NOT NULL,
+  text TEXT,
+  status TEXT NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'SENT', 'FAILED', 'SKIPPED')),
+  provider TEXT,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  sent_at TEXT
+);
+
+-- table: auth_links
+CREATE TABLE IF NOT EXISTS auth_links (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL CHECK (purpose IN ('MAGIC', 'RESET')),
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL
+);
+
 -- index: idx_sessions_user
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
 
@@ -1295,3 +1332,17 @@ CREATE INDEX IF NOT EXISTS idx_speaking_sessions_attempt
 
 -- index: idx_user_identities_user
 CREATE INDEX IF NOT EXISTS idx_user_identities_user ON user_identities (user_id);
+
+-- index: idx_notifications_user
+CREATE INDEX IF NOT EXISTS idx_notifications_user
+  ON notifications (user_id, read_at, created_at DESC);
+
+-- index: idx_email_outbox_created
+CREATE INDEX IF NOT EXISTS idx_email_outbox_created ON email_outbox (created_at DESC);
+
+-- index: idx_email_outbox_to
+CREATE INDEX IF NOT EXISTS idx_email_outbox_to ON email_outbox (to_email, created_at DESC);
+
+-- index: idx_auth_links_user
+CREATE INDEX IF NOT EXISTS idx_auth_links_user
+  ON auth_links (user_id, purpose, used_at, created_at DESC);

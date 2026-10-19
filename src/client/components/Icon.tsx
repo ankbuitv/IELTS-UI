@@ -43,6 +43,7 @@ export type IconName =
   | 'lock'
   | 'calendar'
   | 'mail'
+  | 'bell'
   | 'trendingUp'
   | 'award'
   | 'file'
@@ -274,6 +275,12 @@ const PATHS: Record<IconName, ReactElement> = {
     <>
       <rect x="3" y="5.5" width="18" height="13" rx="2.5" />
       <path d="m4 7.5 8 5.5 8-5.5" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M6.5 10a5.5 5.5 0 0 1 11 0c0 4 1.2 5.4 2 6.2.3.3.1.8-.4.8H4.9c-.5 0-.7-.5-.4-.8.8-.8 2-2.2 2-6.2Z" />
+      <path d="M10 20a2.4 2.4 0 0 0 4 0" />
     </>
   ),
   trendingUp: (

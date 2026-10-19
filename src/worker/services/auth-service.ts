@@ -4,6 +4,7 @@ import { ApiError } from '../lib/errors';
 import { hashPassword, hashSessionToken, randomToken, verifyPassword } from '../lib/crypto';
 import { generateOtpCode, generateTotpSecret, totpAuthUrl, verifyTotp } from '../lib/totp';
 import { newId, nowIso } from '../lib/ids';
+import { loginOtpEmail, magicLinkEmail, passwordResetEmail, sendEmail } from './email-service';
 import type { Role } from '../../shared/types';
 
 const MIN_PASSWORD_LENGTH = 10;
@@ -557,7 +558,11 @@ export async function verifyTwoFactor(
     throw ApiError.unauthenticated('Two-factor authentication is not active on that account.');
   }
   const ok = await verifyTotp(profile.totp_secret, input.code);
-  if (!ok) throw ApiError.unauthenticated('That authenticator code is not correct.');
+  if (!ok) {
+    // A backup code also proves possession; it is single-use like the TOTP step.
+    const backup = await consumeOtpRow(env, matched.user_id, 'BACKUP', input.code.trim().toUpperCase());
+    if (!backup) throw ApiError.unauthenticated('That authenticator code is not correct.');
+  }
 
   await env.DB.prepare('UPDATE login_otp_codes SET used_at = ? WHERE id = ?').bind(nowIso(), matched.id).run();
 
@@ -592,8 +597,10 @@ export async function requestLoginOtp(
   if (row.status === 'SUSPENDED') throw ApiError.forbidden('This account is suspended. Contact an administrator.');
 
   const issued = await issueOtpRow(env, row.id, 'LOGIN', generateOtpCode(), 10 * 60_000);
-  // Delivery: an email provider can be wired in here. In development the code
-  // is returned to the caller so the flow is testable end to end.
+  const message = loginOtpEmail(env, issued.code);
+  await sendEmail(env, { ...message, to: row.email });
+  // In development the code is also returned so the flow stays testable when
+  // no email provider is configured.
   const dev = (env.APP_ENV ?? '').toLowerCase() !== 'production';
   console.info('login_otp', row.id, dev ? `(dev code ${issued.code})` : '(sent)');
   return { sent: true, ...(dev ? { devCode: issued.code } : {}), expiresAt: issued.expiresAt };
@@ -639,7 +646,11 @@ export async function setupTotp(
 }
 
 /** Turns 2FA on once the user proves they have the authenticator. */
-export async function enableTotp(env: Env, user: AuthUser, code: string): Promise<{ enabled: true }> {
+export async function enableTotp(
+  env: Env,
+  user: AuthUser,
+  code: string,
+): Promise<{ enabled: true; backupCodes: string[] }> {
   const profile = await env.DB.prepare('SELECT totp_secret FROM user_profiles WHERE user_id = ?')
     .bind(user.id)
     .first<{ totp_secret: string | null }>();
@@ -647,7 +658,20 @@ export async function enableTotp(env: Env, user: AuthUser, code: string): Promis
   const ok = await verifyTotp(profile.totp_secret, code);
   if (!ok) throw ApiError.validation('That authenticator code is not correct — check your app and try again.');
   await env.DB.prepare('UPDATE user_profiles SET totp_enabled = 1 WHERE user_id = ?').bind(user.id).run();
-  return { enabled: true };
+
+  // Fresh backup codes every time 2FA is turned on. The plaintext only ever
+  // leaves the server in this response; the database keeps PBKDF2 hashes.
+  await env.DB.prepare("DELETE FROM login_otp_codes WHERE user_id = ? AND purpose = 'BACKUP'")
+    .bind(user.id)
+    .run();
+  const backupCodes: string[] = [];
+  for (let index = 0; index < 8; index += 1) {
+    const raw = generateOtpCode();
+    const formatted = `${raw.slice(0, 4)}-${raw.slice(4)}`;
+    await issueOtpRow(env, user.id, 'BACKUP', formatted, 365 * 86_400_000);
+    backupCodes.push(formatted);
+  }
+  return { enabled: true, backupCodes };
 }
 
 export async function disableTotp(env: Env, user: AuthUser, code: string): Promise<{ enabled: false }> {
@@ -659,6 +683,10 @@ export async function disableTotp(env: Env, user: AuthUser, code: string): Promi
     if (!ok) throw ApiError.validation('Enter a current authenticator code to turn 2FA off.');
   }
   await env.DB.prepare('UPDATE user_profiles SET totp_secret = NULL, totp_enabled = 0 WHERE user_id = ?')
+    .bind(user.id)
+    .run();
+  // Backup codes are only meaningful while 2FA is on.
+  await env.DB.prepare("DELETE FROM login_otp_codes WHERE user_id = ? AND purpose = 'BACKUP'")
     .bind(user.id)
     .run();
   return { enabled: false };
@@ -684,4 +712,150 @@ export async function loginFederated(
     .run();
   const session = await createSession(env, row.id, context);
   return { user: toAuthUser({ ...row, failed_login_count: 0, locked_until: null }), ...session };
+}
+
+
+// ----------------------------------------------------- Email links (magic / reset)
+
+export type AuthLinkPurpose = 'MAGIC' | 'RESET';
+
+const AUTH_LINK_TTL_MS: Record<AuthLinkPurpose, number> = {
+  MAGIC: 15 * 60_000,
+  RESET: 30 * 60_000,
+};
+
+/**
+ * Creates a single-use, hashed token for an email link. Issuing a new link
+ * invalidates every older unused one for the same purpose, so a stolen email
+ * from an earlier request stops working.
+ */
+async function createAuthLink(env: Env, userId: string, purpose: AuthLinkPurpose): Promise<string> {
+  const token = randomToken(32);
+  const tokenHash = await hashSessionToken(token, env.SESSION_SECRET ?? 'dev-pepper');
+  const timestamp = nowIso();
+  await env.DB.prepare('UPDATE auth_links SET used_at = ? WHERE user_id = ? AND purpose = ? AND used_at IS NULL')
+    .bind(timestamp, userId, purpose)
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO auth_links (id, user_id, purpose, token_hash, expires_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      newId('lnk', 16),
+      userId,
+      purpose,
+      tokenHash,
+      new Date(Date.now() + AUTH_LINK_TTL_MS[purpose]).toISOString(),
+      timestamp,
+    )
+    .run();
+  return token;
+}
+
+interface AuthLinkRow {
+  id: string;
+  user_id: string;
+  expires_at: string;
+}
+
+/** Looks up a live link. Returns null for unknown, used or expired tokens. */
+async function findAuthLink(env: Env, token: string, purpose: AuthLinkPurpose): Promise<AuthLinkRow | null> {
+  const tokenHash = await hashSessionToken(token.trim(), env.SESSION_SECRET ?? 'dev-pepper');
+  const row = await env.DB.prepare(
+    `SELECT id, user_id, expires_at FROM auth_links
+      WHERE token_hash = ? AND purpose = ? AND used_at IS NULL AND expires_at > ?`,
+  )
+    .bind(tokenHash, purpose, nowIso())
+    .first<AuthLinkRow>();
+  return row ?? null;
+}
+
+/** Always succeeds — the response must not disclose whether the account exists. */
+export async function requestMagicLink(env: Env, identifier: string): Promise<{ sent: true }> {
+  const row = await findUserByIdentifier(env, identifier.trim().toLowerCase());
+  if (!row || row.status !== 'ACTIVE') return { sent: true };
+  const token = await createAuthLink(env, row.id, 'MAGIC');
+  const message = magicLinkEmail(env, token);
+  await sendEmail(env, { ...message, to: row.email });
+  return { sent: true };
+}
+
+/** Signs in from an emailed link. Still honours an authenticator when enabled. */
+export async function consumeMagicLink(
+  env: Env,
+  token: string,
+  context: { ip: string; userAgent: string },
+): Promise<LoginResult | TwoFactorPending> {
+  const link = await findAuthLink(env, token, 'MAGIC');
+  if (!link) throw ApiError.unauthenticated('That sign-in link is invalid or has expired. Request a new one.');
+  await env.DB.prepare('UPDATE auth_links SET used_at = ? WHERE id = ?').bind(nowIso(), link.id).run();
+
+  const row = await env.DB.prepare(
+    `SELECT u.id, u.email, u.role, u.status, u.password_hash, u.password_salt, u.password_iterations,
+            u.password_algo, u.created_at, u.last_login_at, u.failed_login_count, u.locked_until,
+            u.username, p.display_name, p.avatar_updated_at, p.totp_secret, p.totp_enabled
+       FROM users u LEFT JOIN user_profiles p ON p.user_id = u.id
+      WHERE u.id = ?`,
+  )
+    .bind(link.user_id)
+    .first<UserRowAuth>();
+  if (!row) throw ApiError.unauthenticated('That account no longer exists.');
+  if (row.status === 'SUSPENDED') throw ApiError.forbidden('This account is suspended. Contact an administrator.');
+
+  if (row.totp_enabled === 1 && row.totp_secret) {
+    const ticket = await issueOtpRow(env, row.id, 'LOGIN', randomToken(24), 5 * 60_000);
+    return { twoFactorRequired: true, ticket: ticket.code, expiresAt: ticket.expiresAt };
+  }
+
+  await env.DB.prepare(
+    'UPDATE users SET failed_login_count = 0, locked_until = NULL, last_login_at = ?, updated_at = ? WHERE id = ?',
+  )
+    .bind(nowIso(), nowIso(), row.id)
+    .run();
+
+  const session = await createSession(env, row.id, context);
+  return { user: toAuthUser(row), ...session };
+}
+
+/** Always succeeds — no account enumeration. */
+export async function requestPasswordReset(env: Env, identifier: string): Promise<{ sent: true }> {
+  const row = await findUserByIdentifier(env, identifier.trim().toLowerCase());
+  if (!row || row.status === 'SUSPENDED') return { sent: true };
+  const token = await createAuthLink(env, row.id, 'RESET');
+  const message = passwordResetEmail(env, token);
+  await sendEmail(env, { ...message, to: row.email });
+  return { sent: true };
+}
+
+export async function resetPasswordWithToken(
+  env: Env,
+  token: string,
+  newPassword: string,
+): Promise<{ email: string }> {
+  const link = await findAuthLink(env, token, 'RESET');
+  if (!link) throw ApiError.validation('That reset link is invalid or has expired. Request a new one.');
+
+  const row = await env.DB.prepare('SELECT id, email, status FROM users WHERE id = ?')
+    .bind(link.user_id)
+    .first<{ id: string; email: string; status: string }>();
+  if (!row) throw ApiError.validation('That account no longer exists.');
+  if (row.status === 'SUSPENDED') throw ApiError.forbidden('This account is suspended. Contact an administrator.');
+
+  const policy = checkPasswordPolicy(newPassword, row.email);
+  if (!policy.ok) {
+    throw ApiError.validation('The new password does not meet the security policy.', { problems: policy.problems });
+  }
+
+  const hashed = await hashPassword(newPassword);
+  await env.DB.prepare(
+    `UPDATE users SET password_hash = ?, password_salt = ?, password_iterations = ?, password_algo = ?, updated_at = ?
+      WHERE id = ?`,
+  )
+    .bind(hashed.hash, hashed.salt, hashed.iterations, hashed.algo, nowIso(), row.id)
+    .run();
+  await env.DB.prepare('UPDATE auth_links SET used_at = ? WHERE user_id = ? AND used_at IS NULL')
+    .bind(nowIso(), row.id)
+    .run();
+  await revokeAllSessions(env, row.id);
+  return { email: row.email };
 }

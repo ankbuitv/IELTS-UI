@@ -14,6 +14,8 @@ import './styles/learn.css';
 import './styles/exam.css';
 import './styles/exam-tools.css';
 import './styles/mentor.css';
+import './styles/notifications.css';
+import './styles/certificate.css';
 import { applyPrefs, loadPrefs } from './lib/display';
 
 // Apply the reader's display preferences before the first paint, so the page

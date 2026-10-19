@@ -1100,6 +1100,7 @@ function TwoFactorCard() {
   const [status, setStatus] = useState<{ enabled: boolean; pending: boolean } | null>(null);
   const [enrolment, setEnrolment] = useState<{ secret: string; authUrl: string } | null>(null);
   const [code, setCode] = useState('');
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   const refreshStatus = useCallback(async () => {
@@ -1128,11 +1129,12 @@ function TwoFactorCard() {
   const enable = async () => {
     setBusy(true);
     try {
-      await api.post('/api/auth/2fa/enable', { code: code.trim() });
+      const result = await api.post<{ enabled: true; backupCodes: string[] }>('/api/auth/2fa/enable', { code: code.trim() });
       setEnrolment(null);
       setCode('');
+      setBackupCodes(result.backupCodes ?? []);
       await refreshStatus();
-      toast.push('Two-factor authentication is on.', 'success');
+      toast.push('Two-factor authentication is on — save your backup codes.', 'success');
     } catch (enableError) {
       toast.push(describeError(enableError), 'error');
     } finally {
@@ -1160,7 +1162,35 @@ function TwoFactorCard() {
       title="Two-factor authentication"
       hint={status?.enabled ? 'On · your authenticator code is required at sign in' : 'Off · sign in with password or a one-time code'}
     >
-      {status?.enabled ? (
+      {backupCodes.length > 0 ? (
+        <>
+          <Notice tone="success" title="Save these backup codes now">
+            Each code signs you in once if you lose your authenticator. They are shown only this time.
+          </Notice>
+          <div className="backup-codes" role="list">
+            {backupCodes.map((entry) => (
+              <code key={entry} role="listitem">{entry}</code>
+            ))}
+          </div>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                void navigator.clipboard?.writeText(backupCodes.join('\n')).then(
+                  () => toast.push('Backup codes copied.', 'success'),
+                  () => toast.push('Could not copy — select the codes manually.', 'error'),
+                );
+              }}
+            >
+              Copy codes
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setBackupCodes([])}>
+              I have saved them
+            </Button>
+          </div>
+        </>
+      ) : status?.enabled ? (
         <>
           <p className="small muted">
             Enter your current authenticator code to turn two-factor authentication off.
