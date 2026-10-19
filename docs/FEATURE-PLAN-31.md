@@ -67,8 +67,8 @@ Migration `0035` (cam_on/mic_on). Chi tiết: `docs/CALL-ROOM.md`.
 | 34 | **AI tutor** | ✅ `/tutor`, `tutor_conversations`/`tutor_messages`, system prompt chống bịa band, giới hạn 60 tin/giờ, giao diện 2 cột + mobile |
 | 40 | **Vocab auto-extract + SRS** | ✅ đã có từ trước: `saveAiVocabulary` khi chấm, Leitner `box`/`due_at`, `/learn/review`, thẻ due trên Vocabulary |
 | 39 | **TTS nhiều giọng** | 🟡 đã có `speech_cache`, 13 giọng server + fallback giọng thiết bị; còn thiếu bộ chọn accent UK/AU/US rõ ràng |
-| 38 | **Word-level transcript** | ⬜ cần timestamp từng từ (provider phải trả word timings); segment-level đã có |
-| 37 | **OCR import đề** | ⬜ vision model đã nhận ảnh nhưng pipeline import chưa lưu/đọc ảnh scan |
+| 38 | **Word-level transcript** | ✅ `src/shared/transcript-timing.ts` chia từ theo anchor + độ dài audio; click từ → menu "Play from here"/tra từ; "Listen from here" nhảy đúng câu evidence (`findEvidenceStart`), 7 test |
+| 37 | **OCR import đề** | ✅ tab **Scan or photo (OCR)**: tối đa 8 ảnh PNG/JPEG/WebP ≤8 MB, vision model đọc + cấu trúc, vào **Review**, audit `IMPORT_OCR` (`POST /api/admin/imports/ocr`) |
 | 36 | **AI generate đề** | ✅ Reading 1–3 bài, 5–14 câu/bài, chọn band; prompt chống đạo văn; vào thẳng **Review** (`POST /api/admin/imports/generate`), audit `IMPORT_AI_GENERATED` |
 | 35 | **AI speaking partner** | ⬜ |
 

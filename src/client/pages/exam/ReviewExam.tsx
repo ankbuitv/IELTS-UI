@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
@@ -7,6 +7,8 @@ import { Icon } from '../../components/Icon';
 import { QuestionRenderer } from '../../components/exam/QuestionRenderer';
 import { AnswerExplanation, evidenceSegmentId } from '../../components/exam/AnswerExplanation';
 import { TranscriptView } from '../../components/exam/TranscriptView';
+import { ExamDictionary } from '../../components/exam/ExamDictionary';
+import { buildWordTimings, findEvidenceStart } from '@shared/transcript-timing';
 import { WritingPrompt, writingTasksOf, type WritingTaskRef } from '../../components/exam/WritingEditor';
 import { AiMarkPanel } from '../../components/AiMarkPanel';
 import { useAiMarking } from '../../hooks/useAiMarking';
@@ -51,20 +53,30 @@ export function AttemptReviewPage() {
   const [sessionIdx, setSessionIdx] = useState(0);
   const [speakingTab, setSpeakingTab] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioDuration, setAudioDuration] = useState<number | null>(null);
+  const [dictTerm, setDictTerm] = useState<string | null>(null);
 
-  /** "Listen from here": play the section recording from the evidence sentence. */
-  const listenFrom = (segmentId: string | null) => {
-    const segment = (activeSectionResultRef.current?.transcript?.segments ?? []).find((item) => item.id === segmentId);
+  /**
+   * "Listen from here": play the recording from the evidence sentence.
+   *
+   * Segment anchors are used when the author supplied them; otherwise the word
+   * timings locate the quoted evidence inside the segment, so the recording
+   * starts on the sentence that proves the answer rather than at the top of the
+   * part.
+   */
+  const listenFrom = (segmentId: string | null, evidence?: string | null) => {
+    if (!segmentId) return;
+    const segment = (activeTranscript?.segments ?? []).find((item) => item.id === segmentId);
     const audio = audioRef.current;
-    if (audio && segment && segment.startSeconds !== null) {
-      audio.currentTime = segment.startSeconds;
+    const wordStart = findEvidenceStart(wordTimings, segmentId, evidence);
+    const seconds = wordStart ?? segment?.startSeconds ?? null;
+    if (audio && seconds !== null && Number.isFinite(seconds)) {
+      audio.currentTime = seconds;
       void audio.play().catch(() => undefined);
     }
-    if (segmentId) {
-      document
-        .getElementById(`transcript-segment-${segmentId}`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    document
+      .getElementById(`segment-${segmentId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
   const activeSession = sessions[sessionIdx] ?? null;
   const [sectionId, setSectionId] = useState<string | null>(null);
@@ -78,11 +90,11 @@ export function AttemptReviewPage() {
   const sectionResults = activeSession?.sectionResults ?? [];
   const activeSectionId = sectionId ?? sectionResults[0]?.sectionId ?? null;
   const activeSectionResult = sectionResults.find((s) => s.sectionId === activeSectionId) ?? null;
-  const activeSectionResultRef = useRef<typeof activeSectionResult>(null);
-  useEffect(() => {
-    activeSectionResultRef.current = activeSectionResult;
-  }, [activeSectionResult]);
   const activePaperSection = activeSectionId ? (sectionsById.get(activeSectionId) ?? null) : null;
+  const activeTranscript = activeSectionResult?.transcript ?? activePaperSection?.transcript ?? null;
+  const wordTimings = activeTranscript
+    ? buildWordTimings(activeTranscript.segments, { durationSeconds: audioDuration })
+    : [];
 
   const reviewItems = useMemo(
     () =>
@@ -261,17 +273,53 @@ export function AttemptReviewPage() {
               )}
               {activeSectionResult?.audio ? (
                 <div style={{ padding: '10px 12px 0' }}>
-                  <audio ref={audioRef} controls preload="metadata" src={activeSectionResult.audio.url} style={{ width: '100%' }} />
+                  <audio
+                    ref={audioRef}
+                    controls
+                    preload="metadata"
+                    src={activeSectionResult.audio.url}
+                    style={{ width: '100%' }}
+                    onLoadedMetadata={(event) => {
+                      const value = event.currentTarget.duration;
+                      if (Number.isFinite(value) && value > 0) setAudioDuration(value);
+                    }}
+                    onDurationChange={(event) => {
+                      const value = event.currentTarget.duration;
+                      if (Number.isFinite(value) && value > 0) setAudioDuration(value);
+                    }}
+                  />
                   <p className="tiny muted" style={{ margin: '6px 2px 0' }}>
                     <Icon name="headphones" size={12} /> Press “Listen from here” on any question to jump to its part.
                   </p>
                 </div>
               ) : null}
               {activeSectionResult?.transcript ? (
-                <TranscriptView transcript={activeSectionResult.transcript} highlightSegmentId={null} />
+                <TranscriptView
+                  transcript={activeSectionResult.transcript}
+                  highlightSegmentId={null}
+                  wordTimings={wordTimings}
+                  onSeekSeconds={(seconds) => {
+                    const audio = audioRef.current;
+                    if (!audio) return;
+                    audio.currentTime = seconds;
+                    void audio.play().catch(() => undefined);
+                  }}
+                  onLookUpWord={(word) => setDictTerm(word)}
+                />
               ) : null}
               {activePaperSection?.transcript && !activeSectionResult?.transcript ? (
-                <TranscriptView transcript={activePaperSection.transcript} highlightSegmentId={null} />
+                <TranscriptView
+                  transcript={activePaperSection.transcript}
+                  highlightSegmentId={null}
+                  wordTimings={wordTimings}
+                  onSeekSeconds={(seconds) => {
+                    const audio = audioRef.current;
+                    if (!audio) return;
+                    audio.currentTime = seconds;
+                    void audio.play().catch(() => undefined);
+                  }}
+                  onLookUpWord={(word) => setDictTerm(word)}
+                />
               ) : null}
             </div>
           }
@@ -396,6 +444,10 @@ export function AttemptReviewPage() {
             correct / red = wrong — click any number to jump to its explanation.
           </span>
         </div>
+      ) : null}
+
+      {dictTerm ? (
+        <ExamDictionary key={dictTerm} initialTerm={dictTerm} onClose={() => setDictTerm(null)} />
       ) : null}
     </div>
   );

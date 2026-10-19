@@ -254,7 +254,8 @@ function ImportStartForm({
   onCreated: (importId: string) => void | Promise<void>;
   onError: (message: string) => void;
 }) {
-  const [mode, setMode] = useState<'paste' | 'file' | 'generate'>('paste');
+  const [mode, setMode] = useState<'paste' | 'file' | 'ocr' | 'generate'>('paste');
+  const [scanFiles, setScanFiles] = useState<File[]>([]);
   const [gen, setGen] = useState({ prompt: '', title: '', band: '6.5', sections: '1', questions: '10' });
   const [busy, setBusy] = useState(false);
   const [pasteText, setPasteText] = useState('');
@@ -300,6 +301,7 @@ function ImportStartForm({
         tabs={[
           { id: 'paste', label: 'Paste text or JSON' },
           { id: 'file', label: 'Upload a document' },
+          { id: 'ocr', label: 'Scan or photo (OCR)' },
           { id: 'generate', label: 'Generate with AI' },
         ]}
       />
@@ -401,6 +403,63 @@ function ImportStartForm({
             }}
           >
             Upload for review
+          </Button>
+        </>
+      ) : mode === 'ocr' ? (
+        <>
+          <div className="gen-callout">
+            <strong>Read a printed or photographed test</strong>
+            <span>
+              Attach up to 8 page photos or screenshots of the same test. The vision model transcribes each page and builds a
+              draft in <b>Review</b>. Photograph one page per image, keep the page flat and in focus, and check every question
+              against the original before publishing. Images are not stored after processing.
+            </span>
+          </div>
+          <Field label="Page images" required hint="PNG, JPEG or WebP, up to 8 MB each, maximum 8 pages.">
+            {(id) => (
+              <input
+                id={id}
+                type="file"
+                multiple
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(event) => setScanFiles(Array.from(event.target.files ?? []).slice(0, 8))}
+              />
+            )}
+          </Field>
+          {scanFiles.length > 0 && (
+            <div className="page-chips">
+              {scanFiles.map((file, index) => (
+                <span className="page-chip" key={`${file.name}-${index}`}>
+                  <b>{index + 1}</b> {file.name} · {(file.size / 1024).toFixed(0)} KB
+                </span>
+              ))}
+            </div>
+          )}
+          <Field label="Title" hint="Optional. Shown in the import list.">
+            {(id) => <TextInput id={id} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />}
+          </Field>
+          {provenance}
+          <Button
+            variant="primary"
+            loading={busy}
+            disabled={scanFiles.length === 0}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const body = new FormData();
+                for (const page of scanFiles) body.append('pages', page);
+                if (form.title) body.set('title', form.title);
+                const result = await api.upload<{ importId: string }>('/api/admin/imports/ocr', body);
+                setScanFiles([]);
+                await onCreated(result.importId);
+              } catch (ocrError) {
+                onError(describeError(ocrError));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Read the pages
           </Button>
         </>
       ) : (

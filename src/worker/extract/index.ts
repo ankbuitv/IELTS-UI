@@ -90,7 +90,7 @@ export function extractText(bytes: Uint8Array, mime: string, filename: string): 
       text: '',
       kind: 'UNSUPPORTED',
       warning:
-        'Images are processed by the AI vision path when an OpenAI key is configured; otherwise attach them manually as assets.',
+        'Images are read by the OCR tab in Admin → Imports when a vision model is configured; otherwise attach them manually as assets.',
     };
   }
 

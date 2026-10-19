@@ -110,7 +110,7 @@ export async function createImport(env: Env, user: AuthUser, input: CreateImport
     log.push({
       at: timestamp,
       message:
-        'No extractable text was found. Scanned documents need OCR, which V1 does not include: paste the text instead so it can be structured.',
+        'No extractable text was found. This looks like a scan: upload its page photos in the OCR tab, or paste the text so it can be structured.',
     });
   }
 
@@ -392,6 +392,99 @@ export async function generateReadingImport(
     entityId: result.importId,
     metadata: { band: input.band, sections: input.sections ?? 1, promptLength: input.prompt.length },
   });
+  return result;
+}
+
+/**
+ * #37 OCR import: photographs or screenshots of a printed test go through the
+ * vision model, which transcribes the pages and structures them in one pass.
+ * The draft lands in REVIEW like any other import; the images are not retained.
+ */
+export interface OcrPage {
+  bytes: Uint8Array;
+  mime: string;
+  filename: string;
+}
+
+const OCR_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+const OCR_MAX_PAGES = 8;
+const OCR_MAX_PAGE_BYTES = 8 * 1024 * 1024;
+
+export async function createOcrImport(
+  env: Env,
+  user: AuthUser,
+  input: { pages: OcrPage[]; title?: string; filename?: string },
+): Promise<CreateImportResult> {
+  if (input.pages.length === 0) throw ApiError.validation('Attach at least one page image.');
+  if (input.pages.length > OCR_MAX_PAGES) {
+    throw ApiError.validation(`Attach at most ${OCR_MAX_PAGES} page images per import.`);
+  }
+
+  let totalBytes = 0;
+  for (const page of input.pages) {
+    if (!page.bytes.byteLength) throw ApiError.validation(`${page.filename} is empty.`);
+    if (page.bytes.byteLength > OCR_MAX_PAGE_BYTES) {
+      throw ApiError.validation(`${page.filename} is larger than 8 MB. Compress it or split the page.`);
+    }
+    if (!(OCR_MIME_TYPES as readonly string[]).includes(page.mime)) {
+      throw ApiError.validation(`${page.filename} is not PNG, JPEG or WebP.`);
+    }
+    totalBytes += page.bytes.byteLength;
+  }
+
+  const status = await aiStatus(env);
+  if (!status.available) {
+    throw new ApiError(
+      'AI_UNAVAILABLE',
+      'OCR needs a vision model. No AI provider is configured, so upload the text or paste it instead.',
+    );
+  }
+
+  const dataUrls: string[] = [];
+  for (const page of input.pages) {
+    let binary = '';
+    for (let index = 0; index < page.bytes.byteLength; index += 1) {
+      binary += String.fromCharCode(page.bytes[index]!);
+    }
+    dataUrls.push(`data:${page.mime};base64,${btoa(binary)}`);
+  }
+
+  const first = input.pages[0]!;
+  const filename = sanitiseFilename(input.filename ?? first.filename);
+
+  const structured = await structureTestFromSource(env, {
+    filename,
+    titleHint: input.title,
+    imageDataUrls: dataUrls,
+    ocr: true,
+  });
+
+  const serialised = JSON.stringify(structured.payload);
+  if (serialised.length > 2_000_000) {
+    throw ApiError.validation('The recognised test is too large. Split it across several imports.');
+  }
+  const checksum = await sha256Hex(new TextEncoder().encode(serialised).buffer as ArrayBuffer);
+  const result = await createStructuredImport(env, user, {
+    title: input.title?.trim() || undefined,
+    filename,
+    mime: first.mime,
+    sizeBytes: totalBytes,
+    payload: structured.payload,
+    checksum,
+    contentOrigin: 'IMPORTED',
+    sourceTitle: `OCR from ${input.pages.length} scanned page(s)`,
+    attribution: 'Transcribed by AI from scan(s) supplied by an administrator. Check against the original before publishing.',
+    aiModel: structured.model,
+  });
+
+  await recordAudit(env, {
+    actorUserId: user.id,
+    action: 'IMPORT_OCR',
+    entityType: 'import',
+    entityId: result.importId,
+    metadata: { pages: input.pages.length, bytes: totalBytes, model: structured.model },
+  });
+
   return result;
 }
 

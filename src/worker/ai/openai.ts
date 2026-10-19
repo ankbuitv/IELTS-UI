@@ -139,7 +139,8 @@ Rules you must follow:
 8. For multiple-answer tasks (MCQ_MULTI) set selectCount and list every correct option id in "answer" separated by "|".
 9. Extract word limits from instructions into wordLimitMax when stated.
 10. Use "warnings" for anything unclear, ambiguous or partially missing.
-11. Do not include any copyrighted branding or claims of official affiliation.`;
+11. Do not include any copyrighted branding or claims of official affiliation.
+12. When page images are supplied as scans, read them with OCR: transcribe the printed text verbatim before structuring it, and mention unreadable fragments in "warnings".`;
 
 export interface AiStructureRequest {
   sourceText?: string;
@@ -147,6 +148,8 @@ export interface AiStructureRequest {
   titleHint?: string;
   imageDataUrls?: string[];
   audioTranscript?: string;
+  /** True when the images are scans with no text layer: the model must OCR them. */
+  ocr?: boolean;
 }
 
 export interface AiStructureResponse {
@@ -174,7 +177,9 @@ export async function structureTestFromSource(
     request.audioTranscript ? `Audio transcript:\n${request.audioTranscript.slice(0, 60_000)}` : null,
     sourceText ? `Source text:\n\n${sourceText}` : null,
     request.imageDataUrls?.length
-      ? `${request.imageDataUrls.length} page image(s) were supplied; work only from the text that accompanies them.`
+      ? request.ocr
+        ? `${request.imageDataUrls.length} scanned page image(s) are attached. Transcribe every visible word — headings, instructions, passages, questions, options, tables and any printed answer key — then structure the test. Do not summarise or skip instructions.`
+        : `${request.imageDataUrls.length} page image(s) were supplied; work only from the text that accompanies them.`
       : null,
     'Return the structured test as JSON.',
   ]

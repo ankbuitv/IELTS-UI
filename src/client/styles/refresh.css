@@ -330,3 +330,88 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
 }
 .gen-callout strong { font-size: 0.86rem; color: var(--ink-900); }
 .gen-callout span { font-size: 0.78rem; line-height: 1.5; color: var(--ink-600); }
+
+/* OCR page chips */
+.page-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
+.page-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--paper-100);
+  border: 1px solid var(--line);
+  font-size: 0.74rem;
+  color: var(--ink-700);
+}
+.page-chip b { color: var(--brand-700); }
+
+/* #38 transcript words: jump + in-place lookup */
+.convo__bubble--words { padding: 8px 10px; cursor: default; text-align: left; }
+.convo__wordwrap { position: relative; display: inline; }
+.convo__word {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  line-height: 1.65;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.convo__word::after { content: ' '; }
+.convo__word:hover,
+.convo__word:focus-visible { background: var(--brand-100); color: var(--brand-800); outline: none; }
+.convo__word--open { background: var(--brand-200); color: var(--brand-900); box-shadow: 0 0 0 1px var(--brand-300); }
+.convo__wordpop {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  bottom: calc(100% + 6px);
+  display: flex;
+  flex-direction: column;
+  min-width: 168px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  white-space: nowrap;
+}
+.convo__wordpop-time {
+  padding: 4px 8px 5px;
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-500);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 3px;
+}
+.convo__wordpop button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--ink-800);
+  cursor: pointer;
+}
+.convo__wordpop button:hover { background: var(--brand-50); color: var(--brand-800); }
+@media (max-width: 640px) {
+  .convo__wordpop { min-width: 150px; bottom: auto; top: calc(100% + 6px); }
+}
+.convo__bubble-text {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.convo__bubble-text:disabled { cursor: default; }
