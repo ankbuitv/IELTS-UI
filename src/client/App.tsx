@@ -47,6 +47,7 @@ import { TrainingPage } from './pages/staff/TrainingPage';
 import { CalendarPage } from './pages/student/CalendarPage';
 import { ClassDetailPage } from './pages/mentor/ClassDetailPage';
 import { CallRoomPage } from './pages/mentor/CallRoomPage';
+import { EarningsPage } from './pages/mentor/EarningsPage';
 import { NotificationsPage } from './components/NotificationBell';
 import { CertificatePage } from './pages/student/CertificatePage';
 
@@ -354,6 +355,14 @@ export function App() {
           element={
             <RequireAuth roles={['MENTOR', 'ADMIN']}>
               <MentorConsolePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="mentor/earnings"
+          element={
+            <RequireAuth roles={['MENTOR', 'ADMIN']}>
+              <EarningsPage />
             </RequireAuth>
           }
         />

@@ -99,7 +99,7 @@ export function QuestionRenderer({
     ) : null;
 
   return (
-    <div className={classes} id={`q-${question.number}`} onFocus={() => onFocusQuestion(question.id)}>
+    <div className={classes} id={`q-${question.id}`} onFocus={() => onFocusQuestion(question.id)}>
       {answerInsideText ? null : (
         <div className="question__number" aria-hidden="true">
           {question.number}

@@ -325,7 +325,7 @@ export async function listSessionsFor(env: Env, viewer: AuthUser, scope: 'upcomi
  * session, any member (or the mentor) of that class. The class's durable room
  * session has the mentor on both sides and is shared by every member.
  */
-async function assertSessionAccess(env: Env, session: MentorSession, viewer: AuthUser): Promise<void> {
+export async function assertSessionAccess(env: Env, session: MentorSession, viewer: AuthUser): Promise<void> {
   if (session.mentorId === viewer.id || session.studentId === viewer.id) return;
   if (viewer.role === 'ADMIN') return;
   if (session.kind === 'CLASS' && session.classId) {
@@ -341,6 +341,31 @@ async function assertSessionAccess(env: Env, session: MentorSession, viewer: Aut
     if (klass && klass.mentor_id === viewer.id) return;
   }
   throw ApiError.forbidden('This session is not yours.');
+}
+
+/**
+ * A breakout room is a named sub-room of the same session. The host (mentor or
+ * admin) can visit any of them; everybody else must be assigned to the room
+ * they ask for. `main` is always allowed once session access passed.
+ */
+export async function assertRoomKey(
+  env: Env,
+  session: MentorSession,
+  viewer: AuthUser,
+  roomKey: string,
+): Promise<void> {
+  if (!roomKey || roomKey === 'main') return;
+  const room = await env.DB.prepare('SELECT id FROM class_breakouts WHERE session_id = ? AND room_key = ?')
+    .bind(session.id, roomKey)
+    .first<{ id: string }>();
+  if (!room) throw ApiError.validation('That breakout room is no longer open.');
+  if (session.mentorId === viewer.id || viewer.role === 'ADMIN') return;
+  const member = await env.DB.prepare(
+    'SELECT 1 AS ok FROM class_breakout_members WHERE breakout_id = ? AND user_id = ?',
+  )
+    .bind(room.id, viewer.id)
+    .first<{ ok: number }>();
+  if (!member) throw ApiError.forbidden('You are not assigned to this breakout room.');
 }
 
 export async function cancelSession(env: Env, viewer: AuthUser, sessionId: string, reason?: string): Promise<MentorSession> {
@@ -433,22 +458,31 @@ export interface RoomParticipant {
   avatarUpdatedAt: string | null;
 }
 
-export async function joinRoom(env: Env, viewer: AuthUser, sessionId: string): Promise<{ ok: true }> {
+export async function joinRoom(
+  env: Env,
+  viewer: AuthUser,
+  sessionId: string,
+  roomKey = 'main',
+): Promise<{ ok: true }> {
   if (await isRoomBanned(env, sessionId, viewer.id)) {
     throw ApiError.forbidden('You were removed from this room by the mentor.');
   }
   const session = await getSession(env, sessionId);
   await assertSessionAccess(env, session, viewer);
+  await assertRoomKey(env, session, viewer, roomKey);
   if (session.status === 'CANCELLED') throw ApiError.conflict('That session was cancelled.');
   if (session.status === 'COMPLETED') throw ApiError.conflict('That session is already over.');
 
   const timestamp = nowIso();
   await env.DB.prepare(
-    `INSERT INTO mentor_room_presence (session_id, user_id, joined_at, last_seen_at, hand_raised)
-     VALUES (?, ?, ?, ?, 0)
-     ON CONFLICT (session_id, user_id) DO UPDATE SET last_seen_at = excluded.last_seen_at`,
+    `INSERT INTO mentor_room_presence (session_id, user_id, joined_at, last_seen_at, hand_raised, room_key)
+     VALUES (?, ?, ?, ?, 0, ?)
+     ON CONFLICT (session_id, user_id) DO UPDATE SET
+       last_seen_at = excluded.last_seen_at,
+       hand_raised = 0,
+       room_key = excluded.room_key`,
   )
-    .bind(sessionId, viewer.id, timestamp, timestamp)
+    .bind(sessionId, viewer.id, timestamp, timestamp, roomKey)
     .run();
 
   // The mentor opening the room puts the session live.
@@ -483,8 +517,10 @@ export async function roomState(
   viewer: AuthUser,
   sessionId: string,
   sinceSignalId: string | null,
+  roomKey = 'main',
 ): Promise<{
   session: MentorSession;
+  roomKey: string;
   participants: RoomParticipant[];
   messages: MentorChatMessage[];
   signals: MentorSignal[];
@@ -492,6 +528,7 @@ export async function roomState(
 }> {
   const session = await getSession(env, sessionId);
   await assertSessionAccess(env, session, viewer);
+  await assertRoomKey(env, session, viewer, roomKey);
 
   const now = new Date();
   const timestamp = now.toISOString();
@@ -501,11 +538,13 @@ export async function roomState(
   // everyone timed out while still talking — the counter said "0 in room" next
   // to live tiles.)
   await env.DB.prepare(
-    `INSERT INTO mentor_room_presence (session_id, user_id, joined_at, last_seen_at, hand_raised)
-     VALUES (?, ?, ?, ?, 0)
-     ON CONFLICT (session_id, user_id) DO UPDATE SET last_seen_at = excluded.last_seen_at`,
+    `INSERT INTO mentor_room_presence (session_id, user_id, joined_at, last_seen_at, hand_raised, room_key)
+     VALUES (?, ?, ?, ?, 0, ?)
+     ON CONFLICT (session_id, user_id) DO UPDATE SET
+       last_seen_at = excluded.last_seen_at,
+       room_key = excluded.room_key`,
   )
-    .bind(sessionId, viewer.id, timestamp, timestamp)
+    .bind(sessionId, viewer.id, timestamp, timestamp, roomKey)
     .run();
   await env.DB.prepare(
     'DELETE FROM mentor_room_presence WHERE session_id = ? AND last_seen_at < ?',
@@ -521,10 +560,10 @@ export async function roomState(
        FROM mentor_room_presence pr
        JOIN users u ON u.id = pr.user_id
        LEFT JOIN user_profiles p ON p.user_id = pr.user_id
-      WHERE pr.session_id = ?
+      WHERE pr.session_id = ? AND pr.room_key = ?
       ORDER BY pr.joined_at`,
   )
-    .bind(sessionId)
+    .bind(sessionId, roomKey)
     .all<{ user_id: string; joined_at: string; hand_raised: number; display_name: string; role: string; avatar_updated_at: string | null }>();
 
   const messages = await env.DB.prepare(
@@ -534,11 +573,11 @@ export async function roomState(
        FROM mentor_messages m
        JOIN users u ON u.id = m.sender_id
        LEFT JOIN user_profiles p ON p.user_id = m.sender_id
-      WHERE m.session_id = ?
+      WHERE m.session_id = ? AND m.room_key = ?
       ORDER BY m.created_at DESC
       LIMIT 80`,
   )
-    .bind(sessionId)
+    .bind(sessionId, roomKey)
     .all<{
       id: string;
       session_id: string;
@@ -552,22 +591,23 @@ export async function roomState(
 
   const signalQuery = sinceSignalId
     ? env.DB.prepare(
-        `SELECT id, session_id, sender_id, target_id, kind, payload, created_at
+        `SELECT id, session_id, sender_id, target_id, room_key, kind, payload, created_at
            FROM mentor_signals
-          WHERE session_id = ? AND sender_id <> ? AND id > ?
+          WHERE session_id = ? AND room_key = ? AND sender_id <> ? AND id > ?
           ORDER BY created_at`,
-      ).bind(sessionId, viewer.id, sinceSignalId)
+      ).bind(sessionId, roomKey, viewer.id, sinceSignalId)
     : env.DB.prepare(
-        `SELECT id, session_id, sender_id, target_id, kind, payload, created_at
+        `SELECT id, session_id, sender_id, target_id, room_key, kind, payload, created_at
            FROM mentor_signals
-          WHERE session_id = ? AND sender_id <> ?
+          WHERE session_id = ? AND room_key = ? AND sender_id <> ?
           ORDER BY created_at`,
-      ).bind(sessionId, viewer.id);
+      ).bind(sessionId, roomKey, viewer.id);
   const signals = await signalQuery.all<{
     id: string;
     session_id: string;
     sender_id: string;
     target_id: string | null;
+    room_key: string;
     kind: string;
     payload: string;
     created_at: string;
@@ -575,6 +615,7 @@ export async function roomState(
 
   return {
     session,
+    roomKey,
     participants: presence.results.map((row) => ({
       userId: row.user_id,
       displayName: row.display_name,
@@ -600,6 +641,7 @@ export async function roomState(
       sessionId: row.session_id,
       senderId: row.sender_id,
       targetId: row.target_id,
+      roomKey: row.room_key,
       kind: row.kind as MentorSignal['kind'],
       payload: row.payload,
       createdAt: row.created_at,
@@ -614,17 +656,19 @@ export async function postMessage(
   sessionId: string,
   body: string,
   kind: 'CHAT' | 'NOTE' = 'CHAT',
+  roomKey = 'main',
 ): Promise<MentorChatMessage> {
   const session = await getSession(env, sessionId);
   await assertSessionAccess(env, session, viewer);
+  await assertRoomKey(env, session, viewer, roomKey);
   const text = body.trim().slice(0, 4000);
   if (!text) throw ApiError.validation('Write something first.');
   const id = newId('msg');
   const timestamp = nowIso();
   await env.DB.prepare(
-    'INSERT INTO mentor_messages (id, session_id, sender_id, kind, body, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    'INSERT INTO mentor_messages (id, session_id, sender_id, kind, body, created_at, room_key) VALUES (?, ?, ?, ?, ?, ?, ?)',
   )
-    .bind(id, sessionId, viewer.id, kind, text, timestamp)
+    .bind(id, sessionId, viewer.id, kind, text, timestamp, roomKey)
     .run();
   return {
     id,
@@ -643,19 +687,32 @@ export async function postSignal(
   viewer: AuthUser,
   sessionId: string,
   signal: {
-    kind: 'OFFER' | 'ANSWER' | 'CANDIDATE' | 'BYE' | 'HAND' | 'MUTE_MIC' | 'UNMUTE_MIC' | 'KICK' | 'REACTION';
+    kind:
+      | 'OFFER'
+      | 'ANSWER'
+      | 'CANDIDATE'
+      | 'BYE'
+      | 'HAND'
+      | 'MUTE_MIC'
+      | 'UNMUTE_MIC'
+      | 'KICK'
+      | 'REACTION'
+      | 'WHITEBOARD';
     targetId: string | null;
     payload: string;
+    roomKey?: string;
   },
 ): Promise<{ ok: true; id: string }> {
   const session = await getSession(env, sessionId);
   await assertSessionAccess(env, session, viewer);
+  const roomKey = signal.roomKey ?? 'main';
+  await assertRoomKey(env, session, viewer, roomKey);
   if (signal.payload.length > 200_000) throw ApiError.validation('Signal payload is too large.');
   const id = newId('sig');
   await env.DB.prepare(
-    'INSERT INTO mentor_signals (id, session_id, sender_id, target_id, kind, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO mentor_signals (id, session_id, sender_id, target_id, room_key, kind, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
   )
-    .bind(id, sessionId, viewer.id, signal.targetId, signal.kind, signal.payload, nowIso())
+    .bind(id, sessionId, viewer.id, signal.targetId, roomKey, signal.kind, signal.payload, nowIso())
     .run();
   // Keep the envelope table small: anything older than 10 minutes is done.
   await env.DB.prepare('DELETE FROM mentor_signals WHERE session_id = ? AND created_at < ?')

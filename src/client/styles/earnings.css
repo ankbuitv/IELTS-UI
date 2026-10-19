@@ -1,0 +1,99 @@
+/* Mentor earnings: money should feel calm and legible, not playful. */
+
+.earnings__range {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.earnings__chip {
+  border: 1px solid var(--ink-200); background: var(--paper); color: var(--ink-600);
+  border-radius: var(--radius-pill); padding: 7px 13px;
+  font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+.earnings__chip:hover { border-color: var(--ink-400); color: var(--ink-900); }
+.earnings__chip.is-on {
+  background: var(--ink-950); border-color: var(--ink-950); color: #fff;
+}
+
+.earnings__stats {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;
+}
+.earnings__stat {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 18px; background: var(--paper);
+  border: 1px solid var(--ink-200); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+.earnings__stat b {
+  display: block; font-size: 1.55rem; font-weight: 800; line-height: 1.05;
+  letter-spacing: -0.03em; color: var(--ink-950); font-variant-numeric: tabular-nums;
+}
+.earnings__stat span { font-size: 0.74rem; font-weight: 600; color: var(--ink-500); }
+.earnings__stat-icon {
+  flex: none; display: grid; place-items: center;
+  width: 40px; height: 40px; border-radius: 12px;
+}
+.earnings__stat-icon.is-mint { background: #e3f7ec; color: #1f7a4d; }
+.earnings__stat-icon.is-violet { background: #eeeaff; color: #5b4bdb; }
+.earnings__stat-icon.is-sun { background: #fff4d8; color: #9a6b00; }
+.earnings__stat-icon.is-coral { background: #ffe9e4; color: #b04331; }
+
+.earnings__grid {
+  display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px;
+}
+.earnings__card {
+  padding: 18px 20px; background: var(--paper);
+  border: 1px solid var(--ink-200); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+.earnings__card header {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin-bottom: 12px;
+}
+.earnings__card h2 { margin: 0; font-size: 0.98rem; letter-spacing: -0.01em; }
+.earnings__note { margin: 0 0 12px; line-height: 1.55; }
+.earnings__legend { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 0.78rem; color: var(--ink-600); }
+.earnings__legend li { display: flex; align-items: center; gap: 8px; }
+
+.earnings__months { display: grid; gap: 10px; }
+.earnings__month {
+  display: grid; grid-template-columns: 78px minmax(0, 1fr) 56px 78px;
+  align-items: center; gap: 10px; font-size: 0.78rem;
+}
+.earnings__month-label { color: var(--ink-600); font-weight: 600; }
+.earnings__month-bar {
+  height: 9px; border-radius: 99px; background: var(--ink-100); overflow: hidden;
+}
+.earnings__month-bar span {
+  display: block; height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, #7c6aff, #5b4bdb);
+}
+.earnings__month b { text-align: right; font-variant-numeric: tabular-nums; }
+.earnings__month .muted { text-align: right; }
+
+.earnings__table-wrap {
+  background: var(--paper); border: 1px solid var(--ink-200);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); overflow-x: auto;
+}
+.earnings__table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.earnings__table th {
+  text-align: left; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-500);
+  padding: 12px 14px; border-bottom: 1px solid var(--ink-200); white-space: nowrap;
+}
+.earnings__table td { padding: 12px 14px; border-bottom: 1px solid var(--ink-100); vertical-align: middle; }
+.earnings__table tr:last-child td { border-bottom: 0; }
+.earnings__table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.earnings__table .nowrap { white-space: nowrap; color: var(--ink-600); }
+.earnings__topic { display: block; font-weight: 600; color: var(--ink-900); }
+.earnings__empty { padding: 24px 18px; text-align: center; }
+.earnings__table .btn { white-space: nowrap; }
+
+@media (max-width: 1020px) {
+  .earnings__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .earnings__grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .earnings__stats { grid-template-columns: 1fr; }
+  .earnings__month { grid-template-columns: 64px minmax(0, 1fr) 48px; }
+  .earnings__month .muted { display: none; }
+}

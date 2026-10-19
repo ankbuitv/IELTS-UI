@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 74   Indexes: 92
+-- Tables: 80   Indexes: 96
 -- =============================================================================
 
 -- table: user_profiles
@@ -925,18 +925,7 @@ CREATE TABLE IF NOT EXISTS mentor_messages (
   kind       TEXT NOT NULL DEFAULT 'CHAT' CHECK (kind IN ('CHAT', 'SYSTEM', 'NOTE')),
   body       TEXT NOT NULL,
   created_at TEXT NOT NULL
-);
-
--- table: mentor_signals
-CREATE TABLE IF NOT EXISTS mentor_signals (
-  id         TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
-  sender_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  target_id  TEXT,
-  kind       TEXT NOT NULL CHECK (kind IN ('OFFER', 'ANSWER', 'CANDIDATE', 'BYE')),
-  payload    TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
+, room_key TEXT NOT NULL DEFAULT 'main');
 
 -- table: mentor_reviews
 CREATE TABLE IF NOT EXISTS mentor_reviews (
@@ -955,7 +944,7 @@ CREATE TABLE IF NOT EXISTS mentor_room_presence (
   user_id     TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   joined_at   TEXT NOT NULL,
   last_seen_at TEXT NOT NULL,
-  hand_raised INTEGER NOT NULL DEFAULT 0,
+  hand_raised INTEGER NOT NULL DEFAULT 0, room_key TEXT NOT NULL DEFAULT 'main',
   PRIMARY KEY (session_id, user_id)
 );
 
@@ -1066,6 +1055,80 @@ CREATE TABLE IF NOT EXISTS auth_links (
   token_hash TEXT NOT NULL UNIQUE,
   expires_at TEXT NOT NULL,
   used_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+-- table: class_polls
+CREATE TABLE IF NOT EXISTS class_polls (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  room_key      TEXT NOT NULL DEFAULT 'main',
+  created_by    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  kind          TEXT NOT NULL DEFAULT 'QUIZ' CHECK (kind IN ('QUIZ', 'POLL')),
+  question      TEXT NOT NULL,
+  options_json  TEXT NOT NULL,
+  correct_index INTEGER,
+  status        TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'CLOSED')),
+  created_at    TEXT NOT NULL,
+  closed_at     TEXT
+);
+
+-- table: class_poll_answers
+CREATE TABLE IF NOT EXISTS class_poll_answers (
+  poll_id      TEXT NOT NULL REFERENCES class_polls (id) ON DELETE CASCADE,
+  user_id      TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  choice_index INTEGER NOT NULL,
+  created_at   TEXT NOT NULL,
+  PRIMARY KEY (poll_id, user_id)
+);
+
+-- table: class_breakouts
+CREATE TABLE IF NOT EXISTS class_breakouts (
+  id         TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  room_key   TEXT NOT NULL,
+  ends_at    TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE (session_id, room_key)
+);
+
+-- table: class_breakout_members
+CREATE TABLE IF NOT EXISTS class_breakout_members (
+  breakout_id TEXT NOT NULL REFERENCES class_breakouts (id) ON DELETE CASCADE,
+  user_id     TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  assigned_at TEXT NOT NULL,
+  PRIMARY KEY (breakout_id, user_id)
+);
+
+-- table: class_whiteboards
+CREATE TABLE IF NOT EXISTS class_whiteboards (
+  session_id TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  room_key   TEXT NOT NULL DEFAULT 'main',
+  revision   INTEGER NOT NULL DEFAULT 0,
+  strokes_json TEXT NOT NULL DEFAULT '[]',
+  updated_by TEXT REFERENCES users (id) ON DELETE SET NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (session_id, room_key)
+);
+
+-- table: user_digests
+CREATE TABLE IF NOT EXISTS user_digests (
+  user_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  week_key TEXT NOT NULL,
+  sent_at  TEXT NOT NULL,
+  PRIMARY KEY (user_id, week_key)
+);
+
+-- table: mentor_signals
+CREATE TABLE IF NOT EXISTS "mentor_signals" (
+  id         TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  sender_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  target_id  TEXT,
+  room_key   TEXT NOT NULL DEFAULT 'main',
+  kind       TEXT NOT NULL CHECK (kind IN ('OFFER', 'ANSWER', 'CANDIDATE', 'BYE', 'HAND', 'MUTE_MIC', 'UNMUTE_MIC', 'KICK', 'REACTION', 'WHITEBOARD')),
+  payload    TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
 
@@ -1303,9 +1366,6 @@ CREATE INDEX IF NOT EXISTS idx_mentor_class_members_user ON mentor_class_members
 -- index: idx_mentor_messages_session
 CREATE INDEX IF NOT EXISTS idx_mentor_messages_session ON mentor_messages (session_id, created_at);
 
--- index: idx_mentor_signals_session
-CREATE INDEX IF NOT EXISTS idx_mentor_signals_session ON mentor_signals (session_id, created_at);
-
 -- index: idx_mentor_reviews_mentor
 CREATE INDEX IF NOT EXISTS idx_mentor_reviews_mentor ON mentor_reviews (mentor_id, created_at DESC);
 
@@ -1351,3 +1411,18 @@ CREATE INDEX IF NOT EXISTS idx_auth_links_user
 -- index: idx_mentor_sessions_confirmation
 CREATE INDEX IF NOT EXISTS idx_mentor_sessions_confirmation
   ON mentor_sessions (confirmation, status, starts_at);
+
+-- index: idx_class_polls_session
+CREATE INDEX IF NOT EXISTS idx_class_polls_session ON class_polls (session_id, created_at DESC);
+
+-- index: idx_class_breakouts_session
+CREATE INDEX IF NOT EXISTS idx_class_breakouts_session ON class_breakouts (session_id);
+
+-- index: idx_mentor_signals_session
+CREATE INDEX IF NOT EXISTS idx_mentor_signals_session ON mentor_signals (session_id, room_key, created_at);
+
+-- index: idx_mentor_presence_room
+CREATE INDEX IF NOT EXISTS idx_mentor_presence_room ON mentor_room_presence (session_id, room_key, last_seen_at);
+
+-- index: idx_mentor_messages_room
+CREATE INDEX IF NOT EXISTS idx_mentor_messages_room ON mentor_messages (session_id, room_key, created_at);

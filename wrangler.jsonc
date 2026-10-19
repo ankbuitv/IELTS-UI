@@ -69,6 +69,11 @@
   // ---------------------------------------------------------------------------
   // Non-secret configuration. Secrets are NOT stored here - see docs/DEPLOYMENT.md
   // ---------------------------------------------------------------------------
+  // Monday 08:00 Vietnam time (01:00 UTC) — the weekly learner recap.
+  "triggers": {
+    "crons": ["0 1 * * 1"]
+  },
+
   "vars": {
     "APP_ENV": "development",
     "APP_BASE_URL": "https://ielts.ankb.qzz.io",

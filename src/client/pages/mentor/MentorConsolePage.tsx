@@ -60,6 +60,10 @@ export function MentorConsolePage() {
               <Icon name="edit" size={14} />
               Edit profile
             </Button>
+            <Button variant="glass" onClick={() => navigate('/mentor/earnings')}>
+              <Icon name="coin" size={14} />
+              Earnings
+            </Button>
           </div>
         </div>
         <div className="mentor-hero__stats">

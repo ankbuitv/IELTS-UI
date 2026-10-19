@@ -649,3 +649,40 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
 .exam-root--review .review-scorebar__caption { font-size: 0.78rem; color: var(--ink-600); }
 .exam-root--review .review-scorebar__chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .exam-root--review .aimark { margin-top: 10px; }
+
+/* "Still empty" chips: every missing question is one click away. */
+.missing-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+.missing-chip {
+  appearance: none;
+  border: 1px solid #e4b9b3;
+  background: #fff4f2;
+  color: #a33a2c;
+  border-radius: 999px;
+  padding: 4px 11px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.missing-chip:hover,
+.missing-chip:focus-visible {
+  background: #a33a2c;
+  color: #fff;
+  outline: none;
+}
+.missing-chip--more {
+  cursor: default;
+  background: #f6f1ef;
+  border-color: #e3d7d3;
+  color: #7a6a65;
+}
+.missing-chip--more:hover {
+  background: #f6f1ef;
+  color: #7a6a65;
+}

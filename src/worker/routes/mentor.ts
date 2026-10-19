@@ -42,6 +42,18 @@ import {
   upsertMentorProfile,
 } from '../services/mentor-service';
 import { notify } from '../services/notification-service';
+import {
+  answerPoll,
+  closeBreakouts,
+  closePoll,
+  createBreakouts,
+  createPoll,
+  getWhiteboard,
+  listBreakouts,
+  listPolls,
+  saveWhiteboard,
+} from '../services/live-class-service';
+import { mentorEarnings, mentorInvoice } from '../services/digest-service';
 
 const router = new Hono<AppBindings>();
 
@@ -175,14 +187,15 @@ router.post('/mentor/sessions/:sessionId/review', async (c) => {
 router.get('/mentor/sessions/:sessionId/room', async (c) => {
   const user = currentUser(c);
   const since = c.req.query('since') || null;
-  const state = await roomState(c.env, user, c.req.param('sessionId'), since);
+  const room = c.req.query('room') || 'main';
+  const state = await roomState(c.env, user, c.req.param('sessionId'), since, room);
   return c.json(state);
 });
 
 router.post('/mentor/sessions/:sessionId/join', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
-  await joinRoom(c.env, user, c.req.param('sessionId'));
+  await joinRoom(c.env, user, c.req.param('sessionId'), c.req.query('room') || 'main');
   return c.json({ ok: true });
 });
 
@@ -206,9 +219,20 @@ router.post('/mentor/sessions/:sessionId/messages', async (c) => {
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const body = await parseBody(
     c,
-    z.object({ body: z.string().min(1).max(4000), kind: z.enum(['CHAT', 'NOTE']).optional() }),
+    z.object({
+      body: z.string().min(1).max(4000),
+      kind: z.enum(['CHAT', 'NOTE']).optional(),
+      room: z.string().max(40).optional(),
+    }),
   );
-  const message = await postMessage(c.env, user, c.req.param('sessionId'), body.body, body.kind ?? 'CHAT');
+  const message = await postMessage(
+    c.env,
+    user,
+    c.req.param('sessionId'),
+    body.body,
+    body.kind ?? 'CHAT',
+    body.room ?? 'main',
+  );
   return c.json({ message }, 201);
 });
 
@@ -218,17 +242,113 @@ router.post('/mentor/sessions/:sessionId/signal', async (c) => {
   const body = await parseBody(
     c,
     z.object({
-      kind: z.enum(['OFFER', 'ANSWER', 'CANDIDATE', 'BYE', 'HAND', 'MUTE_MIC', 'UNMUTE_MIC', 'KICK', 'REACTION']),
+      kind: z.enum(['OFFER', 'ANSWER', 'CANDIDATE', 'BYE', 'HAND', 'MUTE_MIC', 'UNMUTE_MIC', 'KICK', 'REACTION', 'WHITEBOARD']),
       targetId: z.string().min(1).max(64).nullable().optional(),
       payload: z.string().max(120_000),
+      room: z.string().max(40).optional(),
     }),
   );
   const result = await postSignal(c.env, user, c.req.param('sessionId'), {
     kind: body.kind,
     targetId: body.targetId ?? null,
     payload: body.payload,
+    roomKey: body.room ?? 'main',
   });
   return c.json(result, 201);
+});
+
+// ------------------------------------------------------------------------- live extras
+
+router.get('/mentor/sessions/:sessionId/polls', async (c) => {
+  const user = currentUser(c);
+  const room = c.req.query('room') || 'main';
+  return c.json({ polls: await listPolls(c.env, user, c.req.param('sessionId'), room) });
+});
+
+router.post('/mentor/sessions/:sessionId/polls', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      question: z.string().min(3).max(500),
+      options: z.array(z.string().min(1).max(160)).min(2).max(6),
+      kind: z.enum(['QUIZ', 'POLL']).optional(),
+      correctIndex: z.number().int().min(0).max(5).nullable().optional(),
+      room: z.string().max(40).optional(),
+    }),
+  );
+  const poll = await createPoll(c.env, user, c.req.param('sessionId'), body.room ?? 'main', body);
+  return c.json({ poll }, 201);
+});
+
+router.post('/mentor/sessions/:sessionId/polls/:pollId/answer', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ choiceIndex: z.number().int().min(0).max(5) }));
+  const poll = await answerPoll(c.env, user, c.req.param('sessionId'), c.req.param('pollId'), body.choiceIndex);
+  return c.json({ poll });
+});
+
+router.post('/mentor/sessions/:sessionId/polls/:pollId/close', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const poll = await closePoll(c.env, user, c.req.param('sessionId'), c.req.param('pollId'));
+  return c.json({ poll });
+});
+
+router.get('/mentor/sessions/:sessionId/breakouts', async (c) => {
+  const user = currentUser(c);
+  return c.json(await listBreakouts(c.env, user, c.req.param('sessionId')));
+});
+
+router.post('/mentor/sessions/:sessionId/breakouts', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ count: z.number().int().min(2).max(4), minutes: z.number().int().min(5).max(60) }));
+  return c.json(await createBreakouts(c.env, user, c.req.param('sessionId'), body));
+});
+
+router.post('/mentor/sessions/:sessionId/breakouts/close', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  return c.json(await closeBreakouts(c.env, user, c.req.param('sessionId')));
+});
+
+router.get('/mentor/sessions/:sessionId/whiteboard', async (c) => {
+  const user = currentUser(c);
+  const room = c.req.query('room') || 'main';
+  return c.json(await getWhiteboard(c.env, user, c.req.param('sessionId'), room));
+});
+
+router.put('/mentor/sessions/:sessionId/whiteboard', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      room: z.string().max(40).optional(),
+      revision: z.number().int().min(0),
+      strokes: z.array(z.unknown()).max(600),
+    }),
+  );
+  return c.json(
+    await saveWhiteboard(c.env, user, c.req.param('sessionId'), body.room ?? 'main', body.revision, body.strokes),
+  );
+});
+
+// ------------------------------------------------------------------------------ earnings
+
+router.get('/mentor/me/earnings', async (c) => {
+  const user = currentUser(c);
+  const from = c.req.query('from') || undefined;
+  const to = c.req.query('to') || undefined;
+  return c.json(await mentorEarnings(c.env, user, { from, to }));
+});
+
+router.get('/mentor/me/earnings/:sessionId/invoice', async (c) => {
+  const user = currentUser(c);
+  return c.json(await mentorInvoice(c.env, user, c.req.param('sessionId')));
 });
 
 // ------------------------------------------------------------------------------ classes

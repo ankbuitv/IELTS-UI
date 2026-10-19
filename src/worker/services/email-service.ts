@@ -199,3 +199,59 @@ export function notificationEmail(env: Env, title: string, body: string, href?: 
     text: url ? `${title}\n\n${body}\n\n${url}` : `${title}\n\n${body}`,
   };
 }
+
+/** Monday recap: what moved this week and what is next. */
+export function digestEmail(
+  env: Env,
+  digest: {
+    name: string;
+    attempts: number;
+    band: number | null;
+    previousBand: number | null;
+    skills: Array<{ skill: string; count: number; averageBand: number | null }>;
+    sessionsAttended: number;
+    upcomingSessions: Array<{ title: string; startsAt: string }>;
+    streakDays: number;
+  },
+  url: string,
+): EmailMessage {
+  const delta =
+    digest.band !== null && digest.previousBand !== null
+      ? Math.round((digest.band - digest.previousBand) * 10) / 10
+      : null;
+  const deltaLine =
+    delta === null
+      ? ''
+      : `<p style="margin:8px 0 0;color:${delta >= 0 ? '#1f7a4d' : '#a33a2c'};font-weight:600">${delta >= 0 ? '+' : ''}${delta.toFixed(1)} band so với tuần trước</p>`;
+  const skills = digest.skills
+    .filter((row) => row.averageBand !== null)
+    .map(
+      (row) =>
+        `<tr><td style="padding:6px 0;color:#5a5568">${escapeHtml(row.skill)}</td><td style="padding:6px 0;text-align:right;font-weight:600">${row.averageBand!.toFixed(1)}</td><td style="padding:6px 0;text-align:right;color:#8b8698">${row.count} bài</td></tr>`,
+    )
+    .join('');
+  const next = digest.upcomingSessions.length
+    ? `<p style="margin:18px 0 6px"><b>Sắp tới</b></p><ul style="margin:0;padding-left:18px;color:#5a5568">${digest.upcomingSessions
+        .map(
+          (session) =>
+            `<li>${escapeHtml(session.title)} — ${escapeHtml(new Date(session.startsAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }))}</li>`,
+        )
+        .join('')}</ul>`
+    : '';
+  return {
+    to: '',
+    subject: digest.band !== null ? `Tuần này của ${digest.name}: band ${digest.band.toFixed(1)}` : `Tổng kết tuần của ${digest.name}`,
+    html: emailLayout({
+      heading: `Tuần này của bạn${digest.band !== null ? ` — band ${digest.band.toFixed(1)}` : ''}`,
+      body: `<p>Chào ${escapeHtml(digest.name)},</p>
+        <p>Bạn đã luyện <b>${digest.attempts}</b> phần thi trong tuần qua${digest.sessionsAttended ? `, tham gia <b>${digest.sessionsAttended}</b> buổi học trực tiếp` : ''}. Chuỗi học hiện tại: <b>${digest.streakDays} ngày</b>.</p>
+        ${deltaLine}
+        ${skills ? `<p style="margin:20px 0 6px"><b>Band theo kỹ năng</b></p><table role="presentation" width="100%" style="font-size:14px">${skills}</table>` : ''}
+        ${next}
+        <p style="margin:22px 0 0">Một tuần mới là một cơ hội mới. Bắt đầu với 15 phút hôm nay nhé.</p>`,
+      cta: { label: 'Xem tiến bộ của tôi', href: url },
+      footnote: 'Bạn nhận email này vì đã học trên AI Eo trong tuần qua.',
+    }),
+    text: `Tổng kết tuần AI Eo của ${digest.name}: ${digest.attempts} phần thi${digest.band !== null ? `, band ${digest.band.toFixed(1)}` : ''}, chuỗi ${digest.streakDays} ngày. Xem chi tiết: ${url}`,
+  };
+}

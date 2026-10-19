@@ -27,15 +27,20 @@ nhật ký email).
 
 ---
 
-## Đợt 2 — Lớp học trực tiếp (mentor)
+## Đợt 2 — Lớp học trực tiếp (mentor) ✅
 
-| # | Tính năng | Ghi chú kỹ thuật |
+| # | Tính năng | Trạng thái |
 |---|---|---|
-| 21 | **Weekly digest** | Dùng `email-service` + `notifications` vừa có; cron `scheduled` tổng hợp tuần |
-| 19 | **Live quiz/poll** | Bảng `class_polls` + `class_poll_answers`; đồng bộ qua polling room state hiện tại |
-| 17 | **Breakout rooms** | Mở rộng `mentor_sessions` thành phòng con, tái dùng signaling WebRTC |
-| 18 | **Whiteboard trong call** | Canvas + lưu nét vẽ vào D1/R2, chia sẻ qua signaling |
-| 24 | **Earnings & invoice** | Tổng hợp `learn_coin_log` + `mentor_sessions`, xuất PDF/CSV |
+| 21 | **Weekly digest** | ✅ cron thứ Hai 08:00 VN + email + notification, chống trùng theo tuần, chạy tay qua `/api/admin/digest/run` |
+| 19 | **Live quiz/poll** | ✅ bảng `class_polls`/`class_poll_answers`, đồng bộ 3 giây, đáp án đúng chỉ lộ khi đóng câu |
+| 17 | **Breakout rooms** | ✅ `room_key` tách presence/chat/signalling/board, chia phòng tự động, hẹn giờ, tự quay về |
+| 18 | **Whiteboard trong call** | ✅ canvas toạ độ chuẩn hoá, 5 màu/3 nét, undo, revision chống ghi đè |
+| 24 | **Earnings & invoice** | ✅ `/mentor/earnings`, lọc thời gian, CSV, invoice A4 in được |
+
+Kèm theo: sửa **câu báo thiếu oan** (đếm theo question id + liệt kê câu trống),
+**booking hiện đúng chờ xác nhận**, mở rộng CHECK của `mentor_signals` (reaction
+và mute/kick trước đây bị SQLite từ chối), chat tách theo phòng. Chi tiết:
+`docs/LIVE-CLASSROOM.md`. Migration `0033`, `0034`.
 
 ## Đợt 3 — AI & nội dung
 

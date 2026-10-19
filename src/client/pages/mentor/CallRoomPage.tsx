@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { mentorApi } from '../../lib/mentor-api';
 import { describeError } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -8,6 +8,7 @@ import { Icon } from '../../components/Icon';
 import { MentorAvatar, formatWhen } from '../../components/mentor/MentorBits';
 import { UserAvatar } from '../../components/UserAvatar';
 import type { MentorChatMessage, MentorRoomState, MentorSignal, RoomParticipant } from '@shared/mentor';
+import type { BreakoutState, ClassPoll, WhiteboardStroke } from '@shared/live';
 
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -53,6 +54,10 @@ interface Peer {
  */
 export function CallRoomPage() {
   const { sessionId = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  // A breakout room is the same session with a different `room` key; leaving
+  // and re-entering swaps the whole call (see BreakoutPanel).
+  const room = searchParams.get('room') || 'main';
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -86,6 +91,11 @@ export function CallRoomPage() {
   const [reactionsOpen, setReactionsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [switching, setSwitching] = useState(false);
+  // Live classroom tools.
+  const [breakouts, setBreakouts] = useState<BreakoutState | null>(null);
+  const [breakoutOpen, setBreakoutOpen] = useState(false);
+  const [quizOpen, setQuizOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
@@ -96,7 +106,18 @@ export function CallRoomPage() {
   const participantsRef = useRef<MentorRoomState['participants']>([]);
   const lastSignalIdRef = useRef<string | null>(null);
   const sessionRef = useRef<string>(sessionId);
+  const roomRef = useRef(room);
   const leftRef = useRef(false);
+
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
+
+  /** Signalling never crosses rooms: the room key rides on every envelope. */
+  const sendSignal = (
+    signal: Parameters<typeof mentorApi.signal>[1],
+  ): Promise<{ ok: true; id: string }> =>
+    mentorApi.signal(sessionRef.current, { ...signal, room: roomRef.current });
 
   useEffect(() => {
     sessionRef.current = sessionId;
@@ -349,7 +370,7 @@ export function CallRoomPage() {
       try {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        await mentorApi.signal(sessionRef.current, { kind: 'OFFER', targetId: userId, payload: JSON.stringify(offer) });
+        await sendSignal({ kind: 'OFFER', targetId: userId, payload: JSON.stringify(offer) });
       } catch {
         // The next poll or track change retries.
       }
@@ -442,7 +463,7 @@ export function CallRoomPage() {
           await flushCandidates(signal.senderId, pc);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          await mentorApi.signal(sessionRef.current, {
+          await sendSignal({
             kind: 'ANSWER',
             targetId: signal.senderId,
             payload: JSON.stringify(answer),
@@ -513,7 +534,7 @@ export function CallRoomPage() {
     let alive = true;
     const tick = async () => {
       try {
-        const next = await mentorApi.room(sessionId, lastSignalIdRef.current ?? undefined);
+        const next = await mentorApi.room(sessionId, lastSignalIdRef.current ?? undefined, room);
         if (!alive) return;
         participantsRef.current = next.participants;
         setState(next);
@@ -556,7 +577,43 @@ export function CallRoomPage() {
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [phase, sessionId, selfId, addPeer, handleSignal, syncSenders, negotiate]);
+  }, [phase, sessionId, selfId, room, addPeer, handleSignal, syncSenders, negotiate]);
+
+  // Breakout rooms: refresh while the call is open so assignments and closing
+  // reach participants without a reload.
+  useEffect(() => {
+    if (phase !== 'room' || !selfId) return;
+    let alive = true;
+    const load = async () => {
+      try {
+        const next = await mentorApi.breakouts(sessionId);
+        if (!alive) return;
+        setBreakouts(next);
+        // The host closed the rooms (or they expired): go back to the main call.
+        if (room !== 'main' && !next.rooms.some((item) => item.roomKey === room)) {
+          window.location.assign(`/sessions/${sessionId}/room`);
+        }
+      } catch {
+        // A transient failure leaves the last known assignment on screen.
+      }
+    };
+    void load();
+    const interval = window.setInterval(() => void load(), 6000);
+    return () => {
+      alive = false;
+      window.clearInterval(interval);
+    };
+  }, [phase, sessionId, selfId, room]);
+
+  // When the breakout timer runs out, everybody returns to the main room.
+  const breakoutEndsAt = breakouts?.endsAt ?? null;
+  useEffect(() => {
+    if (!breakoutEndsAt || room === 'main') return;
+    const delay = Date.parse(breakoutEndsAt) - Date.now();
+    if (!Number.isFinite(delay)) return;
+    const timer = window.setTimeout(() => window.location.assign(`/sessions/${sessionId}/room`), Math.max(1000, delay));
+    return () => window.clearTimeout(timer);
+  }, [breakoutEndsAt, room, sessionId]);
 
   // Session clock.
   useEffect(() => {
@@ -571,7 +628,7 @@ export function CallRoomPage() {
   useEffect(() => {
     let alive = true;
     mentorApi
-      .room(sessionId)
+      .room(sessionId, undefined, room)
       .then((data) => {
         if (!alive) return;
         setState(data);
@@ -587,7 +644,7 @@ export function CallRoomPage() {
     return () => {
       alive = false;
     };
-  }, [sessionId, selfId]);
+  }, [sessionId, selfId, room]);
 
   // Mic/cam toggles push straight onto the live tracks.
   useEffect(() => {
@@ -606,7 +663,7 @@ export function CallRoomPage() {
     const bye = () => {
       if (leftRef.current) return;
       pcsRef.current.forEach((_pc, peerId) => {
-        void mentorApi.signal(sessionRef.current, { kind: 'BYE', targetId: peerId, payload: '' }).catch(() => undefined);
+        void sendSignal({ kind: 'BYE', targetId: peerId, payload: '' }).catch(() => undefined);
       });
       void mentorApi.leave(sessionRef.current).catch(() => undefined);
     };
@@ -628,7 +685,7 @@ export function CallRoomPage() {
     setJoinBusy(true);
     const stream = await startMedia();
     try {
-      await mentorApi.join(sessionId);
+      await mentorApi.join(sessionId, room);
       setPhase('room');
       // Tracks are attached by the effect/callback refs on mount; make sure the
       // connection to an already-present peer renegotiates with the real media.
@@ -649,7 +706,7 @@ export function CallRoomPage() {
     if (leftRef.current) return;
     leftRef.current = true;
     pcsRef.current.forEach((pc, peerId) => {
-      void mentorApi.signal(sessionId, { kind: 'BYE', targetId: peerId, payload: '' }).catch(() => undefined);
+      void sendSignal({ kind: 'BYE', targetId: peerId, payload: '' }).catch(() => undefined);
       pc.close();
     });
     pcsRef.current.clear();
@@ -704,7 +761,7 @@ export function CallRoomPage() {
     setHandRaised(next);
     try {
       await mentorApi.raiseHand(sessionId, next);
-      await mentorApi.signal(sessionId, { kind: 'HAND', targetId: null, payload: next ? 'up' : 'down' });
+      await sendSignal({ kind: 'HAND', targetId: null, payload: next ? 'up' : 'down' });
     } catch {
       setHandRaised(!next);
     }
@@ -716,7 +773,7 @@ export function CallRoomPage() {
     setReactions((prev) => [...prev.slice(-12), { key, emoji, name: 'You' }]);
     window.setTimeout(() => setReactions((prev) => prev.filter((item) => item.key !== key)), 3200);
     try {
-      await mentorApi.signal(sessionId, { kind: 'REACTION', targetId: null, payload: emoji });
+      await sendSignal({ kind: 'REACTION', targetId: null, payload: emoji });
     } catch {
       // Reactions are best-effort.
     }
@@ -725,7 +782,7 @@ export function CallRoomPage() {
   /** Mentor-only: force-mute / restore a member's microphone. */
   const forceMute = async (targetId: string, muted: boolean) => {
     try {
-      await mentorApi.signal(sessionId, { kind: muted ? 'MUTE_MIC' : 'UNMUTE_MIC', targetId, payload: '' });
+      await sendSignal({ kind: muted ? 'MUTE_MIC' : 'UNMUTE_MIC', targetId, payload: '' });
     } catch {
       setError('Could not reach that participant.');
     }
@@ -749,7 +806,7 @@ export function CallRoomPage() {
     if (!body) return;
     setDraft('');
     try {
-      const { message } = await mentorApi.sendMessage(sessionId, body);
+      const { message } = await mentorApi.sendMessage(sessionId, body, 'CHAT', room);
       setState((prev) => {
         if (!prev) return prev;
         const withoutDupes = prev.messages.filter((item) => item.id !== message.id);
@@ -762,7 +819,7 @@ export function CallRoomPage() {
 
   const saveNotes = async () => {
     try {
-      const { message } = await mentorApi.sendMessage(sessionId, notes, 'NOTE');
+      const { message } = await mentorApi.sendMessage(sessionId, notes, 'NOTE', room);
       setState((prev) => (prev ? { ...prev, messages: [...prev.messages, message] } : prev));
       setNotes('');
     } catch (cause) {
@@ -1313,6 +1370,46 @@ export function CallRoomPage() {
         </div>
       ) : null}
 
+      {breakouts?.open ? (
+        <div className="jr-banner jr-banner--breakout">
+          <Icon name="grid" size={16} />
+          {room === 'main' ? (
+            breakouts.myRoom ? (
+              <span>
+                Breakout rooms are open. You are in <strong>{breakouts.myRoom.name}</strong>.
+              </span>
+            ) : (
+              <span>Breakout rooms are open — your mentor will place you in one.</span>
+            )
+          ) : (
+            <span>
+              Breakout <strong>{breakouts.rooms.find((item) => item.roomKey === room)?.name ?? 'room'}</strong>
+              {breakouts.endsAt
+                ? ` · back to the main room at ${new Date(breakouts.endsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                : ''}
+            </span>
+          )}
+          {room === 'main' && breakouts.myRoom ? (
+            <button
+              type="button"
+              onClick={() => window.location.assign(`/sessions/${sessionId}/room?room=${encodeURIComponent(breakouts.myRoom!.roomKey)}`)}
+            >
+              Join
+            </button>
+          ) : null}
+          {room !== 'main' ? (
+            <button type="button" onClick={() => window.location.assign(`/sessions/${sessionId}/room`)}>
+              Return to main
+            </button>
+          ) : null}
+          {isMentor && room === 'main' ? (
+            <button type="button" onClick={() => setBreakoutOpen(true)}>
+              Manage
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <footer className="jr-toolbar">
         <div className="jr-toolbar__inner">
           <button
@@ -1407,6 +1504,40 @@ export function CallRoomPage() {
             <span className="jr-btn__label">People</span>
           </button>
 
+          <button
+            type="button"
+            className={`jr-btn${quizOpen ? ' is-on' : ''}`}
+            onClick={() => {
+              setQuizOpen(true);
+              setBoardOpen(false);
+              setPanelOpen(false);
+            }}
+            aria-label="Quiz and polls"
+            title="Quiz and polls"
+          >
+            <span className="jr-ico">
+              <Icon name="presentation" size={20} />
+            </span>
+            <span className="jr-btn__label">Quiz</span>
+          </button>
+
+          <button
+            type="button"
+            className={`jr-btn${boardOpen ? ' is-on' : ''}`}
+            onClick={() => {
+              setBoardOpen(true);
+              setQuizOpen(false);
+              setPanelOpen(false);
+            }}
+            aria-label="Whiteboard"
+            title="Whiteboard"
+          >
+            <span className="jr-ico">
+              <Icon name="pen" size={20} />
+            </span>
+            <span className="jr-btn__label">Board</span>
+          </button>
+
           <div className="jr-pop">
             <button
               type="button"
@@ -1458,6 +1589,10 @@ export function CallRoomPage() {
             </button>
             {moreOpen ? (
               <div className="jr-more" role="menu">
+                <button type="button" onClick={() => { setBreakoutOpen(true); setMoreOpen(false); }}>
+                  <Icon name="grid" size={15} />
+                  Breakout rooms
+                </button>
                 <button type="button" onClick={() => { setSettingsOpen(true); setMoreOpen(false); }}>
                   <Icon name="settings" size={15} />
                   Device settings
@@ -1506,13 +1641,30 @@ export function CallRoomPage() {
             ) : null}
           </div>
 
-          <span className="jr-sep" />
-
-          <button type="button" className="jr-hangup" onClick={() => void leave()} aria-label="Leave the call" title="Leave the call">
-            <Icon name="phoneOff" size={20} />
-          </button>
         </div>
+
+        <button type="button" className="jr-hangup" onClick={() => void leave()} aria-label="Leave the call" title="Leave the call">
+          <Icon name="phoneOff" size={20} />
+        </button>
       </footer>
+
+      {quizOpen ? (
+        <QuizPanel sessionId={sessionId} room={room} host={isMentor} onClose={() => setQuizOpen(false)} />
+      ) : null}
+
+      {boardOpen ? (
+        <WhiteboardPanel sessionId={sessionId} room={room} host={isMentor} onClose={() => setBoardOpen(false)} />
+      ) : null}
+
+      {breakoutOpen ? (
+        <BreakoutPanel
+          sessionId={sessionId}
+          host={isMentor}
+          state={breakouts}
+          onChanged={setBreakouts}
+          onClose={() => setBreakoutOpen(false)}
+        />
+      ) : null}
 
       {inviteOpen ? (
         <div
@@ -1568,6 +1720,684 @@ export function CallRoomPage() {
  * shows while no live video is arriving (camera off / still connecting) — a
  * shared screen must never hide behind a placeholder.
  */
+/**
+ * Quiz & polls: the host writes a question, everyone answers, and results show
+ * live. A closed quiz reveals the correct option (the API only sends it then).
+ */
+function QuizPanel({
+  sessionId,
+  room,
+  host,
+  onClose,
+}: {
+  sessionId: string;
+  room: string;
+  host: boolean;
+  onClose: () => void;
+}) {
+  const [polls, setPolls] = useState<ClassPoll[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [composing, setComposing] = useState(false);
+  const [question, setQuestion] = useState('');
+  const [options, setOptions] = useState(['', '']);
+  const [correct, setCorrect] = useState<number | null>(null);
+  const [kind, setKind] = useState<'QUIZ' | 'POLL'>('QUIZ');
+
+  const load = useCallback(async () => {
+    try {
+      const { polls: next } = await mentorApi.polls(sessionId, room);
+      setPolls(next);
+    } catch (cause) {
+      setError(describeError(cause));
+    }
+  }, [sessionId, room]);
+
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const { polls: next } = await mentorApi.polls(sessionId, room);
+        if (alive) setPolls(next);
+      } catch {
+        // The next tick retries; the panel keeps the last known question.
+      }
+    };
+    void tick();
+    const timer = window.setInterval(tick, 3000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [sessionId, room]);
+
+  const launch = async () => {
+    const cleaned = options.map((option) => option.trim()).filter(Boolean);
+    if (question.trim().length < 3 || cleaned.length < 2) {
+      setError('Write a question and at least two options.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await mentorApi.createPoll(sessionId, room, {
+        question: question.trim(),
+        options: cleaned,
+        kind,
+        correctIndex: kind === 'QUIZ' ? correct : null,
+      });
+      setQuestion('');
+      setOptions(['', '']);
+      setCorrect(null);
+      setComposing(false);
+      await load();
+    } catch (cause) {
+      setError(describeError(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const answer = async (poll: ClassPoll, index: number) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { poll: next } = await mentorApi.answerPoll(sessionId, poll.id, index);
+      setPolls((prev) => prev.map((item) => (item.id === next.id ? next : item)));
+    } catch (cause) {
+      setError(describeError(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const close = async (poll: ClassPoll) => {
+    setBusy(true);
+    try {
+      const { poll: next } = await mentorApi.closePoll(sessionId, poll.id);
+      setPolls((prev) => prev.map((item) => (item.id === next.id ? next : item)));
+    } catch (cause) {
+      setError(describeError(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const open = polls.find((poll) => poll.status === 'OPEN') ?? null;
+  const previous = polls.filter((poll) => poll.status === 'CLOSED').slice(0, 3);
+  const reveal = open ? open.status === 'CLOSED' || host : false;
+
+  return (
+    <div
+      className="jr-modal-scrim"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="jr-modal jr-modal--tool" role="dialog" aria-modal="true" aria-label="Quiz and polls">
+        <header className="jr-modal__head">
+          <div>
+            <h2>Quiz &amp; polls</h2>
+            <p className="jr-modal__sub">Ask one question at a time — answers update live for everyone.</p>
+          </div>
+          <button type="button" className="jr-iconbtn" onClick={onClose} aria-label="Close">
+            <Icon name="close" size={18} />
+          </button>
+        </header>
+
+        {error ? <p className="jr-tool__error">{error}</p> : null}
+
+        {open ? (
+          <section className="jr-quiz">
+            <div className="jr-quiz__top">
+              <span className={`jr-quiz__tag${open.kind === 'POLL' ? ' is-poll' : ''}`}>{open.kind === 'POLL' ? 'Poll' : 'Quiz'}</span>
+              <span className="jr-quiz__count">
+                {open.totalVotes} answer{open.totalVotes === 1 ? '' : 's'}
+              </span>
+            </div>
+            <h3 className="jr-quiz__question">{open.question}</h3>
+            <div className="jr-quiz__options">
+              {open.options.map((option) => {
+                const answered = open.myChoice !== null || host;
+                const isMine = open.myChoice === option.index;
+                const isCorrect = reveal && open.correctIndex === option.index;
+                const percent = open.totalVotes ? Math.round((option.votes / open.totalVotes) * 100) : 0;
+                return (
+                  <button
+                    key={option.index}
+                    type="button"
+                    className={`jr-quiz__option${isMine ? ' is-mine' : ''}${isCorrect ? ' is-correct' : ''}`}
+                    onClick={() => void answer(open, option.index)}
+                    disabled={busy || host || open.myChoice !== null}
+                  >
+                    <span className="jr-quiz__letter">{String.fromCharCode(65 + option.index)}</span>
+                    <span className="jr-quiz__text">{option.text}</span>
+                    {answered ? (
+                      <>
+                        <span className="jr-quiz__bar" aria-hidden="true">
+                          <span style={{ width: `${percent}%` }} />
+                        </span>
+                        <span className="jr-quiz__votes">{option.votes}</span>
+                      </>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="jr-quiz__foot">
+              {open.myChoice !== null ? <span className="jr-quiz__muted">Your answer is in — waiting for the host.</span> : null}
+              {host ? (
+                <Button variant="primary" onClick={() => void close(open)} loading={busy}>
+                  Close question
+                </Button>
+              ) : null}
+            </div>
+          </section>
+        ) : (
+          <div className="jr-tool__empty">
+            <Icon name="presentation" size={28} />
+            <p>No question is running right now.</p>
+            {host ? (
+              <Button variant="primary" onClick={() => setComposing(true)}>
+                Start a question
+              </Button>
+            ) : (
+              <p className="jr-quiz__muted">Your mentor will launch one — it appears here automatically.</p>
+            )}
+          </div>
+        )}
+
+        {host && composing ? (
+          <section className="jr-quiz jr-quiz--compose">
+            <div className="jr-quiz__row">
+              <label>
+                Type
+                <select value={kind} onChange={(event) => setKind(event.target.value as 'QUIZ' | 'POLL')}>
+                  <option value="QUIZ">Quiz (one correct answer)</option>
+                  <option value="POLL">Poll (no right answer)</option>
+                </select>
+              </label>
+            </div>
+            <label className="jr-quiz__field">
+              Question
+              <input
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                placeholder="e.g. Which word means “important”?"
+                maxLength={500}
+              />
+            </label>
+            <div className="jr-quiz__field">
+              <span>Options</span>
+              {options.map((option, index) => (
+                <div className="jr-quiz__optrow" key={index}>
+                  <span className="jr-quiz__letter">{String.fromCharCode(65 + index)}</span>
+                  <input
+                    value={option}
+                    onChange={(event) =>
+                      setOptions((prev) => prev.map((value, position) => (position === index ? event.target.value : value)))
+                    }
+                    placeholder={`Option ${index + 1}`}
+                    maxLength={160}
+                  />
+                  {options.length > 2 ? (
+                    <button
+                      type="button"
+                      className="jr-iconbtn"
+                      aria-label={`Remove option ${index + 1}`}
+                      onClick={() => {
+                        setOptions((prev) => prev.filter((_, position) => position !== index));
+                        if (correct === index) setCorrect(null);
+                        else if (correct !== null && correct > index) setCorrect(correct - 1);
+                      }}
+                    >
+                      <Icon name="close" size={14} />
+                    </button>
+                  ) : null}
+                  {kind === 'QUIZ' ? (
+                    <label className="jr-quiz__correct" title="Mark as the correct answer">
+                      <input
+                        type="radio"
+                        name="correct-option"
+                        checked={correct === index}
+                        onChange={() => setCorrect(index)}
+                      />
+                      <span>Correct</span>
+                    </label>
+                  ) : null}
+                </div>
+              ))}
+              {options.length < 4 ? (
+                <button type="button" className="jr-quiz__add" onClick={() => setOptions((prev) => [...prev, ''])}>
+                  <Icon name="plus" size={14} /> Add option
+                </button>
+              ) : null}
+            </div>
+            <div className="jr-quiz__foot">
+              <Button onClick={() => setComposing(false)}>Cancel</Button>
+              <Button variant="primary" loading={busy} onClick={() => void launch()}>
+                Launch
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
+        {host && !composing && !open ? null : null}
+
+        {previous.length > 0 ? (
+          <section className="jr-quiz__history">
+            <h4>Earlier questions</h4>
+            {previous.map((poll) => (
+              <div key={poll.id} className="jr-quiz__past">
+                <span>{poll.question}</span>
+                <span className="jr-quiz__muted">{poll.totalVotes} answers</span>
+              </div>
+            ))}
+          </section>
+        ) : null}
+
+        {host && !composing && open ? (
+          <button type="button" className="jr-tool__link" onClick={() => setComposing(true)}>
+            Ask another question
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+/**
+ * Shared whiteboard. Coordinates are normalised, so every screen draws the
+ * same picture; the server keeps one row per room with a revision counter.
+ */
+function WhiteboardPanel({
+  sessionId,
+  room,
+  host,
+  onClose,
+}: {
+  sessionId: string;
+  room: string;
+  host: boolean;
+  onClose: () => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const strokesRef = useRef<WhiteboardStroke[]>([]);
+  const revisionRef = useRef(0);
+  const drawingRef = useRef<WhiteboardStroke | null>(null);
+  const sizeRef = useRef({ width: 1, height: 1, dpr: 1 });
+  const [strokes, setStrokes] = useState<WhiteboardStroke[]>([]);
+  const [, setRevision] = useState(0);
+  const [color, setColor] = useState('#f5f3ff');
+  const [width, setWidth] = useState(4);
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  const redraw = useCallback(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    const { width: cssWidth, height: cssHeight, dpr } = sizeRef.current;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const all = drawingRef.current ? [...strokesRef.current, drawingRef.current] : strokesRef.current;
+    for (const stroke of all) {
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.width;
+      ctx.beginPath();
+      stroke.points.forEach(([x, y], index) => {
+        const px = x * cssWidth;
+        const py = y * cssHeight;
+        if (index === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+    }
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      canvas.width = Math.max(1, Math.round(rect.width * dpr));
+      canvas.height = Math.max(1, Math.round(rect.height * dpr));
+      sizeRef.current = { width: rect.width || 1, height: rect.height || 1, dpr };
+      redraw();
+    };
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, [redraw]);
+
+  const adopt = useCallback(
+    (next: WhiteboardStroke[], revision: number) => {
+      strokesRef.current = next;
+      revisionRef.current = revision;
+      setStrokes(next);
+      setRevision(revision);
+      redraw();
+    },
+    [redraw],
+  );
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const board = await mentorApi.whiteboard(sessionId, room);
+        if (!alive || drawingRef.current) return;
+        if (board.revision > revisionRef.current) adopt(board.strokes, board.revision);
+        else if (board.revision === revisionRef.current) setStatus('saved');
+      } catch (cause) {
+        if (alive) setError(describeError(cause));
+      }
+    };
+    void load();
+    const timer = window.setInterval(load, 3000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [sessionId, room, adopt]);
+
+  const save = async (next: WhiteboardStroke[]) => {
+    setStatus('saving');
+    setError(null);
+    try {
+      const result = await mentorApi.saveWhiteboard(sessionId, room, revisionRef.current, next);
+      if (result.saved) {
+        revisionRef.current = result.revision;
+        setRevision(result.revision);
+        setStatus('saved');
+      } else {
+        adopt(result.strokes, result.revision);
+        setStatus('idle');
+        setError('Someone else was drawing — the board refreshed. Check your last stroke.');
+      }
+    } catch (cause) {
+      setStatus('idle');
+      setError(describeError(cause));
+    }
+  };
+
+  const pointFrom = (event: ReactPointerEvent<HTMLCanvasElement>): [number, number] => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return [clamp01((event.clientX - rect.left) / Math.max(1, rect.width)), clamp01((event.clientY - rect.top) / Math.max(1, rect.height))];
+  };
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drawingRef.current = { color, width, points: [pointFrom(event)] };
+    redraw();
+  };
+
+  const onPointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const current = drawingRef.current;
+    if (!current) return;
+    current.points.push(pointFrom(event));
+    redraw();
+  };
+
+  const onPointerUp = () => {
+    const current = drawingRef.current;
+    if (!current) return;
+    drawingRef.current = null;
+    if (current.points.length === 1) current.points.push(current.points[0]!);
+    const next = [...strokesRef.current, current];
+    strokesRef.current = next;
+    setStrokes(next);
+    redraw();
+    void save(next);
+  };
+
+  const undo = () => {
+    if (drawingRef.current) return;
+    const next = strokesRef.current.slice(0, -1);
+    strokesRef.current = next;
+    setStrokes(next);
+    redraw();
+    void save(next);
+  };
+
+  const clear = () => {
+    if (!host) return;
+    if (!window.confirm('Clear the whiteboard for everyone?')) return;
+    strokesRef.current = [];
+    setStrokes([]);
+    redraw();
+    void save([]);
+  };
+
+  const palette = ['#f5f3ff', '#ffd166', '#8ce99a', '#ff8787', '#74c0fc'];
+
+  return (
+    <div
+      className="jr-modal-scrim"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="jr-modal jr-modal--tool jr-modal--board" role="dialog" aria-modal="true" aria-label="Whiteboard">
+        <header className="jr-modal__head">
+          <div>
+            <h2>Whiteboard</h2>
+            <p className="jr-modal__sub">
+              {strokes.length} stroke{strokes.length === 1 ? '' : 's'} · {status === 'saving' ? 'Saving…' : 'Shared with the room'}
+            </p>
+          </div>
+          <button type="button" className="jr-iconbtn" onClick={onClose} aria-label="Close">
+            <Icon name="close" size={18} />
+          </button>
+        </header>
+
+        {error ? <p className="jr-tool__error">{error}</p> : null}
+
+        <div className="jr-board__bar">
+          <div className="jr-board__colors" role="group" aria-label="Pen colour">
+            {palette.map((tone) => (
+              <button
+                key={tone}
+                type="button"
+                className={`jr-board__color${color === tone ? ' is-on' : ''}`}
+                style={{ background: tone }}
+                onClick={() => setColor(tone)}
+                aria-label={`Use colour ${tone}`}
+              />
+            ))}
+          </div>
+          <div className="jr-board__widths" role="group" aria-label="Pen size">
+            {[
+              { value: 2, label: 'Thin' },
+              { value: 4, label: 'Medium' },
+              { value: 8, label: 'Thick' },
+            ].map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                className={`jr-board__width${width === item.value ? ' is-on' : ''}`}
+                onClick={() => setWidth(item.value)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <span className="jr-board__spacer" />
+          <button type="button" className="jr-board__action" onClick={undo} disabled={strokes.length === 0}>
+            <Icon name="rotate" size={14} /> Undo
+          </button>
+          {host ? (
+            <button type="button" className="jr-board__action is-danger" onClick={clear} disabled={strokes.length === 0}>
+              <Icon name="trash" size={14} /> Clear
+            </button>
+          ) : null}
+        </div>
+
+        <div className="jr-board__canvas-wrap">
+          <canvas
+            ref={canvasRef}
+            className="jr-board__canvas"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            onPointerLeave={(event) => {
+              if (drawingRef.current) onPointerUp();
+              else event.currentTarget.releasePointerCapture?.(event.pointerId);
+            }}
+          />
+          {strokes.length === 0 ? <p className="jr-board__hint">Draw here — everyone in the room sees it.</p> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Host: split the class into rooms and start a timer. Everyone: join / return. */
+function BreakoutPanel({
+  sessionId,
+  host,
+  state,
+  onChanged,
+  onClose,
+}: {
+  sessionId: string;
+  host: boolean;
+  state: BreakoutState | null;
+  onChanged: (next: BreakoutState) => void;
+  onClose: () => void;
+}) {
+  const [count, setCount] = useState(2);
+  const [minutes, setMinutes] = useState(10);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const create = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      onChanged(await mentorApi.createBreakouts(sessionId, count, minutes));
+    } catch (cause) {
+      setError(describeError(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const closeAll = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      onChanged(await mentorApi.closeBreakouts(sessionId));
+    } catch (cause) {
+      setError(describeError(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const enter = (roomKey: string) => {
+    window.location.assign(`/sessions/${sessionId}/room${roomKey === 'main' ? '' : `?room=${encodeURIComponent(roomKey)}`}`);
+  };
+
+  return (
+    <div
+      className="jr-modal-scrim"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="jr-modal jr-modal--tool" role="dialog" aria-modal="true" aria-label="Breakout rooms">
+        <header className="jr-modal__head">
+          <div>
+            <h2>Breakout rooms</h2>
+            <p className="jr-modal__sub">Split the class into small rooms, each with its own call, chat and board.</p>
+          </div>
+          <button type="button" className="jr-iconbtn" onClick={onClose} aria-label="Close">
+            <Icon name="close" size={18} />
+          </button>
+        </header>
+
+        {error ? <p className="jr-tool__error">{error}</p> : null}
+
+        {host ? (
+          <section className="jr-breakout__form">
+            <label>
+              Rooms
+              <select value={count} onChange={(event) => setCount(Number(event.target.value))}>
+                {[2, 3, 4].map((value) => (
+                  <option key={value} value={value}>
+                    {value} rooms
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Timer
+              <select value={minutes} onChange={(event) => setMinutes(Number(event.target.value))}>
+                {[5, 10, 15, 20, 30].map((value) => (
+                  <option key={value} value={value}>
+                    {value} minutes
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button variant="primary" loading={busy} onClick={() => void create()}>
+              Open rooms
+            </Button>
+            {state?.open ? (
+              <Button loading={busy} onClick={() => void closeAll()}>
+                Close all
+              </Button>
+            ) : null}
+          </section>
+        ) : null}
+
+        {state?.open ? (
+          <div className="jr-breakout__rooms">
+            {state.rooms.map((item) => (
+              <article key={item.id} className="jr-breakout__room">
+                <header>
+                  <h3>{item.name}</h3>
+                  <span>{item.members.length}</span>
+                </header>
+                <p className="jr-breakout__members">
+                  {item.members.length > 0 ? item.members.map((member) => member.displayName).join(', ') : 'Empty'}
+                </p>
+                <div className="jr-breakout__foot">
+                  <button type="button" className="jr-tool__link" onClick={() => enter(item.roomKey)}>
+                    {host ? 'Join room' : 'Join'}
+                  </button>
+                  {state.myRoom?.id === item.id ? <span className="jr-breakout__mine">Your room</span> : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="jr-tool__empty">
+            <Icon name="grid" size={28} />
+            <p>No breakout rooms are open.</p>
+            {host ? <p className="jr-quiz__muted">Open 2–4 rooms and the students in this call are split evenly.</p> : null}
+          </div>
+        )}
+
+        <p className="jr-breakout__note">
+          A breakout is a separate call inside this session — chat, reactions and the whiteboard stay in that room. When
+          the timer ends, everyone returns to the main room.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function RemoteTile({ peer, participant }: { peer: Peer; participant?: RoomParticipant }) {
   const [live, setLive] = useState(false);
   const [micLive, setMicLive] = useState(true);

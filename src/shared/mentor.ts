@@ -198,6 +198,8 @@ export interface RoomParticipant {
 
 export interface MentorRoomState {
   session: MentorSession;
+  /** Room the state was requested for (main or a breakout key). */
+  roomKey: string;
   participants: RoomParticipant[];
   messages: MentorChatMessage[];
   /** WebRTC signalling envelopes for the viewer since `since`. */
@@ -210,7 +212,9 @@ export interface MentorSignal {
   sessionId: string;
   senderId: string;
   targetId: string | null;
-  kind: 'OFFER' | 'ANSWER' | 'CANDIDATE' | 'BYE';
+  /** `main` or a breakout room key. Signalling never crosses rooms. */
+  roomKey: string;
+  kind: 'OFFER' | 'ANSWER' | 'CANDIDATE' | 'BYE' | 'HAND' | 'MUTE_MIC' | 'UNMUTE_MIC' | 'KICK' | 'REACTION' | 'WHITEBOARD';
   payload: string;
   createdAt: string;
 }

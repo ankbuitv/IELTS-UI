@@ -40,6 +40,7 @@ import { validateConversionRanges } from '../../shared/scoring';
 import { QUESTION_TYPES } from '../../shared/question-types';
 import { TEST_TYPES, SKILLS, ROLES, CONTENT_ORIGINS } from '../../shared/types';
 import { kindForMime } from '../extract';
+import { runWeeklyDigests } from '../services/digest-service';
 
 const router = new Hono<AppBindings>();
 
@@ -47,6 +48,41 @@ router.use('*', requireAuth, requireRole('ADMIN'));
 router.use('*', async (c, next) => {
   assertSameOrigin(c);
   await next();
+});
+
+// ---------------------------------------------------------------------------
+// Weekly digest + email log
+// ---------------------------------------------------------------------------
+router.post('/digest/run', async (c) => {
+  const body = await parseBody(
+    c,
+    z.object({ dryRun: z.boolean().optional(), weekOf: z.string().datetime().optional(), userId: z.string().max(64).optional() }),
+  ).catch(() => null);
+  const result = await runWeeklyDigests(c.env, {
+    dryRun: body?.dryRun ?? false,
+    weekOf: body?.weekOf ? new Date(body.weekOf) : undefined,
+    userId: body?.userId,
+    limit: 200,
+  });
+  return c.json(result);
+});
+
+router.get('/emails', async (c) => {
+  const rows = await c.env.DB.prepare(
+    `SELECT id, to_email, subject, status, provider, error, created_at, sent_at, html
+       FROM email_outbox ORDER BY created_at DESC LIMIT 25`,
+  ).all<{
+    id: string;
+    to_email: string;
+    subject: string;
+    status: string;
+    provider: string | null;
+    error: string | null;
+    created_at: string;
+    sent_at: string | null;
+    html: string;
+  }>();
+  return c.json({ emails: rows.results });
 });
 
 // ---------------------------------------------------------------------------
