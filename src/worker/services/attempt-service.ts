@@ -111,6 +111,7 @@ export interface AttemptSectionRow {
 /** Candidate-visible per-section progress and timing (shared shape). */
 export type { AttemptSectionState } from '../../shared/candidate';
 import type { AttemptSectionState } from '../../shared/candidate';
+import { createSpeakingSession, findSpeakingForAttempt } from './speaking-service';
 
 interface AssignmentRow {
   id: string;
@@ -1628,6 +1629,21 @@ export async function submitAttempt(
   }
 
   await finalizeAttempt(env, attempt, reason);
+
+  // A full mock counts Speaking as one of its four skills: submitting opens one
+  // AI-judged speaking session linked to this attempt (Writing is already
+  // AI-judged inside the paper; Reading/Listening use the scoring profile).
+  if (attempt.test_type === 'FULL_MOCK') {
+    const existing = await env.DB.prepare(
+      'SELECT id FROM speaking_sessions WHERE source_attempt_id = ? LIMIT 1',
+    )
+      .bind(attemptId)
+      .first<{ id: string }>();
+    if (!existing) {
+      await createSpeakingSession(env, user, { mode: 'MOCK', sourceAttemptId: attemptId }).catch(() => null);
+    }
+  }
+
   const refreshed = await env.DB.prepare(
     'SELECT status, raw_score, total_questions, estimated_band FROM attempts WHERE id = ?',
   )
@@ -1699,6 +1715,13 @@ export interface AttemptResultView {
   testTitle: string;
   testType: TestType;
   testVersionId: string;
+  /** The AI-judged speaking session linked to a full mock, once it exists. */
+  speaking: {
+    sessionId: string;
+    status: string;
+    overallBand: number | null;
+    topicTitle: string;
+  } | null;
   versionNumber: number;
   mode: ExamMode;
   status: AttemptRow['status'];
@@ -1781,10 +1804,12 @@ export async function loadAttemptResult(
 ): Promise<AttemptResultView> {
   const attempt = await env.DB.prepare('SELECT * FROM attempts WHERE id = ?').bind(attemptId).first<AttemptRow>();
   if (!attempt) throw ApiError.notFound('Attempt not found.');
-  if (attempt.user_id !== user.id && user.role === 'STUDENT') {
+  if (attempt.user_id !== user.id && (user.role === 'STUDENT' || user.role === 'MENTOR')) {
     throw ApiError.forbidden('This attempt belongs to another user.');
   }
-  return buildResultView(env, attempt, { includeReview: user.id === attempt.user_id || user.role !== 'STUDENT' });
+  return buildResultView(env, attempt, {
+    includeReview: user.id === attempt.user_id || (user.role !== 'STUDENT' && user.role !== 'MENTOR'),
+  });
 }
 
 export async function buildResultView(
@@ -1914,6 +1939,8 @@ export async function buildResultView(
     });
   }
 
+  const speaking = await findSpeakingForAttempt(env, attempt.id);
+
   const counts = countIntegrity(integrityRows.results.map((row) => row.type));
   const submittedAt = attempt.submitted_at;
   const durationSeconds =
@@ -1931,6 +1958,14 @@ export async function buildResultView(
     testTitle: test?.title ?? 'Test',
     testType: attempt.test_type,
     testVersionId: attempt.test_version_id,
+    speaking: speaking
+      ? {
+          sessionId: speaking.id,
+          status: speaking.status,
+          overallBand: speaking.overallBand,
+          topicTitle: speaking.topicTitle,
+        }
+      : null,
     versionNumber: version?.version_number ?? 1,
     mode: attempt.mode,
     status: attempt.status,

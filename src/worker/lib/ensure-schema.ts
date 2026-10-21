@@ -78,6 +78,11 @@ export const CHECK_REBUILDS: ReadonlyArray<{ table: string; requires: RegExp; wh
     requires: /kind[^,]*CHECK\s*\([^)]*'SPEAKING'/i,
     why: "kind must allow the five lesson types (migration 0012)",
   },
+  {
+    table: 'users',
+    requires: /role[^,]*CHECK\s*\([^)]*'MENTOR'/i,
+    why: "role must allow 'MENTOR' (migration 0020)",
+  },
 ];
 
 export interface SchemaReport {

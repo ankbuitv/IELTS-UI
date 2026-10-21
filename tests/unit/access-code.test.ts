@@ -130,6 +130,8 @@ const student = (id: string): AuthUser => ({
   role: 'STUDENT',
   status: 'ACTIVE',
   displayName: 'Student',
+  username: null,
+  avatarUrl: null,
   createdAt: new Date().toISOString(),
   lastLoginAt: null,
 });

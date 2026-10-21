@@ -41,7 +41,7 @@ interface AssetRow {
 }
 
 export function AdminSettingsPage() {
-  const [tab, setTab] = useState<'settings' | 'ai' | 'assets' | 'audit'>('settings');
+  const [tab, setTab] = useState<'settings' | 'ai' | 'assets' | 'notifications' | 'audit'>('settings');
 
   return (
     <div className="stack">
@@ -59,6 +59,7 @@ export function AdminSettingsPage() {
           { id: 'settings', label: 'Platform settings' },
           { id: 'ai', label: 'AI providers' },
           { id: 'assets', label: 'Media' },
+          { id: 'notifications', label: 'Announcements' },
           { id: 'audit', label: 'Audit log' },
         ]}
         value={tab}
@@ -68,6 +69,7 @@ export function AdminSettingsPage() {
       {tab === 'settings' ? <SettingsPanel /> : null}
       {tab === 'ai' ? <AiProvidersPanel /> : null}
       {tab === 'assets' ? <AssetsPanel /> : null}
+      {tab === 'notifications' ? <AnnouncementsPanel /> : null}
       {tab === 'audit' ? <AuditPanel /> : null}
     </div>
   );
@@ -568,5 +570,139 @@ function AuditPanel() {
         <Stat label="Audit retention" value="Unbounded" hint="Prune with a scheduled query if your policy requires retention limits." />
       </Card>
     </div>
+  );
+}
+
+
+// ------------------------------------------------------------- announcements
+
+interface EmailRow {
+  id: string;
+  to_email: string;
+  subject: string;
+  status: 'QUEUED' | 'SENT' | 'FAILED' | 'SKIPPED';
+  provider: string | null;
+  error: string | null;
+  created_at: string;
+  sent_at: string | null;
+}
+
+const EMAIL_TONE: Record<EmailRow['status'], 'neutral' | 'success' | 'warning' | 'danger'> = {
+  SENT: 'success',
+  QUEUED: 'warning',
+  FAILED: 'danger',
+  SKIPPED: 'neutral',
+};
+
+function AnnouncementsPanel() {
+  const toast = useToast();
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [href, setHref] = useState('');
+  const [role, setRole] = useState<'ALL' | 'STUDENT' | 'TEACHER' | 'MENTOR' | 'ADMIN'>('ALL');
+  const [email, setEmail] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const { data: emails, reload } = useAsync<{ providerConfigured: boolean; items: EmailRow[] }>(
+    () => api.get('/api/admin/emails'),
+    [],
+  );
+
+  const send = async () => {
+    setBusy(true);
+    try {
+      const result = await api.post<{ recipients: number }>('/api/admin/notifications/broadcast', {
+        title: title.trim(),
+        body: body.trim(),
+        ...(href.trim() ? { href: href.trim() } : {}),
+        ...(role === 'ALL' ? {} : { role }),
+        email,
+      });
+      toast.push(`Sent to ${result.recipients} ${result.recipients === 1 ? 'person' : 'people'}.`, 'success');
+      setTitle('');
+      setBody('');
+      setHref('');
+      await reload();
+    } catch (error) {
+      toast.push(describeError(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Card
+        title="Send an announcement"
+        hint="Lands in the bell of every signed-in account. Optionally email it as well — email needs RESEND_API_KEY and EMAIL_FROM."
+      >
+        <Field label="Title" required>
+          {(id) => (
+            <TextInput
+              id={id}
+              value={title}
+              maxLength={120}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Mock test this Saturday"
+            />
+          )}
+        </Field>
+        <Field label="Message" hint="One short paragraph reads best in the bell.">
+          {(id) => (
+            <TextArea id={id} value={body} maxLength={600} rows={3} onChange={(event) => setBody(event.target.value)} />
+          )}
+        </Field>
+        <div className="grid grid--2">
+          <Field label="Open when clicked" hint="An in-app path, e.g. /practice or /my-sessions.">
+            {(id) => (
+              <TextInput id={id} value={href} onChange={(event) => setHref(event.target.value)} placeholder="/practice" />
+            )}
+          </Field>
+          <Field label="Audience">
+            {(id) => (
+              <select id={id} value={role} onChange={(event) => setRole(event.target.value as typeof role)}>
+                <option value="ALL">Everyone active</option>
+                <option value="STUDENT">Students</option>
+                <option value="TEACHER">Teachers</option>
+                <option value="MENTOR">Mentors</option>
+                <option value="ADMIN">Admins</option>
+              </select>
+            )}
+          </Field>
+        </div>
+        <Checkbox checked={email} onChange={setEmail} label="Also send it by email" />
+        <div className="row" style={{ marginTop: 10 }}>
+          <Button variant="primary" loading={busy} disabled={title.trim().length < 3} onClick={send}>
+            Send announcement
+          </Button>
+        </div>
+      </Card>
+
+      <Card
+        title="Email delivery"
+        hint="Every transactional email is recorded before it is sent, so queued messages can be checked even without a provider."
+        actions={<Badge tone={emails?.providerConfigured ? 'success' : 'warning'}>{emails?.providerConfigured ? 'Provider connected' : 'Queued only'}</Badge>}
+      >
+        {emails && !emails.providerConfigured ? (
+          <Notice tone="info" title="No email provider configured">
+            Messages are stored with status QUEUED and the sign-in links can be read from the outbox. Set
+            <span className="mono"> RESEND_API_KEY </span> and <span className="mono">EMAIL_FROM</span> as Worker secrets to
+            deliver them.
+          </Notice>
+        ) : null}
+        <div className="stack" style={{ gap: 0 }}>
+          {(emails?.items ?? []).slice(0, 12).map((item) => (
+            <div key={item.id} className="row" style={{ justifyContent: 'space-between', gap: 12, padding: '9px 0', borderBottom: '1px solid var(--ink-100)' }}>
+              <div style={{ minWidth: 0 }}>
+                <strong className="small" style={{ display: 'block' }}>{item.subject}</strong>
+                <span className="tiny muted">{item.to_email} · {formatDateTime(item.created_at)}</span>
+                {item.error ? <span className="tiny" style={{ color: 'var(--danger, #b4324b)', display: 'block' }}>{item.error}</span> : null}
+              </div>
+              <Badge tone={EMAIL_TONE[item.status]}>{item.status.toLowerCase()}</Badge>
+            </div>
+          ))}
+          {emails && emails.items.length === 0 ? <p className="muted small">No email has been sent yet.</p> : null}
+        </div>
+      </Card>
+    </>
   );
 }

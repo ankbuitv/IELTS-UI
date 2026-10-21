@@ -7,6 +7,7 @@ import { formatDateTime } from '../../lib/format';
 interface AdminUserRow {
   id: string;
   email: string;
+  username: string | null;
   role: string;
   status: string;
   created_at: string;
@@ -48,6 +49,7 @@ export function AdminUsersPage() {
             <select value={role} onChange={(event) => setRole(event.target.value)}>
               <option value="">All roles</option>
               <option value="STUDENT">Student</option>
+              <option value="MENTOR">Mentor</option>
               <option value="TEACHER">Teacher</option>
               <option value="ADMIN">Administrator</option>
             </select>
@@ -84,7 +86,7 @@ export function AdminUsersPage() {
                     <div className="tiny muted">{user.email}</div>
                   </td>
                   <td>
-                    <Badge tone={user.role === 'ADMIN' ? 'accent' : user.role === 'TEACHER' ? 'info' : 'neutral'}>
+                    <Badge tone={user.role === 'ADMIN' ? 'accent' : user.role === 'TEACHER' ? 'info' : user.role === 'MENTOR' ? 'success' : 'neutral'}>
                       {user.role.toLowerCase()}
                     </Badge>
                   </td>
@@ -163,6 +165,7 @@ function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
         {(id) => (
           <Select id={id} value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
             <option value="STUDENT">Student</option>
+            <option value="MENTOR">Mentor</option>
             <option value="TEACHER">Teacher</option>
             <option value="ADMIN">Administrator</option>
           </Select>
@@ -205,14 +208,21 @@ function ManageUserForm({
 }) {
   const [role, setRole] = useState(user.role);
   const [status, setStatus] = useState(user.status);
+  const [username, setUsername] = useState(user.username ?? '');
   const [resetPassword, setResetPassword] = useState('');
 
   return (
     <div className="stack">
+      <Field label="Username" hint="3–24 characters: letters, numbers, dot, dash or underscore. Leave empty to remove it.">
+        {(id) => (
+          <TextInput id={id} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="e.g. nguyenan" />
+        )}
+      </Field>
       <Field label="Role">
         {(id) => (
           <Select id={id} value={role} onChange={(event) => setRole(event.target.value)}>
             <option value="STUDENT">Student</option>
+            <option value="MENTOR">Mentor</option>
             <option value="TEACHER">Teacher</option>
             <option value="ADMIN">Administrator</option>
           </Select>
@@ -247,6 +257,7 @@ function ManageUserForm({
             await api.patch(`/api/admin/users/${user.id}`, {
               role,
               status,
+              ...(username.trim() ? { username: username.trim() } : {}),
               ...(resetPassword ? { resetPassword } : {}),
             });
             await onDone('User updated.');

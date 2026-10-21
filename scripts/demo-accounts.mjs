@@ -6,7 +6,7 @@
  * empty catalogue:
  *
  *   1. ensures the bootstrap administrator exists,
- *   2. creates a TEACHER and a STUDENT account (idempotent),
+ *   2. creates TEACHER, MENTOR and STUDENT accounts (idempotent),
  *   3. plays two Learn lessons as the demo student, on a profile that has never
  *      been used, so the path shows progress and the shop has coins in it,
  *   4. publishes the original sample tests that ship as DRAFT in seed/seed.sql.
@@ -26,6 +26,7 @@ const PASSWORD = process.env.DEMO_PASSWORD ?? 'Demo-Passw0rd!23';
 const ACCOUNTS = {
   admin: { email: 'admin@demo.test', displayName: 'Demo Admin', role: 'ADMIN' },
   teacher: { email: 'teacher@demo.test', displayName: 'Demo Teacher', role: 'TEACHER' },
+  mentor: { email: 'mentor@demo.test', displayName: 'Demo Mentor', role: 'MENTOR' },
   student: { email: 'student@demo.test', displayName: 'Demo Student', role: 'STUDENT' },
 };
 
@@ -57,6 +58,7 @@ function createClient() {
     get: (path) => request(path),
     post: (path, json) => request(path, { method: 'POST', json }),
     patch: (path, json) => request(path, { method: 'PATCH', json }),
+    put: (path, json) => request(path, { method: 'PUT', json }),
   };
 }
 
@@ -196,6 +198,36 @@ async function main() {
     log(`  · teacher  ${ACCOUNTS.teacher.email} present already`);
   }
 
+  // 2b. Mentor, created (or promoted) the same way, then given a coach profile
+  //     and weekly availability so the directory and booking flow are usable.
+  const mentorClient = createClient();
+  const mentorState = await ensureTeacher(admin, ACCOUNTS.mentor);
+  if (mentorState.error) {
+    log(`  ! mentor   ${ACCOUNTS.mentor.email} could not be prepared: ${JSON.stringify(mentorState.error)}`);
+  } else {
+    log(`  ${mentorState.created ? '✓' : mentorState.promoted ? '✓' : '·'} mentor   ${ACCOUNTS.mentor.email} (${mentorState.created ? 'created' : mentorState.promoted ? 'role promoted to MENTOR' : 'existing'})`);
+    const mentorLogin = await mentorClient.post('/api/auth/login', { email: ACCOUNTS.mentor.email, password: PASSWORD });
+    if (mentorLogin.status === 200) {
+      const profile = await mentorClient.post('/api/mentor/profile', {
+        headline: 'Speaking coach · Band 8.5 · 6 years mentoring',
+        bio: 'I help candidates unlock fluent, confident speaking and write cleaner Task 2 essays. Sessions are practical: you speak, I coach, we fix one thing at a time.',
+        specialties: ['SPEAKING', 'WRITING', 'BAND_7_PLUS'],
+        languages: ['English', 'Vietnamese'],
+        hourlyRateCoins: 120,
+        yearsExperience: 6,
+      });
+      if (profile.status === 200) log('  ✓ mentor   coach profile saved');
+      const availability = await mentorClient.put('/api/mentor/availability', {
+        slots: [
+          { weekday: 1, startMinute: 17 * 60, endMinute: 21 * 60 },
+          { weekday: 3, startMinute: 17 * 60, endMinute: 21 * 60 },
+          { weekday: 6, startMinute: 9 * 60, endMinute: 12 * 60 },
+        ],
+      });
+      if (availability.status === 200) log('  ✓ mentor   weekly availability saved');
+    }
+  }
+
   // 3. Student through the public registration path.
   const student = createClient();
   const studentAccount = await ensureAccount(student, ACCOUNTS.student);
@@ -212,6 +244,27 @@ async function main() {
       log(`  · student  head start skipped (${head.skipped})`);
     } else {
       log(`  ✓ student  head start: ${head.done} lessons, ${head.coins} coins, streak 1`);
+    }
+  }
+
+  // 4b. A demo booking: the student books the mentor two days out, so
+  //     /my-sessions and the mentor console open on something real.
+  if (studentAccount.body?.user && !mentorState.error) {
+    const start = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+    start.setHours(19, 0, 0, 0);
+    const mentorId = (await admin.get('/api/admin/users?search=mentor@demo.test')).body?.users?.[0]?.id
+      ?? (await admin.get('/api/admin/users?role=MENTOR')).body?.users?.[0]?.id;
+    if (mentorId) {
+      const booked = await student.post(`/api/mentor/${mentorId}/book`, {
+        startsAt: start.toISOString(),
+        durationMinutes: 60,
+        topic: 'Speaking part 2 fluency + essay structure',
+      });
+      if (booked.status === 201) {
+        log('  ✓ student  demo session booked with the mentor');
+      } else {
+        log(`  · student  booking skipped (${booked.status}: ${JSON.stringify(booked.body?.error ?? booked.body)})`);
+      }
     }
   }
 
@@ -240,6 +293,7 @@ async function main() {
   log('Demo sign-ins (password: ' + PASSWORD + ')');
   log(`  admin    ${ACCOUNTS.admin.email}`);
   log(`  teacher  ${ACCOUNTS.teacher.email}`);
+  log(`  mentor   ${ACCOUNTS.mentor.email}`);
   log(`  student  ${ACCOUNTS.student.email}`);
 }
 

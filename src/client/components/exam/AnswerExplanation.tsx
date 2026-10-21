@@ -23,7 +23,7 @@ export function AnswerExplanation({
   correctAnswer: string | null;
   /** Transcript segment the evidence points at, when the payload names one. */
   transcriptSegmentId?: string | null;
-  onListenFrom?: (segmentId: string) => void;
+  onListenFrom?: (segmentId: string, evidence?: string | null) => void;
 }) {
   if (!evidence && !explanation && !correctAnswer) return null;
 
@@ -35,7 +35,7 @@ export function AnswerExplanation({
           Explanation · Question {number}
         </span>
         {transcriptSegmentId && onListenFrom ? (
-          <button type="button" className="btn btn--sm" onClick={() => onListenFrom(transcriptSegmentId)}>
+          <button type="button" className="btn btn--sm" onClick={() => onListenFrom(transcriptSegmentId, evidence)}>
             <Icon name="play" size={13} />
             Listen from here
           </button>

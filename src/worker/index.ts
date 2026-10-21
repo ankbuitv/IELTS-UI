@@ -1,6 +1,7 @@
 import type { Env, ImportQueueMessage } from './env';
 import { createApp } from './app';
 import { pruneRateLimits } from './lib/rate-limit';
+import { runWeeklyDigests } from './services/digest-service';
 import { runImportStage } from './services/import-service';
 
 const app = createApp();
@@ -28,10 +29,14 @@ export default {
     }
   },
 
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(
       (async () => {
         await pruneRateLimits(env);
+        // Monday 08:00 Vietnam time (01:00 UTC): the weekly recap email.
+        if (!controller.cron || controller.cron === '0 1 * * 1') {
+          await runWeeklyDigests(env).catch((error) => console.error('digest_failed', (error as Error).message));
+        }
         await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(new Date().toISOString()).run();
         await env.DB.prepare(
           `DELETE FROM login_attempts WHERE created_at < ?`,

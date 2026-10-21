@@ -3,30 +3,12 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql, 0038_speaking_partner.sql, 0039_question_drills.sql, 0040_social_billing.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 55   Indexes: 69
+-- Tables: 94   Indexes: 109
 -- =============================================================================
-
--- table: users
-CREATE TABLE IF NOT EXISTS users (
-  id                  TEXT PRIMARY KEY,
-  email               TEXT NOT NULL UNIQUE,          -- stored lower-cased
-  role                TEXT NOT NULL CHECK (role IN ('STUDENT', 'TEACHER', 'ADMIN')),
-  status              TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'SUSPENDED', 'INVITED')),
-  password_algo       TEXT NOT NULL DEFAULT 'PBKDF2-SHA256',
-  password_hash       TEXT,                          -- base64url, never leaves the server
-  password_salt       TEXT,
-  password_iterations INTEGER,
-  created_by          TEXT REFERENCES users (id) ON DELETE SET NULL,
-  created_at          TEXT NOT NULL,
-  updated_at          TEXT NOT NULL,
-  last_login_at       TEXT,
-  failed_login_count  INTEGER NOT NULL DEFAULT 0,
-  locked_until        TEXT
-);
 
 -- table: user_profiles
 CREATE TABLE IF NOT EXISTS user_profiles (
@@ -37,7 +19,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   locale       TEXT NOT NULL DEFAULT 'en',
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
-, avatar_id TEXT NOT NULL DEFAULT 'bo', name_effect TEXT NOT NULL DEFAULT 'default', profile_effect TEXT NOT NULL DEFAULT 'none');
+, avatar_id TEXT NOT NULL DEFAULT 'bo', name_effect TEXT NOT NULL DEFAULT 'default', profile_effect TEXT NOT NULL DEFAULT 'none', avatar_updated_at TEXT, avatar_mime TEXT, totp_secret TEXT, totp_enabled INTEGER NOT NULL DEFAULT 0, bio TEXT NOT NULL DEFAULT '', links_json TEXT NOT NULL DEFAULT '');
 
 -- table: sessions
 CREATE TABLE IF NOT EXISTS sessions (
@@ -603,7 +585,7 @@ CREATE TABLE IF NOT EXISTS speaking_sessions (
   marked_at      TEXT,
   created_at     TEXT NOT NULL,
   updated_at     TEXT NOT NULL
-, score_source TEXT, scored_by TEXT REFERENCES users (id) ON DELETE SET NULL, scored_at TEXT);
+, score_source TEXT, scored_by TEXT REFERENCES users (id) ON DELETE SET NULL, scored_at TEXT, topic_json TEXT, source_attempt_id TEXT);
 
 -- table: speaking_responses
 CREATE TABLE IF NOT EXISTS speaking_responses (
@@ -840,8 +822,476 @@ CREATE TABLE IF NOT EXISTS ai_adjudications (
   PRIMARY KEY (entity_type, entity_id)
 );
 
--- index: idx_users_role
-CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
+-- table: users
+CREATE TABLE IF NOT EXISTS "users" (
+  id                  TEXT PRIMARY KEY,
+  email               TEXT NOT NULL UNIQUE,
+  role                TEXT NOT NULL CHECK (role IN ('STUDENT', 'TEACHER', 'ADMIN', 'MENTOR')),
+  status              TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'SUSPENDED', 'INVITED')),
+  password_algo       TEXT NOT NULL DEFAULT 'PBKDF2-SHA256',
+  password_hash       TEXT,
+  password_salt       TEXT,
+  password_iterations INTEGER,
+  created_by          TEXT REFERENCES users (id) ON DELETE SET NULL,
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL,
+  last_login_at       TEXT,
+  failed_login_count  INTEGER NOT NULL DEFAULT 0,
+  locked_until        TEXT
+, username TEXT);
+
+-- table: mentor_profiles
+CREATE TABLE IF NOT EXISTS mentor_profiles (
+  user_id           TEXT PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+  headline          TEXT NOT NULL DEFAULT '',
+  bio               TEXT NOT NULL DEFAULT '',
+  specialties       TEXT NOT NULL DEFAULT '[]',   -- JSON array of MentorSpecialty
+  languages         TEXT NOT NULL DEFAULT '[]',   -- JSON array of language names
+  hourly_rate_coins INTEGER NOT NULL DEFAULT 0,
+  years_experience  INTEGER NOT NULL DEFAULT 0,
+  rating_avg        REAL NOT NULL DEFAULT 0,
+  rating_count      INTEGER NOT NULL DEFAULT 0,
+  students_count    INTEGER NOT NULL DEFAULT 0,
+  sessions_count    INTEGER NOT NULL DEFAULT 0,
+  verified          INTEGER NOT NULL DEFAULT 0,
+  active            INTEGER NOT NULL DEFAULT 1,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+
+-- table: mentor_availability
+CREATE TABLE IF NOT EXISTS mentor_availability (
+  id           TEXT PRIMARY KEY,
+  mentor_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  weekday      INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+  start_minute INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1440),
+  end_minute   INTEGER NOT NULL CHECK (end_minute BETWEEN 0 AND 1440),
+  created_at   TEXT NOT NULL,
+  CHECK (start_minute < end_minute)
+);
+
+-- table: mentor_classes
+CREATE TABLE IF NOT EXISTS mentor_classes (
+  id          TEXT PRIMARY KEY,
+  mentor_id   TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  level       TEXT NOT NULL DEFAULT 'All levels',
+  capacity    INTEGER NOT NULL DEFAULT 10,
+  price_coins INTEGER NOT NULL DEFAULT 0,
+  status      TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('DRAFT', 'OPEN', 'LIVE', 'COMPLETED', 'CANCELLED')),
+  starts_at   TEXT NOT NULL,
+  ends_at     TEXT NOT NULL,
+  recurrence  TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+-- table: mentor_sessions
+CREATE TABLE IF NOT EXISTS mentor_sessions (
+  id              TEXT PRIMARY KEY,
+  mentor_id       TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  student_id      TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  class_id        TEXT REFERENCES mentor_classes (id) ON DELETE SET NULL,
+  kind            TEXT NOT NULL DEFAULT 'ONE_ON_ONE' CHECK (kind IN ('ONE_ON_ONE', 'CLASS')),
+  status          TEXT NOT NULL DEFAULT 'SCHEDULED' CHECK (status IN ('SCHEDULED', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'NO_SHOW')),
+  topic           TEXT NOT NULL DEFAULT '',
+  notes           TEXT,
+  starts_at       TEXT NOT NULL,
+  ends_at         TEXT NOT NULL,
+  started_at      TEXT,
+  ended_at        TEXT,
+  paid_coins      INTEGER NOT NULL DEFAULT 0,
+  student_rating  INTEGER,
+  mentor_feedback TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+, confirmation TEXT NOT NULL DEFAULT 'CONFIRMED'
+  CHECK (confirmation IN ('REQUESTED', 'CONFIRMED', 'DECLINED', 'NONE')));
+
+-- table: mentor_class_members
+CREATE TABLE IF NOT EXISTS mentor_class_members (
+  class_id   TEXT NOT NULL REFERENCES mentor_classes (id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  joined_at  TEXT NOT NULL,
+  PRIMARY KEY (class_id, user_id)
+);
+
+-- table: mentor_messages
+CREATE TABLE IF NOT EXISTS mentor_messages (
+  id         TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  sender_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL DEFAULT 'CHAT' CHECK (kind IN ('CHAT', 'SYSTEM', 'NOTE')),
+  body       TEXT NOT NULL,
+  created_at TEXT NOT NULL
+, room_key TEXT NOT NULL DEFAULT 'main');
+
+-- table: mentor_reviews
+CREATE TABLE IF NOT EXISTS mentor_reviews (
+  id         TEXT PRIMARY KEY,
+  mentor_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  student_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  session_id TEXT REFERENCES mentor_sessions (id) ON DELETE SET NULL,
+  rating     INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  comment    TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+
+-- table: mentor_room_presence
+CREATE TABLE IF NOT EXISTS mentor_room_presence (
+  session_id  TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  user_id     TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  joined_at   TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  hand_raised INTEGER NOT NULL DEFAULT 0, room_key TEXT NOT NULL DEFAULT 'main', cam_on INTEGER NOT NULL DEFAULT 1, mic_on INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (session_id, user_id)
+);
+
+-- table: profile_avatars
+CREATE TABLE IF NOT EXISTS profile_avatars (
+  user_id     TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  chunk_index INTEGER NOT NULL,
+  data_b64    TEXT NOT NULL,
+  bytes       INTEGER NOT NULL DEFAULT 0,
+  mime        TEXT NOT NULL DEFAULT 'image/png',
+  created_at  TEXT NOT NULL,
+  PRIMARY KEY (user_id, chunk_index)
+);
+
+-- table: mentor_class_messages
+CREATE TABLE IF NOT EXISTS mentor_class_messages (
+  id         TEXT PRIMARY KEY,
+  class_id   TEXT NOT NULL REFERENCES mentor_classes (id) ON DELETE CASCADE,
+  sender_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  body       TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- table: login_otp_codes
+CREATE TABLE IF NOT EXISTS login_otp_codes (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL CHECK (purpose IN ('LOGIN', 'BACKUP')),
+  code_hash TEXT NOT NULL,
+  code_salt TEXT NOT NULL,
+  code_iterations INTEGER NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+-- table: classroom_messages
+CREATE TABLE IF NOT EXISTS classroom_messages (
+  id         TEXT PRIMARY KEY,
+  classroom_id TEXT NOT NULL REFERENCES classrooms (id) ON DELETE CASCADE,
+  sender_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  body       TEXT NOT NULL,
+  created_at TEXT NOT NULL
+, attachment_url TEXT, attachment_name TEXT);
+
+-- table: mentor_room_bans
+CREATE TABLE IF NOT EXISTS mentor_room_bans (
+  session_id TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  banned_by  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (session_id, user_id)
+);
+
+-- table: calendar_events
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  title      TEXT NOT NULL,
+  note       TEXT NOT NULL DEFAULT '',
+  starts_at  TEXT NOT NULL,
+  ends_at    TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- table: user_identities
+CREATE TABLE IF NOT EXISTS user_identities (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  provider   TEXT NOT NULL CHECK (provider IN ('google', 'microsoft')),
+  subject    TEXT NOT NULL,
+  email      TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE (provider, subject)
+);
+
+-- table: notifications
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  href TEXT,
+  read_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+-- table: email_outbox
+CREATE TABLE IF NOT EXISTS email_outbox (
+  id TEXT PRIMARY KEY,
+  to_email TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  html TEXT NOT NULL,
+  text TEXT,
+  status TEXT NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'SENT', 'FAILED', 'SKIPPED')),
+  provider TEXT,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  sent_at TEXT
+);
+
+-- table: auth_links
+CREATE TABLE IF NOT EXISTS auth_links (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL CHECK (purpose IN ('MAGIC', 'RESET')),
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+-- table: class_polls
+CREATE TABLE IF NOT EXISTS class_polls (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  room_key      TEXT NOT NULL DEFAULT 'main',
+  created_by    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  kind          TEXT NOT NULL DEFAULT 'QUIZ' CHECK (kind IN ('QUIZ', 'POLL')),
+  question      TEXT NOT NULL,
+  options_json  TEXT NOT NULL,
+  correct_index INTEGER,
+  status        TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'CLOSED')),
+  created_at    TEXT NOT NULL,
+  closed_at     TEXT
+);
+
+-- table: class_poll_answers
+CREATE TABLE IF NOT EXISTS class_poll_answers (
+  poll_id      TEXT NOT NULL REFERENCES class_polls (id) ON DELETE CASCADE,
+  user_id      TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  choice_index INTEGER NOT NULL,
+  created_at   TEXT NOT NULL,
+  PRIMARY KEY (poll_id, user_id)
+);
+
+-- table: class_breakouts
+CREATE TABLE IF NOT EXISTS class_breakouts (
+  id         TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  room_key   TEXT NOT NULL,
+  ends_at    TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE (session_id, room_key)
+);
+
+-- table: class_breakout_members
+CREATE TABLE IF NOT EXISTS class_breakout_members (
+  breakout_id TEXT NOT NULL REFERENCES class_breakouts (id) ON DELETE CASCADE,
+  user_id     TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  assigned_at TEXT NOT NULL,
+  PRIMARY KEY (breakout_id, user_id)
+);
+
+-- table: class_whiteboards
+CREATE TABLE IF NOT EXISTS class_whiteboards (
+  session_id TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  room_key   TEXT NOT NULL DEFAULT 'main',
+  revision   INTEGER NOT NULL DEFAULT 0,
+  strokes_json TEXT NOT NULL DEFAULT '[]',
+  updated_by TEXT REFERENCES users (id) ON DELETE SET NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (session_id, room_key)
+);
+
+-- table: user_digests
+CREATE TABLE IF NOT EXISTS user_digests (
+  user_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  week_key TEXT NOT NULL,
+  sent_at  TEXT NOT NULL,
+  PRIMARY KEY (user_id, week_key)
+);
+
+-- table: mentor_signals
+CREATE TABLE IF NOT EXISTS "mentor_signals" (
+  id         TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES mentor_sessions (id) ON DELETE CASCADE,
+  sender_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  target_id  TEXT,
+  room_key   TEXT NOT NULL DEFAULT 'main',
+  kind       TEXT NOT NULL CHECK (kind IN ('OFFER', 'ANSWER', 'CANDIDATE', 'BYE', 'HAND', 'MUTE_MIC', 'UNMUTE_MIC', 'KICK', 'REACTION', 'WHITEBOARD')),
+  payload    TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- table: weekly_action_plans
+CREATE TABLE IF NOT EXISTS weekly_action_plans (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  week_start  TEXT NOT NULL,
+  plan_json   TEXT NOT NULL,
+  source      TEXT NOT NULL DEFAULT 'RULES' CHECK (source IN ('RULES', 'AI')),
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  UNIQUE (user_id, week_start)
+);
+
+-- table: tutor_conversations
+CREATE TABLE IF NOT EXISTS tutor_conversations (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  title       TEXT NOT NULL DEFAULT 'New chat',
+  focus_skill TEXT NOT NULL DEFAULT 'ANY' CHECK (focus_skill IN ('ANY', 'WRITING', 'SPEAKING', 'READING', 'LISTENING', 'VOCABULARY')),
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+-- table: tutor_messages
+CREATE TABLE IF NOT EXISTS tutor_messages (
+  id              TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES tutor_conversations (id) ON DELETE CASCADE,
+  role            TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content         TEXT NOT NULL,
+  created_at      TEXT NOT NULL
+);
+
+-- table: speaking_partner_sessions
+CREATE TABLE IF NOT EXISTS speaking_partner_sessions (
+  id           TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  topic_id     TEXT NOT NULL,
+  topic_title  TEXT NOT NULL,
+  part         INTEGER NOT NULL CHECK (part BETWEEN 1 AND 3),
+  status       TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'COMPLETED')),
+  summary_json TEXT,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+
+-- table: speaking_partner_turns
+CREATE TABLE IF NOT EXISTS speaking_partner_turns (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL REFERENCES speaking_partner_sessions (id) ON DELETE CASCADE,
+  seq           INTEGER NOT NULL,
+  role          TEXT NOT NULL CHECK (role IN ('PARTNER', 'CANDIDATE')),
+  content       TEXT NOT NULL,
+  feedback_json TEXT,
+  created_at    TEXT NOT NULL,
+  UNIQUE (session_id, seq)
+);
+
+-- table: drill_attempts
+CREATE TABLE IF NOT EXISTS drill_attempts (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  question_type TEXT NOT NULL,
+  payload_json  TEXT NOT NULL,
+  answers_json  TEXT,
+  correct       INTEGER,
+  total         INTEGER,
+  created_at    TEXT NOT NULL,
+  submitted_at  TEXT
+);
+
+-- table: billing_orders
+CREATE TABLE IF NOT EXISTS billing_orders (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  plan_id       TEXT NOT NULL,
+  provider      TEXT NOT NULL CHECK (provider IN ('CARD', 'BANK', 'DEMO')),
+  status        TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PAID', 'CANCELLED', 'EXPIRED')),
+  amount_vnd    INTEGER NOT NULL,
+  reference     TEXT NOT NULL UNIQUE,
+  checkout_url  TEXT,
+  provider_ref  TEXT,
+  instructions  TEXT NOT NULL DEFAULT '',
+  created_at    TEXT NOT NULL,
+  paid_at       TEXT,
+  expires_at    TEXT
+);
+
+-- table: user_subscriptions
+CREATE TABLE IF NOT EXISTS user_subscriptions (
+  user_id            TEXT PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+  plan_id            TEXT NOT NULL,
+  status             TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'CANCELLED', 'EXPIRED')),
+  provider           TEXT NOT NULL,
+  current_period_end TEXT NOT NULL,
+  started_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL,
+  order_id           TEXT REFERENCES billing_orders (id) ON DELETE SET NULL
+);
+
+-- table: learn_season_claims
+CREATE TABLE IF NOT EXISTS learn_season_claims (
+  user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  season_key TEXT NOT NULL,
+  tier       INTEGER NOT NULL,
+  coins      INTEGER NOT NULL DEFAULT 0,
+  item_key   TEXT,
+  claimed_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, season_key, tier)
+);
+
+-- table: study_groups
+CREATE TABLE IF NOT EXISTS study_groups (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  goal        TEXT NOT NULL DEFAULT '',
+  target_band REAL NOT NULL,
+  owner_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  created_at  TEXT NOT NULL
+);
+
+-- table: study_group_members
+CREATE TABLE IF NOT EXISTS study_group_members (
+  group_id  TEXT NOT NULL REFERENCES study_groups (id) ON DELETE CASCADE,
+  user_id   TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  joined_at TEXT NOT NULL,
+  PRIMARY KEY (group_id, user_id)
+);
+
+-- table: study_rooms
+CREATE TABLE IF NOT EXISTS study_rooms (
+  id               TEXT PRIMARY KEY,
+  owner_id         TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  name             TEXT NOT NULL,
+  topic            TEXT NOT NULL DEFAULT '',
+  focus_minutes    INTEGER NOT NULL DEFAULT 25,
+  break_minutes    INTEGER NOT NULL DEFAULT 5,
+  phase            TEXT NOT NULL DEFAULT 'IDLE' CHECK (phase IN ('IDLE', 'FOCUS', 'BREAK')),
+  phase_started_at TEXT,
+  phase_ends_at    TEXT,
+  season_key       TEXT NOT NULL DEFAULT '',
+  created_at       TEXT NOT NULL,
+  closed_at        TEXT
+);
+
+-- table: study_room_members
+CREATE TABLE IF NOT EXISTS study_room_members (
+  room_id      TEXT NOT NULL REFERENCES study_rooms (id) ON DELETE CASCADE,
+  user_id      TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  joined_at    TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  focus_seconds INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (room_id, user_id)
+);
+
+-- table: study_focus_days
+CREATE TABLE IF NOT EXISTS study_focus_days (
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  day     TEXT NOT NULL,
+  seconds INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, day)
+);
 
 -- index: idx_sessions_user
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
@@ -1046,3 +1496,135 @@ CREATE INDEX IF NOT EXISTS idx_learn_daily_lessons_user_day ON learn_daily_lesso
 
 -- index: idx_ai_adjudications_entity
 CREATE INDEX IF NOT EXISTS idx_ai_adjudications_entity ON ai_adjudications (entity_type, entity_id);
+
+-- index: idx_users_role
+CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
+
+-- index: idx_mentor_profiles_active
+CREATE INDEX IF NOT EXISTS idx_mentor_profiles_active ON mentor_profiles (active, rating_avg DESC);
+
+-- index: idx_mentor_availability_mentor
+CREATE INDEX IF NOT EXISTS idx_mentor_availability_mentor ON mentor_availability (mentor_id, weekday);
+
+-- index: idx_mentor_classes_mentor
+CREATE INDEX IF NOT EXISTS idx_mentor_classes_mentor ON mentor_classes (mentor_id, starts_at);
+
+-- index: idx_mentor_classes_status
+CREATE INDEX IF NOT EXISTS idx_mentor_classes_status ON mentor_classes (status, starts_at);
+
+-- index: idx_mentor_sessions_mentor
+CREATE INDEX IF NOT EXISTS idx_mentor_sessions_mentor ON mentor_sessions (mentor_id, starts_at);
+
+-- index: idx_mentor_sessions_student
+CREATE INDEX IF NOT EXISTS idx_mentor_sessions_student ON mentor_sessions (student_id, starts_at);
+
+-- index: idx_mentor_sessions_status
+CREATE INDEX IF NOT EXISTS idx_mentor_sessions_status ON mentor_sessions (status, starts_at);
+
+-- index: idx_mentor_class_members_user
+CREATE INDEX IF NOT EXISTS idx_mentor_class_members_user ON mentor_class_members (user_id);
+
+-- index: idx_mentor_messages_session
+CREATE INDEX IF NOT EXISTS idx_mentor_messages_session ON mentor_messages (session_id, created_at);
+
+-- index: idx_mentor_reviews_mentor
+CREATE INDEX IF NOT EXISTS idx_mentor_reviews_mentor ON mentor_reviews (mentor_id, created_at DESC);
+
+-- index: idx_mentor_class_messages_class
+CREATE INDEX IF NOT EXISTS idx_mentor_class_messages_class ON mentor_class_messages (class_id, created_at);
+
+-- index: idx_users_username
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)
+  WHERE username IS NOT NULL;
+
+-- index: idx_login_otp_user
+CREATE INDEX IF NOT EXISTS idx_login_otp_user ON login_otp_codes (user_id, purpose, used_at);
+
+-- index: idx_classroom_messages_classroom
+CREATE INDEX IF NOT EXISTS idx_classroom_messages_classroom
+  ON classroom_messages (classroom_id, created_at DESC);
+
+-- index: idx_calendar_events_user_starts
+CREATE INDEX IF NOT EXISTS idx_calendar_events_user_starts
+  ON calendar_events (user_id, starts_at);
+
+-- index: idx_speaking_sessions_attempt
+CREATE INDEX IF NOT EXISTS idx_speaking_sessions_attempt
+  ON speaking_sessions (source_attempt_id);
+
+-- index: idx_user_identities_user
+CREATE INDEX IF NOT EXISTS idx_user_identities_user ON user_identities (user_id);
+
+-- index: idx_notifications_user
+CREATE INDEX IF NOT EXISTS idx_notifications_user
+  ON notifications (user_id, read_at, created_at DESC);
+
+-- index: idx_email_outbox_created
+CREATE INDEX IF NOT EXISTS idx_email_outbox_created ON email_outbox (created_at DESC);
+
+-- index: idx_email_outbox_to
+CREATE INDEX IF NOT EXISTS idx_email_outbox_to ON email_outbox (to_email, created_at DESC);
+
+-- index: idx_auth_links_user
+CREATE INDEX IF NOT EXISTS idx_auth_links_user
+  ON auth_links (user_id, purpose, used_at, created_at DESC);
+
+-- index: idx_mentor_sessions_confirmation
+CREATE INDEX IF NOT EXISTS idx_mentor_sessions_confirmation
+  ON mentor_sessions (confirmation, status, starts_at);
+
+-- index: idx_class_polls_session
+CREATE INDEX IF NOT EXISTS idx_class_polls_session ON class_polls (session_id, created_at DESC);
+
+-- index: idx_class_breakouts_session
+CREATE INDEX IF NOT EXISTS idx_class_breakouts_session ON class_breakouts (session_id);
+
+-- index: idx_mentor_signals_session
+CREATE INDEX IF NOT EXISTS idx_mentor_signals_session ON mentor_signals (session_id, room_key, created_at);
+
+-- index: idx_mentor_presence_room
+CREATE INDEX IF NOT EXISTS idx_mentor_presence_room ON mentor_room_presence (session_id, room_key, last_seen_at);
+
+-- index: idx_mentor_messages_room
+CREATE INDEX IF NOT EXISTS idx_mentor_messages_room ON mentor_messages (session_id, room_key, created_at);
+
+-- index: idx_weekly_plan_user
+CREATE INDEX IF NOT EXISTS idx_weekly_plan_user ON weekly_action_plans (user_id, week_start);
+
+-- index: idx_tutor_conversations_user
+CREATE INDEX IF NOT EXISTS idx_tutor_conversations_user ON tutor_conversations (user_id, updated_at);
+
+-- index: idx_tutor_messages_conversation
+CREATE INDEX IF NOT EXISTS idx_tutor_messages_conversation ON tutor_messages (conversation_id, created_at);
+
+-- index: idx_speaking_partner_sessions_user
+CREATE INDEX IF NOT EXISTS idx_speaking_partner_sessions_user
+  ON speaking_partner_sessions (user_id, updated_at);
+
+-- index: idx_speaking_partner_turns_session
+CREATE INDEX IF NOT EXISTS idx_speaking_partner_turns_session
+  ON speaking_partner_turns (session_id, seq);
+
+-- index: idx_drill_attempts_user
+CREATE INDEX IF NOT EXISTS idx_drill_attempts_user ON drill_attempts (user_id, created_at);
+
+-- index: idx_billing_orders_user
+CREATE INDEX IF NOT EXISTS idx_billing_orders_user ON billing_orders (user_id, created_at);
+
+-- index: idx_billing_orders_status
+CREATE INDEX IF NOT EXISTS idx_billing_orders_status ON billing_orders (status, created_at);
+
+-- index: idx_season_claims_user
+CREATE INDEX IF NOT EXISTS idx_season_claims_user ON learn_season_claims (user_id, season_key);
+
+-- index: idx_study_groups_target
+CREATE INDEX IF NOT EXISTS idx_study_groups_target ON study_groups (target_band, created_at);
+
+-- index: idx_study_group_members_user
+CREATE INDEX IF NOT EXISTS idx_study_group_members_user ON study_group_members (user_id);
+
+-- index: idx_study_rooms_open
+CREATE INDEX IF NOT EXISTS idx_study_rooms_open ON study_rooms (closed_at, created_at);
+
+-- index: idx_study_room_members_user
+CREATE INDEX IF NOT EXISTS idx_study_room_members_user ON study_room_members (user_id, last_seen_at);

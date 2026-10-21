@@ -16,6 +16,7 @@ export function AdminLayout() {
     { to: '/admin/attempts', label: 'Attempts' },
     { to: '/admin/learn', label: 'Learn content' },
     { to: '/admin/writing', label: 'Writing' },
+    { to: '/admin/billing', label: 'Billing' },
     { to: '/admin/users', label: 'Users' },
     { to: '/admin/settings', label: 'Settings' },
   ];

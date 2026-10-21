@@ -4,7 +4,8 @@ import type { AppBindings } from '../env';
 import { ApiError } from '../lib/errors';
 import { sha256Hex } from '../lib/crypto';
 import { nowIso } from '../lib/ids';
-import { SERVER_SPEECH_VOICES, synthesizeSpeechWithProvider } from '../ai/providers';
+import { aiStatus } from '../ai/openai';
+import { SERVER_SPEECH_ACCENTS, SERVER_SPEECH_VOICES, isSpeechAccent, synthesizeSpeechWithProvider, type SpeechAccent } from '../ai/providers';
 import { assertCsrf, assertSameOrigin } from '../lib/http';
 import { enforceRateLimit } from '../lib/rate-limit';
 import { parseBody, parseQuery } from '../lib/validate';
@@ -26,6 +27,7 @@ import { getLeaderboard } from '../services/learn-leaderboard-service';
 import { translateSentence } from '../services/learn-translate-service';
 import { auditPlan, getPlan, rebuildPlan, setPlanItemStatus } from '../services/learn-plan-service';
 import { buildPersonalLesson, latestPersonalLesson } from '../services/learn-generation-service';
+import { claimSeasonTier, getSeasonPass } from '../services/season-service';
 import { getEverydayLessons } from '../services/learn-everyday-service';
 import {
   acceptFriendRequest,
@@ -358,13 +360,32 @@ learnRouter.get('/leaderboard', async (c) => {
       scope: z.string().default('learn'),
       window: z.string().default('week'),
       day: daySchema,
+      classroomId: z.string().max(64).optional(),
     }),
   );
   if (!isLeaderboardScope(query.scope)) throw ApiError.validation('That leaderboard does not exist.');
-  if (!isLeaderboardWindow(query.window)) throw ApiError.validation('Choose this week or all time.');
+  if (!isLeaderboardWindow(query.window)) throw ApiError.validation('Choose this week, this season, or all time.');
   return c.json(
-    await getLeaderboard(c.env, user.id, query.scope as LeaderboardScope, query.window as LeaderboardWindow, query.day),
+    await getLeaderboard(c.env, user.id, query.scope as LeaderboardScope, query.window as LeaderboardWindow, query.day, {
+      classroomId: query.classroomId,
+    }),
   );
+});
+
+// ---------------------------------------------------------------- season pass
+/** Current season, XP on the pass, and which rewards are claimable. */
+learnRouter.get('/season', async (c) => {
+  const user = currentUser(c);
+  const query = parseQuery(c, z.object({ day: daySchema.optional() }));
+  return c.json(await getSeasonPass(c.env, user.id, query.day ?? new Date().toISOString().slice(0, 10)));
+});
+
+learnRouter.post('/season/claim', async (c) => {
+  assertSameOrigin(c);
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ tier: z.number().int().min(1).max(10), day: daySchema.optional() }));
+  return c.json(await claimSeasonTier(c.env, user.id, body.day ?? new Date().toISOString().slice(0, 10), body.tier));
 });
 
 // ---------------------------------------------------------------- translation
@@ -393,12 +414,12 @@ learnRouter.post('/translate', async (c) => {
  * no provider, so the client then offers only the device's own voices.
  */
 learnRouter.get('/speech/voices', async (c) => {
-  try {
-    await synthesizeSpeechWithProvider(c.env, 'ping', 'nova');
-    return c.json({ voices: [...SERVER_SPEECH_VOICES] });
-  } catch {
-    return c.json({ voices: [] });
-  }
+  const status = await aiStatus(c.env);
+  return c.json({
+    voices: status.available ? [...SERVER_SPEECH_VOICES] : [],
+    accents: [...SERVER_SPEECH_ACCENTS],
+    defaultAccent: 'UK' as SpeechAccent,
+  });
 });
 
 /**
@@ -411,12 +432,17 @@ learnRouter.get('/speech/voices', async (c) => {
  */
 learnRouter.get('/speech', async (c) => {
   const user = currentUser(c);
-  const { text, voice } = parseQuery(
+  const { text, voice, accent } = parseQuery(
     c,
-    z.object({ text: z.string().trim().min(1).max(200), voice: z.string().min(1).max(24).default('nova') }),
+    z.object({
+      text: z.string().trim().min(1).max(200),
+      voice: z.string().min(1).max(24).default('nova'),
+      accent: z.string().trim().toUpperCase().default('UK'),
+    }),
   );
+  const resolvedAccent: SpeechAccent = isSpeechAccent(accent) ? accent : 'UK';
   const hash = await sha256Hex(text.toLowerCase());
-  const key = `${voice}:${hash}`;
+  const key = `${voice}:${resolvedAccent}:${hash}`;
 
   const hit = await c.env.DB.prepare('SELECT data_b64, mime FROM speech_cache WHERE cache_key = ?')
     .bind(key)
@@ -433,7 +459,7 @@ learnRouter.get('/speech', async (c) => {
     { bucket: `learn-speech:${user.id}`, windowSeconds: 3600, limit: 200 },
     'That is a lot of audio in a short time. Try again in a little while.',
   );
-  const { bytes, mime } = await synthesizeSpeechWithProvider(c.env, text, voice);
+  const { bytes, mime } = await synthesizeSpeechWithProvider(c.env, text, voice, undefined, resolvedAccent);
   const base64 = Buffer.from(new Uint8Array(bytes)).toString('base64');
   await c.env.DB.prepare(
     'INSERT OR REPLACE INTO speech_cache (cache_key, voice, text_hash, mime, data_b64, bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',

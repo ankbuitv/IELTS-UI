@@ -56,8 +56,19 @@ export interface PlayerCard {
   badgeIds: string[];
 }
 
+export interface ProfileLink {
+  label: string;
+  url: string;
+}
+
 export interface GamificationProfile extends PlayerCard {
   createdAt: string;
+  /** Free-text description the player writes about themselves. */
+  bio: string;
+  /** Personal links (up to five) — platforms the player chooses to share. */
+  links: ProfileLink[];
+  /** Overall estimated band from submitted attempts, or null when unmarked. */
+  bestBand: number | null;
   currentLevelXp: number;
   nextLevelXp: number;
   levelProgress: number;
@@ -85,6 +96,20 @@ const ACHIEVEMENT_DEFS = [
   { id: 'xp_1000', name: 'XP collector', description: 'Earn 1,000 experience points.', icon: '⚡', metric: 'xp', target: 1_000 },
   { id: 'friends_3', name: 'Study circle', description: 'Add three friends.', icon: '🤝', metric: 'friends', target: 3 },
   { id: 'tests_3', name: 'Test taker', description: 'Submit three practice tests.', icon: '📝', metric: 'attempts', target: 3 },
+  { id: 'tests_10', name: 'Regular', description: 'Submit ten practice tests.', icon: '📚', metric: 'attempts', target: 10 },
+  { id: 'tests_25', name: 'Veteran', description: 'Submit 25 practice tests.', icon: '🏛️', metric: 'attempts', target: 25 },
+  { id: 'tests_50', name: 'Iron will', description: 'Submit 50 practice tests.', icon: '🛡️', metric: 'attempts', target: 50 },
+  { id: 'lessons_50', name: 'Explorer', description: 'Finish 50 Learn lessons.', icon: '🗺️', metric: 'lessons', target: 50 },
+  { id: 'lessons_100', name: 'Centurion', description: 'Finish 100 Learn lessons.', icon: '🏰', metric: 'lessons', target: 100 },
+  { id: 'xp_500', name: 'Collector', description: 'Earn 500 experience points.', icon: '🪙', metric: 'xp', target: 500 },
+  { id: 'xp_5000', name: 'Hoard', description: 'Earn 5,000 experience points.', icon: '💰', metric: 'xp', target: 5_000 },
+  { id: 'xp_10000', name: 'Legend', description: 'Earn 10,000 experience points.', icon: '👑', metric: 'xp', target: 10_000 },
+  { id: 'streak_14', name: 'Two-week run', description: 'Build a fourteen-day study streak.', icon: '🗓️', metric: 'bestStreak', target: 14 },
+  { id: 'streak_30', name: 'Unstoppable', description: 'Build a thirty-day study streak.', icon: '🌋', metric: 'bestStreak', target: 30 },
+  { id: 'perfect_5', name: 'Precision', description: 'Finish five flawless lessons.', icon: '🎯', metric: 'perfectLessons', target: 5 },
+  { id: 'perfect_10', name: 'Untouchable', description: 'Finish ten flawless lessons.', icon: '🌈', metric: 'perfectLessons', target: 10 },
+  { id: 'friends_10', name: 'Popular', description: 'Add ten friends.', icon: '🎈', metric: 'friends', target: 10 },
+  { id: 'friends_25', name: 'Community star', description: 'Add 25 friends.', icon: '🌟', metric: 'friends', target: 25 },
 ] as const;
 
 type AchievementMetric = (typeof ACHIEVEMENT_DEFS)[number]['metric'];

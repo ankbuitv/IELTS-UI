@@ -13,7 +13,7 @@ export function TakeExamPage() {
   // its button is what takes them to the results.
   useEffect(() => {
     if (session.state?.submitted && !session.lockedOut) {
-      navigate(`/attempts/${attemptId}`, { replace: true });
+      navigate(`/exam/${attemptId}/review`, { replace: true });
     }
   }, [session.state?.submitted, session.lockedOut, attemptId, navigate]);
 

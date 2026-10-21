@@ -4,6 +4,7 @@ import { AppShell } from './components/AppShell';
 import { Loading, Notice } from './components/ui';
 import { useAuth } from './context/AuthContext';
 import { JoinPage, LandingPage, LoginPage, NotFoundPage, RegisterPage } from './pages/auth/PublicPages';
+import { MagicLinkPage, ResetPasswordPage } from './pages/auth/EmailLinks';
 import {
   AttemptHistoryPage,
   AttemptResultPage,
@@ -14,6 +15,7 @@ import {
 } from './pages/student/StudentPages';
 import { StudentDashboardPage } from './pages/student/Dashboard';
 import { VocabularyPage } from './pages/student/VocabularyPage';
+import { TutorPage } from './pages/student/TutorPage';
 import { LearnPage } from './pages/student/LearnPage';
 import { PlanPage } from './pages/student/PlanPage';
 import { ShopPage } from './pages/student/ShopPage';
@@ -23,7 +25,16 @@ import { FriendPage, PublicPlayerProfilePage } from './pages/student/SocialPages
 import { LessonPage, ReviewPage } from './pages/student/LessonPages';
 import { DictionaryPage } from './pages/student/DictionaryPage';
 import { SpeakingPage } from './pages/student/SpeakingPage';
+import { SpeakingPartnerPage } from './pages/student/SpeakingPartnerPage';
+import { DrillsPage } from './pages/student/DrillsPage';
+import { DictationLabPage } from './pages/student/DictationLabPage';
+import { PricingPage } from './pages/student/PricingPage';
+import { SeasonPassPage } from './pages/student/SeasonPassPage';
+import { StudyGroupsPage } from './pages/student/StudyGroupsPage';
+import { StudyRoomPage } from './pages/student/StudyRoomPage';
+import { PronunciationPage } from './pages/student/PronunciationPage';
 import { TakeExamPage } from './pages/exam/TakeExam';
+import { AttemptReviewPage } from './pages/exam/ReviewExam';
 import { TeacherHomePage, ClassroomPage, AssignmentPage, StudentDetailPage } from './pages/teacher/TeacherPages';
 import { AdminWritingQueuePage, TeacherWritingQueuePage } from './pages/staff/WritingQueue';
 import { AdminLayout } from './pages/admin/AdminLayout';
@@ -36,8 +47,21 @@ import { AdminUsersPage } from './pages/admin/AdminUsers';
 import { AdminAttemptsPage } from './pages/admin/AdminAttempts';
 import { AdminSettingsPage } from './pages/admin/AdminSettings';
 import { AdminLearnPage } from './pages/admin/AdminLearn';
+import { AdminBillingPage } from './pages/admin/AdminBillingPage';
+import { MentorDirectoryPage } from './pages/mentor/MentorDirectoryPage';
+import { MentorProfilePage } from './pages/mentor/MentorProfilePage';
+import { MySessionsPage } from './pages/mentor/MySessionsPage';
+import { MentorConsolePage } from './pages/mentor/MentorConsolePage';
+import { ClassesPage } from './pages/mentor/ClassesPage';
+import { TrainingPage } from './pages/staff/TrainingPage';
+import { CalendarPage } from './pages/student/CalendarPage';
+import { ClassDetailPage } from './pages/mentor/ClassDetailPage';
+import { CallRoomPage } from './pages/mentor/CallRoomPage';
+import { EarningsPage } from './pages/mentor/EarningsPage';
+import { NotificationsPage } from './components/NotificationBell';
+import { CertificatePage } from './pages/student/CertificatePage';
 
-function RequireAuth({ children, roles }: { children: ReactNode; roles?: Array<'STUDENT' | 'TEACHER' | 'ADMIN'> }) {
+function RequireAuth({ children, roles }: { children: ReactNode; roles?: Array<'STUDENT' | 'TEACHER' | 'ADMIN' | 'MENTOR'> }) {
   const { user, loading } = useAuth();
   const location = useLocation();
 
@@ -57,6 +81,14 @@ export function App() {
   return (
     <Routes>
       {/* Full-screen exam experience: deliberately outside the app chrome. */}
+      <Route
+        path="/exam/:attemptId/review"
+        element={
+          <RequireAuth>
+            <AttemptReviewPage />
+          </RequireAuth>
+        }
+      />
       <Route
         path="/exam/:attemptId"
         element={
@@ -84,9 +116,21 @@ export function App() {
         }
       />
 
+      {/* The call room is a full-screen experience, like the exam and the lesson player. */}
+      <Route
+        path="/sessions/:sessionId/room"
+        element={
+          <RequireAuth>
+            <CallRoomPage />
+          </RequireAuth>
+        }
+      />
+
       <Route element={<AppShell />}>
         <Route index element={<LandingPage />} />
         <Route path="login" element={<LoginPage />} />
+        <Route path="auth/magic" element={<MagicLinkPage />} />
+        <Route path="reset-password" element={<ResetPasswordPage />} />
         <Route path="register" element={<RegisterPage />} />
         <Route path="join" element={<JoinPage />} />
 
@@ -103,6 +147,22 @@ export function App() {
           element={
             <RequireAuth>
               <PracticePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="certificate/:attemptId"
+          element={
+            <RequireAuth>
+              <CertificatePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="notifications"
+          element={
+            <RequireAuth>
+              <NotificationsPage />
             </RequireAuth>
           }
         />
@@ -139,10 +199,82 @@ export function App() {
           }
         />
         <Route
+          path="lab/dictation"
+          element={
+            <RequireAuth>
+              <DictationLabPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="lab/pronunciation"
+          element={
+            <RequireAuth>
+              <PronunciationPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="pricing"
+          element={
+            <RequireAuth>
+              <PricingPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="season"
+          element={
+            <RequireAuth>
+              <SeasonPassPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="study-groups"
+          element={
+            <RequireAuth>
+              <StudyGroupsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="study-room"
+          element={
+            <RequireAuth>
+              <StudyRoomPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="drills"
+          element={
+            <RequireAuth>
+              <DrillsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="speaking"
           element={
             <RequireAuth>
               <SpeakingPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="speaking/partner"
+          element={
+            <RequireAuth>
+              <SpeakingPartnerPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="speaking/partner/:sessionId"
+          element={
+            <RequireAuth>
+              <SpeakingPartnerPage />
             </RequireAuth>
           }
         />
@@ -235,10 +367,92 @@ export function App() {
           }
         />
         <Route
+          path="tutor"
+          element={
+            <RequireAuth>
+              <TutorPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="calendar"
+          element={
+            <RequireAuth>
+              <CalendarPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="training"
+          element={
+            <RequireAuth roles={['MENTOR', 'TEACHER', 'ADMIN']}>
+              <TrainingPage />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="profile"
           element={
             <RequireAuth>
               <ProfilePage />
+            </RequireAuth>
+          }
+        />
+
+        {/* Mentor platform: directory, booking, live classes and the mentor console. */}
+        <Route
+          path="mentors"
+          element={
+            <RequireAuth>
+              <MentorDirectoryPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="mentors/:mentorId"
+          element={
+            <RequireAuth>
+              <MentorProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="my-sessions"
+          element={
+            <RequireAuth>
+              <MySessionsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="classes/:classId"
+          element={
+            <RequireAuth>
+              <ClassDetailPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="classes"
+          element={
+            <RequireAuth>
+              <ClassesPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="mentor"
+          element={
+            <RequireAuth roles={['MENTOR', 'ADMIN']}>
+              <MentorConsolePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="mentor/earnings"
+          element={
+            <RequireAuth roles={['MENTOR', 'ADMIN']}>
+              <EarningsPage />
             </RequireAuth>
           }
         />
@@ -303,6 +517,7 @@ export function App() {
           <Route path="attempts" element={<AdminAttemptsPage />} />
           <Route path="writing" element={<AdminWritingQueuePage />} />
           <Route path="learn" element={<AdminLearnPage />} />
+          <Route path="billing" element={<AdminBillingPage />} />
           <Route path="settings" element={<AdminSettingsPage />} />
         </Route>
 

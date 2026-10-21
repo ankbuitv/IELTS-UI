@@ -100,6 +100,32 @@ export function AdminLearnPage() {
     }
   };
 
+  const uploadVideoFor = async (id: string, file: File) => {
+    if (!file.type.startsWith('video/') && !/\.(mp4|webm|ogv|ogg|m4v)$/i.test(file.name)) {
+      toast.push('Pick a video file (mp4, webm…).', 'error');
+      return;
+    }
+    try {
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('Could not read the file.'));
+        reader.readAsDataURL(file);
+      });
+      const uploaded = await api.post<{ asset: { id: string; url: string } }>('/api/admin/assets/upload', {
+        filename: file.name,
+        mime: file.type || 'video/mp4',
+        dataBase64,
+        kind: 'OTHER',
+      });
+      await api.put(`/api/admin/learn/lessons/${id}/video`, { videoUrl: uploaded.asset.url });
+      toast.push('Lecture video uploaded.', 'success');
+      await reload();
+    } catch (cause) {
+      toast.push(describeError(cause), 'error');
+    }
+  };
+
   const setVideoFor = async (id: string, current: string) => {
     const input = window.prompt('Teaching video link (YouTube or any embeddable URL). Leave empty to remove.', current);
     if (input === null) return;
@@ -304,6 +330,19 @@ export function AdminLearnPage() {
                         <Button size="sm" variant="ghost" onClick={() => void setVideoFor(lesson.id, lesson.videoUrl ?? '')}>
                           {lesson.videoUrl ? 'Video ✓' : 'Video'}
                         </Button>
+                        <label className="btn btn--sm btn--ghost" style={{ cursor: 'pointer' }}>
+                          Upload
+                          <input
+                            type="file"
+                            accept="video/*"
+                            hidden
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              event.target.value = '';
+                              if (file) void uploadVideoFor(lesson.id, file);
+                            }}
+                          />
+                        </label>
                       </div>
                     </td>
                   </tr>

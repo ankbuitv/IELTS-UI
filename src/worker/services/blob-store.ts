@@ -14,12 +14,14 @@ import { nowIso } from '../lib/ids';
 /** base64 characters per chunk (~36 KB of binary, comfortably inside D1's statement cap). */
 export const BLOB_CHUNK_CHARS = 48_000;
 
-export type BlobTable = 'asset_blobs' | 'speaking_recording_blobs';
+export type BlobTable = 'asset_blobs' | 'speaking_recording_blobs' | 'profile_avatars';
+
+export type BlobOwnerColumn = 'asset_id' | 'response_id' | 'user_id';
 
 export async function putBlob(
   env: Env,
   table: BlobTable,
-  ownerColumn: 'asset_id' | 'response_id',
+  ownerColumn: BlobOwnerColumn,
   ownerId: string,
   base64: string,
   options: { mime?: string; bytes?: number } = {},
@@ -51,7 +53,7 @@ export async function putBlob(
 export async function getBlob(
   env: Env,
   table: BlobTable,
-  ownerColumn: 'asset_id' | 'response_id',
+  ownerColumn: BlobOwnerColumn,
   ownerId: string,
 ): Promise<{ base64: string; mime: string; bytes: number } | null> {
   const rows = await env.DB.prepare(
@@ -74,7 +76,7 @@ export async function getBlob(
 export async function deleteBlob(
   env: Env,
   table: BlobTable,
-  ownerColumn: 'asset_id' | 'response_id',
+  ownerColumn: BlobOwnerColumn,
   ownerId: string,
 ): Promise<void> {
   await env.DB.prepare(`DELETE FROM ${table} WHERE ${ownerColumn} = ?`).bind(ownerId).run();

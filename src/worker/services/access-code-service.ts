@@ -95,7 +95,7 @@ export async function verifyAndUnlock(
   testId: string,
   code: string | null | undefined,
 ): Promise<void> {
-  if (user.role !== 'STUDENT') return;
+  if (user.role !== 'STUDENT' && user.role !== 'MENTOR') return;
   const stored = await loadTestCode(env, testId);
   if (!stored?.access_code_hash) return;
   if (await isTestUnlocked(env, user.id, testId)) return;

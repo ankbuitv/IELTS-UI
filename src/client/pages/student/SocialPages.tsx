@@ -4,8 +4,8 @@ import { AVATARS, NAME_EFFECTS, PROFILE_EFFECTS, type FriendOverview, type Frien
 import type { NameEffect, ProfileEffect } from '@shared/gamification';
 import { PlayerAvatar, badgeName, playerNameClass } from '../../components/learn/PlayerAvatar';
 import { Icon } from '../../components/Icon';
-import { Button, Loading, Notice, useToast } from '../../components/ui';
-import { describeError } from '../../lib/api';
+import { Button, Field, Loading, Notice, TextArea, TextInput, useToast } from '../../components/ui';
+import { api, describeError } from '../../lib/api';
 import { learnApi } from '../../lib/learn-api';
 import type { ShopState } from '@shared/shop';
 
@@ -209,8 +209,24 @@ export function PublicPlayerProfilePage() {
           <PlayerAvatar avatarId={profile.avatarId} name={profile.displayName} size={100} effect={profile.profileEffect} />
           <div>
             <p className="eyebrow">{profile.role === 'ADMIN' ? 'Administrator' : 'Learner'} profile</p>
-            <h1 className={playerNameClass(profile.nameEffect)}><i className={`presence-dot${profile.online ? ' is-online' : ''}`} />{profile.displayName}</h1>
+            <h1 className={playerNameClass(profile.nameEffect)}>
+              <i className={`presence-dot${profile.online ? ' is-online' : ''}`} />
+              {profile.displayName}
+              <span className="band-tag" title="Estimated overall band">{profile.bestBand !== null ? `Band ${profile.bestBand.toFixed(1)}` : 'Unmarked'}</span>
+              {profile.role === 'ADMIN' ? <span className="band-tag band-tag--role">Admin</span> : null}
+            </h1>
             <p className="player-profile-hero__meta">Level {profile.level} · {profile.xp.toLocaleString()} XP · {profile.streak} day streak{profile.online ? ' · Online now' : ' · Offline'}</p>
+            {profile.bio ? <p className="player-profile-hero__bio">{profile.bio}</p> : null}
+            {profile.links.length > 0 ? (
+              <div className="player-profile-hero__links">
+                {profile.links.map((link) => (
+                  <a key={link.url} href={link.url} target="_blank" rel="noreferrer noopener" className="profile-link-chip">
+                    <Icon name="external" size={12} />
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
         <div className="player-profile-hero__actions">
@@ -253,6 +269,14 @@ export function PublicPlayerProfilePage() {
         </section>
       ) : null}
 
+      {self ? (
+        <ProfileBioEditor
+          initialBio={profile.bio}
+          initialLinks={profile.links}
+          onSaved={(bio, links) => setProfile({ ...profile, bio, links })}
+        />
+      ) : null}
+
       <section className="player-profile-stats">
         <div className="card"><Icon name="bolt" size={20} /><b>{profile.stats.xp.toLocaleString()}</b><span>Total XP</span></div>
         <div className="card"><Icon name="book" size={20} /><b>{profile.stats.lessons}</b><span>Lessons completed</span></div>
@@ -273,5 +297,97 @@ export function PublicPlayerProfilePage() {
         </div>
       </section>
     </main>
+  );
+}
+
+
+/** "Introduce yourself" — bio and personal links on the public profile. */
+function ProfileBioEditor({
+  initialBio,
+  initialLinks,
+  onSaved,
+}: {
+  initialBio: string;
+  initialLinks: Array<{ label: string; url: string }>;
+  onSaved: (bio: string, links: Array<{ label: string; url: string }>) => void;
+}) {
+  const toast = useToast();
+  const [bio, setBio] = useState(initialBio);
+  const [links, setLinks] = useState<Array<{ label: string; url: string }>>(
+    initialLinks.length > 0 ? [...initialLinks] : [{ label: '', url: '' }],
+  );
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    const cleanLinks = links
+      .map((link) => ({ label: link.label.trim(), url: link.url.trim() }))
+      .filter((link) => link.label && link.url)
+      .slice(0, 5);
+    setBusy(true);
+    try {
+      await api.patch('/api/auth/profile', { bio: bio.trim(), links: cleanLinks });
+      onSaved(bio.trim(), cleanLinks);
+      toast.push('Profile details saved.', 'success');
+    } catch (cause) {
+      toast.push(describeError(cause), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="card">
+      <header>
+        <h2>Introduce yourself</h2>
+        <p className="muted small">A short description and the links you want people to see — on your profile and beside your name.</p>
+      </header>
+      <div className="stack">
+        <Field label="Description" hint="Up to 600 characters. Shown on your public profile.">
+          {(id) => (
+            <TextArea id={id} rows={3} value={bio} maxLength={600} onChange={(event) => setBio(event.target.value)} placeholder="e.g. Year 12 · aiming for Band 7.5 · love reading & science" />
+          )}
+        </Field>
+        <Field label="Links" hint="Up to five — YouTube channel, Facebook, portfolio…">
+          {() => (
+            <div className="stack" style={{ gap: 8 }}>
+              {links.map((link, index) => (
+                <div key={index} className="row gap-8">
+                  <div style={{ width: 150 }}>
+                    <TextInput
+                      value={link.label}
+                      placeholder="Label (e.g. YouTube)"
+                      onChange={(event) => setLinks(links.map((item, i) => (i === index ? { ...item, label: event.target.value } : item)))}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <TextInput
+                      value={link.url}
+                      placeholder="https://…"
+                      onChange={(event) => setLinks(links.map((item, i) => (i === index ? { ...item, url: event.target.value } : item)))}
+                    />
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => setLinks(links.filter((_, i) => i !== index))} aria-label="Remove link">
+                    <Icon name="trash" size={13} />
+                  </Button>
+                </div>
+              ))}
+              {links.length < 5 ? (
+                <div>
+                  <Button size="sm" variant="ghost" onClick={() => setLinks([...links, { label: '', url: '' }])}>
+                    <Icon name="plus" size={13} />
+                    Add link
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </Field>
+        <div>
+          <Button variant="primary" loading={busy} onClick={() => void save()}>
+            Save profile details
+          </Button>
+        </div>
+      </div>
+    </section>
   );
 }

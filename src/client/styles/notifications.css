@@ -1,0 +1,184 @@
+/* ==========================================================================
+   Notification centre — header bell, popover and the full /notifications page.
+   Deliberately quiet: paper surfaces, one violet accent for unread, no shadows
+   beyond the popover lift.
+   ========================================================================== */
+
+.notif { position: relative; display: flex; align-items: center; }
+
+.notif__trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  border: 1px solid var(--ink-100);
+  background: var(--paper);
+  color: var(--ink-700);
+  cursor: pointer;
+  transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+.notif__trigger:hover,
+.notif__trigger.is-open { background: var(--ink-50, #f6f4fb); border-color: var(--ink-200); color: var(--ink-900); }
+
+.notif__badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #6d5bd0;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 17px;
+  text-align: center;
+  border: 2px solid var(--paper);
+  box-sizing: content-box;
+}
+
+.notif__panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(400px, calc(100vw - 28px));
+  max-height: min(560px, calc(100vh - 120px));
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border: 1px solid var(--ink-100);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(30, 25, 60, 0.16);
+  overflow: hidden;
+  z-index: 70;
+  animation: notif-in 140ms ease-out;
+}
+@keyframes notif-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.notif__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--ink-100);
+}
+.notif__head strong { font-size: 0.94rem; color: var(--ink-950); }
+.notif__link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #5b4bdb;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.notif__link:hover { text-decoration: underline; }
+
+.notif__empty { margin: 0; padding: 22px 18px; color: var(--ink-500); font-size: 0.86rem; line-height: 1.55; }
+
+.notif__list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
+.notif__item {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 10px 10px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: background var(--speed) var(--ease);
+}
+.notif__item:hover { background: var(--ink-50, #f7f5fc); }
+.notif__item.is-unread { background: #f7f4ff; }
+.notif__item.is-unread:hover { background: #f1ecff; }
+
+.notif__icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--paper);
+  border: 1px solid var(--ink-100);
+  color: #5b4bdb;
+  margin-top: 1px;
+}
+
+.notif__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.notif__text strong { font-size: 0.84rem; font-weight: 700; color: var(--ink-900); line-height: 1.35; }
+.notif__text span { font-size: 0.78rem; color: var(--ink-600); line-height: 1.45; }
+.notif__text em { font-style: normal; font-size: 0.68rem; color: var(--ink-400); margin-top: 2px; }
+
+.notif__all {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 11px;
+  border-top: 1px solid var(--ink-100);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink-800);
+}
+.notif__all:hover { background: var(--ink-50, #f7f5fc); text-decoration: none; }
+
+/* ------------------------------------------------------------ full page */
+
+.notif-page { list-style: none; margin: 0; padding: 0; }
+.notif-page li { border-bottom: 1px solid var(--ink-100); }
+.notif-page li:last-child { border-bottom: 0; }
+.notif-page li.is-unread { background: #faf8ff; }
+.notif-page__item {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 15px 18px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.notif-page__item:hover { background: var(--ink-50, #f7f5fc); }
+.notif__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #6d5bd0; margin-top: 12px; }
+
+@media (max-width: 640px) {
+  .notif__trigger { width: 34px; height: 34px; border-radius: 10px; }
+  .notif__panel { position: fixed; top: 62px; right: 12px; left: 12px; width: auto; max-height: calc(100vh - 150px); }
+  .notif-page__item { padding: 13px 14px; }
+}
+
+
+/* 2FA backup codes shown once after turning two-factor on */
+.backup-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 7px;
+  margin: 12px 0;
+}
+.backup-codes code {
+  padding: 8px 10px;
+  border: 1px dashed var(--ink-200, #ddd8ea);
+  border-radius: 8px;
+  background: var(--ink-50, #f8f6fc);
+  font-size: 0.84rem;
+  letter-spacing: 0.06em;
+  text-align: center;
+  color: var(--ink-900);
+}

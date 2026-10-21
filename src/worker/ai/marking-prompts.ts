@@ -16,6 +16,7 @@
  * provider key off it); models simply read it as a heading.
  */
 import { SPEAKING_CRITERIA, WRITING_CRITERIA } from '../../shared/ai-rubric';
+import type { ChatMessage } from './providers';
 
 /** Bump when the brief changes, so stored scores can be traced to the brief that produced them. */
 export const MARKING_PROMPT_VERSION = 'aieo-marking-2026.10';
@@ -119,9 +120,11 @@ export interface WritingPromptInput {
   minimumWords: number;
   /** The candidate's recent overall estimate. Used ONLY to pitch vocabulary, never the band. */
   levelHint?: number | null;
+  /** The task's chart/map/diagram as a data URL, when the paper carries one. */
+  imageDataUrl?: string | null;
 }
 
-export function buildWritingMessages(input: WritingPromptInput): Array<{ role: 'system' | 'user'; content: string }> {
+export function buildWritingMessages(input: WritingPromptInput): ChatMessage[] {
   const system = [
     `TASK_KIND: WRITING_MARK  (brief ${MARKING_PROMPT_VERSION})`,
     PRINCIPLES,
@@ -146,10 +149,22 @@ ${input.responseText.slice(0, 12_000)}
 
 Mark it now and return the JSON object only.`;
 
-  return [
-    { role: 'system', content: system },
-    { role: 'user', content: user },
-  ];
+  const messages: ChatMessage[] = [{ role: 'system', content: system }];
+  if (input.imageDataUrl) {
+    messages.push({
+      role: 'user',
+      content: [
+        {
+          type: 'text',
+          text: `${user}\n\nThe task image (the chart, table, map or diagram the candidate was asked to describe) is attached. Judge TASK_ACHIEVEMENT against what the image actually shows: correct figures, the right key features and a truthful overview.`,
+        },
+        { type: 'image_url', image_url: { url: input.imageDataUrl } },
+      ],
+    });
+  } else {
+    messages.push({ role: 'user', content: user });
+  }
+  return messages;
 }
 
 const SPEAKING_DESCRIPTORS = `BAND DESCRIPTOR SUMMARIES FOR SPEAKING (judge from the TRANSCRIPT only)

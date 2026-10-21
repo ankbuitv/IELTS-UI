@@ -43,7 +43,23 @@ export interface Env {
   OLLAMA_MODEL?: string;
   /** Model behind Judge02 (a second opinion through the same Ollama endpoint and keys). */
   OLLAMA_MODEL_2?: string;
+  /** Vision model for marking tasks that come with an image (default gemma4:31b). */
+  OLLAMA_VISION_MODEL?: string;
   OLLAMA_BASE_URL?: string;
+  /** Resend API key — when absent, email stays in the outbox (status QUEUED). */
+  RESEND_API_KEY?: string;
+  /** From address, e.g. `AI Eo <no-reply@ielts.example.com>`. Required to send. */
+  EMAIL_FROM?: string;
+  /** Optional Reply-To for transactional mail. */
+  EMAIL_REPLY_TO?: string;
+  /** Stripe secret key. When absent, card checkout reports itself unavailable. */
+  STRIPE_SECRET_KEY?: string;
+  /** Stripe endpoint secret for `/api/billing/stripe/webhook` signature checks. */
+  STRIPE_WEBHOOK_SECRET?: string;
+  /** Manual bank-transfer details shown on a pending order (VNPay/MoMo style). */
+  BILLING_BANK_NAME?: string;
+  BILLING_BANK_ACCOUNT?: string;
+  BILLING_BANK_HOLDER?: string;
 }
 
 export interface ImportQueueMessage {

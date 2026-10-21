@@ -363,8 +363,8 @@
 .arena {
   position: relative; overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 22px; align-items: center;
   padding: 22px 26px; border-radius: var(--radius-xl); color: #fff;
-  background: linear-gradient(135deg, #0f4c3a 0%, #14805c 45%, #1f9d63 100%);
-  box-shadow: 0 6px 0 #0a3a2c;
+  background: linear-gradient(128deg, #42279f 0%, #6845f0 48%, #8a68ff 100%);
+  box-shadow: 0 10px 34px -12px rgba(104, 69, 240, 0.6);
 }
 .arena::after {
   content: ''; position: absolute; right: -60px; top: -80px; width: 320px; height: 320px; border-radius: 50%;
@@ -557,7 +557,7 @@
 
 /* ------------------------------------------------------------------- shop */
 .shop { display: flex; flex-direction: column; gap: 20px; }
-.shop__hero { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 20px; align-items: center; padding: 22px 26px; border-radius: var(--radius-xl); background: linear-gradient(135deg, #1b2a44, #243d63); color: #fff; box-shadow: 0 6px 0 #16233a; }
+.shop__hero { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 20px; align-items: center; padding: 22px 26px; border-radius: var(--radius-xl); background: linear-gradient(135deg, #2c2552, #4a3a8f); color: #fff; box-shadow: 0 10px 30px -12px rgba(60, 40, 140, 0.55); }
 .shop__kicker { margin: 0 0 4px; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sun-300); }
 .shop__hero h1 { margin: 0 0 8px; font-size: clamp(1.4rem, 2.6vw, 1.9rem); color: #fff; letter-spacing: -0.02em; }
 .shop__hero p { margin: 0; color: rgba(255, 255, 255, 0.88); max-width: 62ch; }
@@ -607,7 +607,7 @@
 
 /* ----------------------------------------------------------- leaderboards */
 .board { display: flex; flex-direction: column; gap: 18px; }
-.board__hero { display: flex; align-items: center; gap: 18px; padding: 20px 24px; border-radius: var(--radius-xl); background: linear-gradient(135deg, #3a1d6e, #5a35b8 60%, #7a4fe0); color: #fff; box-shadow: 0 6px 0 #2c1553; }
+.board__hero { display: flex; align-items: center; gap: 18px; padding: 20px 24px; border-radius: var(--radius-xl); background: linear-gradient(135deg, #42279f, #6845f0 60%, #8a68ff); color: #fff; box-shadow: 0 10px 30px -12px rgba(104, 69, 240, 0.55); }
 .board__kicker { margin: 0 0 4px; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #ffd75e; }
 .board__hero h1 { margin: 0 0 4px; font-size: clamp(1.35rem, 2.4vw, 1.8rem); color: #fff; letter-spacing: -0.02em; }
 .board__hero .muted { color: rgba(255, 255, 255, 0.86); margin: 0; }
@@ -756,7 +756,7 @@
 
 /* ------------------------------------------------------- everyday lessons */
 .everyday-page, .social-page { display: flex; flex-direction: column; gap: 18px; max-width: 1050px; margin: 0 auto; }
-.everyday-hero { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 20px; align-items: center; padding: 22px 28px; background: linear-gradient(135deg, #123c4d, #167b80 58%, #39a38a); color: #fff; border: 0; box-shadow: 0 6px 0 #0e5b62; }
+.everyday-hero { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 20px; align-items: center; padding: 22px 28px; background: linear-gradient(135deg, #0b6b66, #12a394 58%, #2ed3b7); color: #fff; border: 0; box-shadow: 0 10px 30px -12px rgba(16, 163, 148, 0.55); }
 .everyday-hero__mascot { display: grid; place-items: center; }
 .everyday-hero__copy h1 { margin: 2px 0 6px; color: #fff; font-size: clamp(1.7rem, 4vw, 2.35rem); letter-spacing: -.03em; }
 .everyday-hero__copy > p:not(.eyebrow) { max-width: 68ch; margin: 0; color: rgba(255,255,255,.9); line-height: 1.55; }
@@ -815,9 +815,9 @@
 .social-panel h2, .profile-customise h2, .achievement-panel h2 { margin: 0; font-size: 1.1rem; color: var(--ink-950); }
 .social-panel > p { margin: 0; }
 .player-profile-page { max-width: 940px; }
-.player-profile-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; padding: 24px 28px; border-radius: var(--radius-xl); background: linear-gradient(135deg, #1b2a44, #273f64); color: #fff; box-shadow: 0 6px 0 #16233a; }
-.player-profile-hero--glow { background: radial-gradient(circle at 15% 42%, rgba(79, 185, 250, .52), transparent 30%), linear-gradient(135deg, #1b2a44, #273f64); }
-.player-profile-hero--sparkle { background: radial-gradient(circle at 15% 42%, rgba(255, 215, 94, .4), transparent 30%), linear-gradient(135deg, #302044, #4c3670); }
+.player-profile-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; padding: 24px 28px; border-radius: var(--radius-xl); background: linear-gradient(135deg, #2c2552, #453a86); color: #fff; box-shadow: 0 10px 30px -12px rgba(60, 40, 140, 0.55); }
+.player-profile-hero--glow { background: radial-gradient(circle at 15% 42%, rgba(145, 115, 255, .52), transparent 30%), linear-gradient(135deg, #2c2552, #453a86); }
+.player-profile-hero--sparkle { background: radial-gradient(circle at 15% 42%, rgba(255, 210, 62, .4), transparent 30%), linear-gradient(135deg, #3a2b78, #5b3ce8); }
 .player-profile-hero__back { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: 5px; width: fit-content; color: rgba(255,255,255,.8); font-size: .82rem; font-weight: 700; text-decoration: none; }
 .player-profile-hero__identity { display: flex; align-items: center; gap: 18px; min-width: 0; }
 .player-profile-hero__identity h1 { display: flex; align-items: center; gap: 6px; margin: 2px 0 4px; color: #fff; font-size: clamp(1.55rem, 4vw, 2.15rem); overflow-wrap: anywhere; }

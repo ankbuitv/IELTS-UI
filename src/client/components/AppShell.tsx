@@ -9,15 +9,19 @@ import { DisplayMenu } from './DisplayMenu';
 import { Icon, type IconName } from './Icon';
 import { SiteFooter } from './SiteFooter';
 import { Button, Loading } from './ui';
-import { initials } from '../lib/format';
+import { UserAvatar } from './UserAvatar';
+import { SearchPalette } from './SearchPalette';
+import { NotificationBell } from './NotificationBell';
 
 /**
  * Application shell.
  *
- * A white top bar with the logo and pill-style links (desktop) or a bottom tab bar (below
- * 960px), and one "More" panel that is a dropdown on a wide screen and a bottom sheet on a
- * phone. The navy footer carries the brand, the links and the standing disclaimer, so there is
- * no banner on every page.
+ * Signed in, the desktop gets a soft lavender sidebar — the control centre of
+ * the app (learning, coaching, rewards, admin) — with the wallet chips and the
+ * account card anchored at the bottom, exactly like the playful learning apps
+ * this design language borrows from. The slim top bar carries the search, the
+ * display menu, "Start a test" and the avatar. Phones keep the bottom tab bar
+ * and the one "More" sheet. Public pages use the marketing top nav instead.
  */
 interface NavItem {
   to: string;
@@ -25,34 +29,81 @@ interface NavItem {
   icon: IconName;
 }
 
-/** Main places for a signed-in candidate, in the order they are used. */
-const MAIN_NAV: NavItem[] = [
-  { to: '/dashboard', label: 'Home', icon: 'home' },
-  { to: '/learn', label: 'Learn', icon: 'target' },
-  { to: '/practice', label: 'Practice', icon: 'book' },
-  { to: '/history', label: 'Results', icon: 'award' },
-  { to: '/vocabulary', label: 'Vocabulary', icon: 'layers' },
-  { to: '/dictionary', label: 'Dictionary', icon: 'search' },
-];
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
 
-/** Everything else lives behind "More". */
-const MORE_NAV: NavItem[] = [
-  { to: '/learn/shop', label: 'Shop', icon: 'cart' },
-  { to: '/learn/leaderboard', label: 'Leaderboards', icon: 'trophy' },
-  { to: '/learn/friends', label: 'Friends', icon: 'users' },
-  { to: '/learn/plan', label: 'Study plan', icon: 'calendar' },
-  { to: '/speaking', label: 'Speaking', icon: 'mic' },
-  { to: '/analytics', label: 'My progress', icon: 'chart' },
-  { to: '/classrooms', label: 'Classrooms', icon: 'users' },
-  { to: '/profile', label: 'Profile', icon: 'user' },
-];
+/** Main places for a signed-in candidate, in the order they are used. */
+const LEARN_GROUP: NavGroup = {
+  label: 'Learn',
+  items: [
+    { to: '/dashboard', label: 'Home', icon: 'home' },
+    { to: '/learn', label: 'Learning path', icon: 'target' },
+    { to: '/practice', label: 'Practice', icon: 'book' },
+    { to: '/drills', label: 'Type drills', icon: 'target' },
+    { to: '/lab/dictation', label: 'Dictation lab', icon: 'headphones' },
+    { to: '/lab/pronunciation', label: 'Pronunciation', icon: 'volume' },
+    { to: '/history', label: 'Results', icon: 'award' },
+    { to: '/vocabulary', label: 'Vocabulary', icon: 'layers' },
+    { to: '/tutor', label: 'AI Tutor', icon: 'sparkle' },
+    { to: '/dictionary', label: 'Dictionary', icon: 'search' },
+  ],
+};
+
+/** The mentor world: book a coach, upcoming calls, live classes. */
+const COACHING_GROUP: NavGroup = {
+  label: 'Coaching',
+  items: [
+    { to: '/mentors', label: 'Find a mentor', icon: 'graduation' },
+    { to: '/my-sessions', label: 'My sessions', icon: 'video' },
+    { to: '/classes', label: 'Live classes', icon: 'users' },
+  ],
+};
+
+const GROW_GROUP: NavGroup = {
+  label: 'Grow',
+  items: [
+    { to: '/calendar', label: 'Calendar', icon: 'calendar' },
+    { to: '/speaking', label: 'Speaking', icon: 'mic' },
+    { to: '/speaking/partner', label: 'Speaking partner', icon: 'sparkle' },
+    { to: '/analytics', label: 'My progress', icon: 'chart' },
+    { to: '/learn/plan', label: 'Study plan', icon: 'calendar' },
+    { to: '/classrooms', label: 'Classrooms', icon: 'presentation' },
+  ],
+};
+
+const REWARDS_GROUP: NavGroup = {
+  label: 'Rewards',
+  items: [
+    { to: '/learn/shop', label: 'Shop', icon: 'cart' },
+    { to: '/learn/leaderboard', label: 'Leaderboard', icon: 'trophy' },
+    { to: '/season', label: 'Season pass', icon: 'crown' },
+    { to: '/study-groups', label: 'Study groups', icon: 'users' },
+    { to: '/study-room', label: 'Study room', icon: 'clock' },
+    { to: '/learn/friends', label: 'Friends', icon: 'heart' },
+    { to: '/pricing', label: 'Plans & Pro', icon: 'coin' },
+    { to: '/profile', label: 'Profile', icon: 'user' },
+  ],
+};
+
+const MENTOR_GROUP: NavGroup = {
+  label: 'Mentor',
+  items: [
+    { to: '/mentor', label: 'Console', icon: 'presentation' },
+    { to: '/my-sessions', label: 'Sessions', icon: 'video' },
+    { to: '/classes', label: 'My classes', icon: 'users' },
+    { to: '/mentors', label: 'Directory', icon: 'graduation' },
+    { to: '/training', label: 'Training', icon: 'bulb' },
+  ],
+};
 
 /** The four phone tabs for a candidate; the fifth opens the More sheet. */
 const TAB_NAV: NavItem[] = [
   { to: '/dashboard', label: 'Home', icon: 'home' },
   { to: '/learn', label: 'Learn', icon: 'target' },
+  { to: '/mentors', label: 'Mentors', icon: 'graduation' },
   { to: '/practice', label: 'Practice', icon: 'book' },
-  { to: '/vocabulary', label: 'Words', icon: 'layers' },
 ];
 
 /** Sections of the landing page; from any other public page these navigate to "/" and scroll. */
@@ -63,25 +114,85 @@ const PUBLIC_NAV = [
   { hash: '#teachers', label: 'For teachers' },
 ];
 
-const STAFF_ADMIN: NavItem = { to: '/admin', label: 'Admin', icon: 'shield' };
-const STAFF_TEACHING: NavItem = { to: '/teacher', label: 'Teaching', icon: 'presentation' };
-const STAFF_MARKING: NavItem = { to: '/teacher/marking', label: 'Marking', icon: 'pen' };
-
 /**
- * What each role sees in the bar. Candidates get the six places they use; teachers and
- * administrators get their own console first (it is what they came for) with Practice and
- * Learn beside it, and everything else sits behind "More" so no bar ever overflows.
+ * What each role sees in the sidebar. Candidates get the full playground;
+ * mentors get their console first; teachers and administrators lead with the
+ * console they came for and keep coaching beside it.
  */
-function navFor(role: string | undefined): { top: NavItem[]; tabs: NavItem[]; home: string } {
-  const practice = MAIN_NAV[2]!;
-  const learn = MAIN_NAV[1]!;
+function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]; home: string } {
   if (role === 'ADMIN') {
-    return { top: [STAFF_ADMIN, STAFF_TEACHING, STAFF_MARKING, practice, learn], tabs: [STAFF_ADMIN, STAFF_TEACHING, STAFF_MARKING, practice], home: '/admin' };
+    return {
+      groups: [
+        {
+          label: 'Manage',
+          items: [
+            { to: '/admin', label: 'Admin console', icon: 'shield' },
+            { to: '/teacher', label: 'Teaching', icon: 'presentation' },
+            { to: '/teacher/marking', label: 'Marking queue', icon: 'pen' },
+            { to: '/training', label: 'Training', icon: 'bulb' },
+          ],
+        },
+        LEARN_GROUP,
+        COACHING_GROUP,
+        GROW_GROUP,
+        REWARDS_GROUP,
+      ],
+      tabs: [
+        { to: '/admin', label: 'Admin', icon: 'shield' },
+        { to: '/teacher', label: 'Teaching', icon: 'presentation' },
+        { to: '/learn', label: 'Learn', icon: 'target' },
+        { to: '/practice', label: 'Practice', icon: 'book' },
+      ],
+      home: '/admin',
+    };
   }
   if (role === 'TEACHER') {
-    return { top: [STAFF_TEACHING, STAFF_MARKING, practice, learn], tabs: [STAFF_TEACHING, STAFF_MARKING, practice, learn], home: '/teacher' };
+    return {
+      groups: [
+        {
+          label: 'Teaching',
+          items: [
+            { to: '/teacher', label: 'Teaching console', icon: 'presentation' },
+            { to: '/teacher/marking', label: 'Marking queue', icon: 'pen' },
+            { to: '/training', label: 'Training', icon: 'bulb' },
+            { to: '/practice', label: 'Practice', icon: 'book' },
+            { to: '/learn', label: 'Learning path', icon: 'target' },
+          ],
+        },
+        COACHING_GROUP,
+        GROW_GROUP,
+        REWARDS_GROUP,
+      ],
+      tabs: [
+        { to: '/teacher', label: 'Teaching', icon: 'presentation' },
+        { to: '/teacher/marking', label: 'Marking', icon: 'pen' },
+        { to: '/learn', label: 'Learn', icon: 'target' },
+        { to: '/practice', label: 'Practice', icon: 'book' },
+      ],
+      home: '/teacher',
+    };
   }
-  return { top: MAIN_NAV, tabs: TAB_NAV, home: '/dashboard' };
+  if (role === 'MENTOR') {
+    return {
+      groups: [
+        MENTOR_GROUP,
+        LEARN_GROUP,
+        GROW_GROUP,
+      ],
+      tabs: [
+        { to: '/mentor', label: 'Console', icon: 'presentation' },
+        { to: '/my-sessions', label: 'Sessions', icon: 'video' },
+        { to: '/classes', label: 'Classes', icon: 'users' },
+        { to: '/practice', label: 'Practice', icon: 'book' },
+      ],
+      home: '/mentor',
+    };
+  }
+  return {
+    groups: [LEARN_GROUP, COACHING_GROUP, GROW_GROUP, REWARDS_GROUP],
+    tabs: TAB_NAV,
+    home: '/dashboard',
+  };
 }
 
 const samePlace = (pathname: string, item: NavItem) => pathname === item.to || pathname.startsWith(`${item.to}/`);
@@ -90,16 +201,20 @@ export function AppShell() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchOpen, setSearchOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [panelOrigin, setPanelOrigin] = useState<'sidebar' | 'topbar' | 'tabbar' | 'more'>('topbar');
   const [coins, setCoins] = useState<number | null>(null);
+  const [streak, setStreak] = useState<number | null>(null);
+  const [xp, setXp] = useState<number | null>(null);
   const [boosted, setBoosted] = useState(false);
   const heartbeatUserId = user?.id;
 
-  // The coin balance belongs to the whole shell, not to the shop page: it is the
-  // thing that makes "spend it or lose the habit" visible while the learner is
-  // on the path. Refreshed on every navigation, which is where a lesson or a
-  // purchase can have changed it. A failure is silent on purpose — the chip is
-  // a shortcut, and the shop page itself explains what went wrong.
+  // The wallet chips live in the whole shell, not just the shop: they are what
+  // makes "spend it or lose the habit" visible while the learner is on the
+  // path. Refreshed on every navigation, which is where a lesson or a purchase
+  // can have changed them. A failure is silent on purpose — the chips are a
+  // shortcut, and the shop page itself explains what went wrong.
   useEffect(() => {
     if (user?.role !== 'STUDENT') return;
     let alive = true;
@@ -108,6 +223,8 @@ export function AppShell() {
       .then((data) => {
         if (!alive) return;
         setCoins(data.profile.coins);
+        setStreak(data.profile.streak ?? 0);
+        setXp(data.profile.xp ?? 0);
         setBoosted(boostState(data.profile.xpBoostUntil)?.active === true);
       })
       .catch(() => undefined);
@@ -161,10 +278,10 @@ export function AppShell() {
   }
 
   const nav = navFor(user?.role);
-  // Behind "More": every candidate place that is not already in the top bar. The phone sheet
-  // also lists what the top bar has but the four phone tabs do not.
-  const overflowNav = [...MAIN_NAV, ...MORE_NAV].filter((item) => !nav.top.some((top) => top.to === item.to));
-  const phoneOnlyNav = nav.top.filter((item) => !nav.tabs.some((tab) => tab.to === item.to));
+  // Behind "More": every place that is not one of the four phone tabs. The phone
+  // sheet also lists what the sidebar has but the tabs do not.
+  const allItems = nav.groups.flatMap((group) => group.items);
+  const overflowNav = allItems.filter((item) => !nav.tabs.some((tab) => tab.to === item.to));
 
   const signOut = async () => {
     await logout();
@@ -173,109 +290,206 @@ export function AppShell() {
   };
 
   const bleed = !user && location.pathname === '/';
-  const moreActive = overflowNav.some((item) => samePlace(location.pathname, item));
-  const inTopNav = nav.top.some((item) => samePlace(location.pathname, item));
   const inTabs = nav.tabs.some((item) => samePlace(location.pathname, item));
+  const moreActive = overflowNav.some((item) => samePlace(location.pathname, item));
 
   return (
-    <div className="site">
-      <header className="site-header">
-        <div className="site-header__inner">
-          <NavLink to={user ? nav.home : '/'} className="site-brand" aria-label="Ai eo home">
-            <BrandLogo theme="auto" height={32} />
+    <div className={`site${user ? ' site--app' : ''}`}>
+      {user ? (
+        <aside className="app-sidebar">
+          <NavLink to={nav.home} className="app-sidebar__brand" aria-label="Ai eo home">
+            <BrandLogo theme="light" height={30} />
           </NavLink>
 
-          {user ? (
-            <nav className="site-nav" aria-label="Main">
-              {nav.top.map((item) => (
-                <NavLink key={item.to} to={item.to} end={item.to === '/teacher'} className={({ isActive }) => (isActive ? 'active' : undefined)}>
-                  {item.label}
-                </NavLink>
-              ))}
-              <button
-                type="button"
-                className={`site-nav__more${moreActive && !inTopNav ? ' active' : ''}`}
-                aria-expanded={panelOpen}
-                aria-haspopup="menu"
-                onClick={() => setPanelOpen((open) => !open)}
-              >
-                More
-                <Icon name="chevronDown" size={13} />
-              </button>
-            </nav>
-          ) : (
-            <nav className="site-nav site-nav--public" aria-label="Site">
-              {PUBLIC_NAV.map((item) => (
-                <Link key={item.hash} to={{ pathname: '/', hash: item.hash }}>
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-          )}
+          <Button
+            variant="primary"
+            className="app-sidebar__cta"
+            onClick={() => navigate('/practice')}
+          >
+            <Icon name="play" size={13} />
+            Start a test
+          </Button>
 
-          <div className="site-actions">
-            {user ? (
-              <>
-                {user.role === 'STUDENT' && coins !== null ? (
+          <nav className="app-sidebar__nav" aria-label="Main">
+            {nav.groups.map((group) => (
+              <div key={group.label} className="app-sidebar__group">
+                <span className="app-sidebar__label">{group.label}</span>
+                {group.items.map((item) => (
                   <NavLink
-                    to="/learn/shop"
-                    className="coin-chip"
-                    title={boosted ? 'Coins — double XP is running' : 'Coins — spend them in the shop'}
-                    aria-label={`${coins} coins, open the shop`}
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === '/teacher' || item.to === '/admin' || item.to === '/mentor'}
+                    className={({ isActive }) => `app-nav-item${isActive ? ' active' : ''}`}
                   >
-                    <Icon name="coin" size={15} />
-                    <b>{coins.toLocaleString('en')}</b>
-                    {boosted ? <em>×2</em> : null}
+                    <Icon name={item.icon} size={18} />
+                    {item.label}
                   </NavLink>
-                ) : null}
-                <DisplayMenu compact label="Display" />
-                <NavLink to="/practice" className="btn btn--sm btn--primary site-cta">
-                  <Icon name="play" size={12} />
-                  <span>Start a test</span>
+                ))}
+              </div>
+            ))}
+          </nav>
+
+          <div className="app-sidebar__foot">
+            {user.role === 'STUDENT' && coins !== null ? (
+              <div className="app-sidebar__wallet">
+                <NavLink to="/learn/shop" className="wallet-chip" title="Coins — spend them in the shop">
+                  <Icon name="coin" size={14} />
+                  {coins.toLocaleString('en')}
                 </NavLink>
+                <span className="wallet-chip wallet-chip--streak" title="Day streak">
+                  <Icon name="flame" size={14} filled />
+                  {streak ?? 0}
+                </span>
+                <span className="wallet-chip wallet-chip--xp" title="Total XP">
+                  <Icon name="bolt" size={14} />
+                  {xp ?? 0}
+                </span>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="app-sidebar__user"
+              onClick={() => {
+                setPanelOrigin('sidebar');
+                setPanelOpen((open) => !open);
+              }}
+            >
+              <UserAvatar src={user.avatarUrl} userId={user.id} name={user.displayName} size={40} title={user.displayName} />
+              <span className="app-sidebar__user-text">
+                <strong title={user.displayName}>{user.displayName}</strong>
+                <span>{user.role.toLowerCase()}</span>
+              </span>
+              <Icon name="chevronDown" size={15} />
+            </button>
+          </div>
+        </aside>
+      ) : null}
+
+      <div className="app-frame">
+        <header className="site-header">
+          <div className="site-header__inner">
+            <NavLink to={user ? nav.home : '/'} className="site-brand" aria-label="Ai eo home">
+              <BrandLogo theme="auto" height={30} />
+            </NavLink>
+
+            {user ? (
+              <nav className="site-nav" aria-label="Main">
+                {nav.tabs.map((item) => (
+                  <NavLink key={item.to} to={item.to} end={item.to === '/teacher' || item.to === '/admin' || item.to === '/mentor'} className={({ isActive }) => (isActive ? 'active' : undefined)}>
+                    {item.label}
+                  </NavLink>
+                ))}
                 <button
                   type="button"
-                  className="site-avatar"
-                  title={user.displayName}
-                  aria-label="Account menu"
+                  className={`site-nav__more${moreActive && !inTabs ? ' active' : ''}`}
                   aria-expanded={panelOpen}
-                  onClick={() => setPanelOpen((open) => !open)}
+                  aria-haspopup="menu"
+                  onClick={() => {
+                    setPanelOrigin('more');
+                    setPanelOpen((open) => !open);
+                  }}
                 >
-                  {initials(user.displayName)}
+                  More
+                  <Icon name="chevronDown" size={13} />
                 </button>
-              </>
+              </nav>
             ) : (
-              <>
-                <Button size="sm" variant="ghost" onClick={() => navigate('/login')}>
-                  Sign in
-                </Button>
-                <Button size="sm" variant="primary" onClick={() => navigate('/register')}>
-                  Create account
-                </Button>
-              </>
+              <nav className="site-nav site-nav--public" aria-label="Site">
+                {PUBLIC_NAV.map((item) => (
+                  <Link key={item.hash} to={{ pathname: '/', hash: item.hash }}>
+                    {item.label}
+                  </Link>
+                ))}
+              </nav>
             )}
+
+            <div className="site-actions">
+              {user ? (
+                <>
+                  <button type="button" className="site-search" onClick={() => setSearchOpen(true)} aria-label="Search tests, lessons, mentors">
+                    <Icon name="search" size={15} />
+                    Search lessons, words, mentors…
+                  </button>
+                  {user.role === 'STUDENT' && coins !== null ? (
+                    <>
+                      <NavLink
+                        to="/learn/shop"
+                        className="wallet-chip"
+                        title={boosted ? 'Coins — double XP is running' : 'Coins — spend them in the shop'}
+                        aria-label={`${coins} coins, open the shop`}
+                      >
+                        <Icon name="coin" size={14} />
+                        <b>{coins.toLocaleString('en')}</b>
+                        {boosted ? <em>×2</em> : null}
+                      </NavLink>
+                      <span className="wallet-chip wallet-chip--streak" title="Day streak">
+                        <Icon name="flame" size={14} filled />
+                        <b>{streak ?? 0}</b>
+                      </span>
+                    </>
+                  ) : null}
+                  <NotificationBell />
+                  <DisplayMenu compact label="Display" />
+                  <NavLink to="/practice" className="btn btn--sm btn--primary site-cta">
+                    <Icon name="play" size={12} />
+                    <span>Start a test</span>
+                  </NavLink>
+                  <button
+                    type="button"
+                    className="site-avatar-btn"
+                    title={user.displayName}
+                    aria-label="Account menu"
+                    aria-expanded={panelOpen}
+                    onClick={() => {
+                      setPanelOrigin('topbar');
+                      setPanelOpen((open) => !open);
+                    }}
+                  >
+                    <UserAvatar src={user.avatarUrl} userId={user.id} name={user.displayName} size={38} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Button size="sm" variant="ghost" onClick={() => navigate('/login')}>
+                    Sign in
+                  </Button>
+                  <Button size="sm" variant="primary" onClick={() => navigate('/register')}>
+                    Create account
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main className={`site-main${bleed ? ' site-main--bleed' : ''}`}>
-        <Outlet />
-      </main>
+        <main className={`site-main${bleed ? ' site-main--bleed' : ''}`}>
+          <Outlet />
+        </main>
 
+        <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
       <SiteFooter role={user?.role} compact={Boolean(user)} />
+      </div>
 
       {user ? (
         <nav className="site-tabbar" aria-label="Main">
           {nav.tabs.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.to === '/teacher'} className={({ isActive }) => `site-tabbar__item${isActive ? ' active' : ''}`}>
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/teacher' || item.to === '/admin' || item.to === '/mentor'}
+              className={({ isActive }) => `site-tabbar__item${isActive ? ' active' : ''}`}
+            >
               <Icon name={item.icon} size={20} />
               <span>{item.label}</span>
             </NavLink>
           ))}
           <button
             type="button"
-            className={`site-tabbar__item${panelOpen || ((moreActive || inTopNav) && !inTabs) ? ' active' : ''}`}
-            onClick={() => setPanelOpen((open) => !open)}
+            className={`site-tabbar__item${panelOpen || (moreActive && !inTabs) ? ' active' : ''}`}
+            onClick={() => {
+              setPanelOrigin('tabbar');
+              setPanelOpen((open) => !open);
+            }}
             aria-expanded={panelOpen}
           >
             <Icon name="menu" size={20} />
@@ -287,30 +501,24 @@ export function AppShell() {
       {user && panelOpen ? (
         <>
           <div className="more-backdrop" onClick={() => setPanelOpen(false)} />
-          <div className="more-panel" role="menu" aria-label="More">
+          <div className={`more-panel more-panel--${panelOrigin}`} role="menu" aria-label="More">
             <div className="more-panel__who">
-              <span className="site-avatar site-avatar--lg" aria-hidden="true">
-                {initials(user.displayName)}
-              </span>
+              <UserAvatar src={user.avatarUrl} userId={user.id} name={user.displayName} size={44} />
               <span className="more-panel__who-text">
                 <strong title={user.displayName}>{user.displayName}</strong>
                 <span>{user.role.toLowerCase()}</span>
               </span>
             </div>
 
-            {phoneOnlyNav.length > 0 ? (
-              <div className="more-panel__group more-panel__group--phone">
-                {phoneOnlyNav.map((item) => (
-                  <NavLink key={item.to} to={item.to} end={item.to === '/teacher'} className="more-item" role="menuitem">
-                    <Icon name={item.icon} size={17} />
-                    {item.label}
-                  </NavLink>
-                ))}
-              </div>
-            ) : null}
             <div className="more-panel__group">
               {overflowNav.map((item) => (
-                <NavLink key={item.to} to={item.to} className="more-item" role="menuitem">
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/teacher' || item.to === '/admin' || item.to === '/mentor'}
+                  className={({ isActive }) => `more-item${isActive ? ' active' : ''}`}
+                  role="menuitem"
+                >
                   <Icon name={item.icon} size={17} />
                   {item.label}
                 </NavLink>

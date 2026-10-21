@@ -9,6 +9,7 @@ import { AttemptList, newestFirst } from '../../components/AttemptList';
 import { Icon } from '../../components/Icon';
 import { BandEstimatesPanel } from '../../components/BandEstimates';
 import { LearnStrip } from '../../components/learn/LearnStrip';
+import { ActionPlanCard } from '../../components/ActionPlanCard';
 import {
   BAND_DISCLAIMER,
   formatBand,
@@ -54,7 +55,7 @@ export function StudentDashboardPage() {
   const dueSoon = data.upcomingDeadlines.slice(0, 3);
   const activeAssignments = data.assignments.filter((assignment) => assignment.status !== 'SUBMITTED').slice(0, 3);
   const upNext = dueSoon.length > 0 ? dueSoon : activeAssignments;
-  const firstName = user?.displayName.split(' ')[0] ?? '';
+  const firstName = user?.username ?? user?.displayName.split(' ')[0] ?? '';
 
   const trendPoints = data.trends
     .slice(0, 12)
@@ -93,6 +94,32 @@ export function StudentDashboardPage() {
                 }${data.totals.fullMocks > 0 ? ` · ${data.totals.fullMocks} full mock${data.totals.fullMocks === 1 ? '' : 's'}` : ''}`}
           </p>
         </div>
+        <div className="dash-hero__stats" role="list" aria-label="Your statistics">
+          <div className="dash-stat" role="listitem">
+            <span className="dash-stat__value">{data.totals.submitted}</span>
+            <span className="dash-stat__label">Tests done</span>
+          </div>
+          <div className="dash-stat" role="listitem">
+            <span className="dash-stat__value">{data.totals.averageBand !== null ? formatBand(data.totals.averageBand) : '—'}</span>
+            <span className="dash-stat__label">Average band</span>
+          </div>
+          <div className="dash-stat" role="listitem">
+            <span className="dash-stat__value">{formatDuration(data.totals.totalTimeSeconds)}</span>
+            <span className="dash-stat__label">Time practised</span>
+          </div>
+          <div className="dash-stat" role="listitem">
+            <span className="dash-stat__value">{data.totals.streakDays} 🔥</span>
+            <span className="dash-stat__label">Day streak</span>
+          </div>
+          <div className="dash-stat" role="listitem">
+            <span className="dash-stat__value">{data.totals.xpTotal.toLocaleString()}</span>
+            <span className="dash-stat__label">XP</span>
+          </div>
+          <div className="dash-stat" role="listitem">
+            <span className="dash-stat__value">{data.totals.fullMocks}</span>
+            <span className="dash-stat__label">Full mocks</span>
+          </div>
+        </div>
         <div className="dash-hero__actions">
           {running ? (
             <Link className="btn btn--primary" to={`/exam/${running.attemptId}`}>
@@ -111,6 +138,8 @@ export function StudentDashboardPage() {
           </Link>
         </div>
       </section>
+
+      <ActionPlanCard />
 
       <LearnStrip />
 

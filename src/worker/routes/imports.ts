@@ -7,11 +7,14 @@ import { parseBody } from '../lib/validate';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { currentUser } from '../middleware/auth';
 import { enforceRateLimit } from '../lib/rate-limit';
+import type { OcrPage } from '../services/import-service';
 import {
   applyImportDraft,
   convertAiPayload,
   createImport,
+  createOcrImport,
   createTextImport,
+  generateReadingImport,
   loadImportDetail,
   runImportPipelineInline,
 } from '../services/import-service';
@@ -177,6 +180,69 @@ router.post('/', async (c) => {
   });
 
   return c.json(result, 201);
+});
+
+/**
+ * #36 Generate an original Reading test from an administrator's brief.
+ * The result is a normal import in REVIEW: nothing is published automatically,
+ * and every passage/answer still has to be checked by a human.
+ */
+router.post('/generate', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  await enforceRateLimit(
+    c.env,
+    { bucket: `import-generate:${user.id}`, windowSeconds: 3600, limit: 12 },
+    'That is a lot of generated tests in one hour. Review the drafts already created before generating more.',
+  );
+  const body = await parseBody(
+    c,
+    z.object({
+      prompt: z.string().trim().min(20).max(2000),
+      title: z.string().trim().max(160).optional(),
+      band: z.number().min(4).max(9).default(6.5),
+      sections: z.number().int().min(1).max(3).default(1),
+      questionsPerSection: z.number().int().min(5).max(14).default(10),
+    }),
+  );
+  return c.json(await generateReadingImport(c.env, user, body), 201);
+});
+
+/**
+ * #37 OCR import: one request carries every page image; the vision model reads
+ * them and the result enters the normal review pipeline.
+ */
+router.post('/ocr', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  await enforceRateLimit(
+    c.env,
+    { bucket: `import-ocr:${user.id}`, windowSeconds: 3600, limit: 30 },
+    'Too many OCR jobs in the last hour. Check the drafts already created before scanning more.',
+  );
+
+  const form = await c.req.formData().catch(() => null);
+  if (!form) throw ApiError.validation('A multipart/form-data upload is required.');
+
+  const pages: OcrPage[] = [];
+  for (const entry of form.getAll('pages')) {
+    if (!(entry instanceof File)) continue;
+    pages.push({
+      bytes: new Uint8Array(await entry.arrayBuffer()),
+      mime: entry.type,
+      filename: entry.name || 'page.png',
+    });
+  }
+  if (pages.length === 0) throw ApiError.validation('Attach at least one page image in the "pages" field.');
+
+  return c.json(
+    await createOcrImport(c.env, user, {
+      pages,
+      title: stringField(form, 'title'),
+      filename: pages.length === 1 ? pages[0]!.filename : `scan-${pages.length}-pages.png`,
+    }),
+    201,
+  );
 });
 
 /**

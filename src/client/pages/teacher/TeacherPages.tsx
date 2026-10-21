@@ -22,6 +22,7 @@ import {
   useToast,
 } from '../../components/ui';
 import { AccuracyList, BarChart, type ChartTone } from '../../components/charts';
+import { ClassroomChatButton } from '../../components/ClassroomChat';
 import { ResultSummary, WritingMarkForm, type AttemptResultPayload } from '../../components/ResultView';
 import {
   BAND_DISCLAIMER,
@@ -93,12 +94,15 @@ export function TeacherHomePage() {
       ) : (
         <div className="grid grid--3">
           {data?.classrooms.map((classroom) => (
-            <div className="card card--link" key={classroom.id}>
+            <div className="card" key={classroom.id}>
               <div className="row row--between">
                 <h3 style={{ margin: 0 }}>{classroom.name}</h3>
                 {classroom.status === 'ARCHIVED' ? <Badge tone="dim">Archived</Badge> : <Badge tone="success">Active</Badge>}
               </div>
               <p className="small muted">{classroom.description || 'No description.'}</p>
+              <div className="row gap-8">
+                <ClassroomChatButton classroomId={classroom.id} classroomName={classroom.name} />
+              </div>
               <KeyValue
                 items={[
                   ['Students', String(classroom.studentCount)],

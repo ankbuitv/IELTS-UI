@@ -26,19 +26,24 @@ import {
 import { replaceVersionContent, type EditableContent } from '../services/content-write-service';
 import { purgeTest, purgeVersion } from '../services/content-delete-service';
 import { listWritingQueue, markQuestionManually, setWritingScore } from '../services/marking-service';
+import { loadWritingMarks } from '../services/ai-marking-service';
 import { ensureDefaultScoringProfiles } from '../services/scoring-profile-service';
 import { clearTestAccessCode, setTestAccessCode } from '../services/access-code-service';
 import { schemaReport } from '../lib/ensure-schema';
 import { buildResultView } from '../services/attempt-service';
 import type { AttemptRow } from '../services/attempt-service';
 import { getAdminAnalytics } from '../services/analytics-service';
+import { notifyMany } from '../services/notification-service';
 import { aiStatus } from '../ai/openai';
 import { listPublicProviders, saveProviders, testProvider } from '../ai/providers';
 import { AI_PROVIDER_KINDS, type AiProviderConfig } from '../../shared/ai';
 import { validateConversionRanges } from '../../shared/scoring';
+import { listAllOrders, markOrderPaid } from '../services/billing-service';
+import { ORDER_STATUSES, type OrderStatus } from '../../shared/billing';
 import { QUESTION_TYPES } from '../../shared/question-types';
 import { TEST_TYPES, SKILLS, ROLES, CONTENT_ORIGINS } from '../../shared/types';
 import { kindForMime } from '../extract';
+import { runWeeklyDigests } from '../services/digest-service';
 
 const router = new Hono<AppBindings>();
 
@@ -46,6 +51,61 @@ router.use('*', requireAuth, requireRole('ADMIN'));
 router.use('*', async (c, next) => {
   assertSameOrigin(c);
   await next();
+});
+
+// ---------------------------------------------------------------------------
+// Billing
+// ---------------------------------------------------------------------------
+router.get('/billing/orders', async (c) => {
+  const query = parseQuery(c, z.object({ status: z.enum(ORDER_STATUSES).optional() }));
+  return c.json(await listAllOrders(c.env, query.status as OrderStatus | undefined));
+});
+
+router.post('/billing/orders/:orderId/approve', async (c) => {
+  const actor = currentUser(c);
+  const subscription = await markOrderPaid(c.env, c.req.param('orderId'), 'admin');
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'billing.order.approve',
+    entityType: 'billing_order',
+    entityId: c.req.param('orderId'),
+  });
+  return c.json({ subscription });
+});
+
+// ---------------------------------------------------------------------------
+// Weekly digest + email log
+// ---------------------------------------------------------------------------
+router.post('/digest/run', async (c) => {
+  const body = await parseBody(
+    c,
+    z.object({ dryRun: z.boolean().optional(), weekOf: z.string().datetime().optional(), userId: z.string().max(64).optional() }),
+  ).catch(() => null);
+  const result = await runWeeklyDigests(c.env, {
+    dryRun: body?.dryRun ?? false,
+    weekOf: body?.weekOf ? new Date(body.weekOf) : undefined,
+    userId: body?.userId,
+    limit: 200,
+  });
+  return c.json(result);
+});
+
+router.get('/emails', async (c) => {
+  const rows = await c.env.DB.prepare(
+    `SELECT id, to_email, subject, status, provider, error, created_at, sent_at, html
+       FROM email_outbox ORDER BY created_at DESC LIMIT 25`,
+  ).all<{
+    id: string;
+    to_email: string;
+    subject: string;
+    status: string;
+    provider: string | null;
+    error: string | null;
+    created_at: string;
+    sent_at: string | null;
+    html: string;
+  }>();
+  return c.json({ emails: rows.results });
 });
 
 // ---------------------------------------------------------------------------
@@ -80,12 +140,12 @@ router.get('/users', async (c) => {
     bindings.push(query.role);
   }
   if (query.search) {
-    conditions.push('(u.email LIKE ? OR p.display_name LIKE ?)');
-    bindings.push(`%${query.search}%`, `%${query.search}%`);
+    conditions.push('(u.email LIKE ? OR p.display_name LIKE ? OR u.username LIKE ?)');
+    bindings.push(`%${query.search}%`, `%${query.search}%`, `%${query.search}%`);
   }
 
   const rows = await c.env.DB.prepare(
-    `SELECT u.id, u.email, u.role, u.status, u.created_at, u.last_login_at, p.display_name,
+    `SELECT u.id, u.email, u.username, u.role, u.status, u.created_at, u.last_login_at, p.display_name,
             (SELECT COUNT(*) FROM attempts a WHERE a.user_id = u.id) AS attempts,
             (SELECT COUNT(*) FROM classrooms c WHERE c.teacher_id = u.id) AS classrooms
        FROM users u
@@ -137,6 +197,13 @@ router.patch('/users/:id', async (c) => {
       role: z.enum(ROLES).optional(),
       status: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
       displayName: z.string().trim().min(1).max(120).optional(),
+      username: z
+        .string()
+        .trim()
+        .min(3)
+        .max(24)
+        .regex(/^[a-zA-Z0-9._-]+$/, 'Use letters, numbers, dot, dash or underscore.')
+        .optional(),
       resetPassword: z.string().min(10).max(200).optional(),
     }),
   );
@@ -161,10 +228,20 @@ router.patch('/users/:id', async (c) => {
     );
   }
 
+  if (body.username !== undefined) {
+    const clash = await c.env.DB.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?')
+      .bind(body.username, userId)
+      .first<{ id: string }>();
+    if (clash) throw ApiError.validation('That username is already taken.');
+    statements.push(
+      c.env.DB.prepare('UPDATE users SET username = ?, updated_at = ? WHERE id = ?').bind(body.username, timestamp, userId),
+    );
+  }
+
   if (body.displayName !== undefined) {
     statements.push(
-      c.env.DB.prepare('UPDATE user_profiles SET display_name = ?, updated_at = ? WHERE user_id = ?')
-        .bind(body.displayName, timestamp, userId),
+      c.env.DB.prepare("INSERT INTO user_profiles (user_id, display_name, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET display_name = excluded.display_name, updated_at = excluded.updated_at")
+        .bind(userId, body.displayName, timestamp, timestamp),
     );
   }
 
@@ -1063,6 +1140,17 @@ router.get('/attempts/:attemptId', async (c) => {
   return c.json({ ...view, student: { id: attempt.user_id, email: student?.email, displayName: student?.display_name } });
 });
 
+/** The judges' latest estimate for one essay, used to prefill the quick-mark form. */
+router.get('/writing-submissions/:submissionId/ai-draft', async (c) => {
+  const submissionId = c.req.param('submissionId');
+  const submission = await c.env.DB.prepare('SELECT id FROM writing_submissions WHERE id = ?')
+    .bind(submissionId)
+    .first<{ id: string }>();
+  if (!submission) throw ApiError.notFound('Writing submission not found.');
+  const marks = await loadWritingMarks(c.env, [submissionId]);
+  return c.json({ mark: marks.get(submissionId) ?? null });
+});
+
 router.get('/writing-queue', async (c) => {
   const user = currentUser(c);
   const unmarkedOnly = c.req.query('unmarked') === '1' || c.req.query('unmarked') === 'true';
@@ -1739,6 +1827,66 @@ router.post('/assets/:id/reingest', async (c) => {
     ip: clientIp(c),
   });
   return c.json({ stored: result.stored, reason: result.reason ?? null });
+});
+
+/** Broadcast to the bell of every active account (optionally one role), with optional email. */
+router.post('/notifications/broadcast', async (c) => {
+  const actor = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(
+    c,
+    z.object({
+      title: z.string().trim().min(3).max(120),
+      body: z.string().trim().max(600).default(''),
+      href: z.string().trim().max(200).optional(),
+      role: z.enum(['STUDENT', 'TEACHER', 'MENTOR', 'ADMIN']).optional(),
+      email: z.boolean().optional(),
+    }),
+  );
+
+  const rows = body.role
+    ? await c.env.DB.prepare('SELECT id FROM users WHERE status = ? AND role = ?').bind('ACTIVE', body.role).all<{ id: string }>()
+    : await c.env.DB.prepare('SELECT id FROM users WHERE status = ?').bind('ACTIVE').all<{ id: string }>();
+  const recipients = (rows.results ?? []).map((row) => row.id);
+
+  const delivered = await notifyMany(c.env, recipients, {
+    kind: 'SYSTEM',
+    title: body.title,
+    body: body.body,
+    href: body.href,
+    email: body.email ?? false,
+  });
+  await recordAudit(c.env, {
+    actorUserId: actor.id,
+    action: 'NOTIFICATION_BROADCAST',
+    entityType: 'notification',
+    entityId: null,
+    metadata: { title: body.title, recipients: delivered, role: body.role ?? 'ALL' },
+    ip: clientIp(c),
+    userAgent: c.req.header('user-agent') ?? '',
+  });
+  return c.json({ ok: true, recipients: delivered });
+});
+
+/** Recent transactional email (subject + status only — bodies can contain links). */
+router.get('/emails', async (c) => {
+  const rows = await c.env.DB.prepare(
+    `SELECT id, to_email, subject, status, provider, error, created_at, sent_at
+       FROM email_outbox ORDER BY created_at DESC LIMIT 50`,
+  ).all<{
+    id: string;
+    to_email: string;
+    subject: string;
+    status: string;
+    provider: string | null;
+    error: string | null;
+    created_at: string;
+    sent_at: string | null;
+  }>();
+  return c.json({
+    providerConfigured: Boolean(c.env.RESEND_API_KEY && c.env.EMAIL_FROM),
+    items: rows.results ?? [],
+  });
 });
 
 async function uniqueSlug(env: AppBindings['Bindings'], title: string): Promise<string> {

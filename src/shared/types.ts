@@ -4,7 +4,7 @@
  * into the browser.
  */
 
-export const ROLES = ['STUDENT', 'TEACHER', 'ADMIN'] as const;
+export const ROLES = ['STUDENT', 'TEACHER', 'ADMIN', 'MENTOR'] as const;
 export type Role = (typeof ROLES)[number];
 
 export const TEST_TYPES = ['READING', 'LISTENING', 'WRITING', 'FULL_MOCK'] as const;

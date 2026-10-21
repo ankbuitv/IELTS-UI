@@ -15,10 +15,10 @@
  * progress only; email addresses and authentication details never leave the Worker.
  */
 
-export const LEADERBOARD_SCOPES = ['learn', 'practice'] as const;
+export const LEADERBOARD_SCOPES = ['learn', 'practice', 'class'] as const;
 export type LeaderboardScope = (typeof LEADERBOARD_SCOPES)[number];
 
-export const LEADERBOARD_WINDOWS = ['week', 'all'] as const;
+export const LEADERBOARD_WINDOWS = ['week', 'season', 'all'] as const;
 export type LeaderboardWindow = (typeof LEADERBOARD_WINDOWS)[number];
 
 export function isLeaderboardScope(value: unknown): value is LeaderboardScope {
@@ -51,6 +51,13 @@ export interface LeaderboardRow {
   valueLabel: string;
   /** A second fact about the row: the streak, or the best band. */
   secondary: string;
+  /** Estimated overall band from submitted attempts, or null. */
+  bestBand: number | null;
+}
+
+export interface LeaderboardClass {
+  id: string;
+  name: string;
 }
 
 export interface LeaderboardResponse {
@@ -65,6 +72,10 @@ export interface LeaderboardResponse {
   weekStart: string | null;
   /** What the board is scored on, so a client need not hard-code it. */
   valueLabel: string;
+  /** The class this board covers, when `scope` is `class`. */
+  classroom?: LeaderboardClass | null;
+  /** The season the board is in, so the header can count down to its end. */
+  season?: import('./season').SeasonInfo | null;
 }
 
 /** How many rows a board sends. */

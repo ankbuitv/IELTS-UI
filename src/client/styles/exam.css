@@ -593,3 +593,96 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
   /* No hover on touch: keep the enlarge affordance visible. */
   .exam-figure__hint { opacity: 1; transform: none; }
 }
+
+/* ------------------------------------------------------ compact review mode */
+/* Review is for scanning answers, not for reading under time pressure: the
+   same exam chrome, one notch denser so more fits on screen. */
+.exam-root--review { --reading-scale: 0.94; }
+.exam-root--review .question-block { gap: 6px; margin-bottom: 12px; }
+.exam-root--review .q-prompt { font-size: 0.93rem; line-height: 1.55; }
+.exam-root--review .q-body { font-size: 0.93rem; line-height: 1.7; }
+.exam-root--review .convo { gap: 8px; }
+.exam-root--review .convo__row { gap: 8px; }
+.exam-root--review .convo__avatar { width: 26px; height: 26px; font-size: 0.72rem; }
+.exam-root--review .convo__stack { max-width: 88%; }
+.exam-root--review .convo__bubble {
+  font-size: 0.85rem; line-height: 1.55; padding: 7px 11px; border-radius: 12px;
+}
+.exam-root--review .convo__speaker { font-size: 0.66rem; }
+.exam-root--review .explain { margin: 8px 0 2px 18px; }
+.exam-root--review .explain__head { padding: 7px 11px; }
+.exam-root--review .explain__title { font-size: 0.72rem; }
+.exam-root--review .explain__body { padding: 9px 11px; gap: 7px; }
+.exam-root--review .explain__text { font-size: 0.85rem; line-height: 1.58; }
+.exam-root--review .explain__answer { font-size: 0.82rem; padding: 5px 11px; }
+.exam-root--review .nav-strip__item { width: 34px; height: 34px; font-size: 0.82rem; }
+.exam-root--review .exam-pane__scroll { padding: 12px 14px; }
+.exam-root--review .passage__paragraph { margin-bottom: 10px; gap: 10px; }
+.exam-root--review .mchip { font-size: 0.72rem; padding: 3px 9px; }
+@media (max-width: 640px) {
+  .exam-root--review .nav-strip__item { width: 30px; height: 30px; }
+}
+
+
+/* Writing/speaking review: the exam answer box plus a marks strip on top. */
+.exam-root--review .writing-answer { flex: 0 0 auto; }
+.exam-root--review .writing-answer__box--review {
+  min-height: 160px;
+  max-height: 44vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: calc(0.92rem * var(--reading-scale, 1));
+  line-height: 1.65;
+}
+.exam-root--review .review-scorebar {
+  display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+}
+.exam-root--review .review-scorebar__lead { display: flex; align-items: baseline; gap: 10px; }
+.exam-root--review .review-scorebar__band {
+  font-size: 1.7rem; font-weight: 800; line-height: 1;
+  color: var(--ink-950); font-variant-numeric: tabular-nums;
+}
+.exam-root--review .review-scorebar__caption { font-size: 0.78rem; color: var(--ink-600); }
+.exam-root--review .review-scorebar__chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.exam-root--review .aimark { margin-top: 10px; }
+
+/* "Still empty" chips: every missing question is one click away. */
+.missing-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+.missing-chip {
+  appearance: none;
+  border: 1px solid #e4b9b3;
+  background: #fff4f2;
+  color: #a33a2c;
+  border-radius: 999px;
+  padding: 4px 11px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.missing-chip:hover,
+.missing-chip:focus-visible {
+  background: #a33a2c;
+  color: #fff;
+  outline: none;
+}
+.missing-chip--more {
+  cursor: default;
+  background: #f6f1ef;
+  border-color: #e3d7d3;
+  color: #7a6a65;
+}
+.missing-chip--more:hover {
+  background: #f6f1ef;
+  color: #7a6a65;
+}

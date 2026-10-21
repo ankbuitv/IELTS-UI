@@ -40,7 +40,7 @@ const responseSchema = z.union([
   z.object({ values: z.array(z.string().max(4000)).max(20) }),
 ]);
 
-router.post('/', requireRole('STUDENT', 'TEACHER', 'ADMIN'), async (c) => {
+router.post('/', requireRole('STUDENT', 'MENTOR', 'TEACHER', 'ADMIN'), async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const body = await parseBody(
@@ -65,7 +65,7 @@ router.post('/', requireRole('STUDENT', 'TEACHER', 'ADMIN'), async (c) => {
     throw ApiError.validation('Provide a test, test version or assignment.');
   }
   // Only staff may request an elevated integrity mode for self-service practice.
-  const requestedMode = user.role === 'STUDENT' ? 'PRACTICE' : body.mode;
+  const requestedMode = user.role === 'STUDENT' || user.role === 'MENTOR' ? 'PRACTICE' : body.mode;
 
   const result = await createAttempt(c.env, user, {
     ...(body.testId ? { testId: body.testId } : {}),
@@ -140,7 +140,7 @@ const aiMarkWriting = async (c: Context<AppBindings>) => {
     .bind(attemptId)
     .first<{ id: string; user_id: string; status: string }>();
   if (!attempt) throw ApiError.notFound('Attempt not found.');
-  if (attempt.user_id !== user.id && user.role === 'STUDENT') {
+  if (attempt.user_id !== user.id && (user.role === 'STUDENT' || user.role === 'MENTOR')) {
     throw ApiError.forbidden('That attempt belongs to another candidate.');
   }
   // Feedback on a draft would be exam help, so only a finished attempt qualifies.
@@ -266,11 +266,11 @@ router.post('/:id/submit', async (c) => {
 
   // A student may only submit with a candidate reason; teachers/admins may force.
   const reason =
-    user.role !== 'STUDENT' && body.reason ? body.reason : ('CANDIDATE' as const);
+    user.role !== 'STUDENT' && user.role !== 'MENTOR' && body.reason ? body.reason : ('CANDIDATE' as const);
 
   const result = await submitAttempt(c.env, user, c.req.param('id'), reason);
 
-  if (user.role !== 'STUDENT' && attempt.user_id !== user.id) {
+  if (user.role !== 'STUDENT' && user.role !== 'MENTOR' && attempt.user_id !== user.id) {
     await recordAudit(c.env, {
       actorUserId: user.id,
       action: 'ATTEMPT_FORCE_SUBMIT',

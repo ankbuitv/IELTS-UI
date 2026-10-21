@@ -33,6 +33,20 @@ interface AssetRow {
  * and chart images are reachable only by users entitled to the test version, and
  * private import sources stay admin-only.
  */
+router.get('/avatar/:userId', async (c) => {
+  // Profile pictures are visible to any signed-in user; they are decorative.
+  const stored = await getBlob(c.env, 'profile_avatars', 'user_id', c.req.param('userId'));
+  if (!stored) throw ApiError.notFound('No avatar.');
+  const bytes = base64ToBytes(stored.base64);
+  return new Response(bytes as unknown as BodyInit, {
+    headers: {
+      'content-type': stored.mime || 'image/png',
+      'content-length': String(bytes.length),
+      'cache-control': 'private, max-age=300',
+    },
+  });
+});
+
 router.get('/:assetId', async (c) => {
   const user = currentUser(c);
   const asset = await c.env.DB.prepare(

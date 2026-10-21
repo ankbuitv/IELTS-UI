@@ -98,7 +98,17 @@ export interface StudentDashboard {
   trends: TrendPoint[];
   mockHistory: AttemptSummary[];
   practiceHistory: AttemptSummary[];
-  totals: { attempts: number; submitted: number; inProgress: number; fullMocks: number };
+  totals: {
+    attempts: number;
+    submitted: number;
+    inProgress: number;
+    fullMocks: number;
+    totalTimeSeconds: number;
+    averageBand: number | null;
+    streakDays: number;
+    xpTotal: number;
+    coins: number;
+  };
   /** Band estimate per skill and overall, from every kind of marking. */
   estimates: BandEstimates;
 }

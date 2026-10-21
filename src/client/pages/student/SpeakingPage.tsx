@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
+import { analyseFluency } from '@shared/fluency';
+import { detectSpeechRecognition, getSpeechRecognition, type SpeechRecognitionLike } from '../../lib/dictation';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Button, Card, EmptyState, Loading, Notice, TextArea, useToast } from '../../components/ui';
 import { Icon } from '../../components/Icon';
@@ -91,17 +93,33 @@ function SpeakingLobby({ onStarted }: { onStarted: (sessionId: string) => void }
   const topics = useAsync<{ topics: SpeakingCatalogTopic[] }>(() => api.get('/api/speaking/catalog'), []);
   const history = useAsync<{ sessions: SessionSummary[] }>(() => api.get('/api/speaking/sessions'), []);
 
-  const start = async (topicSetId?: string) => {
+  const start = async (topicSetId?: string, topic?: unknown) => {
     setStarting(topicSetId ?? 'custom');
     try {
       const payload = await api.post<SpeakingSessionPayload>('/api/speaking/sessions', {
         ...(topicSetId ? { topicSetId } : {}),
+        ...(topic ? { topic } : {}),
         mode: 'PRACTICE',
       });
       onStarted(payload.session.id);
     } catch (error) {
       toast.push(describeError(error), 'error');
     } finally {
+      setStarting(null);
+    }
+  };
+
+  /** "Chủ đề ngẫu nhiên" — the AI writes a fresh topic set (remix offline). */
+  const startRandom = async () => {
+    setStarting('random');
+    try {
+      const result = await api.post<{ topic: { id: string } & Record<string, unknown> }>(
+        '/api/speaking/random-topic',
+        {},
+      );
+      await start(result.topic.id, result.topic);
+    } catch (error) {
+      toast.push(describeError(error), 'error');
       setStarting(null);
     }
   };
@@ -130,7 +148,29 @@ function SpeakingLobby({ onStarted }: { onStarted: (sessionId: string) => void }
       {topics.loading ? <Loading label="Đang tải chủ đề…" /> : null}
       {topics.error ? <Notice tone="danger">{topics.error}</Notice> : null}
 
+      <Link className="partner-banner" to="/speaking/partner">
+        <span className="partner-banner__icon">
+          <Icon name="sparkle" size={18} />
+        </span>
+        <span className="partner-banner__text">
+          <strong>Practise with the AI speaking partner</strong>
+          <span>One question at a time, coaching after every answer, no recording needed →</span>
+        </span>
+      </Link>
+
       <div className="speaking-topic-grid">
+        <button
+          type="button"
+          className="topic-card topic-card--random"
+          onClick={() => void startRandom()}
+          disabled={starting !== null}
+        >
+          <span className="topic-card__icon">
+            <Icon name="sparkle" size={20} strokeWidth={2} />
+          </span>
+          <span className="topic-card__title">Chủ đề ngẫu nhiên 🎲</span>
+          <span className="topic-card__meta">AI viết một bộ đề mới mỗi lần bấm — không đụng hàng</span>
+        </button>
         {(topics.data?.topics ?? []).map((topic) => (
           <button
             key={topic.id}
@@ -732,9 +772,63 @@ function PartRecorder({
 // Result view
 // ---------------------------------------------------------------------------
 function SpeakingResult({ score, responses }: { score: AiMarkView; responses: SpeakingPartResponse[] }) {
+  const reports = responses
+    .filter((response) => response.transcript.trim() || response.durationSeconds > 0)
+    .map((response) => ({
+      part: response.part,
+      report: analyseFluency({ transcript: response.transcript, durationSeconds: response.durationSeconds }),
+    }));
+  const totalWords = reports.reduce((total, item) => total + item.report.words, 0);
+  const totalSeconds = reports.reduce((total, item) => total + item.report.seconds, 0);
+  const overallWpm = totalSeconds > 0 ? Math.round((totalWords / totalSeconds) * 60) : 0;
+  const fillers = reports.reduce((total, item) => total + item.report.fillerCount, 0);
+  const variety =
+    reports.length > 0
+      ? Math.round((reports.reduce((total, item) => total + item.report.lexicalVariety, 0) / reports.length) * 100)
+      : 0;
+
   return (
     <div className="stack">
       <AiMarkPanel mark={score} heading="Kết quả từ hai giám khảo AI" />
+
+      {reports.length > 0 ? (
+        <Card title="Fluency (from your transcript)" hint="Pace, fillers and vocabulary range — not pronunciation">
+          <div className="fluency-summary">
+            <div>
+              <strong>{overallWpm || '—'}</strong>
+              <span>words / minute</span>
+            </div>
+            <div>
+              <strong>{totalWords}</strong>
+              <span>words spoken</span>
+            </div>
+            <div>
+              <strong>{fillers}</strong>
+              <span>filler words</span>
+            </div>
+            <div>
+              <strong>{variety}%</strong>
+              <span>content-word variety</span>
+            </div>
+          </div>
+          <div className="stack" style={{ gap: 8, marginTop: 12 }}>
+            {reports.map(({ part, report }) => (
+              <div key={part} className="fluency-row">
+                <Badge tone="neutral">Part {part}</Badge>
+                <span className="small">
+                  {report.wordsPerMinute || '—'} wpm · {report.fillerCount} filler{report.fillerCount === 1 ? '' : 's'} · variety{' '}
+                  {Math.round(report.lexicalVariety * 100)}%
+                </span>
+                <span className="tiny muted">{report.advice}</span>
+              </div>
+            ))}
+          </div>
+          <p className="tiny muted" style={{ margin: '10px 0 0' }}>
+            Measured from the transcript and the length of your recording. Pronunciation needs a listener, so it stays with
+            your teacher — this card does not change your band.
+          </p>
+        </Card>
+      ) : null}
       {responses.some((response) => response.hasAudio) ? (
         <Card title="Nghe lại và tự sửa">
           <div className="stack" style={{ gap: 10 }}>
@@ -756,36 +850,6 @@ function SpeakingResult({ score, responses }: { score: AiMarkView; responses: Sp
 // ---------------------------------------------------------------------------
 // Media helpers
 // ---------------------------------------------------------------------------
-interface SpeechRecognitionLike {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: unknown) => void) | null;
-  onend: (() => void) | null;
-}
-
-interface SpeechRecognitionEventLike {
-  resultIndex: number;
-  results: ArrayLike<{ isFinal: boolean; 0?: { transcript?: string } } & { length: number }>;
-}
-
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-
-function getSpeechRecognition(): SpeechRecognitionCtor | null {
-  const scope = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionCtor;
-    webkitSpeechRecognition?: SpeechRecognitionCtor;
-  };
-  return scope.SpeechRecognition ?? scope.webkitSpeechRecognition ?? null;
-}
-
-function detectSpeechRecognition(): boolean {
-  return getSpeechRecognition() !== null;
-}
-
 function pickMimeType(): string | undefined {
   if (typeof MediaRecorder === 'undefined') return undefined;
   const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
