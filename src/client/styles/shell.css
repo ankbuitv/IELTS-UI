@@ -1,5 +1,5 @@
 /* ==========================================================================
-   App shell: white top bar with pill navigation, a bottom tab bar on phones,
+   App shell: warm-white pill bar with pill navigation, a bottom tab bar on phones,
    one "More" panel (dropdown on desktop, bottom sheet on a phone) and the
    navy footer shared with the public pages.
    ========================================================================== */
@@ -11,7 +11,7 @@
 .site-header {
   position: sticky; top: 0; z-index: 50;
   background: var(--paper); color: var(--ink-800);
-  border-bottom: 1px solid var(--ink-200);
+  box-shadow: 0 4px 18px rgba(42, 47, 90, 0.07);
 }
 .site-header__inner {
   max-width: var(--page-max); margin: 0 auto; height: var(--topbar-height);
@@ -24,13 +24,13 @@
 .site-nav { display: none; align-items: center; gap: 2px; flex: 1; min-width: 0; }
 .site-nav a,
 .site-nav button {
-  display: inline-flex; align-items: center; gap: 5px; padding: 7px 12px; border-radius: var(--radius);
+  display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: var(--radius-pill);
   color: var(--ink-600); font-size: 0.9rem; font-weight: 600; font-family: inherit; line-height: 1.2;
   background: none; border: 0; cursor: pointer; white-space: nowrap;
   transition: color var(--speed) var(--ease), background var(--speed) var(--ease);
 }
 .site-nav a:hover, .site-nav button:hover { color: var(--ink-950); background: var(--ink-100); text-decoration: none; }
-.site-nav a.active, .site-nav button.active { color: var(--brand-700); background: var(--brand-50); font-weight: 700; }
+.site-nav a.active, .site-nav button.active { color: var(--ink-900); background: var(--lilac); font-weight: 700; }
 
 .site-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
 .site-actions .btn--ghost { color: var(--ink-800); }
@@ -86,9 +86,9 @@ button.site-avatar:hover { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--b
 .site-tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
   display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
-  background: var(--paper); border-top: 1px solid var(--ink-200);
+  background: var(--paper);
   padding: 4px 6px calc(4px + env(safe-area-inset-bottom, 0px));
-  box-shadow: 0 -6px 18px -12px rgba(14, 26, 43, 0.25);
+  box-shadow: 0 -6px 20px rgba(42, 47, 90, 0.10);
 }
 .site-tabbar__item {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
@@ -97,14 +97,14 @@ button.site-avatar:hover { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--b
 }
 .site-tabbar__item svg { transition: transform var(--speed) var(--ease); }
 .site-tabbar__item:hover { color: var(--ink-950); text-decoration: none; }
-.site-tabbar__item.active { color: var(--brand-700); background: var(--brand-50); }
+.site-tabbar__item.active { color: var(--ink-900); background: var(--lilac); }
 .site-tabbar__item.active svg { transform: translateY(-1px); }
 
 /* -------------------------------------------------------------- More panel */
-.more-backdrop { position: fixed; inset: 0; z-index: 90; background: rgba(14, 26, 43, 0.5); }
+.more-backdrop { position: fixed; inset: 0; z-index: 90; background: rgba(42, 47, 90, 0.45); }
 .more-panel {
   position: fixed; z-index: 100; background: var(--paper); color: var(--ink-800);
-  border: 1px solid var(--ink-200); box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-lg);
   left: 0; right: 0; bottom: 0; max-height: 84dvh; overflow-y: auto;
   border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: 6px 8px calc(8px + env(safe-area-inset-bottom, 0px));
 }
@@ -121,7 +121,7 @@ button.site-avatar:hover { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--b
   font-family: inherit; cursor: pointer;
 }
 .more-item:hover { background: var(--ink-50); color: var(--ink-950); text-decoration: none; }
-.more-item.active { color: var(--brand-700); background: var(--brand-50); }
+.more-item.active { color: var(--ink-900); background: var(--lilac); }
 .more-item svg { color: var(--ink-500); flex: none; }
 .more-item.active svg { color: var(--brand-600); }
 

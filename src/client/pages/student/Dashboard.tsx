@@ -7,6 +7,8 @@ import { Badge, Button, Card, Chips, EmptyState, Loading, Notice, ProgressBar, S
 import { AccuracyList, BarChart, LineChart } from '../../components/charts';
 import { AttemptList, newestFirst } from '../../components/AttemptList';
 import { Icon } from '../../components/Icon';
+import { Mascot } from '../../components/learn/Mascot';
+import { learnApi } from '../../lib/learn-api';
 import { BandEstimatesPanel } from '../../components/BandEstimates';
 import { LearnStrip } from '../../components/learn/LearnStrip';
 import {
@@ -15,6 +17,7 @@ import {
   formatDuration,
   formatPercent,
   formatScore,
+  initials,
   relativeTime,
   SKILL_LABELS,
   statusTone,
@@ -45,7 +48,7 @@ export function StudentDashboardPage() {
     [query],
   );
 
-  if (loading && !data) return <Loading label="Loading your dashboard…" />;
+  if (loading && !data) return <Loading label="Đang tải bảng điều khiển…" />;
   if (error) return <Notice tone="danger">{error}</Notice>;
   if (!data) return null;
 
@@ -84,47 +87,64 @@ export function StudentDashboardPage() {
         </span>
         <div className="dash-hero__text">
           <p className="dash-hero__kicker">{greeting()}</p>
-          <h1>Welcome back{firstName ? `, ${firstName}` : ''}</h1>
+          <h1>Xin chào{firstName ? ` ${firstName}` : ''}!</h1>
           <p>
             {data.totals.submitted === 0
-              ? 'Take your first practice test to start tracking your progress.'
-              : `${data.totals.submitted} attempt${data.totals.submitted === 1 ? '' : 's'} finished${
-                  data.totals.inProgress > 0 ? ` · ${data.totals.inProgress} in progress` : ''
-                }${data.totals.fullMocks > 0 ? ` · ${data.totals.fullMocks} full mock${data.totals.fullMocks === 1 ? '' : 's'}` : ''}`}
+              ? 'Làm bài thi thử đầu tiên để bắt đầu theo dõi tiến bộ của bạn.'
+              : `Đã hoàn thành ${data.totals.submitted} bài${
+                  data.totals.inProgress > 0 ? ` · ${data.totals.inProgress} bài đang làm` : ''
+                }${data.totals.fullMocks > 0 ? ` · ${data.totals.fullMocks} đề mock` : ''}`}
           </p>
         </div>
         <div className="dash-hero__actions">
           {running ? (
             <Link className="btn btn--primary" to={`/exam/${running.attemptId}`}>
               <Icon name="play" size={14} />
-              Continue “{truncateTitle(running.testTitle)}”
+              Tiếp tục “{truncateTitle(running.testTitle)}”
             </Link>
           ) : (
             <Link className="btn btn--primary" to="/practice">
               <Icon name="play" size={14} />
-              Start a test
+              Bắt đầu thi
             </Link>
           )}
           <Link className="btn" to="/learn">
             <Icon name="target" size={14} />
-            Continue learning
+            Tiếp tục học
           </Link>
         </div>
       </section>
 
-      <LearnStrip />
+      <div className="dash-roster">
+        <div className="dash-roster__main">
+          <BandEstimatesPanel estimates={data.estimates} />
 
-      <BandEstimatesPanel estimates={data.estimates} />
+          {upNext.length > 0 ? (
+            <Card className="dash-deadline" title={dueSoon.length > 0 ? 'Sắp hết hạn' : 'Bài tập của bạn'} hint="Từ lớp học của bạn">
+              <div className="stack" style={{ gap: 8 }}>
+                {upNext.map((assignment) => (
+                  <AssignmentRow key={assignment.assignmentId} assignment={assignment} compact />
+                ))}
+              </div>
+            </Card>
+          ) : null}
 
-      {upNext.length > 0 ? (
-        <Card title={dueSoon.length > 0 ? 'Due soon' : 'Your assignments'} hint="From your classrooms">
-          <div className="stack" style={{ gap: 8 }}>
-            {upNext.map((assignment) => (
-              <AssignmentRow key={assignment.assignmentId} assignment={assignment} compact />
-            ))}
+          <LearnStrip />
+        </div>
+
+        <aside className="dash-roster__side">
+          <WeeklyLeaderboard />
+          <div className="dash-mascot">
+            <Mascot mood="happy" size={72} />
+            <div className="dash-mascot__text">
+              <p>Bơ đợi bạn trên con đường học — 15 phút mỗi ngày là đủ để giữ mạch.</p>
+              <Link className="btn btn--sm btn--primary" to="/learn">
+                Vào con đường học
+              </Link>
+            </div>
           </div>
-        </Card>
-      ) : null}
+        </aside>
+      </div>
 
       <div className="dash-grid">
         <Card
@@ -294,13 +314,73 @@ export function StudentDashboardPage() {
   );
 }
 
+/**
+ * The week's XP board: four rows with rank ribbons and name plates, straight
+ * from the Learn leaderboard — never fabricated. Like the Learn strip it is a
+ * convenience: on failure it simply does not render.
+ */
+function WeeklyLeaderboard() {
+  const { data, loading } = useAsync(() => learnApi.leaderboard('learn', 'week'), []);
+
+  if (!data) {
+    return loading ? (
+      <Card className="lb-card" title="Bảng xếp hạng tuần">
+        <div className="stack" style={{ gap: 8 }}>
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index} className="skeleton lb-row--skeleton" style={{ height: 46 }} />
+          ))}
+        </div>
+      </Card>
+    ) : null;
+  }
+
+  const rows = data.rows.slice(0, 4);
+  return (
+    <Card
+      className="lb-card"
+      title="Bảng xếp hạng tuần"
+      hint={data.total > 0 ? `${data.total} bạn có hoạt động tuần này` : 'XP trên con đường học'}
+    >
+      {rows.length === 0 ? (
+        <p className="muted small" style={{ margin: 0 }}>
+          Tuần này chưa có ai lên bảng — học một bài là lên hạng ngay.
+        </p>
+      ) : (
+        <ol className="lb-list">
+          {rows.map((row) => (
+            <li key={row.userId} className={`lb-row${row.isMe ? ' is-me' : ''}`}>
+              <span className={`rank-ribbon rank-ribbon--${row.rank > 4 ? 'n' : String(row.rank)}`} aria-label={`Hạng ${row.rank}`}>
+                {row.rank}
+              </span>
+              <span className="name-plate">
+                <span className="name-plate__avatar" aria-hidden="true">
+                  {initials(row.name)}
+                </span>
+                <span className="name-plate__name">
+                  <span className="name-plate__text">{row.name}</span>
+                  {row.role === 'ADMIN' ? <Badge tone="accent" plain>Quản trị</Badge> : null}
+                </span>
+                {row.online ? <i className="name-plate__dot" title="Đang học" /> : null}
+              </span>
+              <span className="lb-row__value">{row.valueLabel}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      <Link className="lb-more" to="/learn/leaderboard">
+        Xem tất cả <Icon name="arrowRight" size={13} />
+      </Link>
+    </Card>
+  );
+}
+
 /** A short greeting line above the name, from the learner's own clock. */
 function greeting(): string {
   const hour = new Date().getHours();
-  if (hour < 5) return 'Burning the midnight oil';
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 5) return 'Khuya rồi';
+  if (hour < 12) return 'Chào buổi sáng';
+  if (hour < 18) return 'Chào buổi chiều';
+  return 'Chào buổi tối';
 }
 
 /** Keeps a button label on one line. */
@@ -336,7 +416,7 @@ export function AssignmentRow({ assignment, compact }: { assignment: AssignmentS
         </div>
         <div className="assign-row__meta">
           {assignment.testTitle} · {assignment.classroomName}
-          {assignment.deadlineAt ? ` · due ${relativeTime(assignment.deadlineAt)}` : ''}
+          {assignment.deadlineAt ? ` · ${relativeTime(assignment.deadlineAt)}` : ''}
           {!compact ? ` · ${used}` : ''}
           {!compact && assignment.bestRawScore !== null
             ? ` · best ${assignment.bestRawScore}/${assignment.bestTotalQuestions}${assignment.bestBand !== null ? ` (band ${formatBand(assignment.bestBand)})` : ''}`
@@ -346,11 +426,11 @@ export function AssignmentRow({ assignment, compact }: { assignment: AssignmentS
       <div className="assign-row__action">
         {assignment.inProgressAttemptId ? (
           <Button size="sm" variant="primary" onClick={() => navigate(`/exam/${assignment.inProgressAttemptId}`)}>
-            Continue
+            Tiếp tục
           </Button>
         ) : overdue ? (
-          <span className="tiny muted" title="Ask your teacher if you may still take it.">
-            Closed
+          <span className="tiny muted" title="Hỏi giáo viên xem bạn có được làm lại không.">
+            Đã đóng
           </span>
         ) : (
           <Button
@@ -360,7 +440,7 @@ export function AssignmentRow({ assignment, compact }: { assignment: AssignmentS
             onClick={() => void start()}
             disabled={assignment.attemptsUsed >= assignment.maxAttempts}
           >
-            {assignment.attemptsUsed > 0 ? 'Again' : 'Start'}
+            {assignment.attemptsUsed > 0 ? 'Làm lại' : 'Bắt đầu'}
           </Button>
         )}
       </div>

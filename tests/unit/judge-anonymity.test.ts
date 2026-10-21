@@ -21,10 +21,12 @@ function files(dir: string, out: string[] = []): string[] {
  * legitimately configures providers, so it is the one exception.)
  */
 describe('judge anonymity', () => {
+  // Path filters are written POSIX-style; normalise so the test also holds on Windows.
+  const posix = (file: string) => file.replaceAll('\\', '/');
   const studentFacing = [
-    ...files(join(root, 'src/client')).filter((file) => !file.includes('/pages/admin/')),
+    ...files(join(root, 'src/client')).filter((file) => !posix(file).includes('/pages/admin/')),
     ...files(join(root, 'src/shared')),
-  ].filter((file) => !/(\/shared\/ai\.ts|\/shared\/types\.ts)$/.test(file));
+  ].filter((file) => !/(\/shared\/ai\.ts|\/shared\/types\.ts)$/.test(posix(file)));
 
   it('keeps model and vendor names out of every file a candidate downloads', () => {
     const offenders: string[] = [];

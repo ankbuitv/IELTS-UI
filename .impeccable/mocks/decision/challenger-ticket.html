@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Ai eo · Trang chủ — Ví phiếu bay</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+html,body{width:1440px;height:900px;margin:0;overflow:hidden}
+body{background:#F2F2F0;color:#0D1B3D;font:400 14px/1.45 Inter,Arial,sans-serif}
+.top{height:62px;background:#0D1B3D;color:#fff;display:flex;align-items:center;gap:26px;padding:0 30px}
+.brand{font:700 31px/1 "Barlow Condensed",Arial,sans-serif;letter-spacing:.01em}
+.nav{display:flex;gap:24px;height:62px}
+.nav b{font:600 15px/62px "Barlow Condensed",Arial,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.66);border-bottom:3px solid transparent}
+.nav b.on{color:#fff;border-bottom-color:#D7262D}
+.gap{flex:1}
+.serial{font:400 11px "Space Mono",monospace;letter-spacing:.1em;color:#8695bb}
+.go{background:#D7262D;color:#fff;border:0;font:700 15px "Barlow Condensed",Arial,sans-serif;letter-spacing:.18em;text-transform:uppercase;padding:13px 20px 11px}
+.ava{width:34px;height:34px;border:1px solid rgba(255,255,255,.55);border-radius:50%;display:flex;align-items:center;justify-content:center;font:600 13px "Barlow Condensed",Arial,sans-serif;letter-spacing:.1em}
+.sheet{height:838px;padding:20px 30px 22px;display:flex;flex-direction:column;gap:13px}
+.strip{display:flex;flex-direction:column}
+.tabs{display:flex;gap:6px;padding-left:10px;margin-bottom:-1px;position:relative;z-index:3}
+.tab{border:1px solid #0D1B3D;border-bottom:0;border-radius:9px 9px 0 0;background:#fff;padding:6px 17px 5px;font:600 11px/1 "Barlow Condensed",Arial,sans-serif;letter-spacing:.22em;text-transform:uppercase;color:#0D1B3D}
+.tab.on{background:#0D1B3D;color:#fff}
+.cp{background:#fff;border:1px solid #0D1B3D;position:relative}
+.lbl{display:block;font:600 10px/1.2 "Barlow Condensed",Arial,sans-serif;letter-spacing:.26em;text-transform:uppercase;opacity:.6;margin-bottom:6px}
+.num{font:700 16px "Space Mono",monospace;color:#4B2E83;letter-spacing:-.03em}
+.itin{display:flex;height:176px}
+.fields{flex:1;min-width:0;display:flex;flex-direction:column}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #0D1B3D}
+.g4>div{padding:11px 18px 12px;border-right:1px solid #0D1B3D}
+.g4>div:last-child{border-right:0}
+.v{font:600 17px Inter,Arial,sans-serif;letter-spacing:.04em}
+.route{flex:1;display:flex;align-items:center;gap:18px;padding:0 18px}
+.route .lab{width:74px;flex:none}
+.from{font:700 37px/1 "Barlow Condensed",Arial,sans-serif;letter-spacing:.04em;text-transform:uppercase}
+.arw{width:46px;height:12px;flex:none}
+.to{font:700 33px/1 "Space Mono",monospace;color:#4B2E83;letter-spacing:-.04em}
+.est{width:372px;border-left:1px solid #0D1B3D;padding:14px 22px;display:flex;flex-direction:column;justify-content:center}
+.big{font:700 94px/.9 "Space Mono",monospace;color:#4B2E83;letter-spacing:-.08em}
+.cap{font:600 11px/1.55 "Barlow Condensed",Arial,sans-serif;letter-spacing:.18em;text-transform:uppercase;opacity:.75;margin-top:8px}
+.nw{position:absolute;top:50%;transform:translateY(-50%);width:18px;height:38px;overflow:hidden;z-index:2}
+.nw i{position:absolute;top:0;width:38px;height:38px;border-radius:50%;background:radial-gradient(circle 19px at 50% 50%,#F2F2F0 0 17px,#0D1B3D 17px 18.4px,transparent 18.4px)}
+.nw.l{left:0}.nw.l i{left:-19px}
+.nw.r{right:0}.nw.r i{left:-1px}
+.skills{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;height:226px}
+.sk{display:flex;flex-direction:column}
+.sh{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:9px 15px 8px;border-bottom:1px solid #0D1B3D}
+.sh>span:first-child{font:700 17px "Barlow Condensed",Arial,sans-serif;letter-spacing:.16em;text-transform:uppercase}
+.st{border:2px solid #D7262D;color:#D7262D;font:700 11px/1 "Barlow Condensed",Arial,sans-serif;letter-spacing:.2em;text-transform:uppercase;padding:4px 8px 3px;transform:rotate(-8deg);white-space:nowrap}
+.sf{flex:1;display:flex;align-items:flex-end;justify-content:space-between;padding:0 15px 6px;border-bottom:1px solid #0D1B3D}
+.fig{font:700 66px/1 "Space Mono",monospace;color:#4B2E83;letter-spacing:-.07em}
+.sr{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #0D1B3D}
+.sr>div{padding:9px 15px 10px}
+.sr>div:first-child{border-right:1px solid #0D1B3D}
+.sr .lbl{margin-bottom:4px}
+.tk{display:flex;gap:5px;padding:11px 15px}
+.tk i{width:13px;height:13px;border:1px solid #0D1B3D;background:#fff}
+.tk i.f{background:#4B2E83;border-color:#4B2E83}
+.side{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;height:138px}
+.sd{padding:13px 16px 14px;display:flex;flex-direction:column}
+.sd .t{font:700 17px "Barlow Condensed",Arial,sans-serif;letter-spacing:.16em;text-transform:uppercase}
+.sd .f{font:700 54px/1 "Space Mono",monospace;color:#4B2E83;letter-spacing:-.06em;margin-top:auto}
+.sd .c{font:400 12px Inter,Arial,sans-serif;opacity:.7;margin-top:7px}
+.perf{display:flex;align-items:center;gap:16px;height:24px}
+.perf .ln{flex:1;display:flex;justify-content:space-between}
+.perf .ln i{width:8px;height:8px;border:1px solid #0D1B3D;border-radius:50%;background:#F2F2F0}
+.perf .txt{font:600 10px "Barlow Condensed",Arial,sans-serif;letter-spacing:.3em;text-transform:uppercase;opacity:.65}
+.stub{flex:1;display:flex;min-height:0}
+.goal{flex:1;padding:14px 18px;display:flex;flex-direction:column;border-right:1px solid #0D1B3D}
+.goal .row{display:flex;align-items:baseline;gap:12px}
+.goal .n{font:700 54px/1 "Space Mono",monospace;color:#4B2E83;letter-spacing:-.06em}
+.goal .u{font:700 18px "Barlow Condensed",Arial,sans-serif;letter-spacing:.2em;text-transform:uppercase}
+.dead{width:600px;padding:14px 20px;display:flex;align-items:center;gap:18px}
+.dead .txt{flex:1}
+.dead .h{font:700 19px/1.25 "Barlow Condensed",Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase}
+.dead .s{font:400 12.5px Inter,Arial,sans-serif;opacity:.75;margin-top:6px}
+.act{display:flex;flex-direction:column;align-items:flex-end;gap:12px;padding-right:6px}
+.doit{background:#D7262D;color:#fff;border:0;font:700 16px "Barlow Condensed",Arial,sans-serif;letter-spacing:.2em;text-transform:uppercase;padding:15px 26px 13px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">Ai eo</div>
+  <nav class="nav"><b class="on">Trang chủ</b><b>Luyện thi</b><b>Học tập</b><b>Kết quả</b><b>Từ vựng</b><b>Từ điển</b></nav>
+  <div class="gap"></div>
+  <div class="serial">PHIẾU SỐ AE-2026-1116</div>
+  <button class="go">Bắt đầu thi</button>
+  <div class="ava">MA</div>
+</header>
+<main class="sheet">
+  <section class="strip">
+    <div class="tabs"><span class="tab on">Chuyến bay</span><span class="tab">Tuyến</span><span class="tab">Ngày</span><span class="tab">Ghế</span></div>
+    <div class="cp itin">
+      <div class="fields">
+        <div class="g4">
+          <div><span class="lbl">Chuyến bay</span><span class="num">AE 0716</span></div>
+          <div><span class="lbl">Hành khách</span><span class="v">NGUYỄN AN</span></div>
+          <div><span class="lbl">Ngày</span><span class="num">16.11.2026</span></div>
+          <div><span class="lbl">Ghế</span><span class="num">14A</span></div>
+        </div>
+        <div class="route">
+          <div class="lab"><span class="lbl">Tuyến</span></div>
+          <div class="from">Hà Nội</div>
+          <svg class="arw" viewBox="0 0 46 12"><path d="M0 6h40M34 1l6 5-6 5" fill="none" stroke="#0D1B3D" stroke-width="2"/></svg>
+          <div class="to">BAND 7.0</div>
+        </div>
+      </div>
+      <div class="est">
+        <span class="lbl">Điểm ước tính</span>
+        <div class="big">6.5</div>
+        <div class="cap">Ước tính · Thực hành · Không phải kết quả chính thức</div>
+      </div>
+      <span class="nw l"><i></i></span><span class="nw r"><i></i></span>
+    </div>
+  </section>
+
+  <section class="skills">
+    <div class="cp sk">
+      <div class="sh"><span>Reading</span><span class="st">Đã đánh giá</span></div>
+      <div class="sf"><span class="lbl">Điểm tự luyện</span><span class="fig">7.0</span></div>
+      <div class="sr"><div><span class="lbl">Đúng</span><b class="num">32/40</b></div><div><span class="lbl">Lần cuối</span><b class="num">12.10.2026</b></div></div>
+      <div class="tk"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="cp sk">
+      <div class="sh"><span>Listening</span><span class="st">Đã đánh giá</span></div>
+      <div class="sf"><span class="lbl">Điểm tự luyện</span><span class="fig">6.5</span></div>
+      <div class="sr"><div><span class="lbl">Đúng</span><b class="num">28/40</b></div><div><span class="lbl">Lần cuối</span><b class="num">09.10.2026</b></div></div>
+      <div class="tk"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="cp sk">
+      <div class="sh"><span>Writing</span><span class="st">Còn hạn</span></div>
+      <div class="sf"><span class="lbl">Điểm tự luyện</span><span class="fig">6.0</span></div>
+      <div class="sr"><div><span class="lbl">Bài đã giao</span><b class="num">14/18</b></div><div><span class="lbl">Lần cuối</span><b class="num">14.10.2026</b></div></div>
+      <div class="tk"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="cp sk">
+      <div class="sh"><span>Speaking</span><span class="st">Còn hạn</span></div>
+      <div class="sf"><span class="lbl">Điểm tự luyện</span><span class="fig">6.0</span></div>
+      <div class="sr"><div><span class="lbl">Lần phỏng vấn</span><b class="num">09/12</b></div><div><span class="lbl">Lần cuối</span><b class="num">11.10.2026</b></div></div>
+      <div class="tk"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+  </section>
+
+  <section class="side">
+    <div class="cp sd"><span class="t">Streak</span><span class="lbl">7 ngày liên tục</span><div class="f">7</div><div class="c">Kỷ lục cá nhân: 21 ngày</div></div>
+    <div class="cp sd"><span class="t">Bài gần nhất</span><span class="lbl">Đề Reading #3</span><div class="f">32/40</div><div class="c">Đề Reading #3 — 32/40 · 12.10.2026</div></div>
+    <div class="cp sd"><span class="t">Từ vựng mới</span><span class="lbl">Tuần này</span><div class="f">48</div><div class="c">92% trả lời đúng khi ôn tập</div></div>
+    <div class="cp sd"><span class="t">Xếp hạng</span><span class="lbl">Lớp A2 · tuần 46</span><div class="f">#12</div><div class="c">Trên 408 trong 480 học viên</div></div>
+  </section>
+
+  <section class="perf">
+    <span class="ln"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    <span class="txt">Tách tại đây</span>
+    <span class="ln"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+  </section>
+
+  <section class="cp stub">
+    <span class="nw l"><i></i></span><span class="nw r"><i></i></span>
+    <div class="goal">
+      <span class="lbl">Mục tiêu hằng ngày</span>
+      <div class="row"><span class="n">20/30</span><span class="u">Câu</span></div>
+      <div class="tk"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="dead">
+      <div class="txt">
+        <div class="h">Bài giao: Viết Task 2 · Cô Minh</div>
+        <div class="s">Hạn 23/10 · Gửi trước 23:59 · Bộ đề Writing Prediction tháng 10</div>
+      </div>
+      <div class="act"><span class="st">Còn 6 giờ</span><button class="doit">Làm bài</button></div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

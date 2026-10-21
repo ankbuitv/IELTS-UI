@@ -37,10 +37,10 @@ describe('band arithmetic', () => {
   });
 
   it('describes each kind of band honestly', () => {
-    expect(BAND_BASIS_LABELS.FULL).toBe('Complete test');
-    expect(BAND_BASIS_LABELS.PROJECTED).toMatch(/short set/);
-    expect(BAND_BASIS_LABELS.AI).toBe('AI judges');
-    expect(BAND_BASIS_LABELS.TEACHER).toBe('Teacher');
+    expect(BAND_BASIS_LABELS.FULL).toBe('Bài thi hoàn chỉnh');
+    expect(BAND_BASIS_LABELS.PROJECTED).toMatch(/bộ câu hỏi ngắn/);
+    expect(BAND_BASIS_LABELS.AI).toBe('Thẩm phán AI');
+    expect(BAND_BASIS_LABELS.TEACHER).toBe('Giáo viên');
   });
 });
 

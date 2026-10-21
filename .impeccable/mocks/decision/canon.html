@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Ai eo · Trang chủ — Category Standard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--blue:#2563EB;--ink:#111827;--gray:#6B7280;--line:#E5E7EB;--soft:#F9FAFB}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:900px;overflow:hidden;margin:0}
+body{background:#fff;color:var(--ink);font-family:"Inter",sans-serif;font-size:14px;line-height:1.45}
+.top{height:64px;display:flex;align-items:center;gap:36px;padding:0 32px;border-bottom:1px solid var(--line);box-shadow:0 1px 3px rgba(0,0,0,.06);position:relative;z-index:2}
+.brand{display:flex;align-items:center;gap:10px;font-size:19px;font-weight:700;letter-spacing:-.01em}
+.mark{width:32px;height:32px;border-radius:8px;background:var(--blue);color:#fff;display:grid;place-items:center;font-size:16px;font-weight:700}
+.links{display:flex;gap:28px;height:64px}
+.link{position:relative;display:flex;align-items:center;height:64px;font-size:14.5px;font-weight:500;color:var(--gray);text-decoration:none}
+.link.on{color:var(--blue);font-weight:600}
+.link.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--blue)}
+.util{margin-left:auto;display:flex;align-items:center;gap:16px}
+.btn{background:var(--blue);color:#fff;font-size:14.5px;font-weight:600;padding:10px 18px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);text-decoration:none}
+.ava{width:36px;height:36px;border-radius:50%;background:#EEF2FF;color:#3730A3;display:grid;place-items:center;font-size:13px;font-weight:600}
+.wrap{height:836px;padding:26px 32px;display:flex;flex-direction:column;gap:18px}
+.phead{display:flex;align-items:flex-end;justify-content:space-between}
+.phead h1{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.phead p{margin-top:4px;font-size:14px;color:var(--gray)}
+.date{font-size:13.5px;color:var(--gray)}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.tile{display:flex;align-items:center;gap:14px;padding:18px 20px}
+.ic{width:38px;height:38px;border-radius:8px;background:#EFF6FF;color:var(--blue);display:grid;place-items:center;flex:none}
+.lb{font-size:13px;font-weight:500;color:var(--gray)}
+.vl{font-size:26px;font-weight:700;letter-spacing:-.02em;margin-top:1px}
+.dl{font-size:12.5px;font-weight:600;color:var(--blue);margin-top:1px}
+.grid{flex:1;min-height:0;display:grid;grid-template-columns:1fr 404px;gap:18px}
+.left,.right{display:flex;flex-direction:column;gap:18px;min-height:0}
+.ch{display:flex;align-items:center;justify-content:space-between;padding:16px 20px}
+.ch h2{font-size:16px;font-weight:600;letter-spacing:-.01em}
+.count{font-size:13px;font-weight:500;color:var(--gray);background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:3px 9px}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:13px;color:var(--gray)}
+.seg span{padding:6px 13px;border-left:1px solid var(--line)}
+.seg span:first-child{border-left:0}
+.seg .on{background:#EFF6FF;color:var(--blue);font-weight:600}
+.cap{display:flex;align-items:center;gap:7px;padding:0 20px 6px;font-size:12.5px;color:var(--gray)}
+.chart{padding:0 20px 14px}
+.rows .row{display:flex;align-items:center;gap:14px;padding:15px 20px;border-top:1px solid var(--line)}
+.t{flex:1;min-width:0}
+.t b{display:block;font-size:14.5px;font-weight:600}
+.t span{font-size:13px;color:var(--gray)}
+.due{font-size:13px;font-weight:600;color:#DC2626;white-space:nowrap}
+.due.ok{color:var(--gray);font-weight:500}
+.mini{background:var(--blue);color:#fff;font-size:13.5px;font-weight:600;padding:8px 16px;border-radius:8px;text-decoration:none}
+.ghost{border:1px solid var(--line);color:var(--gray);font-size:13.5px;font-weight:500;padding:8px 16px;border-radius:8px;text-decoration:none}
+.more{display:block;padding:13px 20px;border-top:1px solid var(--line);font-size:13.5px;font-weight:600;color:var(--blue);text-decoration:none}
+.nbody{padding:2px 20px 20px}
+.ntitle{font-size:20px;font-weight:700;letter-spacing:-.01em}
+.nmeta{font-size:13.5px;color:var(--gray);margin-top:6px}
+.nchips{display:flex;gap:8px;margin-top:14px}
+.nchips span{font-size:12.5px;font-weight:500;color:var(--gray);background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:5px 11px}
+.nbtn{display:inline-block;margin-top:18px;background:var(--blue);color:#fff;font-size:14px;font-weight:600;padding:10px 20px;border-radius:8px;text-decoration:none;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.gbody{padding:2px 20px 20px}
+.gv{display:flex;align-items:baseline;gap:8px}
+.gv b{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.gv span{font-size:13.5px;color:var(--gray)}
+.pbar{height:8px;border-radius:999px;background:#EFF6FF;margin-top:12px;overflow:hidden}
+.pbar i{display:block;height:100%;width:67%;background:var(--blue);border-radius:999px}
+.gmeta{display:flex;justify-content:space-between;margin-top:12px;font-size:13px;color:var(--gray)}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="mark">A</span>Ai eo</div>
+  <nav class="links"><a class="link on">Trang chủ</a><a class="link">Luyện thi</a><a class="link">Học tập</a><a class="link">Kết quả</a><a class="link">Từ vựng</a><a class="link">Từ điển</a></nav>
+  <div class="util"><a class="btn">Bắt đầu thi</a><span class="ava">MA</span></div>
+</header>
+<div class="wrap">
+  <div class="phead">
+    <div><h1>Xin chào Minh An!</h1><p>Bạn đang ở bậc 6.5 — còn 2 bài nữa lên 7.0</p></div>
+    <div class="date">Thứ Tư, 21/10/2026</div>
+  </div>
+  <section class="tiles">
+    <div class="card tile"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-7"/></svg></span><div><div class="lb">Ước tính</div><div class="vl">6.5</div><div class="dl">+0,5 trong 30 ngày</div></div></div>
+    <div class="card tile"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span><div><div class="lb">Chuỗi</div><div class="vl">7 ngày</div><div class="dl">7/7 ngày trong tuần</div></div></div>
+    <div class="card tile"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg></span><div><div class="lb">Điểm XP</div><div class="vl">1 240 XP</div><div class="dl">+180 XP trong tuần</div></div></div>
+    <div class="card tile"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></svg></span><div><div class="lb">Câu đã làm</div><div class="vl">340 câu</div><div class="dl">45 câu tuần này</div></div></div>
+  </section>
+  <section class="grid">
+    <div class="left">
+      <div class="card">
+        <div class="ch"><h2>Band gần đây</h2><div class="seg"><span class="on">6 tuần</span><span>3 tháng</span><span>6 tháng</span></div></div>
+        <div class="cap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>Thực hành — không phải kết quả chính thức</div>
+        <div class="chart">
+          <svg viewBox="0 0 640 214" width="100%" height="214">
+            <g stroke="#E5E7EB" stroke-width="1"><line x1="46" y1="170" x2="632" y2="170"/><line x1="46" y1="138" x2="632" y2="138"/><line x1="46" y1="106" x2="632" y2="106"/><line x1="46" y1="74" x2="632" y2="74"/><line x1="46" y1="42" x2="632" y2="42"/></g>
+            <g fill="#6B7280" font-size="11" text-anchor="end"><text x="38" y="174">5.0</text><text x="38" y="142">5.5</text><text x="38" y="110">6.0</text><text x="38" y="78">6.5</text><text x="38" y="46">7.0</text></g>
+            <path d="M70 138 184 106 298 106 412 74 526 106 618 74 618 170 70 170Z" fill="#2563EB" opacity=".07"/>
+            <polyline points="70,138 184,106 298,106 412,74 526,106 618,74" fill="none" stroke="#2563EB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <g fill="#fff" stroke="#2563EB" stroke-width="2.5"><circle cx="70" cy="138" r="4.5"/><circle cx="184" cy="106" r="4.5"/><circle cx="298" cy="106" r="4.5"/><circle cx="412" cy="74" r="4.5"/><circle cx="526" cy="106" r="4.5"/><circle cx="618" cy="74" r="4.5"/></g>
+            <g fill="#6B7280" font-size="11" text-anchor="middle"><text x="70" y="196">16/9</text><text x="184" y="196">23/9</text><text x="298" y="196">30/9</text><text x="412" y="196">07/10</text><text x="526" y="196">14/10</text><text x="618" y="196">21/10</text></g>
+          </svg>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><h2>Bài học tiếp theo</h2><span class="count">Module 4 · Reading</span></div>
+        <div class="nbody">
+          <div class="ntitle">Matching Headings</div>
+          <div class="nmeta">Bậc 6.5 · 15 phút · 12 câu hỏi · Thưởng 60 XP</div>
+          <div class="nchips"><span>Từ vựng chủ đề</span><span>Cấu trúc đoạn</span><span>Luyện nhanh 10 câu</span></div>
+          <a class="nbtn">Bắt đầu bài học</a>
+        </div>
+      </div>
+    </div>
+    <div class="right">
+      <div class="card">
+        <div class="ch"><h2>Bài giao</h2><span class="count">3 bài</span></div>
+        <div class="rows">
+          <div class="row"><div class="t"><b>Viết Task 2 — Opinion Essay</b><span>cô Minh · Hạn 23/10</span></div><span class="due">Còn 6 giờ</span><a class="mini">Làm bài</a></div>
+          <div class="row"><div class="t"><b>Đọc Passage 3 — True/False/Not Given</b><span>cô Hà · Hạn 25/10</span></div><span class="due ok">Còn 2 ngày</span><a class="ghost">Xem chi tiết</a></div>
+          <div class="row"><div class="t"><b>Nói Part 2 — Describe a Place</b><span>cô Tuấn · Hạn 27/10</span></div><span class="due ok">Còn 4 ngày</span><a class="ghost">Xem chi tiết</a></div>
+        </div>
+        <a class="more">Xem tất cả bài giao</a>
+      </div>
+      <div class="card" style="flex:1">
+        <div class="ch"><h2>Mục tiêu hôm nay</h2><span class="count">21/10</span></div>
+        <div class="gbody">
+          <div class="gv"><b>20/30</b><span>câu đã làm</span></div>
+          <div class="pbar"><i></i></div>
+          <div class="gmeta"><span>XP hôm nay: 180/250</span><span>Còn 10 câu</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

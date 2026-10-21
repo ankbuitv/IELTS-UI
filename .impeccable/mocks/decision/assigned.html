@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Ai eo · Trang chủ — Tabletop Route</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--board:#F7F1E4;--paper:#FFFDF6;--ink:#22262E;--red:#D64541;--green:#2E7D5B;--kraft:#EADFC8;--line:rgba(34,38,46,.17);--soft:rgba(34,38,46,.55)}
+*{box-sizing:border-box}
+html,body{width:1440px;height:900px;overflow:hidden;margin:0}
+body{background:var(--board);color:var(--ink);font:400 15px/1.45 "Archivo",Helvetica,sans-serif}
+.m{font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:600}
+.eb{font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--soft)}
+.row{display:flex;align-items:center;justify-content:space-between}
+.grow{flex:1}
+.bar-top{height:74px;display:flex;align-items:center;gap:30px;padding:0 40px;border-bottom:1.5px solid var(--line)}
+.logo{font-size:23px;font-weight:800;letter-spacing:-.03em}
+.logo b{color:var(--red)}
+nav{display:flex;gap:24px}
+nav a{color:var(--soft);text-decoration:none;font-size:14.5px;font-weight:600}
+nav a.on{color:var(--ink);font-weight:800;box-shadow:inset 0 -3px 0 var(--red);padding-bottom:6px}
+.chip{display:flex;align-items:center;gap:7px;padding:8px 12px;border:1.5px solid var(--line);background:var(--kraft);border-radius:6px;font-size:13px;font-weight:600}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--red);color:#fff;text-decoration:none;font-weight:800;font-size:14.5px;padding:11px 18px;border-radius:6px;box-shadow:3px 3px 0 var(--ink)}
+.av{width:38px;height:38px;border-radius:50%;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800;letter-spacing:.04em}
+main{padding:28px 40px 32px;display:grid;grid-template-columns:repeat(12,1fr);grid-template-rows:auto auto 1fr;gap:24px}
+h1{font-size:34px;line-height:1.1;font-weight:800;letter-spacing:-.025em;margin:9px 0 7px}
+.sub{color:var(--soft);font-size:15.5px;margin:0}
+.card{background:var(--paper);border:1.5px solid var(--line);border-radius:8px;padding:22px 24px;display:flex;flex-direction:column}
+.foot{margin-top:auto;padding-top:16px}
+.note{font-size:11.5px;color:var(--soft);margin:0}
+.track{height:6px;border-radius:3px;background:rgba(34,38,46,.10);overflow:hidden}
+.track i{display:block;height:100%;border-radius:3px;background:var(--green)}
+.route{grid-column:span 12;background:#F1E7D3;border:1.5px solid var(--line);border-radius:8px;padding:18px 26px 20px}
+.steps{position:relative;display:grid;grid-template-columns:repeat(4,1fr);margin-top:14px}
+.steps::before{content:"";position:absolute;left:12.5%;right:12.5%;top:52px;border-top:2px dashed rgba(34,38,46,.30)}
+.step{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center}
+.tile{width:104px;height:104px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--paper);border:1.5px solid var(--line);position:relative;z-index:1}
+.tile.done{background:var(--green);border-color:#256648}
+.tile.lock{background:transparent;border:2px dashed rgba(34,38,46,.32)}
+.tile.now{border:2.5px solid var(--red);box-shadow:3px 3px 0 rgba(34,38,46,.20)}
+.token{position:absolute;top:-10px;right:-10px;width:22px;height:22px;border-radius:50%;background:var(--red);border:2.5px solid var(--paper);box-shadow:1.5px 1.5px 0 rgba(34,38,46,.25)}
+.tname{font-size:13.5px;font-weight:600;margin:12px 0 3px}
+.tmeta{font-size:11px;color:var(--soft);margin:0}
+.tmeta.here{color:var(--red);font-weight:600}
+.est-n{font-size:58px;font-weight:600;letter-spacing:-.04em;line-height:1;margin:6px 0 20px}
+.skill{display:grid;grid-template-columns:44px 1fr 38px;align-items:center;gap:12px;margin-bottom:14px}
+.skill span{font-size:13.5px;font-weight:600}
+.skill b{text-align:right;font-size:14px}
+.legend{display:flex;gap:18px;font-size:11.5px;color:var(--soft);align-items:center}
+.dot{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:6px}
+.alert{border:2px solid var(--red);background:#FCEFEE}
+.red{color:var(--red)}
+.cnt{font-size:26px;font-weight:600;letter-spacing:.02em;color:var(--red);margin:12px 0 6px}
+.alert h2{font-size:20px;font-weight:800;letter-spacing:-.01em;margin:0 0 6px}
+.meta{font-size:13px;color:var(--soft);margin:0}
+.alert .btn{align-self:flex-start}
+.rtitle{font-size:16px;font-weight:800;margin:10px 0 4px}
+.score{font-size:30px;font-weight:600;letter-spacing:-.02em;margin:0 0 12px}
+.pill{display:inline-flex;align-items:center;gap:6px;background:rgba(46,125,91,.13);color:var(--green);border-radius:4px;padding:5px 9px;font-size:12px;font-weight:800}
+.link{color:var(--ink);font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+</style>
+</head>
+<body>
+<header class="bar-top">
+  <div class="logo">Ai <b>eo</b></div>
+  <nav><a class="on" href="#">Trang chủ</a><a href="#">Luyện thi</a><a href="#">Học tập</a><a href="#">Kết quả</a><a href="#">Từ vựng</a><a href="#">Từ điển</a></nav>
+  <div class="grow"></div>
+  <div class="chip"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#D64541" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2s6 5.5 6 11a6 6 0 11-12 0c0-2.4 1.2-4.2 2.5-5.6.2 2 1.2 3.1 2.3 3.1 1.4 0 2-1.3 1.6-3.4C12.1 5.6 12 3.7 12 2z"/></svg> Chuỗi <span class="m">7</span> ngày</div>
+  <a class="btn" href="#">Bắt đầu thi <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M12 6l6 6-6 6"/></svg></a>
+  <div class="av">MA</div>
+</header>
+<main>
+  <section style="grid-column:span 7">
+    <span class="eb">Tổng quan · Thứ tư 21/10</span>
+    <h1>Chào lại buổi tối, Minh An</h1>
+    <p class="sub">Bạn đang đi đúng hướng cho kỳ thi 16/11 — còn 26 ngày.</p>
+  </section>
+  <section class="card" style="grid-column:span 5">
+    <div class="row"><span class="eb">Mục tiêu hằng ngày</span><span class="m" style="font-size:12px;color:var(--soft)">còn 10 câu</span></div>
+    <div class="row" style="align-items:baseline;gap:10px;margin:8px 0 14px"><b class="m" style="font-size:30px;letter-spacing:-.02em">20/30</b><span style="font-size:13px;color:var(--soft)">câu · Reading &amp; Listening</span></div>
+    <div class="track"><i style="width:66%"></i></div>
+    <p class="note foot">Hoàn thành trước 24:00 để giữ chuỗi 7 ngày.</p>
+  </section>
+  <section class="route">
+    <div class="row"><span class="eb">Lộ trình học tuần này</span><span class="m" style="font-size:12px;color:var(--soft)">2/4 bài hoàn thành · đang ở bước 3</span></div>
+    <div class="steps">
+      <div class="step">
+        <div class="tile done"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.2 5L20 6.5"/></svg></div>
+        <p class="tname">Matching Headings</p><p class="tmeta m">hoàn thành · 8/10</p>
+      </div>
+      <div class="step">
+        <div class="tile done"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.2 5L20 6.5"/></svg></div>
+        <p class="tname">True/False/Not Given</p><p class="tmeta m">hoàn thành · 7/10</p>
+      </div>
+      <div class="step">
+        <div class="tile now"><span class="token"></span><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#D64541" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 013 3L8 19l-4 1z"/></svg></div>
+        <p class="tname">Viết Task 2</p><p class="tmeta here m">bạn đang ở đây · còn 6 giờ</p>
+      </div>
+      <div class="step">
+        <div class="tile lock"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="rgba(34,38,46,.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V7.8a3.5 3.5 0 017 0v2.7"/></svg></div>
+        <p class="tname" style="color:var(--soft)">Nghe Section 3</p><p class="tmeta m">mở sau khi nộp bài</p>
+      </div>
+    </div>
+  </section>
+  <section class="card" style="grid-column:span 5">
+    <span class="eb">Ước tính theo phong độ</span>
+    <div style="display:flex;align-items:baseline;gap:12px"><b class="m est-n">6.5</b><span style="font-size:14px;color:var(--soft)">tổng band ước tính</span></div>
+    <div class="skill"><span>Đọc</span><div class="track"><i style="width:78%"></i></div><b class="m">7.0</b></div>
+    <div class="skill"><span>Nghe</span><div class="track"><i style="width:72%"></i></div><b class="m">6.5</b></div>
+    <div class="skill"><span>Viết</span><div class="track"><i style="width:67%;background:var(--red)"></i></div><b class="m">6.0</b></div>
+    <div class="skill"><span>Nói</span><div class="track"><i style="width:67%;background:var(--red)"></i></div><b class="m">6.0</b></div>
+    <div class="legend foot"><span><i class="dot" style="background:var(--green)"></i>đạt hoặc trên mục tiêu 6.5</span><span><i class="dot" style="background:var(--red)"></i>cần thêm 0.5 band</span></div>
+    <p class="note" style="margin-top:8px">Thực hành — không phải kết quả chính thức.</p>
+  </section>
+  <section class="card alert" style="grid-column:span 4">
+    <div class="row"><span class="eb red">Bài giao sắp hết hạn</span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#D64541" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4.2l2.6 1.8M5 3L2.6 5.2M19 3l2.4 2.2"/></svg></div>
+    <p class="cnt m">CÒN 6 GIỜ</p>
+    <h2>Viết Task 2 — Opinion Essay</h2>
+    <p class="meta">cô Minh · Hạn 23/10 23:59 · từ 250 chữ</p>
+    <a class="btn foot" href="#">Làm bài ngay <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M12 6l6 6-6 6"/></svg></a>
+  </section>
+  <section class="card" style="grid-column:span 3">
+    <span class="eb">Kết quả gần đây</span>
+    <p class="rtitle">Đề Reading #3</p>
+    <p class="score m">32/40</p>
+    <span class="pill" style="align-self:flex-start"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2E7D5B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.2 5L20 6.5"/></svg>Ước tính 7.0</span>
+    <a class="link foot" href="#">Xem lại bài <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22262E" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M12 6l6 6-6 6"/></svg></a>
+  </section>
+</main>
+</body>
+</html>

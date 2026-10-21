@@ -26,16 +26,22 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 import { stripFramingHeaderFile } from './lib/local-preview-headers.mjs';
 
-const root = new URL('..', import.meta.url).pathname;
-const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+// fileURLToPath (not .pathname): on Windows, URL.pathname yields "/C:/...",
+// which existsSync rejects and spawnSync cannot use as a cwd.
+const root = fileURLToPath(new URL('..', import.meta.url));
+// Run wrangler through its JS entry directly: spawning "npx.cmd" throws EINVAL
+// on Windows (Node refuses to spawn .bat/.cmd without a shell), and a shell
+// would mangle quoted SQL arguments.
+const wranglerBin = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
 const port = process.env.PORT ?? '8787';
 const base = `http://127.0.0.1:${port}`;
 
 function wrangler(args, { capture = false, label } = {}) {
   if (label) console.log(`\n▸ ${label}`);
-  return spawnSync(npx, ['wrangler', ...args], {
+  return spawnSync(process.execPath, [wranglerBin, ...args], {
     cwd: root,
     stdio: capture ? 'pipe' : 'inherit',
     encoding: 'utf8',
@@ -112,7 +118,7 @@ if (stripFramingHeaderFile(headersFile, { readFileSync, writeFileSync, existsSyn
 }
 
 console.log(`\n▸ Starting the Worker on ${base}`);
-const server = spawn(npx, ['wrangler', 'dev', '--port', port, '--ip', '0.0.0.0'], {
+const server = spawn(process.execPath, [wranglerBin, 'dev', '--port', port, '--ip', '0.0.0.0'], {
   cwd: root,
   stdio: 'inherit',
   env: process.env,

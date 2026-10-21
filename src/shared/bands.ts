@@ -47,10 +47,10 @@ export type BandBasis =
   | 'TEACHER';
 
 export const BAND_BASIS_LABELS: Record<BandBasis, string> = {
-  FULL: 'Complete test',
-  PROJECTED: 'Projected from a short set',
-  AI: 'AI judges',
-  TEACHER: 'Teacher',
+  FULL: 'Bài thi hoàn chỉnh',
+  PROJECTED: 'Ước tính từ bộ câu hỏi ngắn',
+  AI: 'Thẩm phán AI',
+  TEACHER: 'Giáo viên',
 };
 
 export interface SkillEstimate {

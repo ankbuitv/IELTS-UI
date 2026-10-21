@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './components/ui';
-// Be Vietnam Pro is bundled (fonts.css, imported by globals.css) so Vietnamese diacritics render the same everywhere.
+// Quicksand (body) and Baloo 2 (display) are bundled (fonts.css, imported by globals.css) so Vietnamese diacritics render the same everywhere.
 import './styles/globals.css';
 import './styles/refresh.css';
 import './styles/shell.css';

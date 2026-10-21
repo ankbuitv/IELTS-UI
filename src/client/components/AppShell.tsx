@@ -27,32 +27,32 @@ interface NavItem {
 
 /** Main places for a signed-in candidate, in the order they are used. */
 const MAIN_NAV: NavItem[] = [
-  { to: '/dashboard', label: 'Home', icon: 'home' },
-  { to: '/learn', label: 'Learn', icon: 'target' },
-  { to: '/practice', label: 'Practice', icon: 'book' },
-  { to: '/history', label: 'Results', icon: 'award' },
-  { to: '/vocabulary', label: 'Vocabulary', icon: 'layers' },
-  { to: '/dictionary', label: 'Dictionary', icon: 'search' },
+  { to: '/dashboard', label: 'Trang chủ', icon: 'home' },
+  { to: '/learn', label: 'Học tập', icon: 'target' },
+  { to: '/practice', label: 'Luyện thi', icon: 'book' },
+  { to: '/history', label: 'Kết quả', icon: 'award' },
+  { to: '/vocabulary', label: 'Từ vựng', icon: 'layers' },
+  { to: '/dictionary', label: 'Từ điển', icon: 'search' },
 ];
 
 /** Everything else lives behind "More". */
 const MORE_NAV: NavItem[] = [
-  { to: '/learn/shop', label: 'Shop', icon: 'cart' },
-  { to: '/learn/leaderboard', label: 'Leaderboards', icon: 'trophy' },
-  { to: '/learn/friends', label: 'Friends', icon: 'users' },
-  { to: '/learn/plan', label: 'Study plan', icon: 'calendar' },
-  { to: '/speaking', label: 'Speaking', icon: 'mic' },
-  { to: '/analytics', label: 'My progress', icon: 'chart' },
-  { to: '/classrooms', label: 'Classrooms', icon: 'users' },
-  { to: '/profile', label: 'Profile', icon: 'user' },
+  { to: '/learn/shop', label: 'Cửa hàng', icon: 'cart' },
+  { to: '/learn/leaderboard', label: 'Bảng xếp hạng', icon: 'trophy' },
+  { to: '/learn/friends', label: 'Bạn bè', icon: 'users' },
+  { to: '/learn/plan', label: 'Kế hoạch học', icon: 'calendar' },
+  { to: '/speaking', label: 'Luyện Nói', icon: 'mic' },
+  { to: '/analytics', label: 'Tiến trình', icon: 'chart' },
+  { to: '/classrooms', label: 'Lớp học', icon: 'users' },
+  { to: '/profile', label: 'Hồ sơ', icon: 'user' },
 ];
 
 /** The four phone tabs for a candidate; the fifth opens the More sheet. */
 const TAB_NAV: NavItem[] = [
-  { to: '/dashboard', label: 'Home', icon: 'home' },
-  { to: '/learn', label: 'Learn', icon: 'target' },
-  { to: '/practice', label: 'Practice', icon: 'book' },
-  { to: '/vocabulary', label: 'Words', icon: 'layers' },
+  { to: '/dashboard', label: 'Trang chủ', icon: 'home' },
+  { to: '/learn', label: 'Học tập', icon: 'target' },
+  { to: '/practice', label: 'Luyện thi', icon: 'book' },
+  { to: '/vocabulary', label: 'Từ vựng', icon: 'layers' },
 ];
 
 /** Sections of the landing page; from any other public page these navigate to "/" and scroll. */
@@ -199,7 +199,7 @@ export function AppShell() {
                 aria-haspopup="menu"
                 onClick={() => setPanelOpen((open) => !open)}
               >
-                More
+                Thêm
                 <Icon name="chevronDown" size={13} />
               </button>
             </nav>
@@ -231,7 +231,7 @@ export function AppShell() {
                 <DisplayMenu compact label="Display" />
                 <NavLink to="/practice" className="btn btn--sm btn--primary site-cta">
                   <Icon name="play" size={12} />
-                  <span>Start a test</span>
+                  <span>Bắt đầu thi</span>
                 </NavLink>
                 <button
                   type="button"
@@ -247,10 +247,10 @@ export function AppShell() {
             ) : (
               <>
                 <Button size="sm" variant="ghost" onClick={() => navigate('/login')}>
-                  Sign in
+                  Đăng nhập
                 </Button>
                 <Button size="sm" variant="primary" onClick={() => navigate('/register')}>
-                  Create account
+                  Tạo tài khoản
                 </Button>
               </>
             )}
@@ -279,7 +279,7 @@ export function AppShell() {
             aria-expanded={panelOpen}
           >
             <Icon name="menu" size={20} />
-            <span>More</span>
+            <span>Thêm</span>
           </button>
         </nav>
       ) : null}
@@ -294,7 +294,7 @@ export function AppShell() {
               </span>
               <span className="more-panel__who-text">
                 <strong title={user.displayName}>{user.displayName}</strong>
-                <span>{user.role.toLowerCase()}</span>
+                <span>{user.role === 'STUDENT' ? 'Học viên' : user.role === 'TEACHER' ? 'Giáo viên' : 'Quản trị'}</span>
               </span>
             </div>
 
@@ -319,7 +319,7 @@ export function AppShell() {
             <div className="more-panel__group">
               <button type="button" className="more-item more-item--button" onClick={signOut} role="menuitem">
                 <Icon name="logout" size={17} />
-                Sign out
+                Đăng xuất
               </button>
             </div>
           </div>
