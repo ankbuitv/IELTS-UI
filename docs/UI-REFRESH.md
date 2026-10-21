@@ -1,5 +1,11 @@
 # Ai eo — exam-style redesign, AI judges, Learn path
 
+> **2026 refresh.** The app shell and palette were re-skinned since this note:
+> a soft lavender sidebar on desktop, a violet/sun/coral "learning playground"
+> palette with big rounded cards (see the tokens in `src/client/styles/globals.css`
+> and `shell.css`), and the mentor platform (booking, live call rooms, classes —
+> `docs/MENTOR.md`). The exam screen, AI judges and tab lock below are unchanged.
+
 This replaces the earlier "light workspace" refresh (cyan/violet SaaS look). The
 brief was: drop that interface, build one that looks like the computer-delivered
 IELTS screen rather than an AI-generated dashboard, mark Writing and Speaking

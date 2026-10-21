@@ -1,5 +1,6 @@
 import { api, queryString } from './api';
 import type { LeaderboardResponse, LeaderboardScope, LeaderboardWindow } from '@shared/leaderboard';
+import type { SeasonClaimResult, SeasonPassView } from '@shared/season';
 import type { FriendOverview, FriendSearchResult, GamificationProfile } from '@shared/gamification';
 import type { ShopItemKey, ShopState } from '@shared/shop';
 import type {
@@ -76,8 +77,15 @@ export const learnApi = {
     api.post<{ state: ShopState; applied: boolean; detail: string }>('/api/learn/items/use', { key }),
 
   // ---------------------------------------------------------- leaderboards
-  leaderboard: (scope: LeaderboardScope, window: LeaderboardWindow) =>
-    api.get<LeaderboardResponse>(`/api/learn/leaderboard${queryString({ scope, window, day: localDay() })}`),
+  leaderboard: (scope: LeaderboardScope, window: LeaderboardWindow, classroomId?: string) =>
+    api.get<LeaderboardResponse>(
+      `/api/learn/leaderboard${queryString({ scope, window, day: localDay(), classroomId })}`,
+    ),
+
+  // ------------------------------------------------------------ season pass
+  season: () => api.get<SeasonPassView>(`/api/learn/season${queryString({ day: localDay() })}`),
+  claimSeasonTier: (tier: number) =>
+    api.post<SeasonClaimResult>('/api/learn/season/claim', { tier, day: localDay() }),
 
   // -------------------------------------------------------- social profiles
   myPlayerProfile: () => api.get<{ profile: GamificationProfile }>('/api/learn/profile'),

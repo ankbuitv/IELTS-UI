@@ -139,7 +139,8 @@ Rules you must follow:
 8. For multiple-answer tasks (MCQ_MULTI) set selectCount and list every correct option id in "answer" separated by "|".
 9. Extract word limits from instructions into wordLimitMax when stated.
 10. Use "warnings" for anything unclear, ambiguous or partially missing.
-11. Do not include any copyrighted branding or claims of official affiliation.`;
+11. Do not include any copyrighted branding or claims of official affiliation.
+12. When page images are supplied as scans, read them with OCR: transcribe the printed text verbatim before structuring it, and mention unreadable fragments in "warnings".`;
 
 export interface AiStructureRequest {
   sourceText?: string;
@@ -147,6 +148,8 @@ export interface AiStructureRequest {
   titleHint?: string;
   imageDataUrls?: string[];
   audioTranscript?: string;
+  /** True when the images are scans with no text layer: the model must OCR them. */
+  ocr?: boolean;
 }
 
 export interface AiStructureResponse {
@@ -174,7 +177,9 @@ export async function structureTestFromSource(
     request.audioTranscript ? `Audio transcript:\n${request.audioTranscript.slice(0, 60_000)}` : null,
     sourceText ? `Source text:\n\n${sourceText}` : null,
     request.imageDataUrls?.length
-      ? `${request.imageDataUrls.length} page image(s) were supplied; work only from the text that accompanies them.`
+      ? request.ocr
+        ? `${request.imageDataUrls.length} scanned page image(s) are attached. Transcribe every visible word — headings, instructions, passages, questions, options, tables and any printed answer key — then structure the test. Do not summarise or skip instructions.`
+        : `${request.imageDataUrls.length} page image(s) were supplied; work only from the text that accompanies them.`
       : null,
     'Return the structured test as JSON.',
   ]
@@ -194,6 +199,62 @@ export async function structureTestFromSource(
     temperature: 0.1,
     jsonSchema: { name: STRUCTURED_TEST_SCHEMA_NAME, schema: STRUCTURED_TEST_JSON_SCHEMA as unknown as Record<string, unknown> },
     timeoutMs: 180_000,
+  });
+
+  return {
+    payload: result.data,
+    model: result.provider.model,
+    ...(result.usage ? { usage: result.usage } : {}),
+  };
+}
+
+const GENERATION_SYSTEM_PROMPT = `You write ORIGINAL IELTS-style Reading practice tests for a study platform.
+
+Non-negotiable rules:
+1. Invent every passage. Never reproduce, paraphrase or closely follow a real IELTS, Cambridge, British Council or IDP passage. Do not mention those organisations in the passage.
+2. Never copy a real question. The topic prompt from the administrator is a brief, not a text to copy.
+3. Each section has its own passage of roughly 650–900 words in 4–6 paragraphs labelled A, B, C…
+4. Every question must be answerable from the passage. Include the exact supporting sentence in "evidence" and a one-sentence "explanation".
+5. Number questions consecutively across sections (section 1 starts at 1; section 2 continues).
+6. Use only question types from the schema enum. Use sharedOptions for matching tasks and selectCount for multi-answer tasks.
+7. testType must be "READING"; answerKeyConfidence must be "PROVIDED"; warnings may be empty.
+8. Use consistent British spelling. Keep the register academic but readable.
+9. The material is a practice test, not an official exam: no "official", no band claims inside the passage.`;
+
+export function buildGenerationPrompt(input: AiGenerateRequest): string {
+  return [
+    `Create ${input.sections} Reading section(s) at approximately band ${input.band}.`,
+    `Questions per section: ${input.questionsPerSection}.`,
+    input.title ? `Working title: ${input.title}` : null,
+    `Administrator brief: ${input.prompt}`,
+    'Return the whole test as one JSON object matching the schema.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+export interface AiGenerateRequest {
+  prompt: string;
+  title?: string;
+  band: number;
+  sections: number;
+  questionsPerSection: number;
+}
+
+/** Creates an original Reading test from an admin brief. Always lands in REVIEW. */
+export async function generateTestFromPrompt(env: Env, input: AiGenerateRequest): Promise<AiStructureResponse> {
+  const status = await aiStatus(env);
+  if (!status.available) throw new ApiError('AI_UNAVAILABLE', status.reason ?? 'AI generation is unavailable.');
+
+  const result = await completeJson<unknown>(env, {
+    messages: [
+      { role: 'system', content: GENERATION_SYSTEM_PROMPT },
+      { role: 'user', content: buildGenerationPrompt(input) },
+    ],
+    temperature: 0.75,
+    maxTokens: 14_000,
+    timeoutMs: 300_000,
+    jsonSchema: { name: STRUCTURED_TEST_SCHEMA_NAME, schema: STRUCTURED_TEST_JSON_SCHEMA as unknown as Record<string, unknown> },
   });
 
   return {

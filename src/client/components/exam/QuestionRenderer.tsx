@@ -99,7 +99,7 @@ export function QuestionRenderer({
     ) : null;
 
   return (
-    <div className={classes} id={`q-${question.number}`} onFocus={() => onFocusQuestion(question.id)}>
+    <div className={classes} id={`q-${question.id}`} onFocus={() => onFocusQuestion(question.id)}>
       {answerInsideText ? null : (
         <div className="question__number" aria-hidden="true">
           {question.number}
@@ -432,12 +432,32 @@ function MatchControl({
 }) {
   const generatedId = useId();
   const listId = `match-${generatedId.replace(/[^a-zA-Z0-9-]/g, '')}`;
+  const chosen = options.find((option) => option.id === selected) ?? null;
+  if (readOnly) {
+    // In review the chosen option is shown in full — a disabled select truncates
+    // long option text and hides what the candidate actually picked.
+    return (
+      <div className="row" style={{ gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+        <span className="small" style={{ whiteSpace: 'pre-wrap' }}>
+          {chosen ? (
+            <>
+              <strong>{chosen.id}</strong> — {chosen.text}
+            </>
+          ) : (
+            <span className="muted">No answer</span>
+          )}
+        </span>
+        <span className="tiny muted" id={listId}>
+          {options.length} options
+        </span>
+      </div>
+    );
+  }
   return (
     <div className="row" style={{ gap: 8, alignItems: 'center' }}>
       <select
         aria-label="Select an option"
         value={selected}
-        disabled={readOnly}
         onChange={(event) => onSelect(event.target.value)}
         style={{ maxWidth: 320 }}
       >

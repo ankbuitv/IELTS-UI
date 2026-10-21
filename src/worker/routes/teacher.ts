@@ -29,7 +29,7 @@ import {
 import { getClassroomAnalytics, getSkillPerformance, getTaskTypePerformance, getTrends, listAttempts } from '../services/analytics-service';
 import { buildResultView } from '../services/attempt-service';
 import { listWritingQueue, markQuestionManually, setWritingScore } from '../services/marking-service';
-import { scoreWritingSubmissionWithAi } from '../services/ai-marking-service';
+import { loadWritingMarks, scoreWritingSubmissionWithAi } from '../services/ai-marking-service';
 import { recordAudit } from '../lib/audit';
 import { EXAM_MODES, RESULT_VISIBILITIES, TIMING_POLICIES } from '../../shared/types';
 
@@ -479,6 +479,21 @@ router.post('/attempts/:attemptId/question-marks', async (c) => {
  * `scoring_source = 'AI'` and a teacher can still override it with a normal
  * writing-scores call; the AI feedback stays in the audit table either way.
  */
+/** The judges' latest estimate for one essay, used to prefill the quick-mark form. */
+router.get('/writing-submissions/:submissionId/ai-draft', async (c) => {
+  const user = currentUser(c);
+  const submissionId = c.req.param('submissionId');
+  const submission = await c.env.DB.prepare(
+    `SELECT w.id, a.user_id FROM writing_submissions w JOIN attempts a ON a.id = w.attempt_id WHERE w.id = ?`,
+  )
+    .bind(submissionId)
+    .first<{ id: string; user_id: string }>();
+  if (!submission) throw ApiError.notFound('Writing submission not found.');
+  await requireStudentAccess(c.env, user, submission.user_id);
+  const marks = await loadWritingMarks(c.env, [submissionId]);
+  return c.json({ mark: marks.get(submissionId) ?? null });
+});
+
 router.post('/writing-submissions/:submissionId/ai-score', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);

@@ -43,6 +43,7 @@ export type IconName =
   | 'lock'
   | 'calendar'
   | 'mail'
+  | 'bell'
   | 'trendingUp'
   | 'award'
   | 'file'
@@ -74,7 +75,16 @@ export type IconName =
   | 'bulb'
   | 'crown'
   | 'shieldCheck'
-  | 'hourglass';
+  | 'hourglass'
+  | 'video'
+  | 'monitor'
+  | 'send'
+  | 'hand'
+  | 'phoneOff'
+  | 'edit'
+  | 'more'
+  | 'link'
+  | 'copy';
 
 const PATHS: Record<IconName, ReactElement> = {
   grid: (
@@ -270,6 +280,12 @@ const PATHS: Record<IconName, ReactElement> = {
       <path d="m4 7.5 8 5.5 8-5.5" />
     </>
   ),
+  bell: (
+    <>
+      <path d="M6.5 10a5.5 5.5 0 0 1 11 0c0 4 1.2 5.4 2 6.2.3.3.1.8-.4.8H4.9c-.5 0-.7-.5-.4-.8.8-.8 2-2.2 2-6.2Z" />
+      <path d="M10 20a2.4 2.4 0 0 0 4 0" />
+    </>
+  ),
   trendingUp: (
     <>
       <path d="m3.5 16.5 5-5 3.5 3.5 6.5-6.5" />
@@ -444,6 +460,55 @@ const PATHS: Record<IconName, ReactElement> = {
       <path d="M19.5 4.5 14 10" />
       <path d="M9.5 19.5H4.5V14.5" />
       <path d="M4.5 19.5 10 14" />
+    </>
+  ),
+  video: (
+    <>
+      <rect x="3" y="6.5" width="12.5" height="11" rx="3" />
+      <path d="M15.5 11l5-3v8l-5-3z" />
+    </>
+  ),
+  monitor: (
+    <>
+      <rect x="3" y="4.5" width="18" height="12" rx="2.5" />
+      <path d="M9 20.5h6M12 16.5v4" />
+    </>
+  ),
+  send: <path d="M4.5 12 20 4.5 15.5 20l-3.5-6.5-7.5-1.5zM12 13.5 20 4.5" />,
+  hand: (
+    <>
+      <path d="M8.5 11V5.8a1.4 1.4 0 0 1 2.8 0V10m0-.4V4.9a1.4 1.4 0 0 1 2.8 0V10m0-.8V6.4a1.4 1.4 0 0 1 2.8 0V14a6 6 0 0 1-6 6h-.7a5.6 5.6 0 0 1-4.6-2.4L4 13.4a1.5 1.5 0 0 1 2.4-1.8l2.1 2.4" />
+    </>
+  ),
+  phoneOff: (
+    <>
+      <path d="M5 5h3l1.6 4-2 1.6a12.5 12.5 0 0 0 5.8 5.8l1.6-2 4 1.6v3a1.5 1.5 0 0 1-1.7 1.5C9.6 20 4 14.4 3.5 6.7A1.5 1.5 0 0 1 5 5z" />
+      <path d="M4 4l16 16" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect x="8.5" y="8.5" width="11" height="11" rx="2" />
+      <path d="M15.5 8.5V5.5a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="5.5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="18.5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="M10.5 13.5a3.6 3.6 0 0 0 5.1 0l2.4-2.4a3.6 3.6 0 0 0-5.1-5.1l-1.2 1.2" />
+      <path d="M13.5 10.5a3.6 3.6 0 0 0-5.1 0l-2.4 2.4a3.6 3.6 0 0 0 5.1 5.1l1.2-1.2" />
+    </>
+  ),
+  edit: (
+    <>
+      <path d="M14.5 5.5l4 4L8 20H4v-4z" />
+      <path d="M12.5 7.5l4 4" />
     </>
   ),
 };

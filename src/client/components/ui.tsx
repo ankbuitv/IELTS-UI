@@ -18,7 +18,7 @@ import { Icon, type IconName } from './Icon';
 // ---------------------------------------------------------------------------
 // Buttons
 // ---------------------------------------------------------------------------
-type ButtonVariant = 'default' | 'primary' | 'secondary' | 'success' | 'danger' | 'ghost';
+type ButtonVariant = 'default' | 'primary' | 'secondary' | 'success' | 'danger' | 'ghost' | 'sun' | 'glass';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -506,16 +506,29 @@ export function Modal({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Keep the latest onClose without re-running the focus effect on every render:
+  // an inline `onClose={() => …}` used to change identity per keystroke, and the
+  // effect below then re-focused the dialog, stealing the caret from inputs.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
     document.addEventListener('keydown', onKeyDown);
-    ref.current?.focus();
+    // Only pull focus into the dialog when nothing inside it (or outside) is
+    // already focused — never yank the caret out of a field being typed in.
+    const active = document.activeElement as HTMLElement | null;
+    const focusInside = active && ref.current?.contains(active);
+    if (!active || active === document.body || !focusInside) {
+      ref.current?.focus({ preventScroll: true });
+    }
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return (

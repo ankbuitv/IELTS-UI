@@ -10,13 +10,14 @@ import { AudioPlayer } from './AudioPlayer';
 import { QuestionGroupHeader, GroupOptionBank, QuestionRenderer } from './QuestionRenderer';
 import { SectionImage } from './SectionImage';
 import { TranscriptView } from './TranscriptView';
-import { WritingAnswer, WritingPrompt, writingTasksOf } from './WritingEditor';
+import { WritingAnswer, WritingPrompt, writingTaskLabel, writingTasksOf } from './WritingEditor';
 import { formatClock, MODE_LABELS, SKILL_LABELS } from '../../lib/format';
 import { DisplayMenu } from '../DisplayMenu';
 import { useToast } from '../ui';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { ExamSessionApi } from './useExamSession';
 import { ExamDictionary } from './ExamDictionary';
+import { missingQuestionIds } from './answer-coverage';
 import { TabLockOverlay } from './TabLockOverlay';
 import { useExamViewportLock } from './useExamViewport';
 import { useInputLockdown } from '../../hooks/useInputLockdown';
@@ -43,11 +44,13 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
   const [dictionaryOpen, setDictionaryOpen] = useState(false);
+  const [dictTerm, setDictTerm] = useState('');
   const [leaving, setLeaving] = useState(false);
   const [advancedToNext, setAdvancedToNext] = useState(false);
   const [highlightSegmentId] = useState<string | null>(null);
   const [pickedTaskId, setPickedTaskId] = useState<string | null>(null);
   const warnedRef = useRef<string | null>(null);
+  const fiveMinuteWarnedRef = useRef(false);
 
   const mode: PaneMode = compact ? compactMode : paneMode;
   const setView = useCallback(
@@ -82,22 +85,47 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
     return map;
   }, [sections]);
 
+  /**
+   * Answered questions are tracked by id, never by number. Imported papers
+   * sometimes restart numbering inside a part, and a Set of numbers then counts
+   * two different questions as one — the candidate fills everything and is
+   * still told that questions are missing.
+   */
+  const answeredQuestionIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!state) return ids;
+    const essayIds = new Set(sections.flatMap((section) => section.writingTasks.map((task) => task.id)));
+    const writing = Object.fromEntries(state.writing.map((entry) => [entry.questionId, entry.text]));
+    const missing = new Set(missingQuestionIds(allQuestions, { answers: state.answers, writing, essayIds }));
+    for (const question of allQuestions) {
+      if (!missing.has(question.id)) ids.add(question.id);
+    }
+    return ids;
+  }, [state, allQuestions, sections]);
+
   const answeredNumbers = useMemo(() => {
     const numbers = new Set<number>();
-    if (!state) return numbers;
     for (const question of allQuestions) {
-      if (isEssay(question, sections)) continue;
-      const response = state.answers[question.id];
-      if (!response) continue;
-      const values = 'values' in response ? response.values : [response.value];
-      if (values.some((value) => String(value ?? '').trim().length > 0)) numbers.add(question.number);
-    }
-    for (const writing of state.writing) {
-      const question = allQuestions.find((item) => item.id === writing.questionId);
-      if (question && writing.text.trim().length > 0) numbers.add(question.number);
+      if (answeredQuestionIds.has(question.id)) numbers.add(question.number);
     }
     return numbers;
-  }, [state, allQuestions, sections]);
+  }, [allQuestions, answeredQuestionIds]);
+
+  /** Empty questions in paper order, so "still missing" can name them. */
+  const missingQuestions = useMemo(() => {
+    const writing = writingTasksOf(sections);
+    return allQuestions
+      .filter((question) => !answeredQuestionIds.has(question.id))
+      .map((question) => {
+        const task = writing.find((item) => item.task.id === question.id);
+        return {
+          id: question.id,
+          number: question.number,
+          label: task ? writingTaskLabel(task) : String(question.number),
+          sectionId: sections.find((section) => section.questionNumbers.includes(question.number))?.id ?? null,
+        };
+      });
+  }, [allQuestions, answeredQuestionIds, sections]);
 
   const flaggedNumbers = useMemo(() => {
     const numbers = new Set<number>();
@@ -145,7 +173,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
     [activeSection, questionsBySection],
   );
 
-  const unansweredCount = Math.max(0, allQuestions.length - answeredNumbers.size);
+  const unansweredCount = missingQuestions.length;
   const currentQuestion = allQuestions.find((question) => question.id === currentQuestionId) ?? null;
   const isWriting = Boolean(activeSection && (activeSection.skill === 'WRITING' || activeSection.writingTasks.length > 0));
   const writingTasks = useMemo(() => (activeSection ? writingTasksOf([activeSection]) : []), [activeSection]);
@@ -161,7 +189,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
       if (compact) setCompactMode('QUESTIONS');
       else setPaneMode((current) => (current === 'PASSAGE' ? 'QUESTIONS' : current));
       // Wait a frame so the pane (and a part we just switched to) is rendered.
-      window.requestAnimationFrame(() => scrollQuestionIntoView(number));
+      window.requestAnimationFrame(() => scrollQuestionIntoView(question.id));
     },
     [allQuestions, compact],
   );
@@ -179,6 +207,26 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
       if (firstQuestion) setCurrentQuestionId(firstQuestion.id);
     },
     [isSectionOpen, questionsBySection, toast],
+  );
+
+  /** Jump to an exact question, even when two parts reuse the same number. */
+  const jumpToQuestionId = useCallback(
+    (questionId: string) => {
+      const question = allQuestions.find((item) => item.id === questionId);
+      if (!question) return;
+      const owner = sections.find((section) =>
+        section.groups.some((group) => group.questions.some((item) => item.id === questionId)),
+      );
+      if (owner && owner.id !== activeSection?.id) {
+        switchToSection(owner.id);
+        const task = owner.writingTasks.find((item) => item.id === questionId);
+        if (task) setPickedTaskId(questionId);
+      }
+      setCurrentQuestionId(questionId);
+      if (compact) setCompactMode('QUESTIONS');
+      window.requestAnimationFrame(() => scrollQuestionIntoView(question.id));
+    },
+    [allQuestions, sections, activeSection?.id, switchToSection, compact],
   );
 
   /** Step to the next / previous question, crossing into the neighbouring part. */
@@ -249,6 +297,21 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
       );
     }
   }, [state, toast]);
+
+  /**
+   * #11 Supervised mock: one clear warning at five minutes, next to the tab
+   * lock. Auto-submit on expiry and on the integrity threshold is enforced by
+   * the session layer and the server; this only makes the last five minutes
+   * impossible to miss.
+   */
+  useEffect(() => {
+    const remaining = session.sessionRemainingSeconds;
+    if (remaining === null) return;
+    if (remaining <= 300 && remaining > 0 && !fiveMinuteWarnedRef.current) {
+      fiveMinuteWarnedRef.current = true;
+      toast.push('5 minutes left. Check that every question has an answer before the paper closes.', 'warning');
+    }
+  }, [session.sessionRemainingSeconds, toast]);
 
   if (!state || !state.content) {
     // After the tab lock submits the attempt the server stops sending the paper, but the
@@ -326,7 +389,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
     : null;
   const activeProgress = activeSection ? sectionProgress.find((row) => row.sectionId === activeSection.id) ?? null : null;
   const activeIndex = sections.findIndex((section) => section.id === activeSection?.id);
-  const answeredTotal = answeredNumbers.size;
+  const answeredTotal = answeredQuestionIds.size;
   const total = allQuestions.length;
   const skillLabel = state.components[state.activeComponentIndex]
     ? SKILL_LABELS[state.components[state.activeComponentIndex]!.skill]
@@ -340,6 +403,11 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
 
   const showMaterial = mode !== 'QUESTIONS';
   const showWork = mode !== 'PASSAGE';
+  const practiceTools = state.integrity.policy.mode === 'PRACTICE';
+  const lookupWord = (term: string) => {
+    setDictTerm(term);
+    setDictionaryOpen(true);
+  };
 
   return (
     <div className="exam-root">
@@ -418,7 +486,7 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
           {/* Text size / spacing / theme, reachable mid-exam on a phone. */}
           <DisplayMenu compact />
 
-          {state.integrity.policy.mode === 'PRACTICE' ? (
+          {practiceTools ? (
             <button
               type="button"
               className={`exam-icon exam-icon--vocab${dictionaryOpen ? ' is-on' : ''}`}
@@ -558,6 +626,9 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
                 key={activeSection.id}
                 sections={[activeSection]}
                 showInstructions
+                practiceTools={practiceTools}
+                storageKey={state.attemptId}
+                onLookup={lookupWord}
                 lead={
                   <>
                     {activeSection.description ? <p className="exam-lead small muted">{activeSection.description}</p> : null}
@@ -808,10 +879,19 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
             <>
               {' '}
               <strong>{unansweredCount}</strong> {isWriting ? 'task' : 'question'}
-              {unansweredCount === 1 ? ' is' : 's are'} still unanswered.
+              {unansweredCount === 1 ? ' is' : 's are'} still empty:
             </>
           ) : null}
         </p>
+        {missingQuestions.length > 0 ? (
+          <MissingQuestionChips
+            missing={missingQuestions}
+            onJump={(id) => {
+              setSubmitOpen(false);
+              jumpToQuestionId(id);
+            }}
+          />
+        ) : null}
         <p className="muted small">
           Answers lock after submission. Reading and Listening are marked straight away. Writing is marked
           automatically by two AI judges as soon as you submit.
@@ -824,13 +904,17 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
         onClose={() => setShowUnansweredWarning(false)}
       >
         <UnansweredWarning
-          count={unansweredCount}
+          missing={missingQuestions}
+          onJump={(questionId) => {
+            setShowUnansweredWarning(false);
+            jumpToQuestionId(questionId);
+          }}
           onCancel={() => setShowUnansweredWarning(false)}
           onConfirm={() => void handleSubmit(true)}
         />
       </Modal>
 
-      {dictionaryOpen ? <ExamDictionary onClose={() => setDictionaryOpen(false)} /> : null}
+      {dictionaryOpen ? <ExamDictionary initialTerm={dictTerm} onClose={() => setDictionaryOpen(false)} /> : null}
 
       {session.tabLock ? (
         <TabLockOverlay lock={session.tabLock} onReturn={session.acknowledgeTabLock} onViewResults={onFinished} />
@@ -843,8 +927,8 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
  * Brings a question into view by scrolling its own pane, never the document,
  * and focuses its control without letting the browser scroll anything else.
  */
-function scrollQuestionIntoView(number: number): void {
-  const element = document.getElementById(`q-${number}`);
+function scrollQuestionIntoView(questionId: string): void {
+  const element = document.getElementById(`q-${questionId}`);
   if (!element) return;
   const scroller = element.closest<HTMLElement>('.exam-pane__scroll');
   if (scroller) {
@@ -863,13 +947,49 @@ function partLabel(section: CandidateSection, index: number, compact: boolean): 
   return match ? `${match[1]!.toUpperCase()}${match[2]}` : label.slice(0, 8);
 }
 
-function UnansweredWarning({ count, onCancel, onConfirm }: { count: number; onCancel: () => void; onConfirm: () => void }) {
+interface MissingQuestion {
+  id: string;
+  number: number;
+  label: string;
+}
+
+/**
+ * The exact questions the paper considers empty, as buttons that jump straight
+ * to them. A bare "3 unanswered" leaves the candidate hunting through 40
+ * questions; this closes the gap in one click.
+ */
+function MissingQuestionChips({ missing, onJump }: { missing: MissingQuestion[]; onJump: (id: string) => void }) {
+  const shown = missing.slice(0, 30);
+  return (
+    <div className="missing-chips" aria-label="Questions still empty">
+      {shown.map((item) => (
+        <button key={item.id} type="button" className="missing-chip" onClick={() => onJump(item.id)}>
+          {item.label}
+        </button>
+      ))}
+      {missing.length > shown.length ? <span className="missing-chip missing-chip--more">+{missing.length - shown.length}</span> : null}
+    </div>
+  );
+}
+
+function UnansweredWarning({
+  missing,
+  onJump,
+  onCancel,
+  onConfirm,
+}: {
+  missing: MissingQuestion[];
+  onJump: (id: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
   return (
     <div className="stack">
       <p>
-        You still have <strong>{count}</strong> unanswered question{count === 1 ? '' : 's'}. Unanswered questions score
-        zero, and answers cannot be changed after submission.
+        You still have <strong>{missing.length}</strong> unanswered question{missing.length === 1 ? '' : 's'}. Jump to one
+        below, or submit anyway — empty answers score zero and cannot be changed afterwards.
       </p>
+      {missing.length > 0 ? <MissingQuestionChips missing={missing} onJump={onJump} /> : null}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <Button onClick={onCancel}>Keep working</Button>
         <Button variant="primary" onClick={onConfirm}>
@@ -919,10 +1039,6 @@ function storePassageWidth(value: number): void {
   } catch {
     // Not fatal.
   }
-}
-
-function isEssay(question: CandidateQuestion, sections: CandidateSection[]): boolean {
-  return sections.some((section) => section.writingTasks.some((task) => task.id === question.id));
 }
 
 /**

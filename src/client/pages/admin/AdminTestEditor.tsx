@@ -1521,28 +1521,33 @@ function VersionEditorBody({
                 />
               ) : null}
 
-              {section.skill !== 'WRITING' ? (
-                <Field
-                  label="Section image URL (optional)"
-                  hint="Diagram or chart shown with this section. Saving the content attaches the HTTPS link automatically."
-                >
-                  {(id) => (
-                    <TextInput
-                      id={id}
-                      type="url"
-                      value={section.imageUrl ?? (section.imageAssetId ? `asset:${section.imageAssetId}` : '')}
-                      disabled={readOnly}
-                      placeholder="https://cdn.example.com/diagram.png"
-                      onChange={(event) =>
-                        updateSection(sectionIndex, {
-                          imageUrl: event.target.value || null,
-                          imageAssetId: event.target.value ? section.imageAssetId : null,
-                        })
-                      }
-                    />
-                  )}
-                </Field>
-              ) : null}
+              <Field
+                label="Section image URL (optional)"
+                hint="Diagram or chart shown with this section. For Writing Task 1 the AI judge sees this image when marking."
+              >
+                {(id) => (
+                  <TextInput
+                    id={id}
+                    type="url"
+                    value={section.imageUrl ?? (section.imageAssetId ? `asset:${section.imageAssetId}` : '')}
+                    disabled={readOnly}
+                    placeholder="https://cdn.example.com/diagram.png"
+                    onChange={(event) =>
+                      updateSection(sectionIndex, {
+                        imageUrl: event.target.value || null,
+                        imageAssetId: event.target.value ? section.imageAssetId : null,
+                      })
+                    }
+                  />
+                )}
+              </Field>
+              <ImageUpload
+                versionId={versionId}
+                disabled={readOnly}
+                onUploaded={(assetId) => {
+                  if (assetId) updateSection(sectionIndex, { imageAssetId: assetId, imageUrl: null });
+                }}
+              />
 
               <div className="stack" style={{ marginTop: 14 }}>
                 {section.groups.map((group, groupIndex) => (
@@ -1806,6 +1811,67 @@ function AudioUpload({
       </div>
       <span className="field__hint">
         Media is linked, not uploaded: the file stays on the host you name and must be reachable over HTTPS.
+      </span>
+    </div>
+  );
+}
+
+function ImageUpload({
+  versionId,
+  disabled,
+  onUploaded,
+}: {
+  versionId: string;
+  disabled?: boolean;
+  onUploaded: (assetId?: string) => Promise<void> | void;
+}) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <div className="field">
+      <span className="field__label">Or upload an image (PNG, JPEG, WebP, GIF — up to 4 MB)</span>
+      <div className="row">
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          disabled={disabled || busy}
+          onChange={async (event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            if (file.size > 4_000_000) {
+              toast.push('Keep section images under 4 MB.', 'error');
+              return;
+            }
+            setBusy(true);
+            try {
+              const dataBase64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result ?? ''));
+                reader.onerror = () => reject(new Error('Could not read the file.'));
+                reader.readAsDataURL(file);
+              });
+              const uploaded = await api.post<{ asset: { id: string } }>('/api/admin/assets/upload', {
+                filename: file.name,
+                mime: file.type || 'image/png',
+                dataBase64,
+                kind: 'IMAGE',
+                testVersionId: versionId,
+              });
+              toast.push('Image uploaded and selected — save the content to keep it.', 'success');
+              await onUploaded(uploaded.asset.id);
+            } catch (uploadError) {
+              toast.push(describeError(uploadError), 'error');
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+        {busy ? <span className="tiny muted">Uploading…</span> : null}
+      </div>
+      <span className="field__hint">
+        The image sits next to the passage in the exam, and the AI judge reads it when marking a Writing Task 1 chart.
       </span>
     </div>
   );

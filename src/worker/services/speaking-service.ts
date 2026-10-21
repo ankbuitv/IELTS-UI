@@ -1,9 +1,9 @@
 import type { Env } from '../env';
 import { describeAiFailure } from '../ai/failure';
 import { ApiError } from '../lib/errors';
-import { newId, nowIso } from '../lib/ids';
+import { newId, nowIso, parseJson } from '../lib/ids';
 import type { AuthUser } from '../lib/auth-types';
-import { findSpeakingTopicSet, partPromptText, SPEAKING_PART_META, SPEAKING_TOPIC_SETS } from '../../shared/speaking';
+import { findSpeakingTopicSet, partPromptText, SPEAKING_PART_META, SPEAKING_TOPIC_SETS, type SpeakingTopicSet } from '../../shared/speaking';
 import { loadSpeakingScore, markSpeakingSession } from './ai-marking-service';
 import type { AiMarkView } from '../../shared/judges';
 import { deleteBlob, getBlob, putBlob } from './blob-store';
@@ -66,22 +66,41 @@ export interface SpeakingSessionView {
   score: AiMarkView | null;
 }
 
+/** Catalog set first, else the session's own snapshot (custom/AI topics). */
+function resolveTopicSet(topicSetId: string, topicJson?: string | null): SpeakingTopicSet | null {
+  const catalogued = findSpeakingTopicSet(topicSetId);
+  if (catalogued) return catalogued;
+  const parsed = parseJson<SpeakingTopicSet | null>(topicJson ?? '', null);
+  return parsed && Array.isArray(parsed.part1) ? parsed : null;
+}
+
 export async function createSpeakingSession(
   env: Env,
   user: AuthUser,
-  input: { topicSetId?: string; mode?: 'PRACTICE' | 'MOCK' },
+  input: { topicSetId?: string; mode?: 'PRACTICE' | 'MOCK'; topic?: SpeakingTopicSet; sourceAttemptId?: string },
 ): Promise<SpeakingSessionView> {
   const topic =
+    input.topic ??
     (input.topicSetId ? findSpeakingTopicSet(input.topicSetId) : undefined) ??
     SPEAKING_TOPIC_SETS[Math.floor(Math.random() * SPEAKING_TOPIC_SETS.length)]!;
 
   const timestamp = nowIso();
   const sessionId = newId('spk');
   await env.DB.prepare(
-    `INSERT INTO speaking_sessions (id, user_id, mode, status, topic_set_id, topic_title, part_count, created_at, updated_at)
-     VALUES (?, ?, ?, 'IN_PROGRESS', ?, ?, 3, ?, ?)`,
+    `INSERT INTO speaking_sessions (id, user_id, mode, status, topic_set_id, topic_title, part_count, topic_json, source_attempt_id, created_at, updated_at)
+     VALUES (?, ?, ?, 'IN_PROGRESS', ?, ?, 3, ?, ?, ?, ?)`,
   )
-    .bind(sessionId, user.id, input.mode ?? 'PRACTICE', topic.id, topic.title, timestamp, timestamp)
+    .bind(
+      sessionId,
+      user.id,
+      input.mode ?? 'PRACTICE',
+      topic.id,
+      topic.title,
+      JSON.stringify(topic),
+      input.sourceAttemptId ?? null,
+      timestamp,
+      timestamp,
+    )
     .run();
 
   return requireSession(env, user, sessionId);
@@ -126,7 +145,7 @@ export async function saveSpeakingResponse(
   }
   if (![1, 2, 3].includes(input.part)) throw ApiError.validation('A speaking response belongs to part 1, 2 or 3.');
 
-  const topic = findSpeakingTopicSet(session.topic_set_id);
+  const topic = resolveTopicSet(session.topic_set_id, session.topic_json);
   const promptText = topic ? partPromptText(topic, input.part) : '';
   const transcript = (input.transcript ?? '').slice(0, 20_000);
   const durationSeconds = Math.max(0, Math.min(3600, Math.round((input.durationSeconds ?? 0) * 10) / 10));
@@ -395,14 +414,14 @@ async function requireOwnedSession(
   env: Env,
   user: AuthUser,
   sessionId: string,
-): Promise<{ id: string; user_id: string; status: string; topic_set_id: string }> {
+): Promise<{ id: string; user_id: string; status: string; topic_set_id: string; topic_json: string | null }> {
   const session = await env.DB.prepare(
-    'SELECT id, user_id, status, topic_set_id FROM speaking_sessions WHERE id = ?',
+    'SELECT id, user_id, status, topic_set_id, topic_json FROM speaking_sessions WHERE id = ?',
   )
     .bind(sessionId)
-    .first<{ id: string; user_id: string; status: string; topic_set_id: string }>();
+    .first<{ id: string; user_id: string; status: string; topic_set_id: string; topic_json: string | null }>();
   if (!session) throw ApiError.notFound('Speaking session not found.');
-  if (session.user_id !== user.id && user.role === 'STUDENT') {
+  if (session.user_id !== user.id && (user.role === 'STUDENT' || user.role === 'MENTOR')) {
     throw ApiError.forbidden('That speaking session belongs to another candidate.');
   }
   return session;
@@ -421,6 +440,7 @@ async function requireSession(env: Env, user: AuthUser, sessionId: string): Prom
       status: SpeakingSessionView['session']['status'];
       mode: SpeakingSessionView['session']['mode'];
       topic_set_id: string;
+      topic_json: string | null;
       topic_title: string;
       part_count: number;
       overall_band: number | null;
@@ -439,7 +459,7 @@ async function requireSession(env: Env, user: AuthUser, sessionId: string): Prom
     .bind(session.id)
     .all<{ part: number; prompt_text: string; transcript: string; duration_seconds: number; words: number; has_audio: number }>();
 
-  const topic = findSpeakingTopicSet(row.topic_set_id) ?? null;
+  const topic = resolveTopicSet(row.topic_set_id, row.topic_json);
   return {
     session: {
       id: row.id,
@@ -490,4 +510,21 @@ export function publicPanelLabel(stored: string | null): string | null {
   if (!stored) return null;
   const labels = stored.match(/Judge0[12]/g);
   return labels && labels.length > 0 ? [...new Set(labels)].join(' + ') : 'Judge01';
+}
+
+
+/** The speaking session linked to a full-mock attempt, if any. */
+export async function findSpeakingForAttempt(
+  env: Env,
+  attemptId: string,
+): Promise<{ id: string; status: string; overallBand: number | null; topicTitle: string } | null> {
+  const row = await env.DB.prepare(
+    `SELECT id, status, overall_band, topic_title FROM speaking_sessions
+      WHERE source_attempt_id = ? ORDER BY created_at DESC LIMIT 1`,
+  )
+    .bind(attemptId)
+    .first<{ id: string; status: string; overall_band: number | null; topic_title: string }>();
+  return row
+    ? { id: row.id, status: row.status, overallBand: row.overall_band, topicTitle: row.topic_title }
+    : null;
 }

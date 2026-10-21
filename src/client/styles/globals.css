@@ -140,6 +140,15 @@
 
   --gradient-brand: var(--brand-600);
   --gradient-accent: var(--ink-900);
+  --gradient-sun: linear-gradient(135deg, #ffd25e 0%, #ffc53d 100%);
+  --gradient-coral: linear-gradient(135deg, #ff9b6e 0%, #ff6ba7 100%);
+
+  /* ---- coral: streaks, hearts, flame (from the playground codebase) ---- */
+  --coral-400: #ff9b6e;
+  --coral-500: #ff7a4d;
+  --coral-600: #ee5c2b;
+  --coral-soft: #fff1e8;
+  --coral-border: #ffd2bb;
 
   --font-display: 'Baloo 2', 'Quicksand', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-ui: 'Quicksand', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -299,6 +308,13 @@ html { scroll-behavior: smooth; }
 .btn--ghost { --btn-bg: transparent; --btn-bd: transparent; --btn-edge: transparent; --btn-fg: var(--ink-700); box-shadow: none; }
 .btn--ghost:hover:not(:disabled) { --btn-bg: var(--ink-100); --btn-bd: transparent; --btn-edge: transparent; }
 .btn--ghost:active:not(:disabled) { transform: none; }
+/* Playful accents: sunny yellow and glassy white-on-fill. */
+.btn--sun { --btn-bg: var(--sun-500); --btn-bd: var(--sun-500); --btn-fg: #402b00; --btn-edge: var(--sun-600); }
+.btn--sun:hover:not(:disabled) { --btn-bg: var(--sun-400); --btn-bd: var(--sun-400); --btn-edge: var(--sun-600); color: #402b00; }
+.btn--glass {
+  --btn-bg: rgba(255, 255, 255, 0.16); --btn-bd: rgba(255, 255, 255, 0.4); --btn-fg: #fff; --btn-edge: transparent;
+}
+.btn--glass:hover:not(:disabled) { --btn-bg: rgba(255, 255, 255, 0.28); --btn-bd: rgba(255, 255, 255, 0.55); color: #fff; }
 .btn--sm { min-height: 32px; padding: 3px 14px; font-size: 0.82rem; gap: 6px; border-radius: var(--radius-pill); }
 .btn--lg { min-height: 48px; padding: 9px 26px; font-size: 1rem; border-radius: var(--radius-pill); box-shadow: 0 3px 0 var(--btn-edge), 0 8px 18px -8px rgba(42, 47, 90, 0.35); }
 .btn--lg:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--btn-edge), 0 4px 10px -7px rgba(42, 47, 90, 0.32); }
@@ -632,3 +648,19 @@ table.data--zebra tbody tr:nth-child(even) { background: var(--paper-muted); }
 }
 .password-toggle:hover { background: var(--ink-100); color: var(--ink-900); }
 .password-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* ------------------------------------------------------ mobile safety net */
+@media (max-width: 640px) {
+  h1 { font-size: 1.55rem; letter-spacing: -0.025em; }
+  h2 { font-size: 1.22rem; }
+  .card { padding: 16px 16px; border-radius: 18px; }
+  .stack { gap: 14px; }
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  img, video, iframe { max-width: 100%; }
+  .btn { min-height: 42px; }
+  .btn--sm { min-height: 34px; }
+  .dash-hero { padding: 22px 18px; }
+  .dash-hero__stats { gap: 8px; }
+  .dash-stat { min-width: 84px; padding: 8px 11px; }
+  .dash-stat__value { font-size: 1.12rem; }
+}

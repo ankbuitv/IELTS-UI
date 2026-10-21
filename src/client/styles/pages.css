@@ -55,6 +55,11 @@
 .dash-hero h1 { color: var(--ink-900); margin: 0 0 6px; font-family: var(--font-display); font-size: 2.3rem; font-weight: 800; letter-spacing: -0.02em; }
 .dash-hero p:not(.dash-hero__kicker) { margin: 0; color: var(--ink-600); font-size: 0.98rem; max-width: 62ch; }
 .dash-hero__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+/* Six little paper chips of progress, straight from the playground codebase. */
+.dash-hero__stats { position: relative; z-index: 1; width: 100%; display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.dash-stat { display: flex; flex-direction: column; gap: 1px; min-width: 92px; padding: 8px 14px; border-radius: 14px; background: var(--paper); box-shadow: var(--shadow-xs); }
+.dash-stat__value { font-family: var(--font-display); font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; color: var(--ink-900); font-variant-numeric: tabular-nums; }
+.dash-stat__label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-500); }
 
 /* The roster: pastel skill cells, the butter deadline cell, the Learn strip,
    and the week's board down the side. */
@@ -291,17 +296,19 @@ a.skill-tile:hover .skill-tile__go { color: var(--skill); }
 .ai-retry { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: var(--warning-soft); border: 1px solid var(--warning-border); border-radius: var(--radius); font-size: 0.88rem; color: var(--ink-800); }
 .ai-retry > span { display: inline-flex; align-items: center; gap: 6px; }
 
-.aimark { display: flex; flex-direction: column; gap: 14px; padding: 20px 22px; background: var(--paper); border: 1px solid var(--ink-200); border-radius: var(--radius-xl); box-shadow: var(--shadow-xs); }
-.aimark__head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.aimark { display: flex; flex-direction: column; gap: 14px; padding: 20px 22px; min-width: 0; background: var(--paper); border: 1px solid var(--ink-200); border-radius: var(--radius-xl); box-shadow: var(--shadow-xs); }
+.aimark__head { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
 .aimark__band { flex: none; min-width: 92px; padding: 10px 14px; text-align: center; background: var(--solid); color: var(--on-solid); border-radius: var(--radius-lg); display: flex; flex-direction: column; box-shadow: 0 3px 0 var(--solid-edge); }
 .aimark__band-value { font-size: 2.3rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; color: var(--sun-500); }
-.aimark__band-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #aab6c8; margin-top: 4px; }
+.aimark__band-caption { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #aab6c8; margin-top: 3px; }
 .aimark__who { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; flex: 1; }
 .aimark__who strong { color: var(--ink-950); font-size: 1.05rem; }
-.aimark__who > span { font-size: 0.86rem; color: var(--ink-600); }
-.aimark .tabs { margin: 0; }
-.criteria-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-.criterion { border: 1px solid var(--ink-200); border-radius: var(--radius); background: var(--paper-muted); padding: 12px 14px; }
+.aimark__who > span { font-size: 0.86rem; color: var(--ink-600); overflow-wrap: anywhere; }
+.aimark__who .badge { white-space: normal; max-width: 100%; }
+.aimark .tabs { margin: 0; flex-wrap: wrap; overflow-x: visible; }
+.criteria-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+@media (max-width: 520px) { .criteria-grid { grid-template-columns: 1fr; } }
+.criterion { border: 1px solid var(--ink-200); border-radius: var(--radius); background: var(--paper-muted); padding: 12px 14px; min-width: 0; }
 .criterion__judges { display: flex; gap: 12px; margin: 3px 0 0; font-size: 0.78rem; color: var(--ink-500); }
 .criterion__judges b { color: var(--ink-800); font-variant-numeric: tabular-nums; }
 .aimark__feedback { margin: 0; font-size: 0.96rem; line-height: 1.7; color: var(--ink-800); }
@@ -356,3 +363,58 @@ a.skill-tile:hover .skill-tile__go { color: var(--skill); }
   .report-tiles { min-width: 0; width: 100%; }
   .aimark { padding: 16px; }
 }
+
+/* ------------------------------------------------------------- calendar */
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.cal-grid__head { text-align: center; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-400); padding: 4px 0; }
+.cal-cell {
+  position: relative; min-height: 64px; border-radius: 12px; border: 1px solid var(--edge);
+  background: var(--solid); cursor: pointer; font-weight: 700; color: var(--ink-800);
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 8px;
+  transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+.cal-cell:hover:not(:disabled) { border-color: var(--brand-500); transform: translateY(-1px); }
+.cal-cell--pad { opacity: 0; pointer-events: none; }
+.cal-cell--today { border-color: var(--brand-600); box-shadow: 0 0 0 2px var(--brand-200, rgba(207, 49, 120, 0.25)); }
+.cal-cell--selected { background: var(--brand-600); color: #fff; border-color: var(--brand-600); }
+.cal-cell__dots { display: flex; gap: 3px; }
+.cal-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.cal-dot--session { background: var(--brand-600); }
+.cal-dot--class { background: var(--success); }
+.cal-dot--deadline { background: var(--warning); }
+.cal-dot--note { background: var(--ink-400); }
+.cal-cell--selected .cal-dot { background: #fff; }
+@media (max-width: 560px) { .cal-cell { min-height: 44px; font-size: 0.82rem; } }
+
+/* --------------------------------------------------- profile band & links */
+.band-tag {
+  display: inline-flex; align-items: center; margin-left: 10px; padding: 3px 10px;
+  border-radius: 999px; background: var(--sun-500, #f0a200); color: #402b00;
+  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.03em; vertical-align: middle;
+}
+.band-tag--role { background: var(--brand-600, #cf3178); color: #fff; }
+.player-profile-hero__bio { margin: 8px 0 0; max-width: 640px; color: inherit; opacity: 0.92; white-space: pre-wrap; }
+.player-profile-hero__links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.profile-link-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px;
+  border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.35);
+  color: inherit; text-decoration: none; font-size: 0.82rem; font-weight: 700;
+  background: rgba(255, 255, 255, 0.12);
+}
+.profile-link-chip:hover { background: rgba(255, 255, 255, 0.24); }
+.board__row .band-tag { margin-left: 6px; font-size: 0.66rem; padding: 2px 8px; }
+
+/* ------------------------------------------------- chat attachments & polish */
+.chat-attach {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 4px;
+  padding: 7px 12px; border-radius: 12px; text-decoration: none; font-size: 0.82rem; font-weight: 700;
+  background: rgba(255, 255, 255, 0.16); color: inherit; border: 1px solid rgba(255, 255, 255, 0.22);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chat-attach:hover { background: rgba(255, 255, 255, 0.28); }
+.chat-attach-btn {
+  display: grid; place-items: center; width: 38px; height: 38px; flex: none;
+  border-radius: 12px; border: 1px solid var(--edge); background: var(--wash);
+  cursor: pointer; color: var(--ink-700);
+}
+.chat-attach-btn:hover { border-color: var(--brand-500); color: var(--brand-600); }

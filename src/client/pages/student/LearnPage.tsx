@@ -805,6 +805,7 @@ export function LearnPage() {
                   </Button>
                 ) : null}
                 <Button size="lg" onClick={() => navigate('/learn/shop')}><Icon name="cart" size={15} /> Shop</Button>
+                <Button size="lg" onClick={() => navigate('/mentors')}><Icon name="graduation" size={15} /> Mentors</Button>
                 <Button size="lg" onClick={() => navigate('/learn/leaderboard')}><Icon name="trophy" size={15} /> Leaderboard</Button>
                 <Button size="lg" onClick={() => navigate(`/learn/everyday?band=${selectedBand ?? profile.band}`)}><Icon name="sparkle" size={15} /> Everyday Lessons</Button>
                 <Button size="lg" onClick={() => navigate('/learn/friends')}><Icon name="users" size={15} /> Friends</Button>

@@ -2,11 +2,11 @@ import type { Env } from '../env';
 import { ApiError } from '../lib/errors';
 import { nowIso, parseJson } from '../lib/ids';
 import { completeJson } from '../ai/providers';
-import { describeAiFailure } from '../ai/failure';
 import { VOCAB_TOPICS } from '../ai/coach-prompts';
 import { buildEverydayLessonMessages } from '../ai/learn-prompts';
 import { EVERYDAY_QUOTES, isLessonKind, type EverydayLessonView, type EverydayLessonsResponse, type LearnBand, type LessonKind, type LessonPayload } from '../../shared/learn';
 import { seededRandom, shuffle } from '../../shared/learn-engine';
+import { WORD_BANK } from '../../shared/learn-content';
 import { lessonItemCount, normaliseLessonPayload } from '../../shared/lesson-payload';
 import { insertLesson, ensureCatalogue } from './learn-catalogue-service';
 
@@ -82,6 +82,62 @@ async function readSet(env: Env, userId: string, band: LearnBand, day: string): 
   return { day, band, lessons };
 }
 
+/**
+ * Offline stand-in used whenever the AI cannot produce today's set: six VOCAB
+ * lessons built from the shipped word bank, chosen by a seeded draw so the day
+ * is stable for the learner. Everyday Lessons must never simply "not appear".
+ */
+async function generateOfflineSet(env: Env, userId: string, band: LearnBand, day: string): Promise<void> {
+  const random = seededRandom(`${userId}:${day}:${band}:everyday-offline`);
+  const pool = shuffle(
+    WORD_BANK.filter((word) => word.band === band).length >= 36
+      ? WORD_BANK.filter((word) => word.band === band)
+      : WORD_BANK,
+    random,
+  );
+  const topics = shuffle(VOCAB_TOPICS, random);
+  const now = nowIso();
+  const created: Array<{ lessonId: string; slot: number; quote: string }> = [];
+  for (let slot = 0; slot < DAILY_LESSON_COUNT; slot += 1) {
+    const words = pool.slice(slot * 6, slot * 6 + 6).map((word) => ({
+      term: word.term,
+      pos: word.pos,
+      meaning: word.meaning,
+      vi: word.vi,
+      example: word.example,
+    }));
+    while (words.length < 6) {
+      const extra = pool[words.length % Math.max(1, pool.length)];
+      if (!extra) break;
+      words.push({ term: extra.term, pos: extra.pos, meaning: extra.meaning, vi: extra.vi, example: extra.example });
+    }
+    const payload = normaliseLessonPayload('VOCAB', { words });
+    if (!payload) continue;
+    const topic = topics[slot] ?? 'Daily English';
+    const lessonId = await insertLesson(env, {
+      band,
+      kind: 'VOCAB',
+      unitKey: `everyday-${day}-${band}`,
+      unitTitle: 'Everyday Lessons',
+      unitBlurb: 'A fresh set of six lessons for today.',
+      title: `${topic} — word set ${slot + 1}`,
+      blurb: 'Six useful words with meanings, examples and quick recall drills.',
+      payload,
+      status: 'PUBLISHED',
+      origin: 'PERSONAL_AI',
+      ownerId: userId,
+      createdBy: userId,
+    });
+    created.push({ lessonId, slot, quote: quoteFor(day, slot) });
+  }
+  await env.DB.batch(created.map((entry) =>
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO learn_daily_lessons (user_id, day, band, slot, lesson_id, quote, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(userId, day, band, entry.slot, entry.lessonId, entry.quote, now),
+  ));
+}
+
 async function generateSet(env: Env, userId: string, band: LearnBand, day: string): Promise<void> {
   const random = seededRandom(`${userId}:${day}:${band}:everyday`);
   const kinds = shuffle(DAILY_KINDS, random);
@@ -96,18 +152,16 @@ async function generateSet(env: Env, userId: string, band: LearnBand, day: strin
       reasoningEffort: 'medium',
     });
     rawLessons = Array.isArray(result.data?.lessons) ? result.data!.lessons! : [];
-  } catch (error) {
-    const described = describeAiFailure(error, { task: 'lesson-generate' });
-    if (described.code === 'AI_UNAVAILABLE') {
-      throw new ApiError('AI_UNAVAILABLE', described.message.includes('No AI provider')
-        ? 'Everyday Lessons need an AI provider. Ask an administrator to configure one in Admin → Settings.'
-        : 'The AI could not create today’s lessons. Nothing was saved; try again in a moment.');
-    }
-    throw new ApiError(described.code as never, described.message);
+  } catch {
+    // The AI is optional: fall back to the offline word-bank set so the learner
+    // always gets their six lessons for the day.
+    await generateOfflineSet(env, userId, band, day);
+    return;
   }
 
   if (rawLessons.length < DAILY_LESSON_COUNT) {
-    throw new ApiError('AI_UNAVAILABLE', 'The AI returned an incomplete Everyday Lessons set. Nothing was published; try again shortly.');
+    await generateOfflineSet(env, userId, band, day);
+    return;
   }
 
   const now = nowIso();
@@ -125,7 +179,8 @@ async function generateSet(env: Env, userId: string, band: LearnBand, day: strin
     const validWritingTask = kind !== 'WRITING'
       || (payload?.kind === 'WRITING' && Boolean(payload.taskPrompt) && Boolean(payload.taskType));
     if (!kind || !payload || !validSize || !validWritingTask || !title || titles.has(title.toLowerCase())) {
-      throw new ApiError('AI_UNAVAILABLE', 'One of today’s generated lessons could not be checked. Nothing was published; try again shortly.');
+      await generateOfflineSet(env, userId, band, day);
+      return;
     }
     titles.add(title.toLowerCase());
     const lessonId = await insertLesson(env, {

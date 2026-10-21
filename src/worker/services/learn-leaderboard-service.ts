@@ -17,6 +17,7 @@ import {
   type LeaderboardScope,
   type LeaderboardWindow,
 } from '../../shared/leaderboard';
+import { seasonOf } from '../../shared/season';
 
 const DAY_MIN = '0000-01-01';
 const DAY_MAX = '9999-12-31';
@@ -25,7 +26,7 @@ const INSTANT_MAX = '9999-12-31T23:59:59.999Z';
 const ONLINE_WINDOW_MS = 5 * 60_000;
 const PROFILE_FIELDS = `
   u.id AS user_id,
-  COALESCE(NULLIF(up.display_name, ''), 'Learner') AS name,
+  COALESCE(NULLIF(up.display_name, ''), u.username, 'Learner') AS name,
   u.role AS role,
   up.avatar_id AS avatar_id,
   up.name_effect AS name_effect,
@@ -37,7 +38,8 @@ const PROFILE_FIELDS = `
   COALESCE((SELECT COUNT(*) FROM learn_lessons_done d WHERE d.user_id = u.id AND d.completions > 0), 0) AS lessons,
   COALESCE((SELECT COUNT(*) FROM learn_lessons_done d WHERE d.user_id = u.id AND d.completions > 0 AND d.best_accuracy >= 0.999), 0) AS perfect_lessons,
   COALESCE((SELECT COUNT(*) FROM friendships f WHERE f.status = 'ACCEPTED' AND (f.user_low_id = u.id OR f.user_high_id = u.id)), 0) AS friends,
-  COALESCE((SELECT COUNT(*) FROM attempts at WHERE at.user_id = u.id AND at.status = 'SUBMITTED'), 0) AS attempts`;
+  COALESCE((SELECT COUNT(*) FROM attempts at WHERE at.user_id = u.id AND at.status = 'SUBMITTED'), 0) AS attempts,
+  (SELECT MAX(atb.estimated_band) FROM attempts atb WHERE atb.user_id = u.id AND atb.status IN ('SUBMITTED', 'EXPIRED') AND atb.estimated_band IS NOT NULL) AS best_band`;
 const PROFILE_JOINS = `
   LEFT JOIN user_profiles up ON up.user_id = u.id
   LEFT JOIN learn_profiles lp ON lp.user_id = u.id
@@ -62,9 +64,10 @@ interface PlayerFields {
   perfect_lessons: number;
   friends: number;
   attempts: number;
+  best_band: number | null;
 }
 interface LearnRow extends PlayerFields { value: number }
-interface PracticeRow extends PlayerFields { value: number; best_band: number | null }
+interface PracticeRow extends PlayerFields { value: number }
 
 function playerFields(row: PlayerFields) {
   const stats: GamificationStats = {
@@ -96,6 +99,7 @@ function learnRow(row: LearnRow, rank: number, meId: string): LeaderboardRow {
     value: row.value,
     valueLabel: formatXp(row.value),
     secondary: row.streak > 0 ? `${row.streak} day streak` : 'No streak yet',
+    bestBand: row.best_band === null ? null : Math.round(row.best_band * 10) / 10,
   };
 }
 
@@ -108,7 +112,46 @@ function practiceRow(row: PracticeRow, rank: number, meId: string): LeaderboardR
     value: row.value,
     valueLabel: formatAttempts(row.value),
     secondary: row.best_band === null ? 'Not marked yet' : `Best band ${row.best_band.toFixed(1)}`,
+    bestBand: row.best_band === null ? null : Math.round(row.best_band * 10) / 10,
   };
+}
+
+function valueLabelFor(window: LeaderboardWindow): string {
+  if (window === 'week') return 'XP this week';
+  if (window === 'season') return 'XP this season';
+  return 'XP earned';
+}
+
+interface ClassroomRef {
+  id: string;
+  name: string;
+}
+
+/**
+ * The class a board is for: the requested one when the learner belongs to it,
+ * otherwise the first class they teach or attend.
+ */
+async function resolveClassroom(env: Env, userId: string, classroomId?: string): Promise<ClassroomRef | null> {
+  if (classroomId) {
+    return env.DB.prepare(
+      `SELECT c.id, c.name FROM classrooms c
+        WHERE c.id = ? AND c.status = 'ACTIVE'
+          AND (c.teacher_id = ? OR EXISTS (
+            SELECT 1 FROM classroom_members m WHERE m.classroom_id = c.id AND m.user_id = ? AND m.status = 'ACTIVE'
+          ))`,
+    )
+      .bind(classroomId, userId, userId)
+      .first<ClassroomRef>();
+  }
+  return env.DB.prepare(
+    `SELECT DISTINCT c.id, c.name, c.created_at FROM classrooms c
+       LEFT JOIN classroom_members m ON m.classroom_id = c.id AND m.user_id = ? AND m.status = 'ACTIVE'
+      WHERE c.status = 'ACTIVE' AND (c.teacher_id = ? OR m.user_id IS NOT NULL)
+      ORDER BY c.created_at DESC
+      LIMIT 1`,
+  )
+    .bind(userId, userId)
+    .first<ClassroomRef>();
 }
 
 export async function getLeaderboard(
@@ -117,16 +160,72 @@ export async function getLeaderboard(
   scope: LeaderboardScope,
   window: LeaderboardWindow,
   day: string,
+  options: { classroomId?: string } = {},
 ): Promise<LeaderboardResponse> {
+  const season = seasonOf(day);
   const weekStart = window === 'week' ? weekStartOf(day) : null;
-  const weekEnd = weekStart ? new Date(Date.parse(`${weekStart}T00:00:00Z`) + 7 * 86_400_000) : null;
-  const dayFrom = weekStart ?? DAY_MIN;
-  const dayTo = weekEnd ? new Date(weekEnd.getTime() - 86_400_000).toISOString().slice(0, 10) : DAY_MAX;
-  const instantFrom = weekStart ? `${weekStart}T00:00:00.000Z` : INSTANT_MIN;
-  const instantTo = weekEnd ? new Date(weekEnd.getTime() - 1).toISOString() : INSTANT_MAX;
+  const rangeStart = window === 'week' ? weekStartOf(day) : window === 'season' ? season.startsOn : null;
+  const rangeEnd =
+    window === 'week'
+      ? new Date(Date.parse(`${weekStartOf(day)}T00:00:00Z`) + 6 * 86_400_000).toISOString().slice(0, 10)
+      : window === 'season'
+        ? season.endsOn
+        : null;
+  const dayFrom = rangeStart ?? DAY_MIN;
+  const dayTo = rangeEnd ?? DAY_MAX;
+  const instantFrom = rangeStart ? `${rangeStart}T00:00:00.000Z` : INSTANT_MIN;
+  const instantTo = rangeEnd
+    ? new Date(Date.parse(`${rangeEnd}T00:00:00.000Z`) + 86_400_000 - 1).toISOString()
+    : INSTANT_MAX;
   const now = new Date().toISOString();
   const onlineCutoff = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString();
   const roles = "u.role IN ('STUDENT', 'ADMIN') AND u.status = 'ACTIVE'";
+
+  if (scope === 'class') {
+    const classroom = await resolveClassroom(env, userId, options.classroomId);
+    if (!classroom) {
+      return {
+        scope,
+        window,
+        rows: [],
+        me: null,
+        total: 0,
+        weekStart,
+        valueLabel: valueLabelFor(window),
+        classroom: null,
+        season,
+      };
+    }
+    const valueExpression = window === 'all' ? 'COALESCE(lp.xp, 0)' : 'COALESCE(SUM(x.xp), 0)';
+    const rows = await env.DB.prepare(
+      `SELECT ${PROFILE_FIELDS}, ${valueExpression} AS value
+         FROM users u${PROFILE_JOINS}
+         LEFT JOIN learn_xp_log x ON x.user_id = u.id AND x.day >= ? AND x.day <= ?
+        WHERE ${roles}
+          AND u.id IN (
+            SELECT user_id FROM classroom_members WHERE classroom_id = ? AND status = 'ACTIVE'
+            UNION SELECT teacher_id FROM classrooms WHERE id = ?
+          )
+     GROUP BY u.id
+       HAVING value > 0
+     ORDER BY value DESC, streak DESC, u.id
+        LIMIT 500`,
+    )
+      .bind(onlineCutoff, now, dayFrom, dayTo, classroom.id, classroom.id)
+      .all<LearnRow>();
+    const mapped = (rows.results ?? []).map((row, index) => learnRow(row, index + 1, userId));
+    return {
+      scope,
+      window,
+      rows: mapped.slice(0, LEADERBOARD_LIMIT),
+      me: mapped.find((row) => row.isMe) ?? null,
+      total: mapped.length,
+      weekStart,
+      valueLabel: valueLabelFor(window),
+      classroom,
+      season,
+    };
+  }
 
   if (scope === 'learn') {
     const valueExpression = window === 'all' ? 'COALESCE(lp.xp, 0)' : 'COALESCE(SUM(x.xp), 0)';
@@ -189,7 +288,9 @@ export async function getLeaderboard(
       me: meRow && meRow.value > 0 ? learnRow(meRow, (ahead?.ahead ?? 0) + 1, userId) : null,
       total: total?.total ?? 0,
       weekStart,
-      valueLabel: 'XP earned',
+      valueLabel: valueLabelFor(window),
+      classroom: null,
+      season,
     };
   }
 
@@ -250,6 +351,8 @@ export async function getLeaderboard(
     me: meRow ? practiceRow(meRow, (ahead?.ahead ?? 0) + 1, userId) : null,
     total: total?.total ?? 0,
     weekStart,
-    valueLabel: window === 'week' ? 'Tests this week' : 'Tests taken',
+    valueLabel: window === 'week' ? 'Tests this week' : window === 'season' ? 'Tests this season' : 'Tests taken',
+    classroom: null,
+    season,
   };
 }

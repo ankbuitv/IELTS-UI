@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { inlineCorrections } from '@shared/text-diff';
 import { JUDGE_SPLIT_THRESHOLD, judgesAgree, type AiMarkView, type JudgeLabel, type JudgeOpinion } from '@shared/judges';
 import { Badge, Tabs } from './ui';
 import { Icon } from './Icon';
@@ -14,8 +15,18 @@ type View = 'CONSENSUS' | JudgeLabel;
  * Judges are only ever shown as Judge01 and Judge02. The panel never mentions a
  * model or a provider, and says plainly that the band is an estimate.
  */
-export function AiMarkPanel({ mark, heading }: { mark: AiMarkView; heading?: string }) {
+export function AiMarkPanel({
+  mark,
+  heading,
+  originalText,
+}: {
+  mark: AiMarkView;
+  heading?: string;
+  /** #2 The learner's response, so corrections can be shown in place. */
+  originalText?: string;
+}) {
   const [view, setView] = useState<View>('CONSENSUS');
+  const [inlineOpen, setInlineOpen] = useState(true);
   const opinion: JudgeOpinion | null = view === 'CONSENSUS' ? null : (mark.judges.find((judge) => judge.judge === view) ?? null);
 
   const criteria = opinion ? opinion.criteria : mark.criteria;
@@ -29,6 +40,9 @@ export function AiMarkPanel({ mark, heading }: { mark: AiMarkView; heading?: str
   const split = !judgesAgree(mark);
   const bandShown = opinion ? opinion.band : mark.band;
 
+  const inline =
+    originalText && view === 'CONSENSUS' ? inlineCorrections(originalText, corrections) : null;
+
   const judgeBand = (key: string, label: JudgeLabel): number | null => {
     const found = mark.judges.find((judge) => judge.judge === label)?.criteria.find((criterion) => criterion.key === key);
     return found ? found.band : null;
@@ -39,7 +53,7 @@ export function AiMarkPanel({ mark, heading }: { mark: AiMarkView; heading?: str
       <header className="aimark__head">
         <div className="aimark__band" aria-label={`Band ${formatBand(bandShown)}`}>
           <span className="aimark__band-value">{formatBand(bandShown)}</span>
-          <span className="aimark__band-label">{view === 'CONSENSUS' ? 'Consensus' : view}</span>
+          <span className="aimark__band-caption">Band</span>
         </div>
         <div className="aimark__who">
           <strong>{heading ?? 'AI marking'}</strong>
@@ -129,6 +143,42 @@ export function AiMarkPanel({ mark, heading }: { mark: AiMarkView; heading?: str
                 ))}
               </ul>
             </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {inline && inline.applied > 0 ? (
+        <div className="inline-diff">
+          <div className="inline-diff__head">
+            <h4>Your text, corrected</h4>
+            <button type="button" className="btn btn--sm btn--ghost" onClick={() => setInlineOpen((value) => !value)}>
+              {inlineOpen ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          {inlineOpen ? (
+            <>
+              <p className="inline-diff__text">
+                {inline.segments.map((segment, index) =>
+                  segment.kind === 'SAME' ? (
+                    <span key={index}>{segment.text}</span>
+                  ) : segment.kind === 'DELETE' ? (
+                    <del key={index} title={segment.reason}>
+                      {segment.text}
+                    </del>
+                  ) : (
+                    <ins key={index} title={segment.reason}>
+                      {segment.text}
+                    </ins>
+                  ),
+                )}
+              </p>
+              <p className="inline-diff__legend">
+                <del>removed</del> <ins>suggested</ins>
+                {inline.unplaced.length > 0
+                  ? ` · ${inline.unplaced.length} correction${inline.unplaced.length === 1 ? '' : 's'} could not be placed in the text — see the list below.`
+                  : null}
+              </p>
+            </>
           ) : null}
         </div>
       ) : null}

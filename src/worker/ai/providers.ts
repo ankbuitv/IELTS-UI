@@ -288,13 +288,13 @@ export interface CompletionRequest {
 }
 
 /**
- * Only OpenAI's endpoint accepts image parts. For every other provider the
- * images are replaced by a note saying they were dropped, so a model is never
- * asked to describe a picture it cannot see.
+ * OpenAI's endpoint and Ollama (vision models such as gemma) both accept image
+ * parts. For every other provider the images are replaced by a note saying they
+ * were dropped, so a model is never asked to describe a picture it cannot see.
  */
 function normaliseMessageContent(content: string | ChatContentPart[], kind: AiProviderKind): string | ChatContentPart[] {
   if (typeof content === 'string') return content;
-  if (kind === 'OPENAI') return content;
+  if (kind === 'OPENAI' || kind === 'OLLAMA') return content;
   const images = content.filter((part) => part.type === 'image_url').length;
   const text = content
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
@@ -772,20 +772,51 @@ export async function testProvider(
  * provider that has no speech route surfaces as AI_UNAVAILABLE and the client
  * falls back to the browser's own voices.
  */
-export const SERVER_SPEECH_VOICES = ['nova', 'alloy', 'echo', 'fable', 'onyx', 'shimmer'] as const;
+// Every voice the gpt-4o-mini-tts family speaks with — the in-app voice picker
+// lists them all so learners can pick the reading voice they like.
+export const SERVER_SPEECH_VOICES = [
+  'nova', 'alloy', 'echo', 'fable', 'onyx', 'shimmer',
+  'ash', 'ballad', 'coral', 'sage', 'verse', 'marin', 'cedar',
+] as const;
 export type ServerSpeechVoice = (typeof SERVER_SPEECH_VOICES)[number];
+
+/**
+ * #39 The accents an IELTS candidate has to cope with. The provider voices are
+ * accent-neutral, so the accent is requested explicitly through the speech
+ * model's `instructions` field and forms part of the cache key: the same word
+ * spoken in UK and AU English is two different recordings.
+ */
+export const SERVER_SPEECH_ACCENTS = ['UK', 'AU', 'US'] as const;
+export type SpeechAccent = (typeof SERVER_SPEECH_ACCENTS)[number];
+
+export const SPEECH_ACCENT_INSTRUCTIONS: Record<SpeechAccent, string> = {
+  UK: 'Speak in a natural British Received Pronunciation accent, like a UK IELTS listening recording.',
+  AU: 'Speak in a natural Australian accent, like an Australian English listening recording.',
+  US: 'Speak in a natural General American accent, like a US English listening recording.',
+};
+
+export function isSpeechAccent(value: unknown): value is SpeechAccent {
+  return typeof value === 'string' && (SERVER_SPEECH_ACCENTS as readonly string[]).includes(value);
+}
 
 export async function synthesizeSpeechWithProvider(
   env: Env,
   text: string,
   voice: string,
   providerId?: string,
+  accent: SpeechAccent = 'UK',
 ): Promise<{ bytes: ArrayBuffer; mime: string }> {
   const { provider, apiKey } = await resolveProvider(env, providerId);
   const response = await fetch(buildSpeechEndpoint(provider), {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}) },
-    body: JSON.stringify({ model: 'gpt-4o-mini-tts', input: text, voice, response_format: 'mp3' }),
+    body: JSON.stringify({
+      model: 'gpt-4o-mini-tts',
+      input: text,
+      voice,
+      response_format: 'mp3',
+      instructions: SPEECH_ACCENT_INSTRUCTIONS[accent],
+    }),
     signal: AbortSignal.timeout(30_000),
   });
   if (!response.ok) {

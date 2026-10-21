@@ -1,7 +1,7 @@
 import type { Env } from '../env';
 import { ApiError } from '../lib/errors';
 import { newId, nowIso } from '../lib/ids';
-import { completeJson } from '../ai/providers';
+import { completeJson, type ChatMessage } from '../ai/providers';
 import { describeAiFailure } from '../ai/failure';
 import { resolveJudges, withJudgeRetry, type Judge } from '../ai/judges';
 import {
@@ -14,6 +14,7 @@ import {
   type WritingPromptInput,
 } from '../ai/marking-prompts';
 import { setWritingScore } from './marking-service';
+import { getBlob } from './blob-store';
 import { saveAiVocabulary } from './vocabulary-service';
 import { WRITING_CRITERIA, SPEAKING_CRITERIA } from '../../shared/ai-rubric';
 import { clampBand, meanBand, roundHalfBand } from '../../shared/bands';
@@ -141,7 +142,7 @@ const GRADE_SCHEMA = {
 
 interface MarkingRequest {
   judge: Judge;
-  messages: Array<{ role: 'system' | 'user'; content: string }>;
+  messages: ChatMessage[];
   expectedKeys: string[];
   sourceText: string;
   schemaName: string;
@@ -926,6 +927,34 @@ export interface MarkOutcome {
  * judge that failed), unless `force` is set. A teacher's existing band is never
  * replaced: the AI band is stored as `scoring_source = 'AI'`.
  */
+/**
+ * The task's chart/map/diagram as a data URL for a vision judge. Uploaded media
+ * is read from the blob store; a linked external file is fetched and inlined the
+ * same way so every provider sees the identical input.
+ */
+async function taskImageDataUrl(env: Env, assetId: string): Promise<string | null> {
+  const asset = await env.DB.prepare('SELECT id, mime, storage_kind, external_url FROM assets WHERE id = ?')
+    .bind(assetId)
+    .first<{ id: string; mime: string | null; storage_kind: string; external_url: string | null }>();
+  if (!asset) return null;
+  const mime = asset.mime || 'image/png';
+  const stored = await getBlob(env, 'asset_blobs', 'asset_id', assetId).catch(() => null);
+  if (stored?.base64) return `data:${mime};base64,${stored.base64}`;
+  if (asset.external_url) {
+    try {
+      const response = await fetch(asset.external_url);
+      if (!response.ok) return null;
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      let binary = '';
+      for (const byte of bytes) binary += String.fromCharCode(byte);
+      return `data:${mime};base64,${btoa(binary)}`;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export async function markWritingSubmission(
   env: Env,
   submissionId: string,
@@ -934,11 +963,12 @@ export async function markWritingSubmission(
   return coalesce(`w:${submissionId}:${options.force ? 'force' : 'fill'}`, async () => {
     const submission = await env.DB.prepare(
       `SELECT w.id, w.attempt_id, w.task_label, w.prompt_snapshot, w.response_text, w.word_count,
-              a.user_id, q.config_json, g.config_json AS group_config_json
+              a.user_id, q.config_json, g.config_json AS group_config_json, s.image_asset_id
          FROM writing_submissions w
          JOIN attempts a ON a.id = w.attempt_id
          LEFT JOIN questions q ON q.id = w.question_id
          LEFT JOIN question_groups g ON g.id = q.question_group_id
+         LEFT JOIN sections s ON s.id = g.section_id
         WHERE w.id = ?`,
     )
       .bind(submissionId)
@@ -952,6 +982,7 @@ export async function markWritingSubmission(
         user_id: string;
         config_json: string | null;
         group_config_json: string | null;
+        image_asset_id: string | null;
       }>();
     if (!submission) throw ApiError.notFound('Writing submission not found.');
 
@@ -959,7 +990,10 @@ export async function markWritingSubmission(
     const minimumWords =
       typeof config.minimumWords === 'number' ? config.minimumWords : /task\s*2/i.test(submission.task_label) ? 250 : 150;
 
-    const panel = await resolveJudges(env);
+    // A task that comes with a chart/map/diagram is marked on a vision model
+    // (gemma4:31b by default) that can actually see the image.
+    const imageDataUrl = submission.image_asset_id ? await taskImageDataUrl(env, submission.image_asset_id) : null;
+    const panel = await resolveJudges(env, { vision: imageDataUrl !== null });
     const existing = (await loadLatestOpinions(env, 'WRITING', [submissionId])).get(submissionId) ?? new Map();
     const toAsk = options.force ? panel : panel.filter((judge) => !existing.has(judge.label));
 
@@ -979,6 +1013,7 @@ export async function markWritingSubmission(
             wordCount: submission.word_count,
             minimumWords,
             levelHint,
+            imageDataUrl,
           }),
         ),
       );

@@ -1,3 +1,5 @@
+import { accentMatchesLang, languageForAccent, type SpeechAccent } from '@shared/speech-accent';
+
 /**
  * Speaking text with the browser's own voices.
  *
@@ -17,6 +19,35 @@
  */
 
 let voicesChangedWired = false;
+
+/** Re-exported so callers only import `lib/speech`. */
+export {
+  SPEECH_ACCENTS,
+  accentMatchesLang,
+  isSpeechAccent,
+  languageForAccent,
+  type SpeechAccent,
+} from '@shared/speech-accent';
+
+const ACCENT_KEY = 'aieo.accent';
+
+/** The accent the learner last chose; British is the default for IELTS practice. */
+export function getPreferredAccent(): SpeechAccent {
+  try {
+    const stored = window.localStorage.getItem(ACCENT_KEY);
+    return stored === 'UK' || stored === 'AU' || stored === 'US' ? stored : 'UK';
+  } catch {
+    return 'UK';
+  }
+}
+
+export function setPreferredAccent(accent: SpeechAccent) {
+  try {
+    window.localStorage.setItem(ACCENT_KEY, accent);
+  } catch {
+    // Private mode: the choice applies for this session only.
+  }
+}
 
 export function canSpeak(): boolean {
   return typeof window !== 'undefined' && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
@@ -68,12 +99,25 @@ export async function listEnglishVoices(): Promise<SpeechSynthesisVoice[]> {
   return english.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 }
 
-function pickVoice(voices: SpeechSynthesisVoice[], preferredURI: string | null): SpeechSynthesisVoice | null {
+function pickVoice(
+  voices: SpeechSynthesisVoice[],
+  preferredURI: string | null,
+  accent: SpeechAccent,
+): SpeechSynthesisVoice | null {
   if (preferredURI) {
     const chosen = voices.find((voice) => voice.voiceURI === preferredURI);
-    if (chosen) return chosen;
+    // A voice in the wrong accent is worse than none: the point of the picker
+    // is that UK practice sounds British and AU practice sounds Australian.
+    if (chosen && accentMatchesLang(accent, chosen.lang)) return chosen;
   }
-  return voices.find((voice) => voice.lang === 'en-GB') ?? voices.find((voice) => voice.lang.startsWith('en')) ?? null;
+  const target = languageForAccent(accent);
+  return (
+    voices.find((voice) => voice.lang.toLowerCase() === target.toLowerCase()) ??
+    voices.find((voice) => accentMatchesLang(accent, voice.lang)) ??
+    voices.find((voice) => voice.lang.toLowerCase() === 'en-gb') ??
+    voices.find((voice) => voice.lang.startsWith('en')) ??
+    null
+  );
 }
 
 /**
@@ -102,15 +146,21 @@ export function setPreferredVoiceURI(uri: string | null) {
  * Resolves false — rather than pretending — when the browser cannot speak, so a
  * caller can show the words instead of leaving a silent button.
  */
-export async function speak(text: string, rate = 0.9, preferredVoiceURI?: string | null): Promise<boolean> {
+export async function speak(
+  text: string,
+  rate = 0.9,
+  preferredVoiceURI?: string | null,
+  preferredAccent?: SpeechAccent,
+): Promise<boolean> {
   if (!canSpeak() || !text.trim()) return false;
   try {
     const voices = await loadVoices();
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-GB';
+    const accent = preferredAccent ?? getPreferredAccent();
+    utterance.lang = languageForAccent(accent);
     utterance.rate = rate;
-    const voice = pickVoice(voices, preferredVoiceURI ?? getPreferredVoiceURI());
+    const voice = pickVoice(voices, preferredVoiceURI ?? getPreferredVoiceURI(), accent);
     if (voice) {
       utterance.voice = voice;
       utterance.lang = voice.lang;
@@ -161,9 +211,12 @@ export async function listServerVoices(): Promise<string[]> {
  * Resolves false when there is no provider or the download fails, so the caller
  * can fall back to the browser's own engine.
  */
-export async function speakWithServer(text: string, voice: string): Promise<boolean> {
+export async function speakWithServer(text: string, voice: string, accent: SpeechAccent = getPreferredAccent()): Promise<boolean> {
   try {
-    const response = await fetch(`/api/learn/speech?${new URLSearchParams({ text, voice })}`, { credentials: 'include' });
+    const response = await fetch(
+      `/api/learn/speech?${new URLSearchParams({ text, voice, accent })}`,
+      { credentials: 'include' },
+    );
     if (!response.ok) return false;
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);

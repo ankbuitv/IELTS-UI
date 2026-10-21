@@ -593,7 +593,7 @@ export function LandingPage() {
  * says what the account is for, next to a quiet form panel. One source of truth
  * so sign in, sign up and joining a classroom all look the same.
  */
-function AuthScreen({
+export function AuthScreen({
   eyebrow,
   title,
   lede,
@@ -653,26 +653,57 @@ function AuthScreen({
 }
 
 export function LoginPage() {
-  const { login, user } = useAuth();
+  const { login, verifyTwoFactor, requestOtp, loginWithOtp, requestMagicLink, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [mode, setMode] = useState<'password' | 'otp' | 'magic'>('password');
+  const [magicSent, setMagicSent] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [devCode, setDevCode] = useState<string | null>(null);
+  const [twoFactor, setTwoFactor] = useState<string | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   if (user) return <Navigate to="/dashboard" replace />;
+
+  const target = new URLSearchParams(location.search).get('next');
+  const goHome = (role: string) =>
+    navigate(target ?? (role === 'ADMIN' ? '/admin' : role === 'TEACHER' ? '/teacher' : '/dashboard'), { replace: true });
+
+  const afterAuth = (next: Awaited<ReturnType<typeof login>>) => {
+    if ('twoFactorRequired' in next) {
+      setTwoFactor(next.ticket);
+      return;
+    }
+    goHome(next.role);
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const next = await login(email, password);
-      const target = new URLSearchParams(location.search).get('next');
-      navigate(target ?? (next.role === 'ADMIN' ? '/admin' : next.role === 'TEACHER' ? '/teacher' : '/dashboard'), {
-        replace: true,
-      });
+      if (twoFactor) {
+        const next = await verifyTwoFactor(twoFactor, twoFactorCode.trim());
+        goHome(next.role);
+      } else if (mode === 'magic') {
+        await requestMagicLink(identifier.trim());
+        setMagicSent(true);
+      } else if (mode === 'otp') {
+        if (!otpSent) {
+          const result = await requestOtp(identifier.trim());
+          setOtpSent(true);
+          setDevCode(result.devCode ?? null);
+        } else {
+          afterAuth(await loginWithOtp(identifier.trim(), otpCode.trim()));
+        }
+      } else {
+        afterAuth(await login(identifier.trim(), password));
+      }
     } catch (loginError) {
       setError(describeError(loginError));
     } finally {
@@ -690,8 +721,12 @@ export function LoginPage() {
         { title: 'Timing you cannot trick', detail: 'The server keeps the clock, so refreshing never buys extra minutes.' },
         { title: 'Progress you can read', detail: 'Band estimates per skill, your daily path and a full attempt history.' },
       ]}
-      formTitle="Sign in"
-      formIntro="Use the account your institution gave you, or the one you created."
+      formTitle={twoFactor ? 'Two-factor code' : 'Sign in'}
+      formIntro={
+        twoFactor
+          ? 'Open your authenticator app and enter the six-digit code for this account.'
+          : 'Use your username or the email your institution gave you.'
+      }
       footer={
         <p className="auth__alt">
           No account yet? <Link to="/register">Create a student account</Link>.
@@ -701,27 +736,141 @@ export function LoginPage() {
       <form onSubmit={submit}>
         {error ? <Notice tone="danger">{error}</Notice> : null}
         <div style={{ height: 12 }} />
-        <Field label="Email" required>
-          {(id) => (
-            <TextInput
-              id={id}
-              type="email"
-              autoComplete="email"
-              required
-              placeholder="you@school.edu"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-          )}
-        </Field>
-        <Field label="Password" required>
-          {(id) => (
-            <PasswordInput id={id} value={password} onChange={setPassword} autoComplete="current-password" required />
-          )}
-        </Field>
-        <Button type="submit" variant="primary" size="lg" block loading={busy}>
-          Sign in
-        </Button>
+        {twoFactor ? (
+          <>
+            <Field label="Authenticator code" required>
+              {(id) => (
+                <TextInput
+                  id={id}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  required
+                  placeholder="123456"
+                  value={twoFactorCode}
+                  onChange={(event) => setTwoFactorCode(event.target.value)}
+                />
+              )}
+            </Field>
+            <Button type="submit" variant="primary" size="lg" block loading={busy}>
+              Verify and sign in
+            </Button>
+            <div style={{ height: 8 }} />
+            <Button type="button" variant="ghost" size="sm" block onClick={() => { setTwoFactor(null); setTwoFactorCode(''); }}>
+              Back to sign in
+            </Button>
+          </>
+        ) : (
+          <>
+            <Field label="Username or email" required>
+              {(id) => (
+                <TextInput
+                  id={id}
+                  autoComplete="username"
+                  required
+                  placeholder="you@school.edu or your username"
+                  value={identifier}
+                  onChange={(event) => setIdentifier(event.target.value)}
+                />
+              )}
+            </Field>
+            {mode === 'magic' ? (
+              magicSent ? (
+                <Notice tone="success" title="Check your inbox">
+                  We sent a sign-in link to the email on this account. It expires in 15 minutes and works once.
+                </Notice>
+              ) : (
+                <p className="small muted" style={{ margin: '0 0 14px' }}>
+                  We&apos;ll email a single-use link — no password to remember. It expires in 15 minutes.
+                </p>
+              )
+            ) : mode === 'password' ? (
+              <>
+                <Field label="Password" required>
+                  {(id) => (
+                    <PasswordInput id={id} value={password} onChange={setPassword} autoComplete="current-password" required />
+                  )}
+                </Field>
+                <p className="small muted" style={{ margin: '-4px 0 14px' }}>
+                  <Link to="/reset-password">Forgot your password?</Link>
+                </p>
+              </>
+            ) : (
+              <>
+                {otpSent ? (
+                  <>
+                    <Field label="One-time code" required>
+                      {(id) => (
+                        <TextInput
+                          id={id}
+                          inputMode="text"
+                          autoComplete="one-time-code"
+                          required
+                          placeholder="ABCD1234"
+                          value={otpCode}
+                          onChange={(event) => setOtpCode(event.target.value.toUpperCase())}
+                        />
+                      )}
+                    </Field>
+                    {devCode ? (
+                      <Notice tone="info" title="Development code">
+                        {devCode}
+                      </Notice>
+                    ) : null}
+                  </>
+                ) : null}
+                <div style={{ height: 12 }} />
+              </>
+            )}
+            <Button type="submit" variant="primary" size="lg" block loading={busy}>
+              {mode === 'magic'
+                ? magicSent
+                  ? 'Send another link'
+                  : 'Email me a sign-in link'
+                : mode === 'password'
+                  ? 'Sign in'
+                  : otpSent
+                    ? 'Verify code and sign in'
+                    : 'Send one-time code'}
+            </Button>
+            <div style={{ height: 8 }} />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              block
+              onClick={() => {
+                setMode(mode === 'otp' ? 'password' : 'otp');
+                setOtpSent(false);
+                setOtpCode('');
+                setDevCode(null);
+                setMagicSent(false);
+              }}
+            >
+              {mode === 'otp' ? 'Sign in with password instead' : 'Sign in with a one-time code instead'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              block
+              onClick={() => {
+                setMode(mode === 'magic' ? 'password' : 'magic');
+                setMagicSent(false);
+                setOtpSent(false);
+                setOtpCode('');
+              }}
+            >
+              {mode === 'magic' ? 'Sign in with a password instead' : 'Email me a sign-in link instead'}
+            </Button>
+            <div className="auth__divider"><span>or</span></div>
+            <a className="btn btn--lg btn--block auth__sso" href="/api/auth/sso/google/start">
+              Continue with Google
+            </a>
+            <a className="btn btn--lg btn--block auth__sso" href="/api/auth/sso/microsoft/start">
+              Continue with Microsoft
+            </a>
+          </>
+        )}
       </form>
     </AuthScreen>
   );
@@ -750,7 +899,7 @@ const POLICY_RULES: Array<{ id: string; label: string; test: (password: string, 
   },
 ];
 
-function PasswordPolicy({ password, email }: { password: string; email: string }) {
+export function PasswordPolicy({ password, email }: { password: string; email: string }) {
   const results = POLICY_RULES.map((rule) => ({ ...rule, ok: rule.test(password, email) }));
   const satisfied = results.filter((result) => result.ok).length;
   const percent = password.length === 0 ? 0 : Math.round((satisfied / results.length) * 100);
@@ -777,7 +926,7 @@ export function RegisterPage() {
   const { register, user } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const [form, setForm] = useState({ email: '', password: '', displayName: '', bootstrapAdmin: false });
+  const [form, setForm] = useState({ email: '', password: '', displayName: '', username: '', bootstrapAdmin: false });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [needsBootstrap, setNeedsBootstrap] = useState(false);
@@ -825,7 +974,13 @@ export function RegisterPage() {
     setBusy(true);
     setError(null);
     try {
-      await register(form);
+      await register({
+        email: form.email,
+        password: form.password,
+        displayName: form.displayName,
+        username: form.username.trim() || undefined,
+        bootstrapAdmin: form.bootstrapAdmin,
+      });
       navigate(params.get('next') ?? '/dashboard', { replace: true });
     } catch (registerError) {
       setError(describeError(registerError));
@@ -863,6 +1018,17 @@ export function RegisterPage() {
               placeholder="Nguyen Van A"
               value={form.displayName}
               onChange={(event) => setForm({ ...form, displayName: event.target.value })}
+            />
+          )}
+        </Field>
+        <Field label="Username" hint="Optional · 3-24 chars: a-z, 0-9, dot or underscore. Used to sign in and greet you.">
+          {(id) => (
+            <TextInput
+              id={id}
+              autoComplete="username"
+              placeholder="e.g. nguyenvana"
+              value={form.username}
+              onChange={(event) => setForm({ ...form, username: event.target.value.toLowerCase() })}
             />
           )}
         </Field>
