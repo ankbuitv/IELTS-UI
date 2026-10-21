@@ -12,13 +12,16 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('..', import.meta.url).pathname;
-const wrangler = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const root = fileURLToPath(new URL('..', import.meta.url));
+// Direct JS entry: spawning "npx.cmd" throws EINVAL on Windows (Node refuses
+// .bat/.cmd without a shell) and a shell would mangle quoted SQL.
+const wranglerBin = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
 
 function run(args, label) {
   console.log(`\n▸ ${label}`);
-  const result = spawnSync(wrangler, ['wrangler', ...args], {
+  const result = spawnSync(process.execPath, [wranglerBin, ...args], {
     cwd: root,
     stdio: 'inherit',
     shell: false,

@@ -9,11 +9,12 @@ export const MASCOT_MOODS = ['idle', 'happy', 'sad', 'wow', 'think', 'wave', 'sl
 export type MascotMood = (typeof MASCOT_MOODS)[number];
 export type MascotTone = 'plain' | 'good' | 'bad' | 'info';
 export const MASCOT_CHARACTERS = [
-  'bo', 'luna', 'pip', 'kai', 'nori', 'mimi', 'komet', 'tiki', 'fuyu', 'moti', 'amber', 'daisy',
+  'miu', 'bo', 'luna', 'pip', 'kai', 'nori', 'mimi', 'komet', 'tiki', 'fuyu', 'moti', 'amber', 'daisy',
 ] as const;
 export type MascotCharacter = (typeof MASCOT_CHARACTERS)[number];
 
 const CHARACTERS: Record<MascotCharacter, { name: string; top: string; bottom: string; belly: string; accent: string; detail: string; accessory: string }> = {
+  miu: { name: 'Miu', top: '#ffe9c7', bottom: '#f5ad5e', belly: '#fffaf1', accent: '#d98331', detail: '#ff7d9f', accessory: 'cat' },
   bo: { name: 'Bơ', top: '#5fd39a', bottom: '#1f9d63', belly: '#e6fff0', accent: '#328c5b', detail: '#f5a623', accessory: 'sprout' },
   luna: { name: 'Luna', top: '#c4a5ff', bottom: '#8054cf', belly: '#fff2fd', accent: '#6843ad', detail: '#f7d866', accessory: 'ears' },
   pip: { name: 'Pip', top: '#ffe074', bottom: '#eea92e', belly: '#fff9dc', accent: '#ce8121', detail: '#e97758', accessory: 'tufts' },
@@ -75,6 +76,26 @@ function Mouth({ mood }: { mood: MascotMood }) {
 
 function Accessory({ type, accent, detail }: { type: string; accent: string; detail: string }) {
   switch (type) {
+    case 'cat':
+      return (
+        <g>
+          {/* A curling tail, tucked behind the body. */}
+          <path d="M95 94 Q112 94 112 80 Q112 70 104 69" fill="none" stroke={accent} strokeWidth="7" strokeLinecap="round" />
+          {/* Pointy cat ears with pink insides. */}
+          <path d="M42 47 Q34 22 46 17 Q57 22 57 43" fill={accent} />
+          <path d="M63 43 Q64 22 74 17 Q86 22 78 47" fill={accent} />
+          <path d="M45 38 Q41 27 47 25 Q52 28 51 38" fill={detail} opacity=".75" />
+          <path d="M69 38 Q69 27 75 25 Q79 28 75 38" fill={detail} opacity=".75" />
+          {/* The ribbon bow — the catalog's own signature. */}
+          <g stroke="#cf3178" strokeLinejoin="round">
+            <path d="M79 30 q-9 -7 -13 0 q6 7 13 3 z" fill="#ff6ba7" strokeWidth="1.5" />
+            <path d="M87 30 q9 -7 13 0 q-6 7 -13 3 z" fill="#ff6ba7" strokeWidth="1.5" />
+            <path d="M81 34 l-4 9 l6 -5 z" fill="#ff6ba7" strokeWidth="1.2" />
+            <path d="M85 34 l5 8 l-6 -4 z" fill="#ff6ba7" strokeWidth="1.2" />
+            <circle cx="83" cy="31" r="3.6" fill="#cf3178" strokeWidth="1.5" />
+          </g>
+        </g>
+      );
     case 'sprout':
       return <g><path d="M60 42 C60 31 60 23 60 16" fill="none" stroke={accent} strokeWidth="3.4" strokeLinecap="round" /><ellipse cx="50" cy="20" rx="9" ry="5.4" fill={detail} transform="rotate(-24 50 20)" /><ellipse cx="70" cy="18" rx="9" ry="5.4" fill={accent} transform="rotate(22 70 18)" /></g>;
     case 'ears':
@@ -108,7 +129,7 @@ export function Mascot({
   message,
   tone = 'plain',
   className = '',
-  character = 'bo',
+  character = 'miu',
 }: {
   mood?: MascotMood;
   size?: number;
@@ -121,7 +142,7 @@ export function Mascot({
   const artId = useRef<HTMLButtonElement | null>(null);
   const [clicked, setClicked] = useState(false);
   const resetClick = useRef<number | null>(null);
-  const palette = CHARACTERS[character] ?? CHARACTERS.bo;
+  const palette = CHARACTERS[character] ?? CHARACTERS.miu;
   useEffect(() => () => { if (resetClick.current !== null) window.clearTimeout(resetClick.current); }, []);
 
   const tap = () => {
@@ -151,7 +172,7 @@ export function Mascot({
           {palette.accessory === 'shell' ? <Accessory type="shell" accent={palette.accent} detail={palette.detail} /> : null}
           {palette.accessory === 'cloud' ? <Accessory type="cloud" accent={palette.accent} detail={palette.detail} /> : null}
           {palette.accessory === 'fins' ? <Accessory type="fins" accent={palette.accent} detail={palette.detail} /> : null}
-          {palette.accessory === 'horns' || palette.accessory === 'ears' || palette.accessory === 'tufts' || palette.accessory === 'sprout' || palette.accessory === 'crown' || palette.accessory === 'star' || palette.accessory === 'antenna' || palette.accessory === 'eyes' ? (
+          {palette.accessory === 'horns' || palette.accessory === 'ears' || palette.accessory === 'tufts' || palette.accessory === 'sprout' || palette.accessory === 'crown' || palette.accessory === 'star' || palette.accessory === 'antenna' || palette.accessory === 'eyes' || palette.accessory === 'cat' ? (
             <g className="mascot__head-accessory"><Accessory type={palette.accessory} accent={palette.accent} detail={palette.detail} /></g>
           ) : null}
           <ellipse className="mascot__wing mascot__wing--left" cx="20" cy="72" rx="8.5" ry="14" fill={palette.accent} transform="rotate(-14 20 72)" />
@@ -163,6 +184,14 @@ export function Mascot({
             <Eyes mood={mood} />
             <path d="M55.5 72.5 h9 l-4.5 5.5 z" fill={palette.detail} />
             <Mouth mood={mood} />
+            {palette.accessory === 'cat' ? (
+              <g stroke={palette.accent} strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.7">
+                <path d="M40 73 L19 70" />
+                <path d="M40 78 L19 83" />
+                <path d="M80 73 L101 70" />
+                <path d="M80 78 L101 83" />
+              </g>
+            ) : null}
             {mood === 'think' ? <text className="mascot__mark" x="96" y="40" fontSize="20" fill="#5b6b80" fontWeight="700">?</text> : null}
             {mood === 'sleep' ? <text className="mascot__mark mascot__mark--zzz" x="94" y="42" fontSize="16" fill="#7b8aa0" fontWeight="700">z z</text> : null}
           </g>
@@ -184,7 +213,7 @@ export function Mascot({
 export function mascotForQuestion(questionId: string): MascotCharacter {
   let hash = 0;
   for (const char of questionId) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return MASCOT_CHARACTERS[hash % MASCOT_CHARACTERS.length] ?? 'bo';
+  return MASCOT_CHARACTERS[hash % MASCOT_CHARACTERS.length] ?? 'miu';
 }
 
 export function reactionTo(verdict: { correct: boolean; almost?: boolean } | null): {
