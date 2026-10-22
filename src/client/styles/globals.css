@@ -1,47 +1,48 @@
 /* ==========================================================================
    Ai eo — design system
-   Character Goods Catalog world (owner-chosen 2026-10-21): a pastel roster on
-   cream. Baloo 2 display + Quicksand body (both carry Vietnamese diacritics
-   properly), pastel color-blocked cells, ribbon pink accent, ink navy type,
-   pill buttons, soft shadows. No gradients, glass, glow or emoji. The
+   Catppuccin world (owner-pinned 2026-10-22): Latte flavour for the app,
+   Mocha for the call room. A cool pastel ground with a mauve commitment —
+   Be Vietnam Pro across the scale (display + body, drawn for Vietnamese
+   diacritics), colour-blocked pastel cells, mauve accent, slate-blue type,
+   pill buttons, soft shadows. No glass, glow or emoji. The
    identity is original to this project
    (see BrandLogo) and is not affiliated with IELTS, the British Council, IDP
    or Cambridge.
 
    Palette roles
-     brand    ribbon pink           primary actions, current item, active nav
-     ink      ink-navy purple scale text, rules, dark surfaces
-     sun      golden yellow         streaks, XP, stars
-     lilac/mint/sky/butter          pastel cell fills (world tokens)
-     info     sky blue              Reading, links in running text
-     teal     mint teal             Listening
-     amber    butter amber          Writing, pending, flagged
-     violet   lilac violet          Speaking
-     success  green                 correct, published, submitted
-     danger   red                   errors, destructive, overdue
+     brand    Catppuccin mauve       primary actions, current item, active nav
+     ink      Latte slate scale      text, rules, dark surfaces
+     sun      Latte gold             streaks, XP, stars
+     lilac/mint/sky/butter           pastel cell fills (mauve/green/blue/gold tints)
+     info     Latte blue             Reading, links in running text
+     teal     teal                   Listening
+     amber    Latte peach            Writing, pending, flagged
+     violet   deep pink              Speaking
+     success  green                  correct, published, submitted
+     danger   red                    errors, destructive, overdue
    ========================================================================== */
 
 @import './fonts.css';
 
 :root {
-  /* ---- brand (ribbon pink: bright for fills, deep for text-bearing fills) ---- */
-  --brand-50: #fff0f6;
-  --brand-100: #ffdfef;
-  --brand-200: #ffc3e0;
-  --brand-300: #ff9acc;
-  --brand-400: #ff7fb3;
-  --brand-500: #ff6ba7;
-  --brand-600: #cf3178; /* white text on it: 4.8:1 */
-  --brand-700: #b02766;
-  --brand-800: #8c1b4f;
+  /* ---- brand (Catppuccin mauve: bright for fills, deep for text-bearing fills) ---- */
+  --brand-50: #f4ecfe;
+  --brand-100: #ece0fd;
+  --brand-200: #dcc5fb;
+  --brand-300: #c39df7;
+  --brand-400: #a873f4;
+  --brand-500: #9354f1;
+  --brand-600: #8839ef; /* white text on it: 5.4:1 */
+  --brand-700: #7530d1;
+  --brand-800: #5f27aa;
   /* The darker lip under a tactile button. */
-  --brand-edge: #a82459;
+  --brand-edge: #5f27aa;
 
-  /* ---- the four pastel cell fills (world tokens) ---- */
-  --lilac: #ede4ff;
-  --mint: #e6f7ef;
-  --sky: #e3f1ff;
-  --butter: #fff0b8;
+  /* ---- the four pastel cell fills (world tokens: mauve / green / blue / gold tints) ---- */
+  --lilac: #ece4fb;
+  --mint: #e0efe4;
+  --sky: #e2ebfa;
+  --butter: #f8ecd6;
 
   /* The kit and pages reference --accent; keep it pointing at the brand. */
   --accent: var(--brand-600);
@@ -52,77 +53,77 @@
   /* Text on a solid brand fill; the dark theme flips it for contrast. */
   --on-brand: #ffffff;
 
-  /* ---- golden accent: streaks, XP, stars ---- */
-  --sun-300: #ffe08a;
-  --sun-400: #ffd25e;
-  --sun-500: #ffc53d;
-  --sun-600: #f2a91c;
-  --sun-700: #c98400;
-  --sun-soft: #fff6dc;
-  --sun-border: #f6dd9c;
+  /* ---- golden accent: streaks, XP, stars (Latte gold) ---- */
+  --sun-300: #fadd9e;
+  --sun-400: #f6c667;
+  --sun-500: #eeae3a;
+  --sun-600: #df8e1e;
+  --sun-700: #a96510;
+  --sun-soft: #fdf3e2;
+  --sun-border: #f5dfb6;
   --sun-ink: #7a4a00;
 
-  /* ---- neutrals: the ink-navy purple scale of the world ---- */
-  --ink-950: #1b1e42;
-  --ink-900: #2a2f5a;
-  --ink-800: #3a3f6b;
-  --ink-700: #4e537f;
-  --ink-600: #5a5f8f;
-  --ink-500: #6e73a0;
-  --ink-400: #9296bc;
-  --ink-300: #c3c6de;
-  --ink-200: #e1e3f1;
-  --ink-100: #ecedf7;
-  --ink-50: #f5f5fb;
+  /* ---- neutrals: the Latte slate scale of the world ---- */
+  --ink-950: #34364a;
+  --ink-900: #4c4f69;
+  --ink-800: #5c5f77;
+  --ink-700: #6c6f85;
+  --ink-600: #7c7f93;
+  --ink-500: #8c8fa1;
+  --ink-400: #9ca0b0;
+  --ink-300: #acb0be;
+  --ink-200: #ccd0da;
+  --ink-100: #e6e9ef;
+  --ink-50: #eff1f5;
 
   --paper: #ffffff;
-  --paper-muted: #fdf6ea;
-  --canvas: #fff6e8; /* the cream ground of the world */
-  /* The footer, dark bands and the exam top bar: ink navy. */
-  --bar: #2a2f5a;
+  --paper-muted: #f6f8fc;
+  --canvas: #eff1f5; /* the Latte base ground of the world */
+  /* The footer, dark bands and the exam top bar: Mocha base. */
+  --bar: #1e1e2e;
   /* A strong, always-dark surface (selected chips, score panels). Re-pointed in dark mode, where the ink scale inverts. */
   --solid: var(--ink-900);
   --solid-edge: var(--ink-950);
   --on-solid: #ffffff;
   --bar-ink: #ffffff;
-  --bar-muted: #b9bcd8;
+  --bar-muted: #bac2de;
   /* The logo in its "auto" theme follows these, so it reads on a white or a dark header. */
-  --logo-ink: #2a2f5a;
+  --logo-ink: #4c4f69;
   --logo-tile: #ffffff;
-  --logo-bars: #ff6ba7;
-  --logo-dot: #2a2f5a;
+  --logo-bars: #8839ef;
+  --logo-dot: #4c4f69;
 
   /* ---- states and skills (softs are the world pastels) ---- */
-  --success: #12805a;
-  --success-soft: #e6f6ee;
-  --success-border: #b0dcc5;
-  --warning: #b45f06;
-  --warning-soft: #fff0b8;
-  --warning-border: #f5dc8e;
-  --danger: #d92d20;
-  --danger-soft: #fef0ee;
-  --danger-border: #fbc9c3;
-  --info: #1d55c0;
-  --info-soft: #e3f1ff;
-  --info-border: #c9e2fb;
-  --violet: #6b3fa8;
-  --violet-soft: #ede4ff;
-  --violet-border: #d9c9f5;
+  --success: #2f7d1f;
+  --success-soft: #e4f3de;
+  --success-border: #bce0af;
+  --warning: #b35408;
+  --warning-soft: #fdeedd;
+  --warning-border: #f6d6b3;
+  --danger: #d20f39;
+  --danger-soft: #fde5ea;
+  --danger-border: #f8c2cd;
+  --info: #1e66f5;
+  --info-soft: #e2ebfa;
+  --info-border: #c6d8f8;
+  --violet: #a63174;
+  --violet-soft: #fbe9f3;
+  --violet-border: #f7c6df;
   --teal: #0b7a75;
-  --teal-soft: #e6f7ef;
-  --teal-border: #bfe8d6;
+  --teal-soft: #e0f0f0;
+  --teal-border: #b8e0e0;
   --emerald: var(--success);
   --amber: var(--warning);
 
   /* Vivid skill colours for fills (icon tiles, path nodes, bars). Text uses the deeper tokens above. */
-  --fill-listening: #12a594;
-  --fill-reading: #3478f0;
-  --fill-writing: #f59a23;
-  --fill-speaking: #8f63f4;
-  --edge-listening: #0b7d70;
-  --edge-reading: #2255b8;
-  --edge-writing: #c07408;
-  --edge-speaking: #6d43cc;
+  --fill-listening: #179299;
+  --fill-reading: #1e66f5;
+  --fill-writing: #df8e1e;
+  --fill-speaking: #d4539f;
+  --edge-listening: #107a80;
+  --edge-reading: #1450c4;
+  --edge-writing: #b57010;
+  --edge-speaking: #a83a80;
 
   /* ---- shape: rounded and pill-soft ---- */
   --radius-sm: 10px;
@@ -131,33 +132,33 @@
   --radius-xl: 24px;
   --radius-pill: 999px;
 
-  --shadow-xs: 0 2px 6px rgba(42, 47, 90, 0.05);
-  --shadow-sm: 0 6px 18px rgba(42, 47, 90, 0.08);
-  --shadow: 0 12px 28px -10px rgba(42, 47, 90, 0.16);
+  --shadow-xs: 0 2px 6px rgba(76, 79, 105, 0.06);
+  --shadow-sm: 0 6px 18px rgba(76, 79, 105, 0.09);
+  --shadow: 0 12px 28px -10px rgba(76, 79, 105, 0.18);
   /* Things that float above the page (menus, dialogs). */
-  --shadow-lg: 0 18px 48px -12px rgba(42, 47, 90, 0.32);
-  --shadow-brand: 0 10px 24px -10px rgba(207, 49, 120, 0.55);
+  --shadow-lg: 0 18px 48px -12px rgba(76, 79, 105, 0.34);
+  --shadow-brand: 0 10px 24px -10px rgba(117, 48, 209, 0.5);
 
   --gradient-brand: var(--brand-600);
   --gradient-accent: var(--ink-900);
-  --gradient-sun: linear-gradient(135deg, #ffd25e 0%, #ffc53d 100%);
-  --gradient-coral: linear-gradient(135deg, #ff9b6e 0%, #ff6ba7 100%);
+  --gradient-sun: linear-gradient(135deg, #f6c667 0%, #eeae3a 100%);
+  --gradient-coral: linear-gradient(135deg, #fe7a45 0%, #ea76cb 100%);
 
-  /* ---- coral: streaks, hearts, flame (from the playground codebase) ---- */
-  --coral-400: #ff9b6e;
-  --coral-500: #ff7a4d;
-  --coral-600: #ee5c2b;
-  --coral-soft: #fff1e8;
-  --coral-border: #ffd2bb;
+  /* ---- coral: streaks, hearts, flame (Catppuccin peach) ---- */
+  --coral-400: #ff9d78;
+  --coral-500: #fe7a45;
+  --coral-600: #e65a1f;
+  --coral-soft: #fdeee7;
+  --coral-border: #f9cfb9;
 
-  --font-display: 'Baloo 2', 'Quicksand', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-ui: 'Quicksand', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-ui: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-reading: var(--font-ui);
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
-  --focus-color: #1d55c0;
+  --focus-color: #1e66f5;
   --focus-ring: 0 0 0 2px var(--paper), 0 0 0 4px var(--focus-color);
-  --focus-halo: rgba(42, 47, 90, 0.13);
+  --focus-halo: rgba(76, 79, 105, 0.14);
   --focus-border: var(--ink-900);
   --topbar-height: 60px;
   --speed: 140ms;
@@ -288,12 +289,12 @@ html { scroll-behavior: smooth; }
   border: 2px solid var(--btn-bd); background: var(--btn-bg); color: var(--btn-fg);
   min-height: 38px; padding: 5px 18px; border-radius: var(--radius-pill); font-size: 0.9rem; font-weight: 700; line-height: 1.2;
   cursor: pointer; font-family: inherit; text-align: center; white-space: nowrap;
-  box-shadow: 0 2px 0 var(--btn-edge), 0 6px 14px -8px rgba(42, 47, 90, 0.32);
+  box-shadow: 0 2px 0 var(--btn-edge), 0 6px 14px -8px rgba(76, 79, 105, 0.32);
   transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease), color var(--speed) var(--ease),
     transform 80ms var(--ease), box-shadow 80ms var(--ease);
 }
 .btn:hover:not(:disabled) { --btn-bg: var(--ink-50); --btn-bd: var(--ink-300); --btn-edge: var(--ink-300); text-decoration: none; }
-.btn:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 var(--btn-edge), 0 3px 8px -6px rgba(42, 47, 90, 0.32); }
+.btn:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 var(--btn-edge), 0 3px 8px -6px rgba(76, 79, 105, 0.32); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 .btn svg { flex: none; }
 .btn--primary { --btn-bg: var(--brand-600); --btn-bd: var(--brand-600); --btn-fg: var(--on-brand); --btn-edge: var(--brand-edge); }
@@ -316,8 +317,8 @@ html { scroll-behavior: smooth; }
 }
 .btn--glass:hover:not(:disabled) { --btn-bg: rgba(255, 255, 255, 0.28); --btn-bd: rgba(255, 255, 255, 0.55); color: #fff; }
 .btn--sm { min-height: 32px; padding: 3px 14px; font-size: 0.82rem; gap: 6px; border-radius: var(--radius-pill); }
-.btn--lg { min-height: 48px; padding: 9px 26px; font-size: 1rem; border-radius: var(--radius-pill); box-shadow: 0 3px 0 var(--btn-edge), 0 8px 18px -8px rgba(42, 47, 90, 0.35); }
-.btn--lg:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--btn-edge), 0 4px 10px -7px rgba(42, 47, 90, 0.32); }
+.btn--lg { min-height: 48px; padding: 9px 26px; font-size: 1rem; border-radius: var(--radius-pill); box-shadow: 0 3px 0 var(--btn-edge), 0 8px 18px -8px rgba(76, 79, 105, 0.35); }
+.btn--lg:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--btn-edge), 0 4px 10px -7px rgba(76, 79, 105, 0.32); }
 .btn--block { width: 100%; }
 .btn--icon { padding: 6px; width: 38px; height: 38px; font-size: 1rem; }
 .btn--icon.btn--sm { width: 32px; height: 32px; padding: 4px; }

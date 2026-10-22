@@ -153,8 +153,10 @@ One platform where **everything is graded server-side and labelled as practice**
 - Name: **Ai eo** — five standalone SVG brand assets ship at
   `IELTS-UI/src/client/public/brand/aieo-*.svg` (horizontal light/dark, icon
   light/dark + one more), asserted by `IELTS-UI/tests/unit/brand.test.ts`.
-- Mascot: **Bơ**, an original SVG creature with seven moods
-  (`src/client/components/learn/Mascot.tsx`), legible at 56 px and 190 px.
+- Mascot: **Bơ**, an original SVG creature with seven moods, existed at
+  `src/client/components/learn/Mascot.tsx` and was **removed by owner order
+  (round of 2026-10-21, committed in 7f503de)** — no mascots ship in the UI
+  today; the component and every render site were deleted.
 - Voice: honest about estimates, never authoritative-sounding; labels every
   band; says plainly what integrity features can and cannot do; shows judges as
   Judge01/Judge02 only.
@@ -163,17 +165,19 @@ One platform where **everything is graded server-side and labelled as practice**
 - Binding constraints from the repo: original content only, no official-exam
   branding, no fabricated testimonials/customers/pricing anywhere in the
   product.
-- Binding look (owner decision, 2026-10-21): the previous "computer-delivered
-  IELTS screen" pin was **revoked by the owner** the same day and replaced by
-  the **Character Goods Catalog** visual world — cream ground, pastel
-  color-blocked cells (lilac/mint/sky/butter), ribbon pink accent, ink navy
-  type, Baloo 2 display + Quicksand body, pill buttons, rounded cards, soft
-  shadows, playful mascots/stickers. Chosen via the Impeccable decision round
-  (seed `d1c9294b13126b2d`); recorded in `DESIGN.md` when documented.
-  `docs/UI-REFRESH.md` now describes the superseded look. Still binding from
-  the old pin: one original SVG icon set, no emoji, no fabricated claims;
-  "no web fonts" is lifted — self-hosted woff2 only, Vietnamese subsets
-  mandatory. Vietnamese-first and every-band-labelled remain invariants.
+- Binding look (owner decision, 2026-10-22): the **Character Goods Catalog**
+  pin of 2026-10-21 (which itself had revoked the earlier "computer-delivered
+  IELTS screen" pin) was **revoked by the owner** the same day and replaced by
+  the **Catppuccin** visual world — Latte flavour ground for the app with a
+  mauve commitment (`#8839ef` primary, slate-blue ink scale, pastel
+  mauve/green/blue/gold cell tints), Mocha (`#1e1e2e`) for dark bands and the
+  call room, **Be Vietnam Pro** across the scale as display + body,
+  pill buttons, rounded cards, soft shadows, no glass/glow/emoji. Recorded in
+  `DESIGN.md`. Still binding from the earlier pins: one original SVG icon set,
+  no emoji, no fabricated claims; self-hosted woff2 only, Vietnamese subsets
+  mandatory (Be Vietnam Pro ships vietnamese/latin/latin-ext from @fontsource).
+  Vietnamese-first and every-band-labelled remain invariants. The call room
+  keeps English chrome (room strings stay EN by product decision).
 
 ## Evidence on Hand
 

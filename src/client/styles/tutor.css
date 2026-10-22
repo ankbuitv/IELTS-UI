@@ -142,7 +142,7 @@
 }
 .tutor-conv:hover .tutor-conv__del,
 .tutor-conv.is-active .tutor-conv__del { opacity: 1; }
-.tutor-conv__del:hover { background: var(--danger-soft, #fdecec); color: var(--danger, #d92d20); }
+.tutor-conv__del:hover { background: var(--danger-soft, #fde5ea); color: var(--danger, #d20f39); }
 
 .tutor-side__back {
   display: flex;
@@ -199,7 +199,7 @@
   padding: 5px 9px;
   cursor: pointer;
 }
-.tutor-main__del:hover { color: var(--danger, #d92d20); border-color: var(--danger-border, #f3c6c3); }
+.tutor-main__del:hover { color: var(--danger, #d20f39); border-color: var(--danger-border, #f8c2cd); }
 
 .tutor-thread {
   flex: 1;
@@ -288,8 +288,8 @@
   margin: 0 20px;
   padding: 8px 10px;
   border-radius: 8px;
-  background: var(--danger-soft, #fdecec);
-  border: 1px solid var(--danger-border, #f3c6c3);
+  background: var(--danger-soft, #fde5ea);
+  border: 1px solid var(--danger-border, #f8c2cd);
   color: var(--danger, #b42318);
   font-size: 0.78rem;
   line-height: 1.45;

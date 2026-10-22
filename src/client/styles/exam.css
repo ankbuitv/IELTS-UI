@@ -283,7 +283,7 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
 .question-block { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
 .q-banner {
   display: flex; gap: 10px; align-items: flex-start; padding: 7px 12px;
-  background: var(--paper-muted); border: 1px solid var(--ink-200); border-left: 3px solid var(--brand-600);
+  background: var(--brand-50); border: 1px solid var(--brand-200);
   border-radius: var(--radius); color: var(--ink-800);
 }
 /* The tick tile was decoration; the range link and the type tag say everything, and phones need the width. */
@@ -491,22 +491,22 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
    the tab-lock block and the practice dictionary.
    ========================================================================== */
 .exam-topbar { background: var(--bar); border-bottom: 3px solid var(--brand-600); color: #fff; height: 48px; }
-.exam-topbar .exam-icon, .exam-topbar .icon-btn { color: #c3c8d0; }
+.exam-topbar .exam-icon, .exam-topbar .icon-btn { color: #ccd0da; }
 .exam-topbar .exam-icon:hover, .exam-topbar .icon-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
-.exam-topbar .exam-icon.is-on { background: #fff; color: #14171b; }
+.exam-topbar .exam-icon.is-on { background: #fff; color: #1e1e2e; }
 .exam-topbar .exam-icon--exit:hover { background: var(--danger); color: #fff; }
 .exam-topbar__title { color: #fff; font-weight: 700; }
-.exam-topbar__sub { color: #aeb4be; }
-.exam-topbar .exam-save { color: #aeb4be; }
-.exam-topbar .exam-save--warn { color: #f0a53a; }
-.exam-topbar .exam-save--bad { color: #ff9a8f; }
-.exam-topbar .exam-integrity { background: transparent; border-color: rgba(255, 255, 255, 0.3); color: #d6dae0; }
-.exam-topbar .exam-integrity--warning { background: rgba(240, 165, 58, 0.18); border-color: #f0a53a; color: #f6c26b; }
-.exam-topbar .exam-integrity--critical { background: rgba(217, 45, 32, 0.28); border-color: #ff7a6e; color: #ffb3ab; }
+.exam-topbar__sub { color: #9ca0b0; }
+.exam-topbar .exam-save { color: #9ca0b0; }
+.exam-topbar .exam-save--warn { color: #df8e1e; }
+.exam-topbar .exam-save--bad { color: #f8c2cd; }
+.exam-topbar .exam-integrity { background: transparent; border-color: rgba(255, 255, 255, 0.3); color: #ccd0da; }
+.exam-topbar .exam-integrity--warning { background: rgba(240, 165, 58, 0.18); border-color: #df8e1e; color: #f6c667; }
+.exam-topbar .exam-integrity--critical { background: rgba(210, 15, 57, 0.28); border-color: #f2939b; color: #f8c2cd; }
 .exam-topbar .exam-timer { background: transparent; border-color: rgba(255, 255, 255, 0.4); color: #fff; font-size: 1rem; }
 .exam-topbar .exam-timer .icon { color: #fff; }
-.exam-topbar .exam-timer--untimed { color: #aeb4be; border-color: rgba(255, 255, 255, 0.25); }
-.exam-topbar .exam-timer--warning { background: rgba(240, 165, 58, 0.18); border-color: #f0a53a; color: #f6c26b; }
+.exam-topbar .exam-timer--untimed { color: #9ca0b0; border-color: rgba(255, 255, 255, 0.25); }
+.exam-topbar .exam-timer--warning { background: rgba(240, 165, 58, 0.18); border-color: #df8e1e; color: #f6c667; }
 .exam-topbar .exam-timer--critical { background: var(--danger); border-color: var(--danger); color: #fff; }
 .exam-topbar .exam-timer--critical .icon { color: #fff; }
 .exam-topbar .btn { background: transparent; color: #fff; border-color: rgba(255, 255, 255, 0.4); }
@@ -516,7 +516,7 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
 .exam-topbar .display-menu__label { display: none; }
 .exam-topbar .display-menu__aa { color: #fff; }
 .exam-topbar :focus-visible { box-shadow: 0 0 0 2px var(--bar), 0 0 0 4px #fff; }
-.exam-topbar .mock-progress__step { background: transparent; border-color: rgba(255, 255, 255, 0.28); color: #aeb4be; }
+.exam-topbar .mock-progress__step { background: transparent; border-color: rgba(255, 255, 255, 0.28); color: #9ca0b0; }
 .exam-topbar .mock-progress__step--done { border-color: #4cc38a; color: #7fdcae; background: transparent; }
 .exam-topbar .mock-progress__step--current { border-color: #fff; color: #fff; background: rgba(255, 255, 255, 0.12); }
 .exam-topbar .mock-progress__step--current .mock-progress__dot { background: #fff; border-color: #fff; }
@@ -553,7 +553,7 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
   background: var(--paper); border: 2px solid var(--ink-900); box-shadow: var(--shadow-lg);
 }
 .exam-dict__head { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 6px 12px; background: var(--solid); color: var(--on-solid); }
-.exam-dict__head .exam-icon { color: #c3c8d0; }
+.exam-dict__head .exam-icon { color: #ccd0da; }
 .exam-dict__head .exam-icon:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
 .exam-dict__body { overflow-y: auto; padding: 10px 12px 12px; }
 @media (max-width: 719px) {
@@ -570,7 +570,7 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
   position: absolute; right: 8px; bottom: 8px; pointer-events: none;
   display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: var(--radius-sm);
   font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em;
-  color: #fff; background: rgba(20, 23, 27, 0.78);
+  color: #fff; background: rgba(24, 24, 37, 0.78);
   opacity: 0; transform: translateY(2px);
   transition: opacity var(--speed) var(--ease), transform var(--speed) var(--ease);
 }
@@ -579,15 +579,15 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
 .exam-lightbox__close {
   position: absolute; top: 14px; right: 14px; width: 40px; height: 40px; border-radius: var(--radius-lg);
   display: grid; place-items: center; cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.32); background: rgba(20, 23, 27, 0.7); color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.32); background: rgba(24, 24, 37, 0.7); color: #fff;
   transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease);
 }
-.exam-lightbox__close:hover { background: rgba(20, 23, 27, 0.95); border-color: rgba(255, 255, 255, 0.6); }
+.exam-lightbox__close:hover { background: rgba(24, 24, 37, 0.95); border-color: rgba(255, 255, 255, 0.6); }
 .exam-lightbox__close:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.45); }
 .exam-lightbox__hint {
   position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); white-space: nowrap;
   font-size: 0.74rem; font-weight: 600; color: rgba(255, 255, 255, 0.82);
-  padding: 4px 10px; border-radius: var(--radius-sm); background: rgba(20, 23, 27, 0.6);
+  padding: 4px 10px; border-radius: var(--radius-sm); background: rgba(24, 24, 37, 0.6);
 }
 @media (pointer: coarse) {
   /* No hover on touch: keep the enlarge affordance visible. */
@@ -659,9 +659,9 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
 }
 .missing-chip {
   appearance: none;
-  border: 1px solid #e4b9b3;
-  background: #fff4f2;
-  color: #a33a2c;
+  border: 1px solid #f8c2cd;
+  background: #fde5ea;
+  color: #99231a;
   border-radius: 999px;
   padding: 4px 11px;
   font: inherit;
@@ -672,17 +672,17 @@ html[data-reading-width='wide'] .passage { max-width: 90ch; }
 }
 .missing-chip:hover,
 .missing-chip:focus-visible {
-  background: #a33a2c;
+  background: #99231a;
   color: #fff;
   outline: none;
 }
 .missing-chip--more {
   cursor: default;
-  background: #f6f1ef;
-  border-color: #e3d7d3;
-  color: #7a6a65;
+  background: #f6f8fc;
+  border-color: #e6e9ef;
+  color: #7c7f93;
 }
 .missing-chip--more:hover {
-  background: #f6f1ef;
-  color: #7a6a65;
+  background: #f6f8fc;
+  color: #7c7f93;
 }

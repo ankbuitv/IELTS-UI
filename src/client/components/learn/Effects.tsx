@@ -13,7 +13,7 @@
  */
 import { useMemo } from 'react';
 
-const CONFETTI_COLOURS = ['#e23a41', '#ffc53d', '#2f9e5f', '#3f7bff', '#a45cf0', '#ff8fa3'];
+const CONFETTI_COLOURS = ['#8839ef', '#f6c667', '#40a02b', '#1e66f5', '#ea76cb', '#179299'];
 
 function seeded(seed: number): () => number {
   // A tiny deterministic generator, so a burst's confetti is stable while it is

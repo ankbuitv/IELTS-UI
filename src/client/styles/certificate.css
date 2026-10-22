@@ -55,9 +55,10 @@
   background: #2c2618; color: #f6ecd2;
   font-weight: 800; font-size: 0.92rem; letter-spacing: 0.02em;
 }
+.cert-mark svg { display: block; }
 .cert-brand div { display: flex; flex-direction: column; line-height: 1.25; }
 .cert-brand strong { font-size: 1.02rem; letter-spacing: -0.01em; }
-.cert-brand span { font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: #8c7c56; }
+.cert-brand div span { font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: #8c7c56; }
 .cert-no { font-size: 0.68rem; letter-spacing: 0.12em; color: #9b8c69; text-transform: uppercase; padding-top: 6px; }
 
 /* ------------------------------------------------------------------- body */
@@ -109,7 +110,7 @@
   font-family: Georgia, 'Times New Roman', serif;
   font-size: clamp(2.6rem, 5vw, 4rem);
   line-height: 0.95;
-  color: #5b4bdb;
+  color: #7530d1;
   font-weight: 500;
 }
 .cert-score__scale { font-size: 0.82rem; color: #8c7c56; }

@@ -11,6 +11,7 @@ import { api } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../context/AuthContext';
 import { Loading, Notice } from '../../components/ui';
+import { BrandMark } from '../../components/BrandLogo';
 import { Icon } from '../../components/Icon';
 import { formatBand, formatDateTime, SKILL_LABELS } from '../../lib/format';
 import type { AttemptResultPayload } from '../../components/ResultView';
@@ -66,7 +67,9 @@ export function CertificatePage() {
         <span className="cert-frame" aria-hidden="true" />
         <header className="cert-head">
           <div className="cert-brand">
-            <span className="cert-mark">AI</span>
+            <span className="cert-mark" aria-hidden="true">
+              <BrandMark theme="brand" size={22} />
+            </span>
             <div>
               <strong>AI Eo</strong>
               <span>IELTS practice platform</span>

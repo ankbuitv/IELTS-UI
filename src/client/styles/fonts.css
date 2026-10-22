@@ -4,13 +4,15 @@
    an English page downloads the Latin files only and the Vietnamese files load
    the first time a Vietnamese word is shown).
 
-   Character Goods Catalog world:
-     display  Baloo 2   700/800 — headlines, numerals, name plates
-     body     Quicksand 500/600/700 — UI copy, forms, reading text
-   Both carry Vietnamese diacritics properly (mandatory: Vietnamese-first UI). */
+   Catppuccin world (owner-pinned 2026-10-22):
+      display + body  Be Vietnam Pro 400/500/600/700/800
+   One family across the scale: a workhorse grotesque drawn for Vietnamese
+   diacritics (mandatory: Vietnamese-first UI); the weight steps carry display
+   numerals, headings and UI copy, so the type stays professional rather than
+   rounded-cartoon. */
 
-@import '@fontsource/baloo-2/700.css';
-@import '@fontsource/baloo-2/800.css';
-@import '@fontsource/quicksand/500.css';
-@import '@fontsource/quicksand/600.css';
-@import '@fontsource/quicksand/700.css';
+@import '@fontsource/be-vietnam-pro/400.css';
+@import '@fontsource/be-vietnam-pro/500.css';
+@import '@fontsource/be-vietnam-pro/600.css';
+@import '@fontsource/be-vietnam-pro/700.css';
+@import '@fontsource/be-vietnam-pro/800.css';

@@ -117,6 +117,6 @@ describe('Ai eo brand assets', () => {
     expect(html).toContain('href="/favicon.svg"');
     expect(html).toContain('/og-image.png');
     expect(html).toContain('property="og:image:width" content="1200"');
-    expect(html).toContain('name="theme-color" content="#ffffff"');
+    expect(html).toContain('name="theme-color" content="#eff1f5"');
   });
 });

@@ -296,8 +296,10 @@ export function AppShell() {
   const nav = navFor(user?.role);
   // The rail: six icon-only places, name shown on hover. Everything else is
   // behind "More", which groups what is left so many features stay scannable.
+  // "Home" is the learner dashboard — the stats screen — for every role; staff
+  // reach their console through More (or their phone tab bar).
   const railItems: NavItem[] = [
-    { to: nav.home, label: 'Trang chủ', icon: 'home' },
+    { to: '/dashboard', label: 'Trang chủ', icon: 'home' },
     { to: '/practice', label: 'Luyện thi', icon: 'book' },
     { to: '/learn', label: 'Học tập', icon: 'target' },
     { to: '/history', label: 'Kết quả', icon: 'award' },

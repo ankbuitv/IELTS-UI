@@ -32,10 +32,10 @@
   flex: none; display: grid; place-items: center;
   width: 40px; height: 40px; border-radius: 12px;
 }
-.earnings__stat-icon.is-mint { background: #e3f7ec; color: #1f7a4d; }
-.earnings__stat-icon.is-violet { background: #eeeaff; color: #5b4bdb; }
-.earnings__stat-icon.is-sun { background: #fff4d8; color: #9a6b00; }
-.earnings__stat-icon.is-coral { background: #ffe9e4; color: #b04331; }
+.earnings__stat-icon.is-mint { background: #e4f3de; color: #2f7d1f; }
+.earnings__stat-icon.is-violet { background: #ece0fd; color: #8839ef; }
+.earnings__stat-icon.is-sun { background: #fdf3e2; color: #7a4a00; }
+.earnings__stat-icon.is-coral { background: #fdeee7; color: #99231a; }
 
 .earnings__grid {
   display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px;
@@ -65,7 +65,7 @@
 }
 .earnings__month-bar span {
   display: block; height: 100%; border-radius: 99px;
-  background: linear-gradient(90deg, #7c6aff, #5b4bdb);
+  background: linear-gradient(90deg, #7530d1, #8839ef);
 }
 .earnings__month b { text-align: right; font-variant-numeric: tabular-nums; }
 .earnings__month .muted { text-align: right; }

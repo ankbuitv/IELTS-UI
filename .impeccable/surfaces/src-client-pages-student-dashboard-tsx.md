@@ -21,57 +21,64 @@ Constraints: Vietnamese-first learner copy; every band labelled "Thực hành �
 không phải kết quả chính thức"; no emoji in UI; server-truth untouched (this is
 a visual rebuild only).
 
-Chosen direction: **Character Goods Catalog** (pop-culture-shelf-character-goods-catalog,
-competitive verdict that won the hand). A pastel roster world: cream ground,
-per-cell pastel color-blocking, rank ribbons, name plates, rounded bubble
-display face. First surface = the shell plus the student dashboard rebuilt in
-this world.
-Memorable moment: the four skills as a pastel roster with rank ribbons and
-name plates — the learner's own cast — with the deadline as the one butter
-cell that raises its voice.
+Chosen direction: **Catppuccin** — owner-pinned 2026-10-22 via the structured
+question ("catpuccin"), which revokes the Character Goods Catalog pin of
+2026-10-21. A Latte-flavour ground with a mauve commitment: cool pastel
+surface ladder, one saturated accent (mauve) doing all the pointing, slate ink,
+a single grotesque family (Be Vietnam Pro) for display and body; Mocha takes
+the dark bands and the call room. First surface = the shell plus the student
+dashboard rebuilt in this world.
+Memorable moment: the four skills as pastel-tinted cells with bands and the
+estimate label — one roster, one system — where the only loud element on
+screen is the mauve pill (active nav, primary CTA).
 
 ## Direction contract
 
-<!-- impeccable:direction-contract 1 -->
+<!-- impeccable:direction-contract 2 -->
 
-THESIS: The dashboard a learner opens every night is their own cast of skills
-— a pastel roster with rank, name plate and one-line state — not another
-neutral stat wall. Refuses the category default: white cards + grey borders +
-blue accent, one flat canvas, hierarchy by size only.
+THESIS: The dashboard a learner opens every night is a working instrument on
+a tinted ground: white cards on Latte base, hierarchy carried by weight and
+space, and exactly one loud colour — mauve — doing all the pointing (active
+nav, primary CTA, current item). Refuses BOTH category defaults: interchangeable
+blue-SaaS chrome (grey page, grey borders, blue accent) and the previous pin's
+toy-shop pastel overload.
 
-OWN-WORLD: Ground cream #FFF6E8; pastel cell fills lilac #EDE4FF, mint
-#E6F7EF, sky #E3F1FF, butter #FFF0B8; ink navy #2A2F5A for all text; ribbon
-pink #FF6BA7 as the single saturated accent (primary buttons, active pills,
-rank-1 ribbon); mint ribbon #7FD8B4, sky ribbon #8FC1F5, butter ribbon
-#F5C84C as rank/skill roles. Display face Baloo 2 800 (bubble, tight);
-body Quicksand 500/700. Cells: 18-24px radius, fill = pastel block, soft
-shadow 0 6px 18px rgba(42,47,90,.08), hairline none — separation by fill and
-space. Pill buttons, pill nav (active = lilac pill with ink text), pill name
-plates under figures. Sparkle/star glyphs as the only ornament, inline SVG.
+OWN-WORLD: Catppuccin Latte ground #EFF1F5, white paper cards, #F6F8FC nested
+surfaces; slate ink scale #34364A (headings) / #4C4F69 / #6C6F85 (body) /
+#8C8FA1 (muted) with #E6E9EF rules; mauve commitment #8839EF (white 5.4:1),
+hover #7530D1, tints #F4ECFE → #DCC5FB; pastel cell fills derived from the
+four skill hues — lilac #ECE4FB, mint #E0EFE4, sky #E2EBFA, butter #F8ECD6;
+role hues info blue #1E66F5, teal #0B7A75, amber #B35408, speaking pink
+#A63174; success #2F7D1F, danger #D20F39; gold #DF8E1E for streaks/XP. Dark
+bands, footer and the call room flip to Mocha #1E1E2E / #181825 / #313244 with
+#CDD6F4 text and #CBA6F7 mauve accents. Display + body: Be Vietnam Pro
+400–800, self-hosted woff2 with the vietnamese subset (mandatory); display
+= 700/800 at −0.03em, body 500, numerals tabular. Cards 14–24px radius, pill
+buttons with a 2px darker lip, shadow 0 6px 18px rgba(76,79,105,.09).
+Ornament: none — colour blocks, weight steps and the original mark carry
+identity; no gradients-as-decoration, glass, glow or emoji.
 
-STORY: The learner lands, sees the greeting and today's one action, reads the
-four skills as ranked cells with bands on name plates, checks the butter
-deadline cell (with clock), glances at the weekly leaderboard column with rank
-ribbons, and leaves through "Bắt đầu thi" or the next lesson. They believe:
-this is mine, it is friendly, and the estimate is honestly labelled.
+STORY: The learner lands, reads the greeting and today's one action, scans the
+four skill cells (tint + band + estimate label), checks the deadline (with its
+clock), glances at the weekly leaderboard and leaves through "Bắt đầu thi" or
+the next lesson. They believe: this is mine, it is calm, and the estimate is
+honestly labelled.
 
-FIRST VIEWPORT (1440×900): top pill nav bar on cream (logo "Ai eo" in Baloo
-800 with sparkle, pill links Trang chủ active / Luyện thi / Học tập / Kết quả /
-Từ vựng / Từ điển, right: pink "480 xu" chip, pink pill CTA "Bắt đầu thi",
-avatar). Below: headline "Xin chào Minh An!" (~38px Baloo) + band line; left
-2/3: four pastel skill cells in a row (Đọc sky, Nghe mint, Viết butter, Nói
-lilac) each with glyph, band on name plate, thin progress bar; then the
-deadline cell (butter fill, small ribbon, red clock line "Còn 6 giờ", pink
-"Làm bài" pill) beside the Learn strip card (streak flame + XP + coins + daily
-goal ring). Right 1/3 column: "Bảng xếp hạng tuần" card (four ranked rows,
-rank ribbons 1-4, XP figures) and the next-lesson cell with Bơ's face (inline
-SVG blob) and "Matching Headings — Bậc 6.5". Everything above the fold.
+FIRST VIEWPORT (1440×900): 76px icon rail on the Latte ground (six icons,
+mauve active pill, hover names, everything else grouped behind "More"); top
+bar with the mark, "480 xu" gold chip, avatar; headline "Xin chào Minh An!"
+(~38px, 800) + band line; left 2/3: four skill cells in ONE row — Đọc sky,
+Nghe mint, Viết butter, Nói lilac — each with glyph, band, estimate label and
+thin bar; the deadline row (clock, red hour line) and the Learn strip (streak,
+XP, coins, goal ring). Right 1/3: "Bảng xếp hạng tuần" card and the
+next-lesson cell. Everything above the fold.
 
-FORM: chosen form position 4 of the ordered seven (grounded list: sticker
-sheet, transit line map, notebook & red pen, character goods catalog [chosen
-via challenger win], board game route, riso zine, scoreboard). seed:
-d1c9294b13126b2d
+FORM: no form roll — the direction is user-pinned (Catppuccin, 2026-10-22);
+a pinned direction beats the roll per new-work.md. Flavour mapping: app =
+Latte (light), call room + dark band + dark display theme = Mocha.
 
-FINISH: unreviewed and undocumented is unfinished; this build ends with the
-finish review, the verdict, DESIGN.md, and every shipping raster carrying its
-provenance.
+FINISH: unreviewed and undocumented is unfinished. This world ends with
+DESIGN.md (token-bearing) written and PRODUCT.md's binding look re-recorded.
+The pixel finish review (screenshots at 1440 + 390) is blocked this session —
+browser MCP disconnected, disclosed to the user; it runs as soon as a browser
+session is back.

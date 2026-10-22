@@ -144,30 +144,89 @@ interface OnlineMeaning {
 }
 
 async function askOnline(term: string): Promise<DictionaryEntry | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`, {
+        headers: { 'user-agent': 'Ai-eo-dictionary/1.0 (https://ielts.ankb.qzz.io)' },
+        signal: AbortSignal.timeout(7_000),
+      });
+      if (response.status === 404) return null; // the source simply lacks the word
+      if (!response.ok) {
+        // 429/5xx from a shared free API: one retry, then let another source try.
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 700));
+          continue;
+        }
+        return null;
+      }
+      const body = (await response.json()) as Array<{ word?: string; phonetic?: string; meanings?: OnlineMeaning[] }>;
+      const first = body[0];
+      if (!first) return null;
+      return normaliseDictionaryEntry(
+        {
+          word: first.word ?? term,
+          phonetic: first.phonetic ?? '',
+          meanings: (first.meanings ?? []).map((meaning) => ({
+            pos: meaning.partOfSpeech ?? '',
+            definitions: (meaning.definitions ?? []).slice(0, 2).map((d) => ({ en: d.definition ?? '', vi: '', example: d.example ?? '' })),
+            synonyms: meaning.synonyms ?? [],
+          })),
+        },
+        term,
+        'ONLINE',
+      );
+    } catch {
+      return null; // network or timeout — the Wiktionary source below takes over
+    }
+  }
+  return null;
+}
+
+/** Wiktionary as a second free source: wider phrase coverage, no key needed. */
+async function askWiktionary(term: string): Promise<DictionaryEntry | null> {
   try {
-    const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`, {
-      signal: AbortSignal.timeout(3_500),
+    const response = await fetch(`https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(term)}`, {
+      headers: { accept: 'application/json', 'user-agent': 'Ai-eo-dictionary/1.0 (https://ielts.ankb.qzz.io)' },
+      signal: AbortSignal.timeout(7_000),
     });
     if (!response.ok) return null;
-    const body = (await response.json()) as Array<{ word?: string; phonetic?: string; meanings?: OnlineMeaning[] }>;
-    const first = body[0];
-    if (!first) return null;
-    return normaliseDictionaryEntry(
-      {
-        word: first.word ?? term,
-        phonetic: first.phonetic ?? '',
-        meanings: (first.meanings ?? []).map((meaning) => ({
-          pos: meaning.partOfSpeech ?? '',
-          definitions: (meaning.definitions ?? []).slice(0, 2).map((d) => ({ en: d.definition ?? '', vi: '', example: d.example ?? '' })),
-          synonyms: meaning.synonyms ?? [],
-        })),
-      },
-      term,
-      'ONLINE',
-    );
+    const body = (await response.json()) as Record<
+      string,
+      Array<{ partOfSpeech?: string; definitions?: Array<{ definition?: string; examples?: string[] }> }>
+    >;
+    const sections = body.en ?? [];
+    const meanings = sections
+      .slice(0, 4)
+      .map((section) => ({
+        pos: section.partOfSpeech ?? '',
+        definitions: (section.definitions ?? [])
+          .slice(0, 2)
+          .map((definition) => ({
+            en: stripMarkup(definition.definition ?? ''),
+            vi: '',
+            example: stripMarkup(definition.examples?.[0] ?? ''),
+          }))
+          .filter((definition) => definition.en.length > 0),
+        synonyms: [] as string[],
+      }))
+      .filter((meaning) => meaning.definitions.length > 0);
+    if (meanings.length === 0) return null;
+    return normaliseDictionaryEntry({ word: term, phonetic: '', meanings }, term, 'ONLINE');
   } catch {
     return null;
   }
+}
+
+/** Wiktionary definitions arrive as HTML fragments; the UI renders plain text. */
+function stripMarkup(value: string): string {
+  return value
+    .replace(/<[^>]*>/g, '')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
 }
 
 async function isSaved(env: Env, userId: string, term: string): Promise<boolean> {
@@ -201,12 +260,12 @@ export async function lookupWord(env: Env, userId: string, rawTerm: string): Pro
       const failure = describeAiFailure(error, { task: 'dictionary' });
       unavailable =
         failure.message === AI_NOT_CONFIGURED_MESSAGE
-          ? 'Only the built-in word list is available right now, and this word is not in it.'
+          ? 'That word is not in the built-in word lists. An administrator can add an AI provider for full coverage.'
           : 'The dictionary could not look that word up right now. Please try again in a moment.';
     }
   }
   if (!entry) {
-    entry = await askOnline(term);
+    entry = (await askOnline(term)) ?? (await askWiktionary(term));
     if (entry) {
       await writeCache(env, term, entry);
       unavailable = undefined;

@@ -37,12 +37,12 @@ html[data-reduce-motion='true'] *::after {
 html[data-theme='dark'] {
   color-scheme: dark;
 
-  --paper: #162033;
-  --paper-muted: #1b2740;
-  --canvas: #0d1524;
-  --bar: #0a111d;
-  --solid: #2a3a5a;
-  --solid-edge: #0a111d;
+  --paper: #1e1e2e;
+  --paper-muted: #1e1e2e;
+  --canvas: #181825;
+  --bar: #11111b;
+  --solid: #313244;
+  --solid-edge: #11111b;
 
   --ink-950: #f4f7fb;
   --ink-900: #e9eef6;
@@ -52,9 +52,9 @@ html[data-theme='dark'] {
   --ink-500: #8190a8;
   --ink-400: #63728b;
   --ink-300: #43526b;
-  --ink-200: #2d3a52;
-  --ink-100: #223049;
-  --ink-50: #1a263c;
+  --ink-200: #313244;
+  --ink-100: #313244;
+  --ink-50: #1e1e2e;
 
   --brand-50: #2c1219;
   --brand-100: #3f1620;
@@ -68,7 +68,7 @@ html[data-theme='dark'] {
   --brand-edge: #9f1b26;
   --on-brand: #ffffff;
   --logo-ink: #ffffff;
-  --logo-tile: #0f172a;
+  --logo-tile: #11111b;
   --logo-bars: #ff4d4d;
   --logo-dot: #ff4d4d;
 
@@ -86,11 +86,11 @@ html[data-theme='dark'] {
   --danger-soft: #331512;
   --danger-border: #7a2d27;
   --info: #7cb0f5;
-  --info-soft: #0f1f36;
-  --info-border: #234574;
+  --info-soft: #181825;
+  --info-border: #313244;
   --violet: #b8a0f0;
-  --violet-soft: #20173a;
-  --violet-border: #45367a;
+  --violet-soft: #181825;
+  --violet-border: #45475a;
   --teal: #4ec5bf;
   --teal-soft: #0c2a29;
   --teal-border: #1d5855;
@@ -194,7 +194,7 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
 .recorder__mic:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--brand-800); }
 .recorder__mic--recording { background: var(--danger); box-shadow: 0 4px 0 #8f1d14; animation: pulse-rec 1.6s ease-in-out infinite; }
 .recorder__mic--stop { background: var(--solid); }
-@keyframes pulse-rec { 0%, 100% { box-shadow: 0 4px 0 #8f1d14, 0 0 0 0 rgba(217, 45, 32, 0.45); } 50% { box-shadow: 0 4px 0 #8f1d14, 0 0 0 12px rgba(217, 45, 32, 0); } }
+@keyframes pulse-rec { 0%, 100% { box-shadow: 0 4px 0 #8f1d14, 0 0 0 0 rgba(210, 15, 57, 0.45); } 50% { box-shadow: 0 4px 0 #8f1d14, 0 0 0 12px rgba(210, 15, 57, 0); } }
 .recorder__status { font-size: 0.82rem; color: var(--ink-500); }
 .recorder__live {
   border: 1px dashed var(--ink-200); border-radius: var(--radius); background: var(--paper-muted);
@@ -224,7 +224,7 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
 .criterion__band { font-weight: 740; color: var(--brand-700); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .criterion__comment { margin: 6px 0 0; font-size: 0.85rem; line-height: 1.55; color: var(--ink-600); }
 .correction-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; font-size: 0.86rem; }
-.correction-row del { color: var(--danger); text-decoration-color: rgba(217, 45, 32, 0.5); }
+.correction-row del { color: var(--danger); text-decoration-color: rgba(210, 15, 57, 0.5); }
 .correction-row ins { color: var(--success); text-decoration: none; font-weight: 700; }
 .correction-row__reason { grid-column: 1 / -1; font-size: 0.8rem; color: var(--ink-500); }
 @media (max-width: 620px) { .correction-row { grid-template-columns: 1fr; } }
@@ -377,7 +377,7 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
   border-radius: 10px;
   background: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 12px 28px rgba(52, 54, 74, 0.18);
   white-space: nowrap;
 }
 .convo__wordpop-time {
@@ -436,7 +436,7 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
   color: var(--ink-500);
   cursor: pointer;
 }
-.lesson__accent-btn.is-on { background: var(--surface); color: var(--brand-800); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12); }
+.lesson__accent-btn.is-on { background: var(--surface); color: var(--brand-800); box-shadow: 0 1px 2px rgba(52, 54, 74, 0.12); }
 .lesson__accent-btn:hover { color: var(--brand-700); }
 
 /* #2 inline corrections in AI marking */
@@ -508,7 +508,7 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
 .dl-select select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font: inherit; font-size: 0.8rem; color: var(--ink-800); }
 .dl-accents { display: inline-flex; padding: 2px; border-radius: 999px; background: var(--paper-100); border: 1px solid var(--line); }
 .dl-accent { border: 0; background: none; padding: 4px 9px; border-radius: 999px; font: inherit; font-size: 0.72rem; font-weight: 650; color: var(--ink-500); cursor: pointer; }
-.dl-accent.is-on { background: var(--surface); color: var(--brand-800); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12); }
+.dl-accent.is-on { background: var(--surface); color: var(--brand-800); box-shadow: 0 1px 2px rgba(52, 54, 74, 0.12); }
 .dl-play { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .dl-answer { display: flex; flex-direction: column; gap: 10px; }
 .dl-answer textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper-50); font: inherit; font-size: 0.92rem; line-height: 1.6; color: var(--ink-800); resize: vertical; }
@@ -541,7 +541,7 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
 .billing-page { max-width: 1040px; }
 .billing-plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .billing-plan { display: flex; flex-direction: column; gap: 10px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
-.billing-plan.is-featured { border-color: var(--brand-300); box-shadow: 0 10px 30px -22px rgba(91, 61, 245, 0.55); }
+.billing-plan.is-featured { border-color: var(--brand-300); box-shadow: 0 10px 30px -22px rgba(136, 57, 239, 0.55); }
 .billing-plan header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .billing-plan h2 { margin: 0; font-size: 1.05rem; }
 .billing-plan__price { margin: 0; font-size: 1.9rem; font-weight: 800; letter-spacing: -0.02em; color: var(--ink-900); }

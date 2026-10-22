@@ -3,27 +3,27 @@
 .practice-hint {
   display: inline-flex; align-items: center; gap: 6px;
   margin: 0 0 8px; padding: 6px 10px; border-radius: 10px;
-  background: var(--sun-50, #fff8e6); color: var(--ink-500);
-  border: 1px solid var(--sun-border, #f2e0b0);
+  background: var(--sun-50, #fdf3e2); color: var(--ink-500);
+  border: 1px solid var(--sun-border, #f5dfb6);
 }
 
 .passage-mark {
   border-radius: 4px; padding: 0 2px; cursor: pointer;
   color: inherit; font-weight: 600;
 }
-.passage-mark--sun { background: #ffe9a8; }
-.passage-mark--mint { background: #c9f2dc; }
+.passage-mark--sun { background: #fadd9e; }
+.passage-mark--mint { background: #bce0af; }
 .passage-mark__note {
   display: inline-grid; place-items: center;
   width: 15px; height: 15px; margin-left: 3px; border-radius: 50%;
-  background: var(--sun-500, #f0a200); color: #fff; vertical-align: middle;
+  background: var(--sun-500, #eeae3a); color: #fff; vertical-align: middle;
 }
 
 .practice-tools-pop {
   position: fixed; z-index: 120; transform: translate(-50%, -100%);
   display: flex; gap: 4px; padding: 5px;
-  background: var(--ink-900, #1c1533); border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(12, 8, 32, 0.35);
+  background: var(--ink-900, #3b1a7a); border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(17, 17, 27, 0.35);
 }
 .practice-tools-pop button {
   width: 30px; height: 30px; border: 0; border-radius: 8px; cursor: pointer;
@@ -43,8 +43,8 @@
 
 /* Review nav strip: green = correct, red = incorrect. */
 .nav-strip__item--done {
-  border-color: var(--success-border, #9fd9b8); background: var(--success-soft, #e7f8ef); color: var(--success, #12864f);
+  border-color: var(--success-border, #bce0af); background: var(--success-soft, #e4f3de); color: var(--success, #2f7d1f);
 }
 .nav-strip__item--missed {
-  border-color: var(--danger-border, #f2b0b0); background: var(--danger-soft, #fdecec); color: var(--danger, #c22c3c);
+  border-color: var(--danger-border, #f8c2cd); background: var(--danger-soft, #fde5ea); color: var(--danger, #b00e2e);
 }
