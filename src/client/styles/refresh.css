@@ -352,7 +352,11 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
 .convo__word {
   display: inline;
   padding: 0;
-  margin: 0;
+  /* Space words with margin, not a generated-content space: a lone `content: ' '`
+     on ::after collapses at the inline-box boundary in some engines, which jams
+     the whole transcript into one word. A right margin never collapses and still
+     lets the line wrap naturally. */
+  margin: 0 0.25em 0 0;
   border: 0;
   background: none;
   font: inherit;
@@ -361,7 +365,6 @@ html[data-theme='dark'] ::selection { background: rgba(216, 42, 55, 0.5); color:
   border-radius: 3px;
   cursor: pointer;
 }
-.convo__word::after { content: ' '; }
 .convo__word:hover,
 .convo__word:focus-visible { background: var(--brand-100); color: var(--brand-800); outline: none; }
 .convo__word--open { background: var(--brand-200); color: var(--brand-900); box-shadow: 0 0 0 1px var(--brand-300); }
