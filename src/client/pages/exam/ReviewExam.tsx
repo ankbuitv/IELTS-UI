@@ -7,6 +7,7 @@ import { Icon } from '../../components/Icon';
 import { QuestionRenderer } from '../../components/exam/QuestionRenderer';
 import { AnswerExplanation, evidenceSegmentId } from '../../components/exam/AnswerExplanation';
 import { TranscriptView } from '../../components/exam/TranscriptView';
+import { ReviewAudioPlayer } from '../../components/exam/ReviewAudioPlayer';
 import { ExamDictionary } from '../../components/exam/ExamDictionary';
 import { buildWordTimings, findEvidenceStart } from '@shared/transcript-timing';
 import { WritingPrompt, writingTasksOf, type WritingTaskRef } from '../../components/exam/WritingEditor';
@@ -273,22 +274,13 @@ export function AttemptReviewPage() {
               )}
               {activeSectionResult?.audio ? (
                 <div style={{ padding: '10px 12px 0' }}>
-                  <audio
-                    ref={audioRef}
-                    controls
-                    preload="metadata"
+                  <ReviewAudioPlayer
                     src={activeSectionResult.audio.url}
-                    style={{ width: '100%' }}
-                    onLoadedMetadata={(event) => {
-                      const value = event.currentTarget.duration;
-                      if (Number.isFinite(value) && value > 0) setAudioDuration(value);
-                    }}
-                    onDurationChange={(event) => {
-                      const value = event.currentTarget.duration;
-                      if (Number.isFinite(value) && value > 0) setAudioDuration(value);
-                    }}
+                    title={activeSectionResult.title || 'Listening audio'}
+                    audioRef={audioRef}
+                    onDuration={setAudioDuration}
                   />
-                  <p className="tiny muted" style={{ margin: '6px 2px 0' }}>
+                  <p className="tiny muted" style={{ margin: '2px 2px 0' }}>
                     <Icon name="headphones" size={12} /> Press “Listen from here” on any question to jump to its part.
                   </p>
                 </div>
@@ -812,12 +804,12 @@ function SpeakingReview({ sessionId }: { sessionId: string }) {
                   <b>{partLabel(response.part)}</b> · {response.promptText}
                 </p>
                 {response.hasAudio ? (
-                  <audio
-                    controls
-                    preload="none"
-                    src={`/api/speaking/sessions/${encodeURIComponent(sessionId)}/audio/${response.part}`}
-                    style={{ width: '100%', marginBottom: 6 }}
-                  />
+                  <div style={{ marginBottom: 6 }}>
+                    <ReviewAudioPlayer
+                      src={`/api/speaking/sessions/${encodeURIComponent(sessionId)}/audio/${response.part}`}
+                      title={`${partLabel(response.part)} — your recording`}
+                    />
+                  </div>
                 ) : null}
                 <div
                   className="passage"
