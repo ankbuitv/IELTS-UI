@@ -4,6 +4,7 @@ import { api, describeError } from '../../lib/api';
 import { Badge, Button, Card, Loading, Notice } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { QuestionRenderer } from '../../components/exam/QuestionRenderer';
+import { ReviewAudioPlayer } from '../../components/exam/ReviewAudioPlayer';
 import type { CandidateQuestion, CandidateQuestionGroup } from '@shared/question-types';
 import type { CandidateResponse } from '@shared/answer-key';
 import {
@@ -217,7 +218,9 @@ export function DrillsPage() {
           <div key={group.id} className="drill-group">
             {group.contextText ? (
               <Card title={group.contextTitle || 'Context'}>
-                {group.audioUrl ? <audio controls preload="none" src={group.audioUrl} style={{ width: '100%', marginBottom: 10 }} /> : null}
+                {group.audioUrl ? (
+                  <ReviewAudioPlayer src={group.audioUrl} title={group.contextTitle || 'Nghe ngữ cảnh'} />
+                ) : null}
                 <div className="drill-context">{group.contextText}</div>
               </Card>
             ) : null}
@@ -272,7 +275,7 @@ export function DrillsPage() {
         </div>
         <div className="row">
           <Badge tone="accent">4–8 questions · no timer</Badge>
-          <Link className="tiny muted" to="/pricing">Free plan: 5 drills a day</Link>
+          <span className="tiny muted">5 drills a day</span>
         </div>
       </div>
 

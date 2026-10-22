@@ -6,6 +6,7 @@ import { detectSpeechRecognition, getSpeechRecognition, type SpeechRecognitionLi
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Button, Card, EmptyState, Loading, Notice, TextArea, useToast } from '../../components/ui';
 import { Icon } from '../../components/Icon';
+import { ReviewAudioPlayer } from '../../components/exam/ReviewAudioPlayer';
 import { formatBand, formatDateTime } from '../../lib/format';
 import { BAND_DESCRIPTORS_NOTE } from '@shared/ai-rubric';
 import { SPEAKING_PART_META } from '@shared/speaking';
@@ -415,9 +416,7 @@ function SpeakingSessionView({ sessionId }: { sessionId: string }) {
 
       {lastRecorded ? (
         <Card title={`Nghe lại Part ${lastRecorded.part}`} hint="Chỉ bạn và giáo viên của bạn nghe được bản ghi này.">
-          <audio controls src={lastRecorded.url} style={{ width: '100%' }}>
-            <track kind="captions" />
-          </audio>
+          <ReviewAudioPlayer src={lastRecorded.url} title={`Part ${lastRecorded.part} — bản ghi`} />
         </Card>
       ) : null}
 
@@ -429,9 +428,9 @@ function SpeakingSessionView({ sessionId }: { sessionId: string }) {
               .map((response) => (
                 <div key={response.part} className="row" style={{ gap: 10 }}>
                   <Badge tone="neutral">Part {response.part}</Badge>
-                  <audio controls src={`/api/speaking/sessions/${sessionId}/audio/${response.part}`} style={{ flex: 1, minWidth: 200 }}>
-                    <track kind="captions" />
-                  </audio>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <ReviewAudioPlayer src={`/api/speaking/sessions/${sessionId}/audio/${response.part}`} />
+                  </div>
                 </div>
               ))}
           </div>

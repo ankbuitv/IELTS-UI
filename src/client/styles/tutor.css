@@ -228,6 +228,57 @@
 .tutor-rich p:last-child { margin-bottom: 0; }
 .tutor-rich ul, .tutor-rich ol { margin: 0 0 8px; padding-left: 20px; display: grid; gap: 4px; }
 .tutor-rich li { margin: 0; }
+
+/* Headings inside a bubble: one clear level, tight rhythm. */
+.tutor-rich h4, .tutor-rich h5, .tutor-rich h6 {
+  margin: 14px 0 6px; line-height: 1.35; color: var(--ink-950); font-weight: 700;
+}
+.tutor-rich > :first-child { margin-top: 0; }
+.tutor-rich h4 { font-size: 1rem; }
+.tutor-rich h5 { font-size: 0.92rem; }
+.tutor-rich h6 { font-size: 0.86rem; color: var(--ink-700); }
+
+/* Code: a quiet inline chip, a muted fenced block that scrolls sideways. */
+.tutor-rich code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em; background: var(--ink-100); color: var(--ink-900);
+  padding: 1px 5px; border-radius: 5px;
+}
+.tutor-rich__pre {
+  margin: 0 0 10px; padding: 10px 12px; overflow-x: auto;
+  background: var(--paper-muted); border: 1px solid var(--ink-200); border-radius: 10px;
+}
+.tutor-rich__pre code { background: none; padding: 0; border-radius: 0; font-size: 0.78rem; color: var(--ink-800); white-space: pre; }
+
+.tutor-rich a { color: var(--brand-700); text-decoration: underline; text-underline-offset: 2px; }
+.tutor-rich a:hover { color: var(--brand-800); }
+
+/* Tables get their own scroll frame so a wide comparison never breaks the bubble. */
+.tutor-rich__scroll {
+  margin: 0 0 10px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--ink-200); border-radius: 10px;
+}
+.tutor-rich__table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.tutor-rich__table th, .tutor-rich__table td {
+  padding: 7px 11px; text-align: left; vertical-align: top;
+  border-bottom: 1px solid var(--ink-100); min-width: 92px;
+}
+.tutor-rich__table th {
+  background: var(--paper-muted); color: var(--ink-900);
+  font-size: 0.72rem; font-weight: 750; letter-spacing: 0.03em; text-transform: uppercase;
+}
+.tutor-rich__table td { color: var(--ink-800); }
+.tutor-rich__table tr:last-child td { border-bottom: 0; }
+
+/* The learner's own bubble is brand-filled — keep its markdown readable. */
+.tutor-msg--user .tutor-rich code { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.tutor-msg--user .tutor-rich a { color: #fff; }
+.tutor-msg--user .tutor-rich__pre { background: rgba(0, 0, 0, 0.16); border-color: rgba(255, 255, 255, 0.3); }
+.tutor-msg--user .tutor-rich__pre code { color: #fff; }
+.tutor-msg--user .tutor-rich__scroll { border-color: rgba(255, 255, 255, 0.35); }
+.tutor-msg--user .tutor-rich__table th { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.tutor-msg--user .tutor-rich__table th, .tutor-msg--user .tutor-rich__table td { border-bottom-color: rgba(255, 255, 255, 0.25); }
+.tutor-msg--user .tutor-rich__table td { color: #fff; }
 .tutor-msg__bubble--typing { display: flex; align-items: center; gap: 4px; padding: 14px 16px; }
 .tutor-msg__bubble--typing i {
   width: 6px;

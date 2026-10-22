@@ -215,7 +215,7 @@ export function SpeakingPartnerPage() {
           </p>
           {!session ? (
             <p className="tiny muted">
-              Free plan: 3 new conversations a day. <Link to="/pricing">Pro makes them unlimited</Link>.
+              3 new conversations a day.
             </p>
           ) : null}
         </div>

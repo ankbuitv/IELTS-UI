@@ -3,6 +3,7 @@ import type { CandidateResponse } from '@shared/answer-key';
 import { api, describeError } from '../lib/api';
 import { Badge, Button, Card, Field, KeyValue, Notice, Tabs, TextArea, TextInput, useToast } from './ui';
 import { QuestionRenderer } from './exam/QuestionRenderer';
+import { ReviewAudioPlayer } from './exam/ReviewAudioPlayer';
 import { TranscriptView } from './exam/TranscriptView';
 import { AnswerExplanation, evidenceSegmentId } from './exam/AnswerExplanation';
 import { BAND_DISCLAIMER, formatBand, formatDateTime, formatDuration, formatPercent, formatScore, MODE_LABELS, SKILL_LABELS, TEST_TYPE_LABELS } from '../lib/format';
@@ -824,12 +825,10 @@ function SectionReview({
         ) : null}
 
         {activeSection?.audio ? (
-          <audio
-            ref={audioRef}
-            controls
-            preload="none"
+          <ReviewAudioPlayer
             src={activeSection.audio.url}
-            style={{ width: '100%' }}
+            title={activeSection.label || 'Listening audio'}
+            audioRef={audioRef}
           />
         ) : null}
 

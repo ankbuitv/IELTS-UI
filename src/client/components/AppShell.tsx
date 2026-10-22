@@ -44,8 +44,6 @@ const LEARN_GROUP: NavGroup = {
     { to: '/calendar', label: 'Lịch học', icon: 'calendar' },
     { to: '/practice', label: 'Luyện thi', icon: 'book' },
     { to: '/drills', label: 'Ôn dạng bài', icon: 'target' },
-    { to: '/lab/dictation', label: 'Luyện nghe chép', icon: 'headphones' },
-    { to: '/lab/pronunciation', label: 'Phát âm', icon: 'volume' },
     { to: '/history', label: 'Kết quả', icon: 'award' },
     { to: '/vocabulary', label: 'Từ vựng', icon: 'layers' },
     { to: '/tutor', label: 'AI Gia sư', icon: 'sparkle' },
@@ -78,11 +76,9 @@ const REWARDS_GROUP: NavGroup = {
   items: [
     { to: '/learn/shop', label: 'Cửa hàng', icon: 'cart' },
     { to: '/learn/leaderboard', label: 'Bảng xếp hạng', icon: 'trophy' },
-    { to: '/season', label: 'Season pass', icon: 'crown' },
     { to: '/study-groups', label: 'Nhóm học', icon: 'users' },
     { to: '/study-room', label: 'Phòng học', icon: 'clock' },
     { to: '/learn/friends', label: 'Bạn bè', icon: 'heart' },
-    { to: '/pricing', label: 'Gói & Pro', icon: 'coin' },
     { to: '/profile', label: 'Hồ sơ', icon: 'user' },
   ],
 };
@@ -94,7 +90,6 @@ const MENTOR_GROUP: NavGroup = {
     { to: '/my-sessions', label: 'Buổi học', icon: 'video' },
     { to: '/classes', label: 'Lớp của tôi', icon: 'users' },
     { to: '/mentors', label: 'Danh sách cố vấn', icon: 'graduation' },
-    { to: '/training', label: 'Đào tạo', icon: 'bulb' },
   ],
 };
 
@@ -129,7 +124,6 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
             { to: '/admin', label: 'Bảng quản trị', icon: 'shield' },
             { to: '/teacher', label: 'Giảng dạy', icon: 'presentation' },
             { to: '/teacher/marking', label: 'Hàng chấm bài', icon: 'pen' },
-            { to: '/training', label: 'Đào tạo', icon: 'bulb' },
           ],
         },
         LEARN_GROUP,
@@ -154,7 +148,6 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
           items: [
             { to: '/teacher', label: 'Bảng giảng dạy', icon: 'presentation' },
             { to: '/teacher/marking', label: 'Hàng chấm bài', icon: 'pen' },
-            { to: '/training', label: 'Đào tạo', icon: 'bulb' },
             { to: '/practice', label: 'Luyện thi', icon: 'book' },
             { to: '/learn', label: 'Lộ trình học', icon: 'target' },
           ],

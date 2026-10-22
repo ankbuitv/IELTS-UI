@@ -27,12 +27,9 @@ import { DictionaryPage } from './pages/student/DictionaryPage';
 import { SpeakingPage } from './pages/student/SpeakingPage';
 import { SpeakingPartnerPage } from './pages/student/SpeakingPartnerPage';
 import { DrillsPage } from './pages/student/DrillsPage';
-import { DictationLabPage } from './pages/student/DictationLabPage';
-import { PricingPage } from './pages/student/PricingPage';
-import { SeasonPassPage } from './pages/student/SeasonPassPage';
+
 import { StudyGroupsPage } from './pages/student/StudyGroupsPage';
 import { StudyRoomPage } from './pages/student/StudyRoomPage';
-import { PronunciationPage } from './pages/student/PronunciationPage';
 import { TakeExamPage } from './pages/exam/TakeExam';
 import { AttemptReviewPage } from './pages/exam/ReviewExam';
 import { TeacherHomePage, ClassroomPage, AssignmentPage, StudentDetailPage } from './pages/teacher/TeacherPages';
@@ -53,7 +50,6 @@ import { MentorProfilePage } from './pages/mentor/MentorProfilePage';
 import { MySessionsPage } from './pages/mentor/MySessionsPage';
 import { MentorConsolePage } from './pages/mentor/MentorConsolePage';
 import { ClassesPage } from './pages/mentor/ClassesPage';
-import { TrainingPage } from './pages/staff/TrainingPage';
 import { CalendarPage } from './pages/student/CalendarPage';
 import { ClassDetailPage } from './pages/mentor/ClassDetailPage';
 import { CallRoomPage } from './pages/mentor/CallRoomPage';
@@ -195,38 +191,6 @@ export function App() {
           element={
             <RequireAuth>
               <StudentClassroomsPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="lab/dictation"
-          element={
-            <RequireAuth>
-              <DictationLabPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="lab/pronunciation"
-          element={
-            <RequireAuth>
-              <PronunciationPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="pricing"
-          element={
-            <RequireAuth>
-              <PricingPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="season"
-          element={
-            <RequireAuth>
-              <SeasonPassPage />
             </RequireAuth>
           }
         />
@@ -379,14 +343,6 @@ export function App() {
           element={
             <RequireAuth>
               <CalendarPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="training"
-          element={
-            <RequireAuth roles={['MENTOR', 'TEACHER', 'ADMIN']}>
-              <TrainingPage />
             </RequireAuth>
           }
         />
