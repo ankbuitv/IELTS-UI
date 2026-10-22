@@ -29,6 +29,12 @@ import {
   updateVocabularyEntry,
 } from '../services/vocabulary-service';
 import { getActionPlan, setActionPlanTaskDone } from '../services/action-plan-service';
+import {
+  CALENDAR_CLASSES_SQL,
+  CALENDAR_DEADLINES_SQL,
+  CALENDAR_PERSONAL_SQL,
+  CALENDAR_SESSIONS_SQL,
+} from './calendar-queries';
 import { getStudentInsights } from '../services/insights-service';
 import { listDrillTypes, startDrill, submitDrill } from '../services/drill-service';
 import {
@@ -131,47 +137,21 @@ router.get('/calendar', async (c) => {
   const from = c.req.query('from') ?? new Date().toISOString();
   const to = c.req.query('to') ?? new Date(Date.now() + 45 * 86400_000).toISOString();
 
-  const personal = await c.env.DB.prepare(
-    'SELECT id, title, note, starts_at, ends_at FROM calendar_events WHERE user_id = ? AND ends_at >= ? AND starts_at <= ? ORDER BY starts_at',
-  )
+  const personal = await c.env.DB.prepare(CALENDAR_PERSONAL_SQL)
     .bind(user.id, from, to)
     .all<{ id: string; title: string; note: string; starts_at: string; ends_at: string }>();
 
-  const sessions = await c.env.DB.prepare(
-    `SELECT s.id, s.topic, s.starts_at, s.ends_at, s.status, s.kind, s.mentor_id,
-            COALESCE(NULLIF(pm.display_name, ''), um.username, 'Mentor') AS mentor_name,
-            COALESCE(NULLIF(ps.display_name, ''), us.username, 'Student') AS student_name
-       FROM mentor_sessions s
-       JOIN users um ON um.id = s.mentor_id
-       JOIN users us ON us.id = s.student_id
-       LEFT JOIN user_profiles pm ON pm.user_id = s.mentor_id
-       LEFT JOIN user_profiles ps ON ps.user_id = s.student_id
-      WHERE (s.mentor_id = ? OR s.student_id = ?) AND s.status IN ('REQUESTED', 'SCHEDULED', 'ACTIVE')
-        AND s.ends_at >= ? AND s.starts_at <= ?
-      ORDER BY s.starts_at`,
-  )
+  const sessions = await c.env.DB.prepare(CALENDAR_SESSIONS_SQL)
     .bind(user.id, user.id, from, to)
     .all<Record<string, string>>();
 
-  const classes = await c.env.DB.prepare(
-    `SELECT c.id, c.title, c.starts_at, c.ends_at, c.status
-       FROM mentor_classes c
-      WHERE (c.mentor_id = ? OR EXISTS (SELECT 1 FROM mentor_class_members m WHERE m.class_id = c.id AND m.user_id = ?))
-        AND c.ends_at >= ? AND c.starts_at <= ?
-      ORDER BY c.starts_at`,
-  )
+  const classes = await c.env.DB.prepare(CALENDAR_CLASSES_SQL)
     .bind(user.id, user.id, from, to)
     .all<Record<string, string>>();
 
-  const deadlines = await c.env.DB.prepare(
-    `SELECT a.id, a.title, a.due_at
-       FROM assignments a
-       JOIN classroom_members m ON m.classroom_id = a.classroom_id AND m.user_id = ? AND m.status = 'ACTIVE'
-      WHERE a.status = 'ACTIVE' AND a.due_at IS NOT NULL AND a.due_at >= ? AND a.due_at <= ?
-      ORDER BY a.due_at`,
-  )
+  const deadlines = await c.env.DB.prepare(CALENDAR_DEADLINES_SQL)
     .bind(user.id, from, to)
-    .all<{ id: string; title: string; due_at: string }>();
+    .all<{ id: string; title: string; deadline_at: string }>();
 
   const events = [
     ...personal.results.map((row) => ({
@@ -203,8 +183,8 @@ router.get('/calendar', async (c) => {
       id: row.id,
       title: `Due · ${row.title}`,
       note: 'Assignment deadline',
-      startsAt: row.due_at,
-      endsAt: row.due_at,
+      startsAt: row.deadline_at,
+      endsAt: row.deadline_at,
     })),
   ].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 
