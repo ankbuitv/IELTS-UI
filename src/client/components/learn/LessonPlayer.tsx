@@ -40,7 +40,6 @@ import type { TranslationResult } from '@shared/learn';
 import { Icon } from '../Icon';
 import { Button } from '../ui';
 import { Stars } from './Stars';
-import { Mascot, mascotForQuestion, reactionTo, type MascotMood } from './Mascot';
 import { Confetti, ComboBadge, FloatingAward, ScreenFlash } from './Effects';
 import { LookupHint, LookupProvider, LookupText } from './LookupText';
 
@@ -417,7 +416,6 @@ export function LessonPlayer({
       <div className="lesson lesson--failed">
         <ScreenFlash burst={flash.burst} tone={flash.tone} />
         <div className="lesson__end">
-          <Mascot mood="sad" size={168} message="That is all five hearts. Nothing is lost — the words will come round again." tone="bad" />
           <h1>Out of hearts</h1>
           <p className="muted">
             You ran out of tries on “{title}”. Your XP and coins so far are kept, and the words you missed will come back in your review.
@@ -457,16 +455,6 @@ export function LessonPlayer({
         <Confetti burst={confetti} pieces={perfect ? 120 : 60} tone={perfect ? 'perfect' : 'good'} />
         <ScreenFlash burst={flash.burst} tone={flash.tone} />
         <div className="lesson__end">
-          <Mascot
-            mood={perfect ? 'wow' : 'happy'}
-            size={196}
-            message={
-              perfect
-                ? 'A perfect run. Every answer right first time — that is a lesson finished properly.'
-                : 'Lesson finished. Every exercise ended up right, which is what counts.'
-            }
-            tone="good"
-          />
           <h1>{perfect ? 'Perfect lesson' : 'Lesson complete'}</h1>
           <p className="muted">{title}</p>
           <dl className="lesson__stats">
@@ -525,7 +513,6 @@ export function LessonPlayer({
   }
 
   const isRetry = current?.id.endsWith(':retry');
-  const reaction = reactionTo(phase === 'feedback' ? verdict : null);
   const model = current ? feedbackModel(current) : null;
 
   return (
@@ -626,15 +613,6 @@ export function LessonPlayer({
                 }}
                 onAnswered={setAnswered}
               />
-              <div className="lesson__mascot">
-                <Mascot
-                  character={mascotForQuestion(current.id)}
-                  mood={phase === 'feedback' ? reaction.mood : isRetry ? 'think' : index % 7 === 3 ? 'fly' : 'idle'}
-                  size={92}
-                  message={phase === 'feedback' ? reaction.message : isRetry ? 'This one again — you know it now.' : undefined}
-                  tone={reaction.tone}
-                />
-              </div>
             </div>
           ) : null}
         </main>
@@ -1384,5 +1362,3 @@ export function useLessonSeed(prefix: string): [string, () => void] {
   return [seed, () => setSalt(Date.now().toString(36))];
 }
 
-// Keep the mood type exported for callers that want to drive the mascot directly.
-export type { MascotMood };

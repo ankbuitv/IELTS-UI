@@ -364,7 +364,7 @@
 
 /* ---------------------------------------------------------------- arena hero */
 .arena {
-  position: relative; overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 22px; align-items: center;
+  position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 22px; align-items: center;
   padding: 22px 26px; border-radius: var(--radius-xl); color: #fff;
   background: linear-gradient(128deg, #42279f 0%, #6845f0 48%, #8a68ff 100%);
   box-shadow: 0 10px 34px -12px rgba(104, 69, 240, 0.6);
@@ -560,7 +560,7 @@
 
 /* ------------------------------------------------------------------- shop */
 .shop { display: flex; flex-direction: column; gap: 20px; }
-.shop__hero { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 20px; align-items: center; padding: 22px 26px; border-radius: var(--radius-xl); background: linear-gradient(135deg, #2c2552, #4a3a8f); color: #fff; box-shadow: 0 10px 30px -12px rgba(60, 40, 140, 0.55); }
+.shop__hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: center; padding: 22px 26px; border-radius: var(--radius-xl); background: linear-gradient(135deg, #2c2552, #4a3a8f); color: #fff; box-shadow: 0 10px 30px -12px rgba(60, 40, 140, 0.55); }
 .shop__kicker { margin: 0 0 4px; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sun-300); }
 .shop__hero h1 { margin: 0 0 8px; font-size: clamp(1.4rem, 2.6vw, 1.9rem); color: #fff; letter-spacing: -0.02em; }
 .shop__hero p { margin: 0; color: rgba(255, 255, 255, 0.88); max-width: 62ch; }
@@ -759,7 +759,7 @@
 
 /* ------------------------------------------------------- everyday lessons */
 .everyday-page, .social-page { display: flex; flex-direction: column; gap: 18px; max-width: 1050px; margin: 0 auto; }
-.everyday-hero { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 20px; align-items: center; padding: 22px 28px; background: linear-gradient(135deg, #0b6b66, #12a394 58%, #2ed3b7); color: #fff; border: 0; box-shadow: 0 10px 30px -12px rgba(16, 163, 148, 0.55); }
+.everyday-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: center; padding: 22px 28px; background: linear-gradient(135deg, #0b6b66, #12a394 58%, #2ed3b7); color: #fff; border: 0; box-shadow: 0 10px 30px -12px rgba(16, 163, 148, 0.55); }
 .everyday-hero__mascot { display: grid; place-items: center; }
 .everyday-hero__copy h1 { margin: 2px 0 6px; color: #fff; font-size: clamp(1.7rem, 4vw, 2.35rem); letter-spacing: -.03em; }
 .everyday-hero__copy > p:not(.eyebrow) { max-width: 68ch; margin: 0; color: rgba(255,255,255,.9); line-height: 1.55; }
@@ -938,7 +938,7 @@
 }
 .learn-compact__hero::after { content: ''; position: absolute; right: -68px; top: -92px; width: 230px; height: 230px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.16), transparent 68%); pointer-events: none; }
 .learn-compact__top, .learn-compact__stats, .learn-compact__goal, .learn-compact__continue, .learn-compact__shortcuts { position: relative; z-index: 1; }
-.learn-compact__top { display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 8px; align-items: center; min-width: 0; }
+.learn-compact__top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-items: center; min-width: 0; }
 .learn-compact__intro { min-width: 0; }
 .learn-compact__kicker { display: flex; align-items: center; gap: 5px; margin: 0 0 5px; color: #bdffe0; font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .learn-compact__intro h1 { margin: 0 0 5px; color: #fff; font-size: clamp(1.2rem, 5vw, 1.65rem); line-height: 1.16; letter-spacing: -.025em; overflow-wrap: anywhere; }

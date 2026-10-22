@@ -33,8 +33,9 @@ the British Council, IDP or Cambridge.
 | `/mentor` | MENTOR, ADMIN | Console: stats tiles, day schedule, student roster, create-class / availability / profile modals. |
 | `/sessions/:id/room` | session members | Full-screen call room (outside the app chrome, like the exam). |
 
-The desktop shell groups these under **Coaching** in the sidebar; the phone tab
-bar surfaces *Mentors* next to Learn.
+The desktop shell keeps **Classes** on its six-icon rail (Home, Practice,
+Learn, Results, Classes, More) and groups the rest under **Coaching** inside
+*More*; the phone tab bar surfaces *Mentors* next to Learn.
 
 ## 3. Booking model
 

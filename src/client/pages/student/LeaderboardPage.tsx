@@ -25,7 +25,6 @@ import {
 } from '@shared/leaderboard';
 import { Icon } from '../../components/Icon';
 import { Button, Loading, Notice } from '../../components/ui';
-import { Mascot } from '../../components/learn/Mascot';
 import { PlayerAvatar, badgeName, playerNameClass } from '../../components/learn/PlayerAvatar';
 import { useAsync } from '../../hooks/useAsync';
 import { learnApi } from '../../lib/learn-api';
@@ -78,7 +77,6 @@ export function LeaderboardPage() {
   return (
     <div className="board">
       <header className="board__hero">
-        <Mascot mood="wow" size={116} />
         <div>
           <p className="board__kicker">Leaderboards</p>
           <h1>

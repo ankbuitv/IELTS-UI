@@ -111,7 +111,10 @@ export function securityHeaders(): Record<string, string> {
     'x-content-type-options': 'nosniff',
     'referrer-policy': 'strict-origin-when-cross-origin',
     'x-frame-options': 'SAMEORIGIN',
-    // The Speaking practice records from the microphone, so this origin (and only this origin) may ask for it.
-    'permissions-policy': 'geolocation=(), microphone=(self), camera=()',
+    // The speaking practice records from the microphone, the call room uses the
+    // camera, and the room can share a screen — so this origin (and only this
+    // origin) may ask for them. `camera=()` here used to hard-block the call
+    // room's camera everywhere (NotAllowedError on every join attempt).
+    'permissions-policy': 'geolocation=(), microphone=(self), camera=(self), display-capture=(self)',
   };
 }

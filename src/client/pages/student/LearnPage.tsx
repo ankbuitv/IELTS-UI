@@ -19,9 +19,8 @@ import { boostState } from '@shared/shop';
 import { useAsync } from '../../hooks/useAsync';
 import { Icon, type IconName } from '../../components/Icon';
 import { Stars } from '../../components/learn/Stars';
-import { Mascot, type MascotMood } from '../../components/learn/Mascot';
 import { PlayerAvatar, playerNameClass } from '../../components/learn/PlayerAvatar';
-import { Confetti, StreakPulse } from '../../components/learn/Effects';
+import { Confetti } from '../../components/learn/Effects';
 import { DictionaryPanel } from '../../components/learn/DictionaryPanel';
 import { Button, Loading, Modal, Notice, useToast } from '../../components/ui';
 import { describeError } from '../../lib/api';
@@ -172,7 +171,6 @@ export function LearnPage() {
   }, [data, toast]);
 
   // A fire sound the first time the path opens on a day that keeps the streak.
-  // The pulse ring is drawn from `streakHot` below, so nothing has to be set here.
   useEffect(() => {
     if (!data || pulseAnnounced.current) return;
     pulseAnnounced.current = true;
@@ -310,8 +308,6 @@ export function LearnPage() {
   const blockingBand = selectedBand !== null ? bandBelow(selectedBand) : null;
   const boost = boostState(profile.xpBoostUntil, new Date());
   const questsDone = data.quests.filter((quest) => quest.claimed).length;
-  const mood: MascotMood = goalDone ? 'wow' : !activeToday && alive ? 'wave' : activeToday ? 'happy' : 'idle';
-  const streakHot = alive && profile.streak > 0 && activeToday;
   const boardTop = board.data?.rows.slice(0, 3) ?? [];
 
   const todayPanels = (
@@ -678,10 +674,6 @@ export function LearnPage() {
                 <h1>{goalDone ? 'Daily goal reached' : activeToday && profile.streak > 0 ? `${profile.streak}-day streak` : nextLesson ? 'Ready for your next lesson?' : 'Your path is ready'}</h1>
                 <p>{boost.active ? `Double XP is active for ${boost.minutesLeft} more minutes.` : goalDone ? 'Every extra answer today earns XP and coins.' : `${Math.max(0, profile.dailyGoalXp - profile.todayXp)} XP to today’s goal.`}</p>
               </div>
-              <div className="learn-compact__mascot">
-                {streakHot ? <StreakPulse burst={1} /> : null}
-                <Mascot mood={mood} size={76} />
-              </div>
             </div>
 
             <div className="learn-compact__stats" aria-label="Your Learn stats">
@@ -772,10 +764,6 @@ export function LearnPage() {
         <>
           <header className="arena">
             <Confetti burst={celebrate} pieces={36} />
-            <div className="arena__mascot">
-              {streakHot ? <StreakPulse burst={1} /> : null}
-              <Mascot mood={mood} size={172} />
-            </div>
             <div className="arena__text">
               <p className="arena__kicker">
                 <Icon name="target" size={13} /> Band {profile.band.toFixed(1)} · {LEARN_BAND_LABELS[profile.band]}

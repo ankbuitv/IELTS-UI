@@ -90,24 +90,6 @@ router.post('/digest/run', async (c) => {
   return c.json(result);
 });
 
-router.get('/emails', async (c) => {
-  const rows = await c.env.DB.prepare(
-    `SELECT id, to_email, subject, status, provider, error, created_at, sent_at, html
-       FROM email_outbox ORDER BY created_at DESC LIMIT 25`,
-  ).all<{
-    id: string;
-    to_email: string;
-    subject: string;
-    status: string;
-    provider: string | null;
-    error: string | null;
-    created_at: string;
-    sent_at: string | null;
-    html: string;
-  }>();
-  return c.json({ emails: rows.results });
-});
-
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------

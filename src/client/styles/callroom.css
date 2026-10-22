@@ -443,6 +443,15 @@
   color: #f0c9c9; font-size: 0.74rem; line-height: 1.5;
 }
 .jr-alert svg { flex: none; margin-top: 1px; }
+.jr-alert__body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.jr-alert__action {
+  align-self: flex-start;
+  padding: 5px 11px; border-radius: 6px;
+  border: 1px solid #5a3535; background: #3a2323; color: #f0c9c9;
+  font: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+  transition: background 130ms ease;
+}
+.jr-alert__action:hover { background: #4a2d2d; }
 
 .jr-join {
   height: 46px; width: 100%; border: 0; border-radius: 8px;

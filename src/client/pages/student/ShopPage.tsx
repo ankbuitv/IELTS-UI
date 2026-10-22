@@ -17,7 +17,6 @@ import { boostState, type ShopItemView, type ShopState } from '@shared/shop';
 import { itemIcon } from './shop-icons';
 import { Icon } from '../../components/Icon';
 import { Badge, Button, Loading, Notice, useToast } from '../../components/ui';
-import { Mascot } from '../../components/learn/Mascot';
 import { useAsync } from '../../hooks/useAsync';
 import { describeError } from '../../lib/api';
 import { learnApi } from '../../lib/learn-api';
@@ -88,7 +87,6 @@ export function ShopPage() {
   return (
     <div className="shop">
       <header className="shop__hero">
-        <Mascot mood="wave" size={132} />
         <div className="shop__hero-text">
           <p className="shop__kicker">Learn shop</p>
           <h1>Spend what you earned</h1>

@@ -4,7 +4,7 @@ import { boostState } from '@shared/shop';
 import { useAuth } from '../context/AuthContext';
 import { learnApi } from '../lib/learn-api';
 import { api } from '../lib/api';
-import { BrandLogo } from './BrandLogo';
+import { BrandLogo, BrandMark } from './BrandLogo';
 import { DisplayMenu } from './DisplayMenu';
 import { Icon, type IconName } from './Icon';
 import { SiteFooter } from './SiteFooter';
@@ -16,12 +16,12 @@ import { NotificationBell } from './NotificationBell';
 /**
  * Application shell.
  *
- * Signed in, the desktop gets a soft lavender sidebar — the control centre of
- * the app (learning, coaching, rewards, admin) — with the wallet chips and the
- * account card anchored at the bottom, exactly like the playful learning apps
- * this design language borrows from. The slim top bar carries the search, the
- * display menu, "Start a test" and the avatar. Phones keep the bottom tab bar
- * and the one "More" sheet. Public pages use the marketing top nav instead.
+ * Signed in, the desktop gets a narrow icon rail — Home, Practice, Learn,
+ * Results, Classes and "More" — six icons only, with the name of each place
+ * revealed on hover. "More" opens the full menu of every other destination,
+ * kept in its groups. The slim top bar carries the search, the wallet chips,
+ * the display menu and the avatar. Phones keep the bottom tab bar and the one
+ * "More" sheet. Public pages use the marketing top nav instead.
  */
 interface NavItem {
   to: string;
@@ -213,6 +213,19 @@ export function AppShell() {
   const [boosted, setBoosted] = useState(false);
   const heartbeatUserId = user?.id;
 
+  // The icon rail is a desktop (≥1080px) affordance: on phones the six places
+  // are the tab bar plus the "More" sheet, so "More" shows the tab set's rest.
+  const [railVisible, setRailVisible] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1080px)').matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 1080px)');
+    const onChange = () => setRailVisible(query.matches);
+    onChange();
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+
   // The wallet chips live in the whole shell, not just the shop: they are what
   // makes "spend it or lose the habit" visible while the learner is on the
   // path. Refreshed on every navigation, which is where a lesson or a purchase
@@ -281,10 +294,22 @@ export function AppShell() {
   }
 
   const nav = navFor(user?.role);
-  // Behind "More": every place that is not one of the four phone tabs. The phone
-  // sheet also lists what the sidebar has but the tabs do not.
-  const allItems = nav.groups.flatMap((group) => group.items);
-  const overflowNav = allItems.filter((item) => !nav.tabs.some((tab) => tab.to === item.to));
+  // The rail: six icon-only places, name shown on hover. Everything else is
+  // behind "More", which groups what is left so many features stay scannable.
+  const railItems: NavItem[] = [
+    { to: nav.home, label: 'Trang chủ', icon: 'home' },
+    { to: '/practice', label: 'Luyện thi', icon: 'book' },
+    { to: '/learn', label: 'Học tập', icon: 'target' },
+    { to: '/history', label: 'Kết quả', icon: 'award' },
+    { to: '/classes', label: 'Lớp học', icon: 'users' },
+  ];
+  const railSet = new Set(railItems.map((item) => item.to));
+  // What "More" holds back: the rail on desktop, the four tabs on phones.
+  const heldBack = railVisible ? railSet : new Set(nav.tabs.map((tab) => tab.to));
+  const overflowGroups = nav.groups
+    .map((group) => ({ label: group.label, items: group.items.filter((item) => !heldBack.has(item.to)) }))
+    .filter((group) => group.items.length > 0);
+  const overflowNav = overflowGroups.flatMap((group) => group.items);
 
   const signOut = async () => {
     await logout();
@@ -300,71 +325,37 @@ export function AppShell() {
     <div className={`site${user ? ' site--app' : ''}`}>
       {user ? (
         <aside className="app-sidebar">
-          <NavLink to={nav.home} className="app-sidebar__brand" aria-label="Ai eo home">
-            <BrandLogo theme="light" height={30} />
+          <NavLink to={nav.home} className="app-sidebar__brand" aria-label="Ai eo — Trang chủ" title="Ai eo">
+            <BrandMark theme="light" size={26} />
           </NavLink>
 
-          <Button
-            variant="primary"
-            className="app-sidebar__cta"
-            onClick={() => navigate('/practice')}
-          >
-            <Icon name="play" size={13} />
-            Bắt đầu thi
-          </Button>
-
-          <nav className="app-sidebar__nav" aria-label="Main">
-            {nav.groups.map((group) => (
-              <div key={group.label} className="app-sidebar__group">
-                <span className="app-sidebar__label">{group.label}</span>
-                {group.items.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.to === '/teacher' || item.to === '/admin' || item.to === '/mentor'}
-                    className={({ isActive }) => `app-nav-item${isActive ? ' active' : ''}`}
-                  >
-                    <Icon name={item.icon} size={18} />
-                    {item.label}
-                  </NavLink>
-                ))}
-              </div>
+          <nav className="app-sidebar__nav" aria-label="Chính">
+            {railItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                data-label={item.label}
+                aria-label={item.label}
+                className={({ isActive }) => `app-nav-item${isActive ? ' active' : ''}`}
+              >
+                <Icon name={item.icon} size={20} />
+              </NavLink>
             ))}
-          </nav>
-
-          <div className="app-sidebar__foot">
-            {user.role === 'STUDENT' && coins !== null ? (
-              <div className="app-sidebar__wallet">
-                <NavLink to="/learn/shop" className="wallet-chip" title="Xu — dùng trong cửa hàng">
-                  <Icon name="coin" size={14} />
-                  {coins.toLocaleString('en')}
-                </NavLink>
-                <span className="wallet-chip wallet-chip--streak" title="Chuỗi ngày">
-                  <Icon name="flame" size={14} filled />
-                  {streak ?? 0}
-                </span>
-                <span className="wallet-chip wallet-chip--xp" title="Tổng XP">
-                  <Icon name="bolt" size={14} />
-                  {xp ?? 0}
-                </span>
-              </div>
-            ) : null}
             <button
               type="button"
-              className="app-sidebar__user"
+              data-label="Thêm"
+              aria-label="Thêm"
+              aria-haspopup="menu"
+              aria-expanded={panelOpen}
+              className={`app-nav-item app-nav-item--more${panelOpen && panelOrigin === 'sidebar' ? ' active' : ''}`}
               onClick={() => {
                 setPanelOrigin('sidebar');
                 setPanelOpen((open) => !open);
               }}
             >
-              <UserAvatar src={user.avatarUrl} userId={user.id} name={user.displayName} size={40} title={user.displayName} />
-              <span className="app-sidebar__user-text">
-                <strong title={user.displayName}>{user.displayName}</strong>
-                <span>{ROLE_LABELS[user.role] ?? user.role}</span>
-              </span>
-              <Icon name="chevronDown" size={15} />
+              <Icon name="menu" size={20} />
             </button>
-          </div>
+          </nav>
         </aside>
       ) : null}
 
@@ -513,20 +504,23 @@ export function AppShell() {
               </span>
             </div>
 
-            <div className="more-panel__group">
-              {overflowNav.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === '/teacher' || item.to === '/admin' || item.to === '/mentor'}
-                  className={({ isActive }) => `more-item${isActive ? ' active' : ''}`}
-                  role="menuitem"
-                >
-                  <Icon name={item.icon} size={17} />
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
+            {overflowGroups.map((group) => (
+              <div key={group.label} className="more-panel__group">
+                <span className="more-panel__label">{group.label}</span>
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === '/teacher' || item.to === '/admin' || item.to === '/mentor'}
+                    className={({ isActive }) => `more-item${isActive ? ' active' : ''}`}
+                    role="menuitem"
+                  >
+                    <Icon name={item.icon} size={17} />
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            ))}
             <div className="more-panel__group">
               <button type="button" className="more-item more-item--button" onClick={signOut} role="menuitem">
                 <Icon name="logout" size={17} />

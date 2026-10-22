@@ -7,11 +7,9 @@ import { Badge, Button, Card, Chips, EmptyState, Loading, Notice, ProgressBar, S
 import { AccuracyList, BarChart, LineChart } from '../../components/charts';
 import { AttemptList, newestFirst } from '../../components/AttemptList';
 import { Icon } from '../../components/Icon';
-import { Mascot } from '../../components/learn/Mascot';
 import { learnApi } from '../../lib/learn-api';
 import { BandEstimatesPanel } from '../../components/BandEstimates';
 import { LearnStrip } from '../../components/learn/LearnStrip';
-import { ActionPlanCard } from '../../components/ActionPlanCard';
 import {
   BAND_DISCLAIMER,
   formatBand,
@@ -142,8 +140,6 @@ export function StudentDashboardPage() {
         </div>
       </section>
 
-      <ActionPlanCard />
-
       <div className="dash-roster">
         <div className="dash-roster__main">
           <BandEstimatesPanel estimates={data.estimates} />
@@ -163,15 +159,6 @@ export function StudentDashboardPage() {
 
         <aside className="dash-roster__side">
           <WeeklyLeaderboard />
-          <div className="dash-mascot">
-            <Mascot mood="happy" size={72} />
-            <div className="dash-mascot__text">
-              <p>Bơ đợi bạn trên con đường học — 15 phút mỗi ngày là đủ để giữ mạch.</p>
-              <Link className="btn btn--sm btn--primary" to="/learn">
-                Vào con đường học
-              </Link>
-            </div>
-          </div>
         </aside>
       </div>
 

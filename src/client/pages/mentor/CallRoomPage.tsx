@@ -64,6 +64,18 @@ export function CallRoomPage() {
   const [phase, setPhase] = useState<'loading' | 'prejoin' | 'room' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  // True when the app sits inside another page's iframe (preview panel). The
+  // parent frame must grant `allow="camera; microphone"` for the frame to use
+  // the devices — nothing this document can do — so the reliable fix is
+  // opening the room in its own tab. Checked once at mount.
+  const [framed] = useState(() => {
+    try {
+      return window.self !== window.top;
+    } catch {
+      return true;
+    }
+  });
+  const openOwnTab = () => window.open(window.location.href, '_blank', 'noopener');
   const [state, setState] = useState<MentorRoomState | null>(null);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
@@ -1032,7 +1044,14 @@ export function CallRoomPage() {
           {mediaError ? (
             <div className="jr-alert">
               <Icon name="alert" size={16} />
-              <span>{mediaError}</span>
+              <div className="jr-alert__body">
+                <span>{mediaError}</span>
+                {framed ? (
+                  <button type="button" className="jr-alert__action" onClick={openOwnTab}>
+                    Open in a new tab
+                  </button>
+                ) : null}
+              </div>
             </div>
           ) : null}
 
@@ -1402,6 +1421,11 @@ export function CallRoomPage() {
           <button type="button" onClick={() => void retryMedia()}>
             Try again
           </button>
+          {framed ? (
+            <button type="button" onClick={openOwnTab}>
+              Open in a new tab
+            </button>
+          ) : null}
           <button type="button" className="jr-banner__close" onClick={() => setMediaError(null)} aria-label="Dismiss">
             <Icon name="close" size={15} />
           </button>

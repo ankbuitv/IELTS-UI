@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { LEARN_BANDS, LEARN_BAND_LABELS, LESSON_KIND_LABELS, type EverydayLessonsResponse, type LearnBand } from '@shared/learn';
-import { Mascot, mascotForQuestion } from '../../components/learn/Mascot';
 import { Icon } from '../../components/Icon';
 import { Button, Loading, Notice } from '../../components/ui';
 import { describeError } from '../../lib/api';
@@ -33,7 +32,6 @@ export function EverydayLessonsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-  const mascot = useMemo(() => mascotForQuestion(`everyday:${band}`), [band]);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,7 +61,6 @@ export function EverydayLessonsPage() {
   return (
     <main className="everyday-page">
       <header className="everyday-hero card">
-        <div className="everyday-hero__mascot"><Mascot character={mascot} mood="wave" size={108} /></div>
         <div className="everyday-hero__copy">
           <p className="eyebrow"><Icon name="sparkle" size={14} /> A fresh set every day</p>
           <h1>Everyday Lessons</h1>

@@ -6,7 +6,7 @@
 :root {
   --page-max: 1240px;
   --page-pad: 24px;
-  --sidebar-w: 264px;
+  --sidebar-w: 76px;
 }
 
 .site { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: var(--canvas); }
@@ -18,50 +18,44 @@
 .app-sidebar {
   display: none;
   position: sticky; top: 0; height: 100vh; height: 100dvh;
-  width: var(--sidebar-w); flex: none;
-  flex-direction: column; gap: 14px;
-  padding: 18px 16px 16px;
+  width: var(--sidebar-w); flex: none; z-index: 60;
+  flex-direction: column; align-items: center; gap: 12px;
+  padding: 14px 8px;
   background: var(--paper);
   border-right: 1px solid var(--ink-100);
 }
-.app-sidebar__brand { display: inline-flex; align-items: center; gap: 10px; padding: 2px 8px; border-radius: var(--radius); }
+.app-sidebar__brand { display: inline-flex; align-items: center; justify-content: center; padding: 4px 0; border-radius: var(--radius); }
 .app-sidebar__brand:hover { text-decoration: none; }
 .app-sidebar__brand svg { display: block; }
-.app-sidebar__brand-text { font-size: 1.18rem; font-weight: 800; letter-spacing: -0.03em; color: var(--ink-950); }
 
-.app-sidebar__cta { width: 100%; }
+.app-sidebar__nav { flex: 1; min-height: 0; overflow: visible; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 2px 0; }
 
-.app-sidebar__nav { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 2px 0; scrollbar-width: none; }
-.app-sidebar__nav::-webkit-scrollbar { display: none; }
-
-.app-sidebar__group { display: flex; flex-direction: column; gap: 2px; }
-.app-sidebar__label {
-  padding: 2px 12px 6px;
-  font-size: 0.66rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--ink-400);
-}
-
+/* Icon-only rail entry: the name rides along as a tooltip on hover/focus. */
 .app-nav-item {
-  display: flex; align-items: center; gap: 11px;
-  padding: 9px 12px; border-radius: var(--radius);
-  color: var(--ink-700); font-size: 0.92rem; font-weight: 600; line-height: 1.2;
-  transition: background var(--speed) var(--ease), color var(--speed) var(--ease), transform var(--speed) var(--ease);
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; padding: 0; border-radius: var(--radius-lg);
+  color: var(--ink-600);
+  transition: background var(--speed) var(--ease), color var(--speed) var(--ease);
 }
-.app-nav-item svg { flex: none; color: var(--ink-500); transition: color var(--speed) var(--ease); }
-.app-nav-item:hover { background: var(--brand-50); color: var(--ink-950); text-decoration: none; transform: translateX(2px); }
+.app-nav-item svg { color: currentColor; }
+.app-nav-item:hover { background: var(--brand-50); color: var(--ink-950); text-decoration: none; }
 .app-nav-item:hover svg { color: var(--brand-600); }
 .app-nav-item.active {
-  background: var(--brand-600); color: #fff; font-weight: 700;
+  background: var(--brand-600); color: #fff;
   box-shadow: var(--shadow-brand);
 }
-.app-nav-item.active svg { color: #fff; }
-
-.app-sidebar__foot { display: flex; flex-direction: column; gap: 10px; }
-.app-sidebar__wallet {
-  display: flex; gap: 8px; padding: 10px 12px;
-  background: var(--paper-muted); border: 1px solid var(--ink-100); border-radius: var(--radius-lg);
+.app-nav-item.active:hover, .app-nav-item.active:hover svg { color: #fff; }
+.app-nav-item::after {
+  content: attr(data-label);
+  position: absolute; left: calc(100% + 12px); top: 50%; transform: translateY(-50%) translateX(-4px);
+  background: var(--ink-950); color: #fff;
+  padding: 6px 10px; border-radius: 8px;
+  font-size: 0.8rem; font-weight: 700; white-space: nowrap; letter-spacing: 0;
+  opacity: 0; pointer-events: none; z-index: 70;
+  transition: opacity 140ms var(--ease), transform 140ms var(--ease);
 }
-.app-sidebar__wallet .wallet-chip { flex: 1; }
+.app-nav-item:hover::after, .app-nav-item:focus-visible::after { opacity: 1; transform: translateY(-50%) translateX(0); }
 
 .wallet-chip {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -80,19 +74,6 @@
 .wallet-chip--streak svg { color: var(--coral-500); }
 .wallet-chip--xp { background: var(--violet-soft); border-color: var(--violet-border); }
 .wallet-chip--xp svg { color: var(--violet); }
-
-.app-sidebar__user {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border-radius: var(--radius-lg);
-  background: var(--ink-50); border: 1px solid var(--ink-100);
-  cursor: pointer; font-family: inherit; text-align: left; width: 100%;
-  transition: border-color var(--speed) var(--ease), background var(--speed) var(--ease);
-}
-.app-sidebar__user:hover { border-color: var(--brand-200); background: var(--brand-50); }
-.app-sidebar__user-text { min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
-.app-sidebar__user-text strong { font-size: 0.86rem; color: var(--ink-950); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.app-sidebar__user-text span { font-size: 0.72rem; color: var(--ink-500); text-transform: capitalize; }
-.app-sidebar__user .icon { margin-left: auto; color: var(--ink-400); flex: none; }
 
 /* ------------------------------------------------------------------- header */
 .site-header {
@@ -254,6 +235,11 @@ button.site-avatar:hover { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--b
 .more-panel__who-text strong { color: var(--ink-950); font-size: 0.98rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .more-panel__who-text span { color: var(--ink-500); font-size: 0.8rem; text-transform: capitalize; }
 .more-panel__group { display: flex; flex-direction: column; gap: 2px; }
+.more-panel__label {
+  display: block; padding: 8px 6px 3px;
+  font-size: 0.66rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-400);
+}
 .more-item {
   display: flex; align-items: center; gap: 11px;
   padding: 11px 13px; border-radius: var(--radius); border: 0; background: none;
@@ -271,11 +257,10 @@ button.site-avatar:hover { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--b
     left: auto; right: 18px; bottom: auto; top: calc(var(--topbar-height) + 8px); transform: none;
     width: 320px; border-radius: var(--radius-xl);
   }
-  /* The sidebar account button lives at the bottom-left: the menu opens
-     directly above it instead of jumping to the top-right corner. */
+  /* The rail's "More" button opens the menu right beside the rail. */
   .more-panel--sidebar {
-    left: 14px; right: auto; top: auto; bottom: 84px;
-    width: min(300px, calc(var(--sidebar-width, 272px) - 28px));
+    left: calc(var(--sidebar-w) + 12px); right: auto; top: 12px; bottom: auto;
+    width: min(340px, calc(100vw - var(--sidebar-w) - 24px));
   }
 }
 
