@@ -131,6 +131,8 @@ export interface CatalogTest {
   mockComponentCount: number;
   requiresAccessCode: boolean;
   unlocked: boolean;
+  /** Library-card thumbnail set by staff; absent on plain text cards. */
+  coverUrl?: string | null;
   /** "3 passages • 40 questions • 60 min" — computed from the real content. */
   structure?: {
     passages: number;

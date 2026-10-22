@@ -268,6 +268,18 @@ export function PracticePage() {
             const sections = test.sections ?? [];
             return (
               <article className={`test-card ${skillClass(test.type)}`} key={test.id}>
+                {test.coverUrl ? (
+                  <div className="test-card__cover">
+                    <img
+                      src={test.coverUrl}
+                      alt=""
+                      loading="lazy"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                ) : null}
                 <header className="test-card__head">
                   <SkillGlyph type={test.type} size={17} />
                   <div className="test-card__titles">

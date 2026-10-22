@@ -241,6 +241,9 @@ a.skill-tile:hover .skill-tile__go { color: var(--skill); }
   transition: border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease), transform var(--speed) var(--ease);
 }
 .test-card:hover { border-color: var(--skill-border, var(--ink-300)); box-shadow: var(--shadow); transform: translateY(-2px); }
+/* Cover thumbnail — an inset banner so cards without one keep their geometry. */
+.test-card__cover { aspect-ratio: 16 / 7; overflow: hidden; border: 1px solid var(--ink-100); border-radius: var(--radius-lg); background: var(--paper-muted); }
+.test-card__cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .test-card__head { display: flex; gap: 14px; align-items: flex-start; }
 .test-card .skill-glyph { width: 48px; height: 48px; border-radius: 15px; background: var(--skill-fill, var(--ink-700)); color: #fff; box-shadow: 0 3px 0 var(--skill-edge, var(--ink-900)); }
 .test-card__titles { min-width: 0; }

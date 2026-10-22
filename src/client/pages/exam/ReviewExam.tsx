@@ -8,6 +8,7 @@ import { QuestionRenderer } from '../../components/exam/QuestionRenderer';
 import { AnswerExplanation, evidenceSegmentId } from '../../components/exam/AnswerExplanation';
 import { TranscriptView } from '../../components/exam/TranscriptView';
 import { ReviewAudioPlayer } from '../../components/exam/ReviewAudioPlayer';
+import { SectionImage } from '../../components/exam/SectionImage';
 import { ExamDictionary } from '../../components/exam/ExamDictionary';
 import { buildWordTimings, findEvidenceStart } from '@shared/transcript-timing';
 import { WritingPrompt, writingTasksOf, type WritingTaskRef } from '../../components/exam/WritingEditor';
@@ -283,6 +284,14 @@ export function AttemptReviewPage() {
                   <p className="tiny muted" style={{ margin: '2px 2px 0' }}>
                     <Icon name="headphones" size={12} /> Press “Listen from here” on any question to jump to its part.
                   </p>
+                </div>
+              ) : null}
+              {activeSectionResult?.image ? (
+                <div style={{ padding: '6px 12px 0' }}>
+                  <SectionImage
+                    image={activeSectionResult.image}
+                    label={activeSectionResult.label || activeSectionResult.title || 'Section'}
+                  />
                 </div>
               ) : null}
               {activeSectionResult?.transcript ? (

@@ -10,6 +10,7 @@ import { verifyAndUnlock } from '../services/access-code-service';
 import { loadScoringProfile } from '../services/marking-service';
 import { estimateBand } from '../../shared/scoring';
 import { buildStructureSummary, type TestStructureSummary } from '../../shared/sections';
+import { resolveAssetUrl, type AssetStorageRow } from '../services/media-service';
 import type { TestType } from '../../shared/types';
 
 const router = new Hono<AppBindings>();
@@ -82,11 +83,14 @@ router.get('/tests', requireAuth, async (c) => {
   const rows = await c.env.DB.prepare(
     `SELECT t.id, t.slug, t.title, t.type, t.summary, t.content_origin, t.updated_at, v.published_at,
             t.access_code_hash IS NOT NULL AS requires_code,
+            t.cover_asset_id, ca.storage_kind AS cover_storage_kind, ca.external_url AS cover_external_url,
+            ca.r2_key AS cover_r2_key,
             v.id AS version_id, v.version_number, v.total_questions, v.duration_seconds, v.is_complete_test,
             (SELECT COUNT(*) FROM mock_components mc WHERE mc.mock_version_id = v.id) AS component_count,
             (SELECT COUNT(*) FROM test_unlocks u WHERE u.test_id = t.id AND u.user_id = ?) AS unlocked
        FROM tests t
        JOIN test_versions v ON v.id = t.current_version_id
+       LEFT JOIN assets ca ON ca.id = t.cover_asset_id
       WHERE t.status = 'PUBLISHED'
       ORDER BY COALESCE(v.published_at, t.updated_at) DESC, t.created_at DESC, t.title`,
   )
@@ -101,6 +105,10 @@ router.get('/tests', requireAuth, async (c) => {
       updated_at: string;
       published_at: string | null;
       requires_code: number;
+      cover_asset_id: string | null;
+      cover_storage_kind: string | null;
+      cover_external_url: string | null;
+      cover_r2_key: string | null;
       version_id: string;
       version_number: number;
       total_questions: number;
@@ -194,6 +202,16 @@ router.get('/tests', requireAuth, async (c) => {
       mockComponentCount: row.component_count,
       requiresAccessCode: row.requires_code === 1,
       unlocked: staffBypass || row.requires_code !== 1 || row.unlocked === 1,
+      /** Library-card thumbnail; null keeps the plain text card. */
+      coverUrl:
+        row.cover_asset_id && row.cover_storage_kind
+          ? resolveAssetUrl({
+              id: row.cover_asset_id,
+              storage_kind: row.cover_storage_kind,
+              external_url: row.cover_external_url,
+              r2_key: row.cover_r2_key,
+            })
+          : null,
       structure: summarise({
         type: row.type,
         total_questions: row.total_questions,

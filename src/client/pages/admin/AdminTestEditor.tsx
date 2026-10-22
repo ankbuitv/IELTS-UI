@@ -256,6 +256,8 @@ interface TestDetailResponse {
     source_url: string | null;
     attribution: string | null;
     license_notes: string | null;
+    cover_asset_id: string | null;
+    cover_url: string | null;
     current_version_id: string | null;
     updated_at: string;
     requires_access_code: number;
@@ -646,7 +648,12 @@ function TestMetaForm({
     sourceUrl: test.source_url ?? '',
     attribution: test.attribution ?? '',
     licenseNotes: test.license_notes ?? '',
+    coverUrl: test.cover_url ?? '',
+    coverAssetId: test.cover_asset_id ?? null,
   });
+  const initialCoverAssetId = test.cover_asset_id ?? null;
+  const initialCoverUrl = test.cover_url ?? '';
+  const [uploadingCover, setUploadingCover] = useState(false);
 
   return (
     <div>
@@ -673,10 +680,95 @@ function TestMetaForm({
       <Field label="Licence notes">
         {(id) => <TextArea id={id} value={form.licenseNotes} onChange={(event) => setForm({ ...form, licenseNotes: event.target.value })} />}
       </Field>
+      <Field
+        label="Cover thumbnail"
+        hint="Picture at the top of this test's card in the student library. Paste an https:// image link or upload a file — leave the field empty for no thumbnail."
+      >
+        {(id) => (
+          <div className="row">
+            <TextInput
+              id={id}
+              type="url"
+              inputMode="url"
+              placeholder="https://cdn.example.com/cover.jpg"
+              value={form.coverUrl}
+              onChange={(event) =>
+                setForm({ ...form, coverUrl: event.target.value, coverAssetId: initialCoverAssetId })
+              }
+            />
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              disabled={uploadingCover}
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (!file) return;
+                if (file.size > 4_000_000) {
+                  onError('Keep cover images under 4 MB.');
+                  return;
+                }
+                setUploadingCover(true);
+                try {
+                  const dataBase64 = await readAsDataURL(file);
+                  const uploaded = await api.post<{ asset: { id: string; url: string } }>('/api/admin/assets/upload', {
+                    filename: file.name,
+                    mime: file.type || 'image/png',
+                    dataBase64,
+                    kind: 'IMAGE',
+                    testVersionId: test.current_version_id ?? undefined,
+                  });
+                  setForm((previous) => ({ ...previous, coverUrl: uploaded.asset.url, coverAssetId: uploaded.asset.id }));
+                } catch (uploadError) {
+                  onError(describeError(uploadError));
+                } finally {
+                  setUploadingCover(false);
+                }
+              }}
+            />
+            {uploadingCover ? <span className="tiny muted">Uploading…</span> : null}
+          </div>
+        )}
+      </Field>
+      {form.coverUrl ? (
+        <div style={{ margin: '2px 0 10px' }}>
+          <img
+            src={form.coverUrl}
+            alt=""
+            style={{
+              display: 'block',
+              width: '100%',
+              maxHeight: 140,
+              objectFit: 'cover',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--ink-200)',
+              background: 'var(--paper-muted)',
+            }}
+            onError={(event) => {
+              event.currentTarget.style.display = 'none';
+            }}
+          />
+        </div>
+      ) : null}
       <Button
         variant="primary"
         onClick={async () => {
           try {
+            // The cover column stores an asset id: a freshly typed link is
+            // linked to an image asset here, an uploaded file is already one.
+            const trimmedCover = form.coverUrl.trim();
+            let coverAssetId: string | null = form.coverAssetId;
+            if (form.coverAssetId === initialCoverAssetId && trimmedCover !== initialCoverUrl) {
+              coverAssetId = trimmedCover
+                ? (
+                    await api.post<{ assetId: string }>('/api/admin/assets', {
+                      url: trimmedCover,
+                      kind: 'IMAGE',
+                      testVersionId: test.current_version_id ?? undefined,
+                    })
+                  ).assetId
+                : null;
+            }
             await api.patch(`/api/admin/tests/${test.id}`, {
               title: form.title,
               summary: form.summary,
@@ -685,6 +777,7 @@ function TestMetaForm({
               sourceUrl: form.sourceUrl || null,
               attribution: form.attribution || null,
               licenseNotes: form.licenseNotes || null,
+              coverAssetId,
             });
             await onSaved();
           } catch (metaError) {
@@ -1757,6 +1850,29 @@ function VersionEditorBody({
   );
 }
 
+/** Reads a picked file as a data URL, the payload shape the upload route wants. */
+const readAsDataURL = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(new Error('Could not read the file.'));
+    reader.readAsDataURL(file);
+  });
+
+/** Best-effort duration probe so the asset picker can label files with their length. */
+const probeAudioDuration = (dataUrl: string): Promise<number | undefined> =>
+  new Promise((resolve) => {
+    const probe = new Audio();
+    const finish = (value?: number) => {
+      window.clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = window.setTimeout(() => finish(), 4000);
+    probe.onloadedmetadata = () => finish(Number.isFinite(probe.duration) ? probe.duration : undefined);
+    probe.onerror = () => finish();
+    probe.src = dataUrl;
+  });
+
 function AudioUpload({
   versionId,
   disabled,
@@ -1773,7 +1889,7 @@ function AudioUpload({
 
   return (
     <div className="field">
-      <span className="field__label">Audio URL (https://… — mp3, m4a, wav, ogg)</span>
+      <span className="field__label">Add audio — upload a file, or paste an https:// link</span>
       <div className="row">
         <TextInput
           type="url"
@@ -1809,8 +1925,51 @@ function AudioUpload({
           Link audio
         </Button>
       </div>
+      <div className="row" style={{ marginTop: 6 }}>
+        <input
+          type="file"
+          accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/ogg,audio/webm,audio/flac"
+          disabled={disabled || busy}
+          onChange={async (event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            const extensionOk = /\.(mp3|m4a|mp4|wav|ogg|oga|webm|aac|flac)$/i.test(file.name);
+            if (file.type && !file.type.startsWith('audio/') && !extensionOk) {
+              toast.push('That is not an audio file — use MP3, M4A, WAV, OGG or WebM.', 'error');
+              return;
+            }
+            // The upload route caps the base64 payload at 24M chars ≈ 18 MB of file.
+            if (file.size > 17_000_000) {
+              toast.push('Keep listening audio under 17 MB — paste a link for larger files.', 'error');
+              return;
+            }
+            setBusy(true);
+            try {
+              const dataBase64 = await readAsDataURL(file);
+              const durationSeconds = await probeAudioDuration(dataBase64);
+              const uploaded = await api.post<{ asset: { id: string } }>('/api/admin/assets/upload', {
+                filename: file.name,
+                mime: file.type || 'audio/mpeg',
+                dataBase64,
+                kind: 'AUDIO',
+                ...(durationSeconds ? { durationSeconds } : {}),
+                testVersionId: versionId,
+              });
+              toast.push('Audio uploaded and selected — save the content to keep it.', 'success');
+              await onUploaded(uploaded.asset.id);
+            } catch (uploadError) {
+              toast.push(describeError(uploadError), 'error');
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+        {busy ? <span className="tiny muted">Uploading…</span> : null}
+      </div>
       <span className="field__hint">
-        Media is linked, not uploaded: the file stays on the host you name and must be reachable over HTTPS.
+        Uploaded files (MP3, M4A, WAV, OGG, WebM — up to 17 MB) are stored on the platform. Pasted links stay on
+        their host and must be reachable over HTTPS.
       </span>
     </div>
   );

@@ -23,6 +23,9 @@ export function AudioPlayer({
 }) {
   const ref = useRef<HTMLAudioElement>(null);
   const furthest = useRef(0);
+  // Resuming a paused recording continues the play already counted; only a
+  // fresh start spends the next play from the limit.
+  const resuming = useRef(false);
   const [plays, setPlays] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [prepRemaining, setPrepRemaining] = useState(audio.playback.prepSeconds);
@@ -31,6 +34,12 @@ export function AudioPlayer({
   const [error, setError] = useState<string | null>(null);
   const maxedOut = plays >= audio.playback.maxPlays;
   const prepDone = prepRemaining <= 0;
+
+  /** A paused recording the policy still lets the learner continue. */
+  const canResume = () => {
+    const element = ref.current;
+    return Boolean(element && audio.playback.allowPause && element.paused && element.currentTime > 0 && !element.ended);
+  };
 
   useEffect(() => {
     setPrepRemaining(audio.playback.prepSeconds);
@@ -48,13 +57,18 @@ export function AudioPlayer({
 
   const handlePlay = () => {
     const element = ref.current;
-    if (!element || maxedOut || !prepDone || playing) return;
+    if (!element || !prepDone || playing) return;
+    // Reaching the play limit blocks *starting* another pass — it must not
+    // block the pause control or resuming the pass already counted.
+    if (maxedOut && !canResume()) return;
+    if (element.ended) resuming.current = false;
     void element.play().catch(() => setError('Playback was blocked by the browser. Press play again.'));
   };
 
   const handlePause = () => {
     const element = ref.current;
     if (!element || !audio.playback.allowPause) return;
+    resuming.current = true;
     element.pause();
   };
 
@@ -88,10 +102,14 @@ export function AudioPlayer({
         }}
         onPlay={() => {
           setPlaying(true);
-          setPlays((value) => value + 1);
+          if (resuming.current) resuming.current = false;
+          else setPlays((value) => value + 1);
         }}
         onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
+        onEnded={() => {
+          resuming.current = false;
+          setPlaying(false);
+        }}
         onError={() => setError('The audio for this part could not be loaded. Check your connection and reload.')}
         onCopy={(event) => {
           event.preventDefault();
@@ -104,9 +122,17 @@ export function AudioPlayer({
           type="button"
           className="audio-panel__play"
           onClick={playing ? handlePause : handlePlay}
-          disabled={maxedOut || !prepDone || (playing && !audio.playback.allowPause)}
+          disabled={!prepDone || (playing ? !audio.playback.allowPause : maxedOut && !canResume())}
           aria-label={playing ? 'Pause recording' : 'Play recording'}
-          title={maxedOut ? 'Play limit reached' : playing ? 'Pause' : 'Play'}
+          title={
+            playing
+              ? 'Pause'
+              : maxedOut && !canResume()
+                ? 'Play limit reached'
+                : canResume()
+                  ? 'Resume'
+                  : 'Play'
+          }
         >
           <Icon name={playing ? 'pause' : 'play'} size={18} />
         </button>
@@ -151,7 +177,7 @@ export function AudioPlayer({
       <div className="audio-panel__meta">
         {!prepDone ? (
           <strong>Starts in {formatClock(prepRemaining)} — controls unlock when preparation ends.</strong>
-        ) : maxedOut ? (
+        ) : maxedOut && !playing && !canResume() ? (
           <strong>Play limit reached.</strong>
         ) : null}
         <span>{policyNotes.join(' · ')}</span>

@@ -4,6 +4,7 @@ import { api, describeError } from '../lib/api';
 import { Badge, Button, Card, Field, KeyValue, Notice, Tabs, TextArea, TextInput, useToast } from './ui';
 import { QuestionRenderer } from './exam/QuestionRenderer';
 import { ReviewAudioPlayer } from './exam/ReviewAudioPlayer';
+import { SectionImage } from './exam/SectionImage';
 import { TranscriptView } from './exam/TranscriptView';
 import { AnswerExplanation, evidenceSegmentId } from './exam/AnswerExplanation';
 import { BAND_DISCLAIMER, formatBand, formatDateTime, formatDuration, formatPercent, formatScore, MODE_LABELS, SKILL_LABELS, TEST_TYPE_LABELS } from '../lib/format';
@@ -73,7 +74,7 @@ export interface AttemptResultPayload {
       correctCount: number | null;
       passage: { id: string; title: string; subtitle: string | null; paragraphs: Array<{ label: string; text: string }>; wordCount: number } | null;
       audio: { assetId: string; url: string; durationSeconds: number | null } | null;
-      image: { assetId: string; url: string } | null;
+      image: { assetId: string; url: string; altText: string | null } | null;
       transcript: { segments: Array<{ id: string; startSeconds: number | null; speaker: string | null; text: string }> } | null;
     }>;
     review: Array<{
@@ -830,6 +831,10 @@ function SectionReview({
             title={activeSection.label || 'Listening audio'}
             audioRef={audioRef}
           />
+        ) : null}
+
+        {activeSection?.image ? (
+          <SectionImage image={activeSection.image} label={activeSection.label || activeSection.title || 'Section'} />
         ) : null}
 
         {activeSection?.passage ? (

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
 import { ApiError } from '../lib/errors';
-import { ingestExternalAudio, normaliseExternalUrl } from '../services/media-service';
+import { ingestExternalAudio, normaliseExternalUrl, resolveAssetUrl } from '../services/media-service';
 import { putBlob } from '../services/blob-store';
 import { assertCsrf, assertSameOrigin, clientIp } from '../lib/http';
 import { parseBody, parseQuery } from '../lib/validate';
@@ -503,7 +503,18 @@ router.get('/tests/:testId', async (c) => {
   void access_code_hash;
   void access_code_salt;
   void access_code_iterations;
-  const testWithFlag = { ...safeTest, requires_access_code: test.access_code_hash != null ? 1 : 0 };
+  // Delivery URL for the library-card thumbnail, so the editor can preview it.
+  const coverRow =
+    typeof test.cover_asset_id === 'string' && test.cover_asset_id
+      ? await c.env.DB.prepare('SELECT id, storage_kind, external_url, r2_key FROM assets WHERE id = ?')
+          .bind(test.cover_asset_id)
+          .first<{ id: string; storage_kind: string; external_url: string | null; r2_key: string | null }>()
+      : null;
+  const testWithFlag = {
+    ...safeTest,
+    requires_access_code: test.access_code_hash != null ? 1 : 0,
+    cover_url: coverRow ? resolveAssetUrl(coverRow) : null,
+  };
 
   const versions = await c.env.DB.prepare(
     `SELECT v.id, v.version_number, v.status, v.change_note, v.total_questions, v.duration_seconds, v.is_complete_test,
@@ -574,10 +585,18 @@ router.patch('/tests/:testId', async (c) => {
       sourceUrl: z.string().max(1000).nullable().optional(),
       attribution: z.string().max(1000).nullable().optional(),
       licenseNotes: z.string().max(4000).nullable().optional(),
+      /** Library-card thumbnail; null clears it. Must point at an existing image asset. */
+      coverAssetId: z.string().max(64).nullable().optional(),
     }),
   );
 
   const testId = c.req.param('testId');
+  if (body.coverAssetId !== undefined && body.coverAssetId !== null) {
+    const asset = await c.env.DB.prepare("SELECT id FROM assets WHERE id = ? AND kind = 'IMAGE'")
+      .bind(body.coverAssetId)
+      .first<{ id: string }>();
+    if (!asset) throw ApiError.validation('Cover must reference an existing image asset.');
+  }
   const setClauses: string[] = [];
   const bindings: unknown[] = [];
   for (const [field, column] of [
@@ -589,6 +608,7 @@ router.patch('/tests/:testId', async (c) => {
     ['sourceUrl', 'source_url'],
     ['attribution', 'attribution'],
     ['licenseNotes', 'license_notes'],
+    ['coverAssetId', 'cover_asset_id'],
   ] as const) {
     const value = body[field];
     if (value !== undefined) {

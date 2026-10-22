@@ -41,7 +41,7 @@ export interface AttemptSectionResult {
   /** Review material — present only after review is released (37). */
   passage: (Omit<CandidatePassage, 'subtitle'> & { subtitle: string | null }) | null;
   audio: { assetId: string; url: string; durationSeconds: number | null } | null;
-  image: { assetId: string; url: string } | null;
+  image: { assetId: string; url: string; altText: string | null } | null;
   transcript: { segments: Array<{ id: string; startSeconds: number | null; speaker: string | null; text: string }> } | null;
 }
 
@@ -2204,10 +2204,10 @@ async function buildSessionSectionResults(
   const assetRows = options.includeReviewMaterial && assetIds.length
     ? (
         await env.DB.prepare(
-          `SELECT id, kind, storage_kind, external_url, r2_key, duration_seconds FROM assets WHERE id IN (${assetIds.map(() => '?').join(',')})`,
+          `SELECT id, kind, storage_kind, external_url, r2_key, duration_seconds, alt_text FROM assets WHERE id IN (${assetIds.map(() => '?').join(',')})`,
         )
           .bind(...assetIds)
-          .all<{ id: string; kind: string; storage_kind: string; external_url: string | null; r2_key: string | null; duration_seconds: number | null }>()
+          .all<{ id: string; kind: string; storage_kind: string; external_url: string | null; r2_key: string | null; duration_seconds: number | null; alt_text: string | null }>()
       ).results
     : [];
   const assetById = new Map(assetRows.map((row) => [row.id, row]));
@@ -2243,7 +2243,7 @@ async function buildSessionSectionResults(
         ? { assetId: audioRow.id, url: audioUrl.startsWith('/') ? `/api/files/${audioRow.id}` : audioUrl, durationSeconds: audioRow.duration_seconds }
         : null,
       image: imageRow && imageUrl
-        ? { assetId: imageRow.id, url: imageUrl.startsWith('/') ? `/api/files/${imageRow.id}` : imageUrl }
+        ? { assetId: imageRow.id, url: imageUrl.startsWith('/') ? `/api/files/${imageRow.id}` : imageUrl, altText: imageRow.alt_text ?? null }
         : null,
       transcript: options.includeReviewMaterial ? parseTranscriptOrNull(row.transcript_json) : null,
     } satisfies AttemptSectionResult;
