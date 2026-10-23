@@ -48,6 +48,7 @@ const LEARN_GROUP: NavGroup = {
     { to: '/vocabulary', label: 'Từ vựng', icon: 'layers' },
     { to: '/tutor', label: 'AI Gia sư', icon: 'sparkle' },
     { to: '/dictionary', label: 'Từ điển', icon: 'search' },
+    { to: '/blog', label: 'Blog', icon: 'book' },
   ],
 };
 

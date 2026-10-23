@@ -22,6 +22,8 @@ import { ShopPage } from './pages/student/ShopPage';
 import { LeaderboardPage } from './pages/student/LeaderboardPage';
 import { EverydayLessonsPage } from './pages/student/EverydayLessonsPage';
 import { FriendPage, PublicPlayerProfilePage } from './pages/student/SocialPages';
+import { BlogListPage, BlogPostPage } from './pages/blog/BlogPages';
+import { BlogEditorPage } from './pages/blog/BlogEditorPage';
 import { LessonPage, ReviewPage } from './pages/student/LessonPages';
 import { DictionaryPage } from './pages/student/DictionaryPage';
 import { SpeakingPage } from './pages/student/SpeakingPage';
@@ -129,6 +131,26 @@ export function App() {
         <Route path="reset-password" element={<ResetPasswordPage />} />
         <Route path="register" element={<RegisterPage />} />
         <Route path="join" element={<JoinPage />} />
+
+        {/* Blog: readable by anyone, written by mentors and admins. */}
+        <Route path="blog" element={<BlogListPage />} />
+        <Route path="blog/:slug" element={<BlogPostPage />} />
+        <Route
+          path="blog/write"
+          element={
+            <RequireAuth roles={['MENTOR', 'ADMIN']}>
+              <BlogEditorPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="blog/write/:postId"
+          element={
+            <RequireAuth roles={['MENTOR', 'ADMIN']}>
+              <BlogEditorPage />
+            </RequireAuth>
+          }
+        />
 
         <Route
           path="dashboard"

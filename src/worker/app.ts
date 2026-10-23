@@ -17,6 +17,7 @@ import fileRoutes from './routes/files';
 import importRoutes from './routes/imports';
 import speakingRoutes from './routes/speaking';
 import mentorRoutes from './routes/mentor';
+import blogRoutes from './routes/blog';
 import profileRoutes from './routes/profile';
 import notificationRoutes from './routes/notifications';
 import { dictionaryRouter, learnRouter } from './routes/learn';
@@ -68,6 +69,7 @@ export function createApp() {
   app.route('/api/study', studyRouter);
   app.route('/api/dictionary', dictionaryRouter);
   app.route('/api', mentorRoutes);
+  app.route('/api/blog', blogRoutes);
   app.route('/api/profile', profileRoutes);
   app.route('/api', classroomRoutes);
   app.route('/api/teacher', teacherRoutes);
