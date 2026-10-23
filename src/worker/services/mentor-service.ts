@@ -11,6 +11,7 @@ import type { Env } from '../env';
 import type { AuthUser } from '../lib/auth-types';
 import { ApiError } from '../lib/errors';
 import { newId, nowIso, parseJson, clamp } from '../lib/ids';
+import { recordAudit } from '../lib/audit';
 import {
   MENTOR_SPECIALTIES,
   type MentorChatMessage,
@@ -1026,16 +1027,33 @@ export async function joinClass(env: Env, viewer: AuthUser, classId: string): Pr
     .run();
 
   // A class session row per member keeps history uniform; the shared room
-  // session is what the member actually calls in.
-  const sessionId = newId('msn');
-  await env.DB.prepare(
-    `INSERT INTO mentor_sessions
-       (id, mentor_id, student_id, class_id, kind, status, topic, starts_at, ends_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'CLASS', 'SCHEDULED', ?, ?, ?, ?, ?)
-     ON CONFLICT DO NOTHING`,
+  // session is what the member actually calls in. Re-joining after a leave
+  // reactivates the member's cancelled row — otherwise the stale row would
+  // refuse every later room open with "That session was cancelled."
+  const memberRow = await env.DB.prepare(
+    `SELECT id, status FROM mentor_sessions
+      WHERE class_id = ? AND student_id = ?
+      ORDER BY created_at DESC LIMIT 1`,
   )
-    .bind(sessionId, row.mentor_id, viewer.id, classId, row.title, row.starts_at, row.ends_at, timestamp, timestamp)
-    .run();
+    .bind(classId, viewer.id)
+    .first<{ id: string; status: string }>();
+  if (!memberRow) {
+    const sessionId = newId('msn');
+    await env.DB.prepare(
+      `INSERT INTO mentor_sessions
+         (id, mentor_id, student_id, class_id, kind, status, topic, starts_at, ends_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'CLASS', 'SCHEDULED', ?, ?, ?, ?, ?)
+       ON CONFLICT DO NOTHING`,
+    )
+      .bind(sessionId, row.mentor_id, viewer.id, classId, row.title, row.starts_at, row.ends_at, timestamp, timestamp)
+      .run();
+  } else if (memberRow.status === 'CANCELLED') {
+    await env.DB.prepare(
+      `UPDATE mentor_sessions SET status = 'SCHEDULED', updated_at = ? WHERE id = ?`,
+    )
+      .bind(timestamp, memberRow.id)
+      .run();
+  }
 
   await ensureClassRoomSession(env, {
     id: classId,
@@ -1058,6 +1076,67 @@ export async function leaveClass(env: Env, viewer: AuthUser, classId: string): P
     .bind(nowIso(), classId, viewer.id)
     .run();
   return getClass(env, viewer, classId);
+}
+
+/**
+ * Deletes a classroom: its roster, class chat, every class session and the
+ * in-room data those sessions carry. The mentor who leads the class or an
+ * administrator may do it; one-on-one sessions are untouched.
+ */
+export async function deleteClass(
+  env: Env,
+  viewer: AuthUser,
+  classId: string,
+): Promise<{ ok: true; sessionsRemoved: number }> {
+  const row = await env.DB.prepare('SELECT id, mentor_id, title FROM mentor_classes WHERE id = ?')
+    .bind(classId)
+    .first<{ id: string; mentor_id: string; title: string }>();
+  if (!row) throw ApiError.notFound('That class does not exist.');
+  if (viewer.role !== 'ADMIN' && row.mentor_id !== viewer.id) {
+    throw ApiError.forbidden('Only the class mentor or an administrator can delete a class.');
+  }
+
+  const sessionIds = (
+    await env.DB.prepare('SELECT id FROM mentor_sessions WHERE class_id = ?').bind(classId).all<{ id: string }>()
+  ).results.map((entry) => entry.id);
+
+  const statements: D1PreparedStatement[] = [];
+  if (sessionIds.length > 0) {
+    const placeholders = sessionIds.map(() => '?').join(',');
+    // Children first and explicitly: the batch must not depend on the
+    // connection's foreign-key pragma to leave no orphans behind.
+    for (const sql of [
+      `DELETE FROM mentor_messages WHERE session_id IN (${placeholders})`,
+      `DELETE FROM mentor_room_presence WHERE session_id IN (${placeholders})`,
+      `DELETE FROM mentor_room_bans WHERE session_id IN (${placeholders})`,
+      `DELETE FROM mentor_signals WHERE session_id IN (${placeholders})`,
+      `DELETE FROM class_poll_answers WHERE poll_id IN (SELECT id FROM class_polls WHERE session_id IN (${placeholders}))`,
+      `DELETE FROM class_polls WHERE session_id IN (${placeholders})`,
+      `DELETE FROM class_breakout_members WHERE breakout_id IN (SELECT id FROM class_breakouts WHERE session_id IN (${placeholders}))`,
+      `DELETE FROM class_breakouts WHERE session_id IN (${placeholders})`,
+      `DELETE FROM class_whiteboards WHERE session_id IN (${placeholders})`,
+      // Ratings of deleted calls survive as mentor history, unlinked.
+      `UPDATE mentor_reviews SET session_id = NULL WHERE session_id IN (${placeholders})`,
+      `DELETE FROM mentor_sessions WHERE id IN (${placeholders})`,
+    ]) {
+      statements.push(env.DB.prepare(sql).bind(...sessionIds));
+    }
+  }
+  statements.push(
+    env.DB.prepare('DELETE FROM mentor_class_members WHERE class_id = ?').bind(classId),
+    env.DB.prepare('DELETE FROM mentor_class_messages WHERE class_id = ?').bind(classId),
+    env.DB.prepare('DELETE FROM mentor_classes WHERE id = ?').bind(classId),
+  );
+  await env.DB.batch(statements);
+
+  await recordAudit(env, {
+    actorUserId: viewer.id,
+    action: 'CLASS_DELETE',
+    entityType: 'mentor_class',
+    entityId: classId,
+    metadata: { title: row.title, sessionsRemoved: sessionIds.length },
+  });
+  return { ok: true, sessionsRemoved: sessionIds.length };
 }
 
 // ---------------------------------------------------------------------------- mentor console

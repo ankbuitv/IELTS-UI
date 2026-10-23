@@ -153,7 +153,7 @@ export function MySessionsPage() {
                       Confirm booking
                     </Button>
                   ) : joinable ? (
-                    <Button variant="primary" onClick={() => navigate(`/sessions/${session.id}/room`)}>
+                    <Button variant="primary" onClick={() => navigate(`/sessions/${session.roomSessionId ?? session.id}/room`)}>
                       <Icon name="video" size={14} />
                       Join call
                     </Button>

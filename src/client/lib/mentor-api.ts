@@ -182,6 +182,9 @@ export const mentorApi = {
     api.post<{ class: MentorClass }>(`/api/mentor/classes/${encodeURIComponent(classId)}/join`, {}),
   leaveClass: (classId: string) =>
     api.post<{ class: MentorClass }>(`/api/mentor/classes/${encodeURIComponent(classId)}/leave`, {}),
+  /** Mentor (own class) or administrator — deletes the class outright. */
+  deleteClass: (classId: string) =>
+    api.delete<{ ok: true; sessionsRemoved: number }>(`/api/mentor/classes/${encodeURIComponent(classId)}`),
 
   // Mentor console
   console: () => api.get<MentorConsoleResponse>('/api/mentor/console/overview'),

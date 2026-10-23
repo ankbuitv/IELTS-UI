@@ -157,7 +157,7 @@ export function MentorConsolePage() {
                       <Button
                         size="sm"
                         variant={joinable ? 'primary' : 'ghost'}
-                        onClick={() => openRoom(session.id)}
+                        onClick={() => openRoom(session.roomSessionId ?? session.id)}
                         disabled={session.status === 'CANCELLED'}
                       >
                         <Icon name="video" size={13} />

@@ -84,6 +84,23 @@ export function ClassDetailPage() {
     }
   };
 
+  // ---------------------------------------------------------------- delete
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const canDelete = isMentor || user?.role === 'ADMIN';
+  const removeClass = async () => {
+    setDeleteBusy(true);
+    try {
+      await mentorApi.deleteClass(classId);
+      toast.push('Class deleted.', 'success');
+      navigate('/classes');
+    } catch (deleteError) {
+      toast.push(describeError(deleteError), 'error');
+      setDeleteBusy(false);
+      setDeleteArmed(false);
+    }
+  };
+
   if (loading && !klass) return <Loading label="Loading the classroom…" />;
   if (error || !klass) {
     return (
@@ -163,6 +180,26 @@ export function ClassDetailPage() {
               Calls open in the shared class room — say hello in the chat first if you like.
             </span>
           </div>
+          {canDelete ? (
+            <div className="row" style={{ marginTop: 6 }}>
+              {deleteArmed ? (
+                <>
+                  <Button variant="danger" loading={deleteBusy} onClick={() => void removeClass()}>
+                    <Icon name="trash" size={14} />
+                    Yes — delete “{klass.title}” forever
+                  </Button>
+                  <Button disabled={deleteBusy} onClick={() => setDeleteArmed(false)}>
+                    Keep class
+                  </Button>
+                </>
+              ) : (
+                <Button variant="ghost" onClick={() => setDeleteArmed(true)}>
+                  <Icon name="trash" size={14} />
+                  Delete class
+                </Button>
+              )}
+            </div>
+          ) : null}
         </div>
         <aside className="mentor-hero__facts">
           <div>

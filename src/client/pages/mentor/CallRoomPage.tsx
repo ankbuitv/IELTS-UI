@@ -952,12 +952,24 @@ export function CallRoomPage() {
   }
 
   if (phase === 'error') {
+    const cancelled = /was cancelled/i.test(error ?? '');
+    const over = /already over/i.test(error ?? '');
     return (
       <div className="stack" style={{ maxWidth: 560, margin: '60px auto' }}>
-        <Notice tone="danger" title="Cannot open this room">
-          {error ?? 'This session is not available.'}
+        <Notice
+          tone="danger"
+          title={cancelled ? 'This session was cancelled' : over ? 'This session has ended' : 'Cannot open this room'}
+        >
+          {cancelled
+            ? 'This booking is no longer active — it was cancelled or declined. Book a fresh time from the mentor profile.'
+            : over
+              ? 'This call is already finished. The recording, notes and feedback live on your sessions page.'
+              : (error ?? 'This session is not available.')}
         </Notice>
-        <Button onClick={() => navigate('/my-sessions')}>Back to my sessions</Button>
+        <div className="row">
+          <Button onClick={() => navigate('/my-sessions')}>Back to my sessions</Button>
+          {cancelled ? <Button onClick={() => navigate('/mentors')}>Browse mentors</Button> : null}
+        </div>
       </div>
     );
   }

@@ -18,6 +18,7 @@ import {
   cancelSession,
   completeSession,
   createClass,
+  deleteClass,
   getClass,
   getMentorProfile,
   getMentorReviews,
@@ -399,6 +400,13 @@ router.post('/mentor/classes/:classId/leave', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   return c.json({ class: await leaveClass(c.env, user, c.req.param('classId')) });
+});
+
+/** The mentor who leads the class — or any administrator — deletes it outright. */
+router.delete('/mentor/classes/:classId', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  return c.json(await deleteClass(c.env, user, c.req.param('classId')));
 });
 
 // ------------------------------------------------------------------------------ class chat & room
