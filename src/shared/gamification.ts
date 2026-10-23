@@ -49,6 +49,8 @@ export interface PlayerCard {
   avatarId: AvatarId;
   nameEffect: NameEffect;
   profileEffect: ProfileEffect;
+  /** When the player uploaded a photo of themselves, this busts its cache; null = character avatar only. */
+  avatarUpdatedAt: string | null;
   online: boolean;
   xp: number;
   level: number;

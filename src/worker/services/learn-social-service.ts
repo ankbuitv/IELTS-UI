@@ -39,6 +39,7 @@ interface IdentityRow {
   avatar_id: string | null;
   name_effect: string | null;
   profile_effect: string | null;
+  avatar_updated_at: string | null;
   xp: number;
   streak: number;
   best_streak: number;
@@ -49,6 +50,7 @@ async function identityRow(env: Env, userId: string): Promise<IdentityRow | null
     `SELECT u.id AS user_id, u.role, u.status, u.created_at,
             u.username,
             up.display_name, up.bio, up.links_json, up.avatar_id, up.name_effect, up.profile_effect,
+            up.avatar_updated_at,
             COALESCE(lp.xp, 0) AS xp, COALESCE(lp.streak, 0) AS streak,
             COALESCE(lp.best_streak, 0) AS best_streak
        FROM users u
@@ -107,6 +109,7 @@ function cardFrom(row: IdentityRow, online: boolean, stats: GamificationStats): 
     avatarId: isAvatarId(row.avatar_id) ? row.avatar_id : 'bo',
     nameEffect: isNameEffect(row.name_effect) ? row.name_effect : 'default',
     profileEffect: isProfileEffect(row.profile_effect) ? row.profile_effect : 'none',
+    avatarUpdatedAt: row.avatar_updated_at ?? null,
     online,
     xp: row.xp,
     level,
@@ -281,6 +284,7 @@ export async function searchPlayers(env: Env, userId: string, query: string): Pr
     `SELECT u.id AS user_id, u.role, u.status, u.created_at,
             u.username,
             up.display_name, up.bio, up.links_json, up.avatar_id, up.name_effect, up.profile_effect,
+            up.avatar_updated_at,
             COALESCE(lp.xp, 0) AS xp, COALESCE(lp.streak, 0) AS streak,
             COALESCE(lp.best_streak, 0) AS best_streak
        FROM users u

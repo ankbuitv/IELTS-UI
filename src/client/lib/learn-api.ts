@@ -86,6 +86,10 @@ export const learnApi = {
   publicPlayerProfile: (userId: string) => api.get<{ profile: GamificationProfile }>(`/api/learn/profiles/${encodeURIComponent(userId)}`),
   updatePlayerIdentity: (input: { avatarId?: string; nameEffect?: string; profileEffect?: string }) =>
     api.patch<{ profile: GamificationProfile }>('/api/learn/profile', input),
+  /** A photo of the player themselves, stored server-side and shown instead of the character avatar. */
+  uploadAvatar: (input: { mime: string; dataBase64: string }) =>
+    api.post<{ ok: true; avatarUrl: string | null; avatarUpdatedAt: string }>('/api/profile/avatar', input),
+  removeAvatar: () => api.delete<{ ok: true; avatarUrl: null }>('/api/profile/avatar'),
   friends: () => api.get<FriendOverview>('/api/learn/friends'),
   searchPeople: (query: string) => api.get<{ results: FriendSearchResult[] }>(`/api/learn/people/search${queryString({ q: query })}`),
   requestFriend: (userId: string) => api.post<{ ok: true }>(`/api/learn/friends/${encodeURIComponent(userId)}`, {}),

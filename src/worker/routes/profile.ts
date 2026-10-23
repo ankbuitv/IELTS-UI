@@ -69,7 +69,7 @@ router.post('/avatar', async (c) => {
     .bind(user.id, timestamp, mime, timestamp, timestamp)
     .run();
 
-  return c.json({ ok: true, avatarUrl: avatarUrlFor(user.id, timestamp) });
+  return c.json({ ok: true, avatarUrl: avatarUrlFor(user.id, timestamp), avatarUpdatedAt: timestamp });
 });
 
 router.delete('/avatar', async (c) => {
@@ -80,7 +80,7 @@ router.delete('/avatar', async (c) => {
     `INSERT INTO user_profiles (user_id, display_name, created_at, updated_at) VALUES (?, '', ?, ?)
      ON CONFLICT (user_id) DO UPDATE SET avatar_updated_at = NULL, avatar_mime = NULL, updated_at = excluded.updated_at`,
   )
-    .bind(nowIso(), user.id)
+    .bind(user.id, nowIso(), nowIso())
     .run();
   return c.json({ ok: true, avatarUrl: null });
 });

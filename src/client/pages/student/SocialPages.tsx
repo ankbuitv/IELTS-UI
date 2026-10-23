@@ -2,18 +2,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AVATARS, NAME_EFFECTS, PROFILE_EFFECTS, type FriendOverview, type FriendSearchResult, type GamificationProfile, type PlayerCard } from '@shared/gamification';
 import type { NameEffect, ProfileEffect } from '@shared/gamification';
-import { PlayerAvatar, badgeName, playerNameClass } from '../../components/learn/PlayerAvatar';
+import { PlayerAvatar, PlayerFace, badgeName, playerNameClass } from '../../components/learn/PlayerAvatar';
 import { Icon } from '../../components/Icon';
 import { Button, Field, Loading, Notice, TextArea, TextInput, useToast } from '../../components/ui';
 import { api, describeError } from '../../lib/api';
 import { learnApi } from '../../lib/learn-api';
+import { squareAvatarDataUrl } from '../../lib/image';
 import type { ShopState } from '@shared/shop';
 
 function PlayerCardLink({ player, trailing }: { player: PlayerCard; trailing?: React.ReactNode }) {
   return (
     <div className="social-player">
       <Link className="social-player__link" to={`/learn/profile/${encodeURIComponent(player.userId)}`}>
-        <PlayerAvatar avatarId={player.avatarId} name={player.displayName} effect={player.profileEffect} />
+        <PlayerFace userId={player.userId} avatarUpdatedAt={player.avatarUpdatedAt} avatarId={player.avatarId} name={player.displayName} effect={player.profileEffect} />
         <span className="social-player__identity">
           <b className={playerNameClass(player.nameEffect)}>
             <i className={`presence-dot${player.online ? ' is-online' : ''}`} />
@@ -178,6 +179,36 @@ export function PublicPlayerProfilePage() {
     }
   };
 
+  // ---------------------------------------------------------------- photo
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const applyPhoto = async (file: File) => {
+    if (!profile) return;
+    setPhotoBusy(true);
+    try {
+      const { mime, dataBase64 } = await squareAvatarDataUrl(file);
+      const response = await learnApi.uploadAvatar({ mime, dataBase64 });
+      setProfile({ ...profile, avatarUpdatedAt: response.avatarUpdatedAt });
+      toast.push('Profile photo updated.', 'success');
+    } catch (cause) {
+      toast.push(describeError(cause), 'error');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+  const dropPhoto = async () => {
+    if (!profile) return;
+    setPhotoBusy(true);
+    try {
+      await learnApi.removeAvatar();
+      setProfile({ ...profile, avatarUpdatedAt: null });
+      toast.push('Profile photo removed.', 'success');
+    } catch (cause) {
+      toast.push(describeError(cause), 'error');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   const actOnFriend = async () => {
     if (!profile) return;
     setSaving(true);
@@ -206,7 +237,7 @@ export function PublicPlayerProfilePage() {
       <header className={`player-profile-hero player-profile-hero--${profile.profileEffect}`}>
         <Link className="player-profile-hero__back" to={self ? '/learn' : '/learn/friends'}><Icon name="chevronRight" style={{ transform: 'rotate(180deg)' }} size={15} /> {self ? 'Learn' : 'Friends'}</Link>
         <div className="player-profile-hero__identity">
-          <PlayerAvatar avatarId={profile.avatarId} name={profile.displayName} size={100} effect={profile.profileEffect} />
+          <PlayerFace userId={profile.userId} avatarUpdatedAt={profile.avatarUpdatedAt} avatarId={profile.avatarId} name={profile.displayName} size={100} effect={profile.profileEffect} />
           <div>
             <p className="eyebrow">{profile.role === 'ADMIN' ? 'Administrator' : 'Learner'} profile</p>
             <h1 className={playerNameClass(profile.nameEffect)}>
@@ -246,7 +277,29 @@ export function PublicPlayerProfilePage() {
 
       {self ? (
         <section className="card profile-customise">
-          <header><h2>Make it yours</h2><p className="muted small">Choose an avatar, then equip name colours and profile effects you own from the shop.</p></header>
+          <header><h2>Make it yours</h2><p className="muted small">Upload a photo of yourself, or pick a character — then equip name colours and profile effects you own from the shop.</p></header>
+          <div className="profile-photo-upload">
+            <label className="btn">
+              <Icon name="upload" size={15} />
+              {profile.avatarUpdatedAt ? 'Change photo' : 'Upload photo'}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                disabled={photoBusy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  if (file) void applyPhoto(file);
+                }}
+              />
+            </label>
+            {profile.avatarUpdatedAt ? (
+              <Button variant="ghost" size="sm" disabled={photoBusy} onClick={() => void dropPhoto()}>
+                Remove photo
+              </Button>
+            ) : null}
+            <span className="tiny muted">Square pictures work best — resized to 512px in your browser before upload.</span>
+          </div>
           <div className="profile-customise__avatars" aria-label="Choose avatar">
             {AVATARS.map((avatar) => (
               <button key={avatar.id} type="button" className={`profile-avatar-option${profile.avatarId === avatar.id ? ' is-on' : ''}`} disabled={saving} onClick={() => void save({ avatarId: avatar.id })} aria-label={`Choose ${avatar.name} avatar`} aria-pressed={profile.avatarId === avatar.id}>

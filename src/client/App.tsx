@@ -301,7 +301,7 @@ export function App() {
         <Route
           path="learn/profile"
           element={
-            <RequireAuth roles={['STUDENT', 'ADMIN']}>
+            <RequireAuth>
               <PublicPlayerProfilePage />
             </RequireAuth>
           }
@@ -309,7 +309,7 @@ export function App() {
         <Route
           path="learn/profile/:userId"
           element={
-            <RequireAuth roles={['STUDENT', 'ADMIN']}>
+            <RequireAuth>
               <PublicPlayerProfilePage />
             </RequireAuth>
           }

@@ -1,4 +1,5 @@
 import { AVATARS, type AvatarId, type NameEffect, type ProfileEffect } from '@shared/gamification';
+import { UserAvatar } from '../UserAvatar';
 
 const BADGE_NAMES: Record<string, string> = {
   first_lesson: 'First steps',
@@ -40,4 +41,29 @@ export function playerNameClass(effect: NameEffect): string {
 
 export function badgeName(id: string): string {
   return BADGE_NAMES[id] ?? 'Achievement';
+}
+
+/**
+ * A person the way the whole app shows them: their uploaded photo when they
+ * have one, the equipped character avatar otherwise.
+ */
+export function PlayerFace({
+  userId,
+  avatarUpdatedAt,
+  avatarId,
+  name,
+  size = 42,
+  effect = 'none',
+}: {
+  userId: string;
+  avatarUpdatedAt?: string | null;
+  avatarId: AvatarId;
+  name: string;
+  size?: number;
+  effect?: ProfileEffect;
+}) {
+  if (avatarUpdatedAt) {
+    return <UserAvatar userId={userId} avatarUpdatedAt={avatarUpdatedAt} name={name} size={size} />;
+  }
+  return <PlayerAvatar avatarId={avatarId} name={name} size={size} effect={effect} />;
 }
