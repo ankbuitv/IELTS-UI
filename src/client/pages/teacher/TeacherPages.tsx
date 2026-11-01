@@ -10,7 +10,6 @@ import {
   ConfirmButton,
   EmptyState,
   Field,
-  KeyValue,
   Loading,
   Modal,
   Notice,
@@ -22,7 +21,9 @@ import {
   useToast,
 } from '../../components/ui';
 import { AccuracyList, BarChart, type ChartTone } from '../../components/charts';
-import { ClassroomChatButton } from '../../components/ClassroomChat';
+import { ClassroomChat, ClassroomChatButton } from '../../components/ClassroomChat';
+import { ClassroomCallButton } from '../../components/ClassroomCallButton';
+import { Icon } from '../../components/Icon';
 import { ResultSummary, WritingMarkForm, type AttemptResultPayload } from '../../components/ResultView';
 import {
   BAND_DISCLAIMER,
@@ -65,6 +66,7 @@ export function TeacherHomePage() {
     [],
   );
   const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState('');
   const [form, setForm] = useState({ name: '', description: '' });
 
   if (loading) return <Loading label="Loading your classrooms…" />;
@@ -72,52 +74,13 @@ export function TeacherHomePage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Teaching</h1>
-          <p className="page-head__meta">Classrooms, assignments, class analytics and integrity summaries.</p>
-        </div>
-        <div className="row">
-          <Button onClick={() => navigate('/teacher/marking')}>Mark writing</Button>
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            New classroom
-          </Button>
-        </div>
-      </div>
-
-      {data?.classrooms.length === 0 ? (
-        <Card>
-          <EmptyState title="No classrooms yet">
-            Create a classroom, invite your students, then assign a published test.
-          </EmptyState>
-        </Card>
-      ) : (
-        <div className="grid grid--3">
-          {data?.classrooms.map((classroom) => (
-            <div className="card" key={classroom.id}>
-              <div className="row row--between">
-                <h3 style={{ margin: 0 }}>{classroom.name}</h3>
-                {classroom.status === 'ARCHIVED' ? <Badge tone="dim">Archived</Badge> : <Badge tone="success">Active</Badge>}
-              </div>
-              <p className="small muted">{classroom.description || 'No description.'}</p>
-              <div className="row gap-8">
-                <ClassroomChatButton classroomId={classroom.id} classroomName={classroom.name} />
-              </div>
-              <KeyValue
-                items={[
-                  ['Students', String(classroom.studentCount)],
-                  ['Assignments', String(classroom.assignmentCount)],
-                  ['Class code', <span className="mono">{classroom.joinCode}</span>],
-                  ['Your role', classroom.isOwner ? 'Owner' : 'Co-teacher'],
-                ]}
-              />
-              <Button block variant="secondary" style={{ marginTop: 12 }} onClick={() => navigate(`/teacher/classrooms/${classroom.id}`)}>
-                Open classroom
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
+      <header className="class-directory__header"><div><h1>Lớp học của giáo viên</h1><p>Quản lý lớp, bài tập và buổi học ở một nơi.</p></div><div className="row"><Button onClick={() => navigate('/teacher/marking')}>Chấm bài</Button><Button variant="primary" onClick={() => setCreating(true)}><Icon name="plus" size={15} /> Tạo lớp học</Button></div></header>
+      <div className="class-directory__toolbar"><label htmlFor="teacher-class-search"><Icon name="search" size={17} /><input id="teacher-class-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm lớp học" /></label><span>{data?.classrooms.length ?? 0} lớp</span></div>
+      {data?.classrooms.length === 0 ? <EmptyState title="Chưa có lớp học">Tạo lớp học và chia sẻ mã mời với học viên.</EmptyState> :
+        <div className="teacher-class-grid">{data?.classrooms.filter((classroom) => classroom.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())).map((classroom) => <article className="teacher-class-tile" key={classroom.id}>
+          <Link className="teacher-class-tile__open" to={`/teacher/classrooms/${classroom.id}`}><span className="teacher-class-tile__icon">{classroom.name.trim().slice(0, 1).toLocaleUpperCase()}</span><strong>{classroom.name}</strong><span>{classroom.studentCount} học viên · {classroom.assignmentCount} bài tập</span></Link>
+          <div className="teacher-class-tile__footer"><span>{classroom.status === 'ARCHIVED' ? 'Đã lưu trữ' : 'Đang hoạt động'}</span><ClassroomChatButton classroomId={classroom.id} classroomName={classroom.name} /></div>
+        </article>)}{data?.classrooms.length && !data.classrooms.some((classroom) => classroom.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) ? <p>Không tìm thấy lớp phù hợp.</p> : null}</div>}
 
       <Modal
         open={creating}
@@ -229,12 +192,13 @@ interface ClassroomDetailResponse {
 export function ClassroomPage() {
   const { classroomId = '' } = useParams();
   const toast = useToast();
-  const [tab, setTab] = useState<'overview' | 'students' | 'assignments' | 'invites'>('overview');
+  const [tab, setTab] = useState<'conversation' | 'files' | 'overview' | 'students' | 'assignments' | 'invites'>('conversation');
   const { data, loading, error, reload } = useAsync<ClassroomDetailResponse>(
     () => api.get(`/api/teacher/classrooms/${classroomId}`),
     [classroomId],
   );
 
+  const classList = useAsync<{ classrooms: ClassroomView[] }>(() => api.get('/api/teacher/classrooms'), []);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteResult, setInviteResult] = useState<{ shareUrl: string; expiresAt: string } | null>(null);
@@ -258,6 +222,7 @@ export function ClassroomPage() {
           </p>
         </div>
         <div className="row">
+          {data.classroom.status === 'ACTIVE' && <ClassroomCallButton classroomId={classroomId} label="Mở phòng học" />}
           <Button onClick={() => setInviteOpen(true)}>Invite students</Button>
           <Button variant="primary" onClick={() => setAssignOpen(true)}>
             New assignment
@@ -267,7 +232,9 @@ export function ClassroomPage() {
 
       <Tabs
         tabs={[
-          { id: 'overview', label: 'Overview' },
+          { id: 'conversation', label: 'Hội thoại' },
+          { id: 'files', label: 'Tệp' },
+          { id: 'overview', label: 'Tổng quan' },
           { id: 'students', label: `Students (${data.members.filter((member) => member.role === 'STUDENT').length})` },
           { id: 'assignments', label: `Assignments (${data.assignments.length})` },
           { id: 'invites', label: `Invitations (${data.invites.length})` },
@@ -275,6 +242,13 @@ export function ClassroomPage() {
         value={tab}
         onChange={setTab}
       />
+
+      {tab === 'conversation' || tab === 'files' ? <div className="teacher-conversations">
+        <aside className="teacher-conversations__sidebar"><div className="teacher-conversations__sidebar-head"><h2>Trò chuyện</h2><Link to="/teacher" aria-label="Danh sách lớp"><Icon name="users" size={18} /></Link></div><p>Lớp học</p>
+          {classList.error ? <span className="teacher-conversations__hint">Không tải được danh sách lớp.</span> : classList.data?.classrooms.map((item) => <Link key={item.id} to={`/teacher/classrooms/${item.id}`} className={`teacher-conversations__class${item.id === classroomId ? ' is-active' : ''}`}><span>{item.name.trim().slice(0, 1).toLocaleUpperCase()}</span><span><strong>{item.name}</strong><small>{item.studentCount} học viên</small></span></Link>)}
+        </aside>
+        <section className="teacher-conversations__main"><header className="teacher-conversations__head"><span className="teacher-conversations__avatar">{data.classroom.name.trim().slice(0, 1).toLocaleUpperCase()}</span><div><h2>{data.classroom.name}</h2><p>{tab === 'files' ? 'Tệp đã chia sẻ trong lớp' : 'Hội thoại chung của lớp'}</p></div></header><ClassroomChat key={classroomId} classroomId={classroomId} view={tab === 'files' ? 'files' : 'messages'} /></section>
+      </div> : null}
 
       {tab === 'overview' ? (
         <>

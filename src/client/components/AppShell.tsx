@@ -48,7 +48,6 @@ const LEARN_GROUP: NavGroup = {
     { to: '/vocabulary', label: 'Từ vựng', icon: 'layers' },
     { to: '/tutor', label: 'AI Gia sư', icon: 'sparkle' },
     { to: '/dictionary', label: 'Từ điển', icon: 'search' },
-    { to: '/blog', label: 'Blog', icon: 'book' },
   ],
 };
 
@@ -67,7 +66,6 @@ const GROW_GROUP: NavGroup = {
   label: 'Phát triển',
   items: [
     { to: '/speaking', label: 'Luyện Nói', icon: 'mic' },
-    { to: '/speaking/partner', label: 'Bạn tập AI', icon: 'sparkle' },
     { to: '/analytics', label: 'Tiến trình', icon: 'chart' },
   ],
 };
@@ -77,7 +75,6 @@ const REWARDS_GROUP: NavGroup = {
   items: [
     { to: '/learn/shop', label: 'Cửa hàng', icon: 'cart' },
     { to: '/learn/leaderboard', label: 'Bảng xếp hạng', icon: 'trophy' },
-    { to: '/study-groups', label: 'Nhóm học', icon: 'users' },
     { to: '/study-room', label: 'Phòng học', icon: 'clock' },
     { to: '/learn/friends', label: 'Bạn bè', icon: 'heart' },
     { to: '/profile', label: 'Hồ sơ', icon: 'user' },

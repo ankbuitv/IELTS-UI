@@ -15,7 +15,6 @@ const SIGNED_OUT: FooterLink[] = [
   { label: 'Ôn luyện', to: '/#skills' },
   { label: 'Cách thi', to: '/#how' },
   { label: 'Câu hỏi', to: '/#faq' },
-  { label: 'Blog', to: '/blog' },
   { label: 'Đăng nhập', to: '/login' },
 ];
 
@@ -24,7 +23,6 @@ const CANDIDATE: FooterLink[] = [
   { label: 'Speaking', to: '/speaking' },
   { label: 'Kết quả', to: '/history' },
   { label: 'Hồ sơ', to: '/profile' },
-  { label: 'Blog', to: '/blog' },
 ];
 
 const STAFF_EXTRA: FooterLink[] = [

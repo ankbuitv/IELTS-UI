@@ -78,6 +78,16 @@ Checklist khi vẫn lỗi:
 ## Kiến trúc
 
 WebRTC mesh (mỗi cặp peer một `RTCPeerConnection`), SDP/ICE đi qua D1
-(`mentor_signals`), presence poll 1,5 giây. Perfect negotiation + rollback xử lý
+(`mentor_signals`), presence poll 1 giây (các request được tuần tự hóa). Perfect negotiation + rollback xử lý
 glare; track đến muộn (camera bật sau, screen share) được thêm và renegotiate.
 Phần UI mới chỉ thay lớp trình bày, không đổi giao thức.
+
+### Optional TURN relay (coturn REST credentials)
+
+Deploy and maintain a TURN server separately (including firewall, TLS and relay ports). Configure `TURN_URLS` as comma-separated `turn:` / `turns:` URLs and set `TURN_SHARED_SECRET` as a Worker secret matching coturn's `static-auth-secret` with `use-auth-secret`. Authorized room users receive time-limited 24-hour HMAC credentials; the shared secret is never sent to clients. Without both settings the call remains STUN-only, and some networks will not connect. This configuration does not itself provision or verify a relay. Test from separate networks before relying on it.
+
+Attendance records explicit joins/leaves and the latest heartbeat, not proof of attention. A network loss or browser close can leave an open interval; reports label the last heartbeat rather than inventing an exact exit time. The host report is limited to the 200 most recent visits and 100 most recent reviews; CSV exports those visible visits. Feedback is non-anonymous and visible to the session host/admin.
+
+### Triển khai sửa lỗi cuộc gọi
+
+Chạy migration D1 `0043`–`0046` trước khi deploy phiên bản Worker/client mới; `0046` xây lại bảng tín hiệu theo sequence tăng dần và giữ dữ liệu cũ. Migration này cần được chạy qua Wrangler, runtime schema tự sửa không thể thêm primary key sequence vào bảng cũ. Sau deploy, mọi người cần tải lại trang để cùng dùng giao thức mới. Trên môi trường nhiều mạng khác nhau, cần TURN thật; STUN không đảm bảo kết nối xuyên NAT/firewall. Với mạng mất đột ngột, presence vẫn dựa vào heartbeat và timeout (không thể đảm bảo thông báo rời tức thời khi trình duyệt bị hệ điều hành dừng).

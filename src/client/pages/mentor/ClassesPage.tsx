@@ -6,14 +6,10 @@ import { describeError } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, EmptyState, Loading, Notice, useToast } from '../../components/ui';
 import { Icon } from '../../components/Icon';
-import { MentorAvatar, formatWhen } from '../../components/mentor/MentorBits';
+import { formatWhen } from '../../components/mentor/MentorBits';
 import { CreateClassModal } from '../../components/mentor/CreateClassModal';
 import type { MentorClass } from '@shared/mentor';
 
-/**
- * Live classes — small mentor-led clubs ("Rising Speakers Club" style): a
- * banner card per class, seats left, join/leave, and one room for the call.
- */
 export function ClassesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -22,200 +18,44 @@ export function ClassesPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-
+  const [query, setQuery] = useState('');
   const list = classes.data?.classes ?? [];
-  const mine = list.filter((item) => item.joined || item.mentorId === user?.id);
-  const discover = list.filter((item) => !mine.includes(item));
+  const filtered = list.filter((item) => `${item.title} ${item.mentorName} ${item.level}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const mine = filtered.filter((item) => item.joined || item.mentorId === user?.id);
+  const discover = filtered.filter((item) => !mine.includes(item));
 
   const join = async (item: MentorClass) => {
-    setBusy(item.id);
-    setError(null);
-    try {
-      await mentorApi.joinClass(item.id);
-      toast.push(`You joined “${item.title}”.`, 'success');
-      await classes.reload();
-    } catch (cause) {
-      setError(describeError(cause));
-    } finally {
-      setBusy(null);
-    }
+    setBusy(item.id); setError(null);
+    try { await mentorApi.joinClass(item.id); toast.push(`Đã tham gia “${item.title}”.`, 'success'); await classes.reload(); }
+    catch (cause) { setError(describeError(cause)); }
+    finally { setBusy(null); }
   };
-
   const leave = async (item: MentorClass) => {
-    if (!window.confirm(`Leave “${item.title}”?`)) return;
-    setBusy(item.id);
-    setError(null);
-    try {
-      await mentorApi.leaveClass(item.id);
-      await classes.reload();
-    } catch (cause) {
-      setError(describeError(cause));
-    } finally {
-      setBusy(null);
-    }
+    if (!window.confirm(`Rời lớp “${item.title}”?`)) return;
+    setBusy(item.id); setError(null);
+    try { await mentorApi.leaveClass(item.id); await classes.reload(); }
+    catch (cause) { setError(describeError(cause)); }
+    finally { setBusy(null); }
   };
-
   const renderCard = (item: MentorClass) => {
     const full = item.memberCount >= item.capacity && !item.joined;
-    return (
-      <article key={item.id} className="class-card">
-        <div className="class-card__banner">
-          <h3>
-            <Link to={`/classes/${item.id}`}>{item.title}</Link>
-          </h3>
-          <p>
-            {item.level} · led by {item.mentorName}
-          </p>
-        </div>
-        <p className="small muted" style={{ margin: 0 }}>
-          {item.description || 'A live practice class with a mentor.'}
-        </p>
-        <div className="class-card__meta">
-          <span className="mchip mchip--violet">
-            <Icon name="calendar" size={12} />
-            {formatWhen(item.startsAt)}
-          </span>
-          {item.recurrence ? (
-            <span className="mchip mchip--sun">
-              <Icon name="rotate" size={12} />
-              {item.recurrence}
-            </span>
-          ) : null}
-          <span className="mchip">{item.priceCoins > 0 ? `${item.priceCoins} coins` : 'Free'}</span>
-        </div>
-        <div className="class-card__seats">
-          <Icon name="users" size={15} />
-          <span>
-            {item.memberCount}/{item.capacity} seats
-          </span>
-          <span className="bar" aria-hidden="true">
-            <span className="bar__track" style={{ display: 'block', height: 6, borderRadius: 999, background: 'var(--ink-100)', overflow: 'hidden' }}>
-              <span
-                style={{
-                  display: 'block',
-                  height: '100%',
-                  width: `${Math.min(100, Math.round((item.memberCount / item.capacity) * 100))}%`,
-                  background: 'var(--brand-500)',
-                  borderRadius: 999,
-                }}
-              />
-            </span>
-          </span>
-        </div>
-        <div className="row" style={{ marginTop: 'auto' }}>
-          {item.mentorId === user?.id ? (
-            <>
-              <Button variant="primary" onClick={() => navigate(`/classes/${item.id}`)}>
-                <Icon name="settings" size={14} />
-                Manage
-              </Button>
-              <Button variant="secondary" onClick={() => navigate(`/classes/${item.id}`)}>
-                <Icon name="video" size={14} />
-                Open room
-              </Button>
-            </>
-          ) : item.joined ? (
-            <>
-              <Button variant="primary" onClick={() => navigate(`/classes/${item.id}`)}>
-                <Icon name="bubble" size={14} />
-                Open class
-              </Button>
-              <Button variant="ghost" loading={busy === item.id} onClick={() => leave(item)}>
-                Leave
-              </Button>
-            </>
-          ) : (
-            <Button variant="primary" loading={busy === item.id} disabled={full || item.status !== 'OPEN'} onClick={() => join(item)}>
-              <Icon name="plus" size={14} />
-              {full ? 'Class full' : 'Join class'}
-            </Button>
-          )}
-        </div>
-      </article>
-    );
+    const owned = item.mentorId === user?.id;
+    return <article className="class-tile" key={item.id}>
+      <div className="class-tile__header"><span className="class-tile__mark" aria-hidden="true">{item.title.trim().slice(0, 1).toLocaleUpperCase()}</span><span className="class-tile__status">{item.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}</span></div>
+      <h3><Link to={`/classes/${item.id}`}>{item.title}</Link></h3><p className="class-tile__mentor">{item.mentorName} · {item.level}</p>
+      <p className="class-tile__description">{item.description || 'Luyện tập trực tiếp cùng cố vấn và các thành viên.'}</p>
+      <div className="class-tile__meta"><span><Icon name="calendar" size={14} /> {formatWhen(item.startsAt)}</span><span><Icon name="users" size={14} /> {item.memberCount}/{item.capacity}</span></div>
+      <div className="class-tile__actions">{owned || item.joined ? <><Button variant="primary" onClick={() => navigate(`/classes/${item.id}`)}>Mở lớp <Icon name="chevronRight" size={14} /></Button>{!owned && <Button variant="ghost" loading={busy === item.id} onClick={() => void leave(item)}>Rời lớp</Button>}</> : <><Button variant="primary" loading={busy === item.id} disabled={full || item.status !== 'OPEN'} onClick={() => void join(item)}>{full ? 'Đã đủ chỗ' : 'Tham gia'}</Button><Link to={`/classes/${item.id}`} className="class-tile__link">Chi tiết</Link></>}</div>
+    </article>;
   };
-
-  return (
-    <div className="stack">
-      <section className="mentor-hero">
-        <div className="mentor-hero__text">
-          <span className="mentor-hero__eyebrow">
-            <Icon name="users" size={14} />
-            Live classes
-          </span>
-          <h1>Practice together, led by a mentor</h1>
-          <p>
-            Small live classes where everyone speaks. Join a club, meet weekly and build the confidence a solo app
-            cannot give you.
-          </p>
-          <div className="mentor-hero__actions">
-            <Button variant="sun" onClick={() => navigate('/mentors')}>
-              Find a mentor
-            </Button>
-            {user?.role === 'MENTOR' || user?.role === 'ADMIN' ? (
-              <Button variant="glass" onClick={() => setCreateOpen(true)}>
-                <Icon name="plus" size={14} />
-                Open a class
-              </Button>
-            ) : null}
-          </div>
-        </div>
-        <div className="mentor-hero__stats">
-          <div className="mentor-hero__stat">
-            <b>{list.length}</b>
-            <span>Classes</span>
-          </div>
-          <div className="mentor-hero__stat">
-            <b>{mine.length}</b>
-            <span>Joined</span>
-          </div>
-        </div>
-      </section>
-
-      {error ? <Notice tone="danger">{error}</Notice> : null}
-      {classes.loading && list.length === 0 ? <Loading label="Loading classes…" /> : null}
-
-      {mine.length > 0 ? (
-        <section className="stack">
-          <h2 style={{ fontSize: '1.15rem' }}>Your classes</h2>
-          <div className="mentor-grid">{mine.map(renderCard)}</div>
-        </section>
-      ) : null}
-
-      <section className="stack">
-        <h2 style={{ fontSize: '1.15rem' }}>Discover</h2>
-        {discover.length === 0 && !classes.loading ? (
-          <EmptyState title="No open classes right now">
-            Check back soon, or book a 1-on-1 session with a mentor instead.
-          </EmptyState>
-        ) : (
-          <div className="mentor-grid">{discover.map(renderCard)}</div>
-        )}
-      </section>
-
-      <section className="stack">
-        <h2 style={{ fontSize: '1.15rem' }}>Your mentors</h2>
-        <CreateClassModal
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
-          onCreated={() => {
-            toast.push('Class published — students can join now.', 'success');
-            void classes.reload();
-          }}
-        />
-        <div className="row">
-          <div className="session-card" style={{ flex: 1 }}>
-            <MentorAvatar name="Aieo Coaching" tone="sun" />
-            <div className="session-card__body">
-              <h3>Not sure where to start?</h3>
-              <p>Browse the mentor directory — filter by specialty, read reviews and book a free first plan.</p>
-            </div>
-            <Button variant="primary" onClick={() => navigate('/mentors')}>
-              Browse mentors
-            </Button>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
+  return <div className="class-directory">
+    <header className="class-directory__header"><div><h1>Lớp học trực tiếp</h1><p>Một nơi để gặp gỡ, trò chuyện và học cùng nhau.</p></div>{(user?.role === 'MENTOR' || user?.role === 'ADMIN') && <Button variant="primary" onClick={() => setCreateOpen(true)}><Icon name="plus" size={15} /> Tạo lớp học</Button>}</header>
+    <div className="class-directory__toolbar"><label htmlFor="class-search"><Icon name="search" size={17} /><input id="class-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm lớp, cố vấn hoặc trình độ" /></label><span>{filtered.length} lớp học</span></div>
+    {error && <Notice tone="danger">{error}</Notice>}
+    {classes.error && <Notice tone="danger">Không tải được lớp học: {describeError(classes.error)}</Notice>}
+    {classes.loading && !list.length && <Loading label="Đang tải lớp học…" />}
+    {mine.length > 0 && <section className="class-directory__section"><div className="class-directory__section-head"><h2>Lớp của bạn</h2><span>{mine.length}</span></div><div className="class-directory__grid">{mine.map(renderCard)}</div></section>}
+    <section className="class-directory__section"><div className="class-directory__section-head"><h2>Khám phá lớp học</h2><span>{discover.length}</span></div>{discover.length ? <div className="class-directory__grid">{discover.map(renderCard)}</div> : !classes.loading && <EmptyState title={query ? 'Không tìm thấy lớp phù hợp' : 'Chưa có lớp để khám phá'}>{query ? 'Thử tìm bằng tên khác.' : 'Quay lại sau hoặc tìm một cố vấn để đặt buổi học riêng.'}</EmptyState>}</section>
+    <CreateClassModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => { toast.push('Đã tạo lớp học.', 'success'); void classes.reload(); }} />
+  </div>;
 }

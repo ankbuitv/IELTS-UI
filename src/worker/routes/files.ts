@@ -59,6 +59,10 @@ router.get('/:assetId', async (c) => {
 
   if (!asset) throw ApiError.notFound('File not found.');
 
+  // Chat attachments are available only to current members of the classroom.
+  // Force a download even for HTML/SVG so user uploads cannot execute on our origin.
+  const chatFile = await c.env.DB.prepare('SELECT 1 AS ok FROM classroom_messages WHERE attachment_url = ? LIMIT 1')
+    .bind(`/api/files/${asset.id}`).first<{ ok: number }>();
   const allowed = await canAccessAsset(c, user, asset);
   if (!allowed) throw ApiError.forbidden('You are not authorized to access this file.');
 
@@ -74,6 +78,7 @@ router.get('/:assetId', async (c) => {
       'content-type': mime,
       'accept-ranges': 'bytes',
       'cache-control': 'private, max-age=60',
+      ...(chatFile ? { 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(asset.filename)}` } : {}),
     };
     const range = parseRange(c.req.header('range') ?? null, bytes.byteLength);
     if (range === 'unsatisfiable') {
@@ -113,6 +118,14 @@ async function canAccessAsset(
   asset: AssetRow,
 ): Promise<boolean> {
   if (user.role === 'ADMIN') return true;
+  const chatAsset = await c.env.DB.prepare('SELECT 1 AS ok FROM classroom_messages WHERE attachment_url = ? LIMIT 1')
+    .bind(`/api/files/${asset.id}`).first<{ ok: number }>();
+  const classroomFile = await c.env.DB.prepare(`SELECT 1 AS ok FROM classroom_messages msg
+    JOIN classrooms cl ON cl.id = msg.classroom_id
+    LEFT JOIN classroom_members cm ON cm.classroom_id = cl.id AND cm.user_id = ? AND cm.status = 'ACTIVE'
+    WHERE msg.attachment_url = ? AND (cl.teacher_id = ? OR cm.user_id IS NOT NULL) LIMIT 1`)
+    .bind(user.id, `/api/files/${asset.id}`, user.id).first<{ ok: number }>();
+  if (chatAsset) return Boolean(classroomFile);
   if (asset.uploaded_by === user.id && asset.visibility === 'PRIVATE') return true;
 
   if (!asset.test_version_id) return false;

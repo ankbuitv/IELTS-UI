@@ -40,7 +40,7 @@ export const mentorApi = {
     api.post<{ ok: true }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/review`, { rating, comment }),
 
   // Live room
-  room: (sessionId: string, since?: string, room = 'main', media?: { cam: boolean; mic: boolean }) => {
+  room: (sessionId: string, since?: string, room = 'main', media?: { cam: boolean; mic: boolean; screen?: boolean }) => {
     const params = new URLSearchParams();
     if (since) params.set('since', since);
     if (room && room !== 'main') params.set('room', room);
@@ -48,6 +48,7 @@ export const mentorApi = {
     if (media) {
       params.set('cam', media.cam ? '1' : '0');
       params.set('mic', media.mic ? '1' : '0');
+      params.set('screen', media.screen ? '1' : '0');
     }
     const query = params.toString();
     return api.get<MentorRoomState>(
@@ -62,7 +63,7 @@ export const mentorApi = {
       params.set('mic', media.mic ? '1' : '0');
     }
     const query = params.toString();
-    return api.post<{ ok: true }>(
+    return api.post<{ ok: true; signalCursor: string }>(
       `/api/mentor/sessions/${encodeURIComponent(sessionId)}/join${query ? `?${query}` : ''}`,
       {},
     );
@@ -162,6 +163,10 @@ export const mentorApi = {
   classes: () => api.get<{ classes: MentorClass[] }>('/api/mentor/classes/list'),
   classDetail: (classId: string) =>
     api.get<{ class: MentorClass }>(`/api/mentor/classes/${encodeURIComponent(classId)}`),
+  classDirectMessages: (classId: string, peerId: string) =>
+    api.get<{ messages: MentorClassMessage[] }>(`/api/mentor/classes/${encodeURIComponent(classId)}/direct/${encodeURIComponent(peerId)}`),
+  postClassDirectMessage: (classId: string, peerId: string, body: string) =>
+    api.post<{ message: MentorClassMessage }>(`/api/mentor/classes/${encodeURIComponent(classId)}/direct/${encodeURIComponent(peerId)}`, { body }),
   classMessages: (classId: string) =>
     api.get<{ messages: MentorClassMessage[] }>(`/api/mentor/classes/${encodeURIComponent(classId)}/messages`),
   postClassMessage: (classId: string, body: string) =>

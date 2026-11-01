@@ -327,6 +327,21 @@ export async function listSessionsFor(env: Env, viewer: AuthUser, scope: 'upcomi
  * session has the mentor on both sides and is shared by every member.
  */
 export async function assertSessionAccess(env: Env, session: MentorSession, viewer: AuthUser): Promise<void> {
+  // Teacher classroom rooms use live membership, not a copied roster.
+  if (session.kind === 'CLASS' && !session.classId) {
+    const room = await env.DB.prepare(`SELECT c.teacher_id, c.status FROM classroom_call_rooms r
+      JOIN classrooms c ON c.id = r.classroom_id WHERE r.session_id = ?`).bind(session.id)
+      .first<{ teacher_id: string; status: string }>();
+    if (room) {
+      if (room.status !== 'ACTIVE') throw ApiError.forbidden('This classroom is archived.');
+      if (viewer.role === 'ADMIN' || viewer.id === room.teacher_id) return;
+      const member = await env.DB.prepare(`SELECT 1 AS ok FROM classroom_call_rooms r
+        JOIN classroom_members m ON m.classroom_id = r.classroom_id
+        WHERE r.session_id = ? AND m.user_id = ? AND m.status = 'ACTIVE'`).bind(session.id, viewer.id).first<{ ok: number }>();
+      if (member) return;
+      throw ApiError.forbidden('Join this classroom to enter its call.');
+    }
+  }
   if (session.mentorId === viewer.id || session.studentId === viewer.id) return;
   if (viewer.role === 'ADMIN') return;
   if (session.kind === 'CLASS' && session.classId) {
@@ -459,6 +474,7 @@ export interface RoomParticipant {
   avatarUpdatedAt: string | null;
   camOn: boolean;
   micOn: boolean;
+  screenOn: boolean;
 }
 
 /** What a participant's devices are doing right now. Presence is the heartbeat,
@@ -466,6 +482,7 @@ export interface RoomParticipant {
 export interface RoomMediaState {
   cam: boolean;
   mic: boolean;
+  screen?: boolean;
 }
 
 export async function joinRoom(
@@ -474,7 +491,7 @@ export async function joinRoom(
   sessionId: string,
   roomKey = 'main',
   media: RoomMediaState = { cam: true, mic: true },
-): Promise<{ ok: true }> {
+): Promise<{ ok: true; signalCursor: string }> {
   if (await isRoomBanned(env, sessionId, viewer.id)) {
     throw ApiError.forbidden('You were removed from this room by the mentor.');
   }
@@ -484,6 +501,9 @@ export async function joinRoom(
   if (session.status === 'CANCELLED') throw ApiError.conflict('That session was cancelled.');
   if (session.status === 'COMPLETED') throw ApiError.conflict('That session is already over.');
 
+  // Snapshot before publishing presence so offers triggered by this join are not missed.
+  const cursor = await env.DB.prepare('SELECT COALESCE(MAX(seq), 0) AS seq FROM mentor_signals WHERE session_id = ? AND room_key = ?')
+    .bind(sessionId, roomKey).first<{ seq: number }>();
   const timestamp = nowIso();
   await env.DB.prepare(
     `INSERT INTO mentor_room_presence (session_id, user_id, joined_at, last_seen_at, hand_raised, room_key, cam_on, mic_on)
@@ -493,10 +513,19 @@ export async function joinRoom(
        hand_raised = 0,
        room_key = excluded.room_key,
        cam_on = excluded.cam_on,
-       mic_on = excluded.mic_on`,
+       mic_on = excluded.mic_on,
+       screen_on = 0`,
   )
     .bind(sessionId, viewer.id, timestamp, timestamp, roomKey, media.cam ? 1 : 0, media.mic ? 1 : 0)
     .run();
+
+  // A stale tab cannot leave an attendance interval open forever. Last seen is
+  // retained as an estimate, not represented as a precise disconnect time.
+  await env.DB.prepare(`UPDATE call_attendance SET left_at = last_seen_at
+    WHERE session_id = ? AND user_id = ? AND left_at IS NULL AND last_seen_at < ?`)
+    .bind(sessionId, viewer.id, new Date(Date.now() - 30_000).toISOString()).run();
+  await env.DB.prepare(`INSERT OR IGNORE INTO call_attendance (id, session_id, user_id, joined_at, last_seen_at)
+    VALUES (?, ?, ?, ?, ?)`).bind(newId('att'), sessionId, viewer.id, timestamp, timestamp).run();
 
   // The mentor opening the room puts the session live.
   if (viewer.id === session.mentorId && session.status === 'SCHEDULED') {
@@ -506,10 +535,13 @@ export async function joinRoom(
       .bind(timestamp, timestamp, sessionId)
       .run();
   }
-  return { ok: true };
+  return { ok: true, signalCursor: String(cursor?.seq ?? 0) };
 }
 
 export async function leaveRoom(env: Env, viewer: AuthUser, sessionId: string): Promise<{ ok: true }> {
+  const now = nowIso();
+  await env.DB.prepare('UPDATE call_attendance SET left_at = ?, last_seen_at = ? WHERE session_id = ? AND user_id = ? AND left_at IS NULL')
+    .bind(now, now, sessionId, viewer.id).run();
   await env.DB.prepare('DELETE FROM mentor_room_presence WHERE session_id = ? AND user_id = ?')
     .bind(sessionId, viewer.id)
     .run();
@@ -538,6 +570,7 @@ export async function roomState(
   participants: RoomParticipant[];
   messages: MentorChatMessage[];
   signals: MentorSignal[];
+  signalCursor: string;
   serverTime: string;
 }> {
   const session = await getSession(env, sessionId);
@@ -547,21 +580,13 @@ export async function roomState(
   const now = new Date();
   const timestamp = now.toISOString();
 
-  // The poll itself is the heartbeat: bump this viewer so they stay listed, then
-  // drop anyone silent for 30 s. (Presence used to be written only on join, so
-  // everyone timed out while still talking — the counter said "0 in room" next
-  // to live tiles.)
-  await env.DB.prepare(
-    `INSERT INTO mentor_room_presence (session_id, user_id, joined_at, last_seen_at, hand_raised, room_key, cam_on, mic_on)
-     VALUES (?, ?, ?, ?, 0, ?, ?, ?)
-     ON CONFLICT (session_id, user_id) DO UPDATE SET
-       last_seen_at = excluded.last_seen_at,
-       room_key = excluded.room_key,
-       cam_on = excluded.cam_on,
-       mic_on = excluded.mic_on`,
-  )
-    .bind(sessionId, viewer.id, timestamp, timestamp, roomKey, media.cam ? 1 : 0, media.mic ? 1 : 0)
-    .run();
+  // A read before joining, or an in-flight poll after leave, must not create presence.
+  await env.DB.prepare(`UPDATE mentor_room_presence SET last_seen_at = ?, cam_on = ?, mic_on = ?, screen_on = ?
+    WHERE session_id = ? AND user_id = ? AND room_key = ?`)
+    .bind(timestamp, media.cam ? 1 : 0, media.mic ? 1 : 0, media.screen ? 1 : 0, sessionId, viewer.id, roomKey).run();
+  await env.DB.prepare(`UPDATE call_attendance SET last_seen_at = ? WHERE session_id = ? AND user_id = ? AND left_at IS NULL
+    AND EXISTS (SELECT 1 FROM mentor_room_presence WHERE session_id = ? AND user_id = ? AND room_key = ?)`)
+    .bind(timestamp, sessionId, viewer.id, sessionId, viewer.id, roomKey).run();
   await env.DB.prepare(
     'DELETE FROM mentor_room_presence WHERE session_id = ? AND last_seen_at < ?',
   )
@@ -569,7 +594,7 @@ export async function roomState(
     .run();
 
   const presence = await env.DB.prepare(
-    `SELECT pr.user_id, pr.joined_at, pr.hand_raised, pr.cam_on, pr.mic_on,
+    `SELECT pr.user_id, pr.joined_at, pr.hand_raised, pr.cam_on, pr.mic_on, pr.screen_on,
             COALESCE(NULLIF(p.display_name, ''), u.username, u.email) AS display_name,
             p.avatar_updated_at,
             u.role
@@ -586,6 +611,7 @@ export async function roomState(
       hand_raised: number;
       cam_on: number;
       mic_on: number;
+      screen_on: number;
       display_name: string;
       role: string;
       avatar_updated_at: string | null;
@@ -614,29 +640,27 @@ export async function roomState(
       avatar_updated_at: string | null;
     }>();
 
-  const signalQuery = sinceSignalId
-    ? env.DB.prepare(
-        `SELECT id, session_id, sender_id, target_id, room_key, kind, payload, created_at
-           FROM mentor_signals
-          WHERE session_id = ? AND room_key = ? AND sender_id <> ? AND id > ?
-          ORDER BY created_at`,
-      ).bind(sessionId, roomKey, viewer.id, sinceSignalId)
-    : env.DB.prepare(
-        `SELECT id, session_id, sender_id, target_id, room_key, kind, payload, created_at
-           FROM mentor_signals
-          WHERE session_id = ? AND room_key = ? AND sender_id <> ?
-          ORDER BY created_at`,
-      ).bind(sessionId, roomKey, viewer.id);
-  const signals = await signalQuery.all<{
-    id: string;
-    session_id: string;
-    sender_id: string;
-    target_id: string | null;
-    room_key: string;
-    kind: string;
-    payload: string;
-    created_at: string;
+  // Old clients can still send a signal ID; new clients use the numeric sequence.
+  let after: number;
+  if (sinceSignalId && /^\d+$/.test(sinceSignalId)) after = Number(sinceSignalId);
+  else if (sinceSignalId) {
+    const previous = await env.DB.prepare('SELECT seq FROM mentor_signals WHERE id = ? AND session_id = ? AND room_key = ?')
+      .bind(sinceSignalId, sessionId, roomKey).first<{ seq: number }>();
+    after = previous?.seq ?? 0;
+  } else {
+    const latest = await env.DB.prepare('SELECT COALESCE(MAX(seq), 0) AS seq FROM mentor_signals WHERE session_id = ? AND room_key = ?')
+      .bind(sessionId, roomKey).first<{ seq: number }>();
+    after = latest?.seq ?? 0;
+  }
+  const signals = await env.DB.prepare(
+    `SELECT seq, id, session_id, sender_id, target_id, room_key, kind, payload, created_at
+       FROM mentor_signals WHERE session_id = ? AND room_key = ? AND sender_id <> ?
+       AND (target_id IS NULL OR target_id = ?) AND seq > ? ORDER BY seq ASC LIMIT 500`,
+  ).bind(sessionId, roomKey, viewer.id, viewer.id, after).all<{
+    seq: number; id: string; session_id: string; sender_id: string; target_id: string | null;
+    room_key: string; kind: string; payload: string; created_at: string;
   }>();
+  const signalCursor = String(signals.results.at(-1)?.seq ?? after);
 
   return {
     session,
@@ -650,6 +674,7 @@ export async function roomState(
       avatarUpdatedAt: row.avatar_updated_at,
       camOn: row.cam_on !== 0,
       micOn: row.mic_on !== 0,
+      screenOn: row.screen_on !== 0,
     })),
     messages: messages.results
       .map((row) => ({
@@ -673,6 +698,7 @@ export async function roomState(
       payload: row.payload,
       createdAt: row.created_at,
     })),
+    signalCursor,
     serverTime: nowIso(),
   };
 }
@@ -734,6 +760,10 @@ export async function postSignal(
   await assertSessionAccess(env, session, viewer);
   const roomKey = signal.roomKey ?? 'main';
   await assertRoomKey(env, session, viewer, roomKey);
+  if (['MUTE_MIC', 'UNMUTE_MIC', 'KICK'].includes(signal.kind) && viewer.id !== session.mentorId && viewer.role !== 'ADMIN') {
+    throw ApiError.forbidden('Only the host can manage participants.');
+  }
+  if (['OFFER', 'ANSWER', 'CANDIDATE'].includes(signal.kind) && !signal.targetId) throw ApiError.validation('A signal target is required.');
   if (signal.payload.length > 200_000) throw ApiError.validation('Signal payload is too large.');
   const id = newId('sig');
   await env.DB.prepare(
@@ -1005,6 +1035,42 @@ export async function postClassMessage(env: Env, viewer: AuthUser, classId: stri
   };
 }
 
+/** Direct chat is limited to two current class participants, including the mentor.
+ * Admin access to the class does not grant access to private conversations. */
+async function assertDirectClassPair(env: Env, classId: string, viewerId: string, peerId: string): Promise<void> {
+  if (viewerId === peerId) throw ApiError.validation('Choose another class member.');
+  const result = await env.DB.prepare(
+    `SELECT user_id FROM mentor_class_members WHERE class_id = ? AND user_id IN (?, ?)
+     UNION SELECT mentor_id AS user_id FROM mentor_classes WHERE id = ? AND mentor_id IN (?, ?)`,
+  ).bind(classId, viewerId, peerId, classId, viewerId, peerId).all<{ user_id: string }>();
+  const ids = new Set(result.results.map((row) => row.user_id));
+  if (!ids.has(viewerId) || !ids.has(peerId)) throw ApiError.forbidden('Both people must belong to this class.');
+}
+
+export async function classDirectMessages(env: Env, viewer: AuthUser, classId: string, peerId: string): Promise<MentorClassMessage[]> {
+  await assertDirectClassPair(env, classId, viewer.id, peerId);
+  const rows = await env.DB.prepare(
+    `SELECT m.id, m.sender_id, m.body, m.created_at,
+      COALESCE(NULLIF(p.display_name, ''), u.username, 'Someone') AS display_name, p.avatar_updated_at
+     FROM class_direct_messages m JOIN users u ON u.id = m.sender_id
+     LEFT JOIN user_profiles p ON p.user_id = m.sender_id
+     WHERE m.class_id = ? AND ((m.sender_id = ? AND m.recipient_id = ?) OR (m.sender_id = ? AND m.recipient_id = ?))
+     ORDER BY m.created_at DESC, m.id DESC LIMIT 100`,
+  ).bind(classId, viewer.id, peerId, peerId, viewer.id).all<{ id: string; sender_id: string; body: string; created_at: string; display_name: string; avatar_updated_at: string | null }>();
+  return rows.results.reverse().map((row) => ({ id: row.id, classId, senderId: row.sender_id, senderName: row.display_name, senderAvatarUpdatedAt: row.avatar_updated_at, body: row.body, createdAt: row.created_at }));
+}
+
+export async function postClassDirectMessage(env: Env, viewer: AuthUser, classId: string, peerId: string, body: string): Promise<MentorClassMessage> {
+  await assertDirectClassPair(env, classId, viewer.id, peerId);
+  const text = body.trim();
+  if (!text) throw ApiError.validation('Write something first.');
+  const id = newId('dm');
+  const timestamp = nowIso();
+  await env.DB.prepare('INSERT INTO class_direct_messages (id, class_id, sender_id, recipient_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(id, classId, viewer.id, peerId, text, timestamp).run();
+  return { id, classId, senderId: viewer.id, senderName: viewer.displayName || viewer.username || 'Someone', senderAvatarUpdatedAt: null, body: text, createdAt: timestamp };
+}
+
 /** The shared call room of a class (created on demand for older classes). */
 export async function classRoomSessionId(env: Env, viewer: AuthUser, classId: string): Promise<{ sessionId: string }> {
   const row = await classAccess(env, classId, viewer);
@@ -1106,6 +1172,8 @@ export async function deleteClass(
     // Children first and explicitly: the batch must not depend on the
     // connection's foreign-key pragma to leave no orphans behind.
     for (const sql of [
+      `DELETE FROM call_feedback WHERE session_id IN (${placeholders})`,
+      `DELETE FROM call_attendance WHERE session_id IN (${placeholders})`,
       `DELETE FROM mentor_messages WHERE session_id IN (${placeholders})`,
       `DELETE FROM mentor_room_presence WHERE session_id IN (${placeholders})`,
       `DELETE FROM mentor_room_bans WHERE session_id IN (${placeholders})`,
@@ -1125,6 +1193,7 @@ export async function deleteClass(
   statements.push(
     env.DB.prepare('DELETE FROM mentor_class_members WHERE class_id = ?').bind(classId),
     env.DB.prepare('DELETE FROM mentor_class_messages WHERE class_id = ?').bind(classId),
+    env.DB.prepare('DELETE FROM class_direct_messages WHERE class_id = ?').bind(classId),
     env.DB.prepare('DELETE FROM mentor_classes WHERE id = ?').bind(classId),
   );
   await env.DB.batch(statements);

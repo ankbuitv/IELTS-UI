@@ -1,313 +1,125 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { mentorApi } from '../../lib/mentor-api';
 import { useAuth } from '../../context/AuthContext';
 import { formatDateTime } from '../../lib/format';
-import { Badge, Button, Card, EmptyState, Loading, TextInput, useToast } from '../../components/ui';
+import { Button, EmptyState, Loading, Notice, useToast } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { MentorAvatar } from '../../components/mentor/MentorBits';
 import type { MentorClassMessage } from '@shared/mentor';
 
-function formatCoins(coins: number): string {
-  return coins <= 0 ? 'Free' : `${coins.toLocaleString('en-US')} coins`;
-}
-
-/**
- * A single classroom: roster, schedule, the group chat and one shared call
- * room the whole class can jump into.
- */
+/** A class workspace: the shared conversation, private member chats and its live room. */
 export function ClassDetailPage() {
   const { classId = '' } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
   const { user } = useAuth();
-  const [refreshKey, setRefreshKey] = useState(0);
-  const { data, error, loading } = useAsync(
-    useCallback(() => mentorApi.classDetail(classId), [classId, refreshKey]),
-  );
+  const { data, error, loading, reload } = useAsync(() => mentorApi.classDetail(classId), [classId]);
   const klass = data?.class ?? null;
-
-  // ---------------------------------------------------------------- roster
   const members = klass?.members ?? [];
-  const isMentor = klass?.mentorId === user?.id;
-  const isMember = isMentor || members.some((member) => member.userId === user?.id);
-
-  // ---------------------------------------------------------------- chat
+  const participant = klass?.mentorId === user?.id || members.some((member) => member.userId === user?.id);
+  const canSeeClassChat = participant || user?.role === 'ADMIN';
+  const canDelete = klass?.mentorId === user?.id || user?.role === 'ADMIN';
+  const [navOpen, setNavOpen] = useState(false);
+  const feedRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
+  const requestVersion = useRef(0);
+  const [peer, setPeer] = useState<{ id: string; name: string } | null>(null);
   const [messages, setMessages] = useState<MentorClassMessage[]>([]);
-  const [chatBody, setChatBody] = useState('');
-  const [chatBusy, setChatBusy] = useState(false);
-
-  const loadMessages = useCallback(async () => {
-    if (!classId) return;
-    try {
-      const result = await mentorApi.classMessages(classId);
-      setMessages(result.messages);
-    } catch {
-      // Polling failure is non-fatal; the next tick retries.
-    }
-  }, [classId]);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [callBusy, setCallBusy] = useState(false);
+  const [joinBusy, setJoinBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   useEffect(() => {
-    if (!isMember) return undefined;
-    void loadMessages();
-    const timer = setInterval(() => void loadMessages(), 4500);
-    return () => clearInterval(timer);
-  }, [isMember, loadMessages]);
+    if (!canSeeClassChat) return undefined;
+    let active = true;
+    const load = async () => {
+      const version = ++requestVersion.current;
+      try {
+        const result = peer ? await mentorApi.classDirectMessages(classId, peer.id) : await mentorApi.classMessages(classId);
+        if (active && version === requestVersion.current) { setMessages(result.messages); setChatError(null); }
+      } catch (cause) {
+        if (active && version === requestVersion.current) setChatError(describeError(cause));
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 4500);
+    return () => { active = false; clearInterval(timer); };
+  }, [classId, canSeeClassChat, peer]);
 
-  const send = async () => {
-    if (!chatBody.trim()) return;
-    setChatBusy(true);
+  useLayoutEffect(() => {
+    if (feedRef.current && stickToBottom.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
+  }, [messages]);
+
+  async function send(event: React.FormEvent) {
+    event.preventDefault();
+    const text = draft.trim();
+    if (!text || sending) return;
+    setSending(true);
     try {
-      const result = await mentorApi.postClassMessage(classId, chatBody.trim());
-      setMessages((current) => [...current, result.message]);
-      setChatBody('');
-    } catch (sendError) {
-      toast.push(describeError(sendError), 'error');
-    } finally {
-      setChatBusy(false);
-    }
-  };
-
-  // ---------------------------------------------------------------- call
-  const [callBusy, setCallBusy] = useState(false);
-  const joinCall = async () => {
-    setCallBusy(true);
-    try {
-      const result = await mentorApi.classRoom(classId);
-      navigate(`/sessions/${result.sessionId}/room`);
-    } catch (callError) {
-      toast.push(describeError(callError), 'error');
-    } finally {
-      setCallBusy(false);
-    }
-  };
-
-  // ---------------------------------------------------------------- delete
-  const [deleteArmed, setDeleteArmed] = useState(false);
-  const [deleteBusy, setDeleteBusy] = useState(false);
-  const canDelete = isMentor || user?.role === 'ADMIN';
-  const removeClass = async () => {
-    setDeleteBusy(true);
-    try {
-      await mentorApi.deleteClass(classId);
-      toast.push('Class deleted.', 'success');
-      navigate('/classes');
-    } catch (deleteError) {
-      toast.push(describeError(deleteError), 'error');
-      setDeleteBusy(false);
-      setDeleteArmed(false);
-    }
-  };
-
-  if (loading && !klass) return <Loading label="Loading the classroom…" />;
-  if (error || !klass) {
-    return (
-      <EmptyState icon="presentation" title="Class not found">
-        <p className="small muted">{error ? describeError(error) : 'This class may have been removed.'}</p>
-        <Link to="/classes" className="btn btn--secondary">
-          <Icon name="chevronRight" size={14} />
-          Back to classes
-        </Link>
-      </EmptyState>
-    );
+      const result = peer ? await mentorApi.postClassDirectMessage(classId, peer.id, text) : await mentorApi.postClassMessage(classId, text);
+      requestVersion.current += 1;
+      stickToBottom.current = true;
+      setMessages((current) => current.some((item) => item.id === result.message.id) ? current : [...current, result.message]);
+      setDraft('');
+    } catch (cause) { toast.push(describeError(cause), 'error'); }
+    finally { setSending(false); }
   }
+  async function joinCall() {
+    setCallBusy(true);
+    try { const result = await mentorApi.classRoom(classId); navigate(`/sessions/${result.sessionId}/room`); }
+    catch (cause) { toast.push(describeError(cause), 'error'); setCallBusy(false); }
+  }
+  async function joinClass() {
+    setJoinBusy(true);
+    try { await mentorApi.joinClass(classId); await reload(); toast.push('Đã tham gia lớp học.', 'success'); }
+    catch (cause) { toast.push(describeError(cause), 'error'); }
+    finally { setJoinBusy(false); }
+  }
+  async function deleteClass() {
+    if (!window.confirm(`Xóa lớp “${klass?.title}”? Hành động này không thể hoàn tác.`)) return;
+    setDeleteBusy(true);
+    try { await mentorApi.deleteClass(classId); navigate('/classes'); }
+    catch (cause) { toast.push(describeError(cause), 'error'); setDeleteBusy(false); }
+  }
+  if (loading && !klass) return <Loading label="Đang tải lớp học…" />;
+  if (error || !klass) return <EmptyState icon="presentation" title="Không tìm thấy lớp học"><p>{error ? describeError(error) : 'Lớp có thể đã bị xóa.'}</p><Link to="/classes">Quay lại danh sách lớp</Link></EmptyState>;
+
+  const people = [
+    { id: klass.mentorId, name: klass.mentorName, avatar: klass.mentorAvatarUpdatedAt, role: 'Cố vấn' },
+    ...members.filter((member) => member.userId !== klass.mentorId).map((member) => ({ id: member.userId, name: member.displayName, avatar: member.avatarUpdatedAt, role: 'Học viên' })),
+  ];
 
   return (
-    <div className="stack">
-      <Link to="/classes" className="btn btn--ghost" style={{ alignSelf: 'flex-start' }}>
-        <Icon name="chevronRight" size={14} />
-        All classes
-      </Link>
-
-      <header className="mentor-hero mentor-hero--class">
-        <div className="mentor-hero__copy">
-          <div className="row">
-            <span className="mchip mchip--coral">
-              <Icon name="users" size={12} />
-              CLASSROOM
-            </span>
-            <span className="mchip">
-              <Icon name="star" size={12} />
-              {klass.level}
-            </span>
-            {isMember ? <Badge tone="success">Member</Badge> : null}
-          </div>
-          <h1>{klass.title}</h1>
-          <p className="lead">{klass.description}</p>
-          <div className="row">
-            <MentorAvatar
-              name={klass.mentorName}
-              userId={klass.mentorId}
-              avatarUpdatedAt={klass.mentorAvatarUpdatedAt}
-              online
-            />
-            <div>
-              <div className="mentor-hero__mentor-name">{klass.mentorName}</div>
-              <div className="tiny muted">{klass.memberCount} {klass.memberCount === 1 ? 'member' : 'members'}</div>
-            </div>
-          </div>
-          <div className="row">
-            <Button
-              variant={klass.status !== 'OPEN' ? 'ghost' : 'primary'}
-              disabled={klass.status !== 'OPEN' || callBusy}
-              loading={callBusy}
-              onClick={() => void joinCall()}
-              title={klass.status !== 'OPEN' ? 'This class has ended.' : 'Open the class call room'}
-            >
-              <Icon name="video" size={15} />
-              Join class call
-            </Button>
-            {!isMember ? (
-              <Button
-                variant="sun"
-                onClick={async () => {
-                  try {
-                    await mentorApi.joinClass(klass.id);
-                    toast.push('Welcome to the class!', 'success');
-                    setRefreshKey((key) => key + 1);
-                  } catch (joinError) {
-                    toast.push(describeError(joinError), 'error');
-                  }
-                }}
-              >
-                <Icon name="calendar" size={15} />
-                Join this class
-              </Button>
-            ) : null}
-            <span className="tiny muted">
-              Calls open in the shared class room — say hello in the chat first if you like.
-            </span>
-          </div>
-          {canDelete ? (
-            <div className="row" style={{ marginTop: 6 }}>
-              {deleteArmed ? (
-                <>
-                  <Button variant="danger" loading={deleteBusy} onClick={() => void removeClass()}>
-                    <Icon name="trash" size={14} />
-                    Yes — delete “{klass.title}” forever
-                  </Button>
-                  <Button disabled={deleteBusy} onClick={() => setDeleteArmed(false)}>
-                    Keep class
-                  </Button>
-                </>
-              ) : (
-                <Button variant="ghost" onClick={() => setDeleteArmed(true)}>
-                  <Icon name="trash" size={14} />
-                  Delete class
-                </Button>
-              )}
-            </div>
-          ) : null}
-        </div>
-        <aside className="mentor-hero__facts">
-          <div>
-            <span className="fact-label">Schedule</span>
-            <span className="fact-value">{formatDateTime(klass.startsAt)} → {formatDateTime(klass.endsAt)}</span>
-          </div>
-          <div>
-            <span className="fact-label">Seats</span>
-            <span className="fact-value">
-              {klass.memberCount}/{klass.capacity}
-            </span>
-          </div>
-          <div>
-            <span className="fact-label">Price</span>
-            <span className="fact-value">{formatCoins(klass.priceCoins)}</span>
-          </div>
-          <div>
-            <span className="fact-label">Status</span>
-            <span className="fact-value">{klass.status !== 'OPEN' ? 'Closed' : 'Open'}</span>
-          </div>
+    <div className="class-workspace">
+      <div className="class-workspace__top">
+        <div><Link to="/classes" className="class-workspace__back">← Tất cả lớp học</Link><h1>{klass.title}</h1><p>{klass.level} · {klass.mentorName}</p></div>
+        {canSeeClassChat ? <Button variant="primary" loading={callBusy} disabled={klass.status !== 'OPEN'} onClick={() => void joinCall()}><Icon name="video" size={16} /> Vào phòng học</Button> : <Button variant="primary" loading={joinBusy} disabled={klass.status !== 'OPEN'} onClick={() => void joinClass()}><Icon name="plus" size={16} /> Tham gia lớp</Button>}
+      </div>
+      <div className="class-workspace__layout">
+        <aside className={`class-workspace__nav${navOpen ? ' is-open' : ''}`} aria-label="Hội thoại lớp học">
+          <div className="class-workspace__nav-title"><h2>Hội thoại</h2><button type="button" className="class-workspace__nav-toggle" aria-expanded={navOpen} onClick={() => setNavOpen((value) => !value)}>{navOpen ? 'Đóng' : 'Chọn hội thoại'}</button></div>
+          <button type="button" disabled={sending} className={`class-workspace__channel${!peer ? ' is-active' : ''}`} onClick={() => { setPeer(null); setNavOpen(false); stickToBottom.current = true; setDraft(''); setMessages([]); setChatError(null); }}><span className="class-workspace__channel-icon"><Icon name="users" size={17} /></span><span><strong>Thảo luận chung</strong><small>Cả lớp</small></span></button>
+          <div className="class-workspace__nav-heading">Thành viên <span>{people.length}</span></div>
+          {people.map((person) => <button key={person.id} type="button" className={`class-workspace__person${peer?.id === person.id ? ' is-active' : ''}`} disabled={sending || !participant || person.id === user?.id} onClick={() => { setPeer({ id: person.id, name: person.name }); setNavOpen(false); stickToBottom.current = true; setDraft(''); setMessages([]); setChatError(null); }} title={person.id === user?.id ? 'Đây là bạn' : !participant ? 'Tham gia lớp để nhắn tin riêng' : `Nhắn tin cho ${person.name}`}><MentorAvatar name={person.name} userId={person.id} avatarUpdatedAt={person.avatar} size="md" /><span><strong>{person.name}{person.id === user?.id ? ' (bạn)' : ''}</strong><small>{person.role}</small></span></button>)}
+          {!participant && <p className="class-workspace__hint">Tham gia lớp để nhắn tin riêng với các thành viên.</p>}
         </aside>
-      </header>
-
-      <div className="grid grid--2">
-        <Card title="Group chat" hint="Everyone in the class sees this feed.">
-          <div className="class-chat">
-            {messages.length === 0 ? (
-              <p className="tiny muted">No messages yet — break the ice.</p>
-            ) : (
-              messages.map((message) => (
-                <div key={message.id} className={message.senderId === user?.id ? 'class-chat__row class-chat__row--self' : 'class-chat__row'}>
-                  {message.senderId !== user?.id ? (
-                    <MentorAvatar
-                      name={message.senderName}
-                      userId={message.senderId}
-                      avatarUpdatedAt={message.senderAvatarUpdatedAt}
-                      size="md"
-                    />
-                  ) : null}
-                  <div>
-                    {message.senderId !== user?.id ? (
-                      <div className="class-chat__author">
-                        {message.senderName} <span className="tiny muted">{formatDateTime(message.createdAt)}</span>
-                      </div>
-                    ) : (
-                      <div className="class-chat__author class-chat__author--self">
-                        You <span className="tiny muted">{formatDateTime(message.createdAt)}</span>
-                      </div>
-                    )}
-                    <div className="class-chat__bubble">{message.body}</div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="row" style={{ marginTop: 12 }}>
-            <TextInput
-              aria-label="Message the class"
-              value={chatBody}
-              onChange={(event) => setChatBody(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                  void send();
-                }
-              }}
-              placeholder="Type a message to the class…"
-            />
-            <Button variant="primary" loading={chatBusy} onClick={() => void send()} disabled={!chatBody.trim()}>
-              <Icon name="send" size={15} />
-              Send
-            </Button>
-          </div>
-        </Card>
-
-        <Card title="Roster" hint={`${members.length} of ${klass.capacity} seats taken`}>
-          <div className="chat-members">
-            <div className="chat-member chat-member--lead">
-              <MentorAvatar
-                name={klass.mentorName}
-                userId={klass.mentorId}
-                avatarUpdatedAt={klass.mentorAvatarUpdatedAt}
-                size="md"
-              />
-              <div>
-                <strong>{klass.mentorName}</strong>
-                <div className="tiny muted">Mentor · session lead</div>
-              </div>
-              <span className="member-since">Since {formatDateTime(klass.createdAt)}</span>
+        <section className="class-workspace__conversation">
+          <header className="class-workspace__conversation-head"><div><h2>{peer ? peer.name : 'Thảo luận chung'}</h2><p>{peer ? 'Tin nhắn riêng trong lớp · chỉ hai người có thể xem' : 'Trao đổi với mọi người trong lớp'}</p></div><Icon name={peer ? 'bubble' : 'users'} size={20} /></header>
+          {!canSeeClassChat ? <div className="class-workspace__empty"><Icon name="bubble" size={30} /><h3>Tham gia cuộc trò chuyện</h3><p>Tham gia lớp để nhắn tin và vào phòng học trực tiếp.</p></div> : <>
+            <div ref={feedRef} className="class-workspace__feed" aria-live="polite" onScroll={(event) => { const el = event.currentTarget; stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
+              {chatError ? <Notice tone="danger">Không tải được tin nhắn: {chatError}</Notice> : null}
+              {!chatError && messages.length === 0 ? <div className="class-workspace__empty"><Icon name="bubble" size={28} /><h3>Chưa có tin nhắn</h3><p>{peer ? `Gửi lời chào đến ${peer.name} để bắt đầu.` : 'Bắt đầu cuộc trò chuyện với lớp của bạn.'}</p></div> : messages.map((message) => <div key={message.id} className={`workspace-message${message.senderId === user?.id ? ' workspace-message--self' : ''}`}><MentorAvatar name={message.senderName} userId={message.senderId} avatarUpdatedAt={message.senderAvatarUpdatedAt} size="md" /><div><div className="workspace-message__meta"><strong>{message.senderId === user?.id ? 'Bạn' : message.senderName}</strong><time>{formatDateTime(message.createdAt)}</time></div><div className="workspace-message__body">{message.body}</div></div></div>)}
             </div>
-            {members.map((member) => (
-              <div className="chat-member" key={member.userId}>
-                <MentorAvatar
-                  name={member.displayName}
-                  userId={member.userId}
-                  avatarUpdatedAt={member.avatarUpdatedAt}
-                  size="md"
-                />
-                <div>
-                  <strong>{member.displayName}</strong>
-                  <div className="tiny muted">Member</div>
-                </div>
-                <span className="member-since">Joined {formatDateTime(member.joinedAt)}</span>
-              </div>
-            ))}
-            {members.length === 0 ? <p className="tiny muted">No members yet — share the class to fill the seats.</p> : null}
-          </div>
-        </Card>
+            <form className="class-workspace__composer" onSubmit={(event) => void send(event)}><label htmlFor="class-message">{peer ? `Tin nhắn đến ${peer.name}` : 'Tin nhắn đến lớp'}</label><div><input id="class-message" maxLength={4000} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Viết tin nhắn…" /><Button type="submit" variant="primary" loading={sending} disabled={!draft.trim()}><Icon name="send" size={15} /> Gửi</Button></div></form>
+          </>}
+        </section>
+        <aside className="class-workspace__details"><h2>Thông tin lớp</h2><p className="class-workspace__description">{klass.description || 'Lớp luyện tập trực tiếp cùng cố vấn.'}</p><dl><div><dt>Lịch học</dt><dd>{formatDateTime(klass.startsAt)}<br />đến {formatDateTime(klass.endsAt)}</dd></div><div><dt>Thành viên</dt><dd>{klass.memberCount} / {klass.capacity}</dd></div><div><dt>Học phí</dt><dd>{klass.priceCoins > 0 ? `${klass.priceCoins.toLocaleString('vi-VN')} xu` : 'Miễn phí'}</dd></div><div><dt>Trạng thái</dt><dd>{klass.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}</dd></div></dl><p className="class-workspace__hint">Trong phòng học: chia nhóm, câu hỏi nhanh và bảng trắng có sẵn trên thanh công cụ.</p>{canDelete && <Button variant="ghost" loading={deleteBusy} onClick={() => void deleteClass()}><Icon name="trash" size={14} /> Xóa lớp</Button>}</aside>
       </div>
     </div>
   );

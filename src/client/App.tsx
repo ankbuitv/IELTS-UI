@@ -22,15 +22,11 @@ import { ShopPage } from './pages/student/ShopPage';
 import { LeaderboardPage } from './pages/student/LeaderboardPage';
 import { EverydayLessonsPage } from './pages/student/EverydayLessonsPage';
 import { FriendPage, PublicPlayerProfilePage } from './pages/student/SocialPages';
-import { BlogListPage, BlogPostPage } from './pages/blog/BlogPages';
-import { BlogEditorPage } from './pages/blog/BlogEditorPage';
 import { LessonPage, ReviewPage } from './pages/student/LessonPages';
 import { DictionaryPage } from './pages/student/DictionaryPage';
 import { SpeakingPage } from './pages/student/SpeakingPage';
-import { SpeakingPartnerPage } from './pages/student/SpeakingPartnerPage';
 import { DrillsPage } from './pages/student/DrillsPage';
 
-import { StudyGroupsPage } from './pages/student/StudyGroupsPage';
 import { StudyRoomPage } from './pages/student/StudyRoomPage';
 import { TakeExamPage } from './pages/exam/TakeExam';
 import { AttemptReviewPage } from './pages/exam/ReviewExam';
@@ -132,26 +128,8 @@ export function App() {
         <Route path="register" element={<RegisterPage />} />
         <Route path="join" element={<JoinPage />} />
 
-        {/* Blog: readable by anyone, written by mentors and admins. */}
-        <Route path="blog" element={<BlogListPage />} />
-        <Route path="blog/:slug" element={<BlogPostPage />} />
-        <Route
-          path="blog/write"
-          element={
-            <RequireAuth roles={['MENTOR', 'ADMIN']}>
-              <BlogEditorPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="blog/write/:postId"
-          element={
-            <RequireAuth roles={['MENTOR', 'ADMIN']}>
-              <BlogEditorPage />
-            </RequireAuth>
-          }
-        />
-
+        {/* Retired UI routes redirect without deleting existing data. */}
+        <Route path="blog/*" element={<Navigate to="/" replace />} />
         <Route
           path="dashboard"
           element={
@@ -216,14 +194,7 @@ export function App() {
             </RequireAuth>
           }
         />
-        <Route
-          path="study-groups"
-          element={
-            <RequireAuth>
-              <StudyGroupsPage />
-            </RequireAuth>
-          }
-        />
+        <Route path="study-groups/*" element={<Navigate to="/learn" replace />} />
         <Route
           path="study-room"
           element={
@@ -248,22 +219,7 @@ export function App() {
             </RequireAuth>
           }
         />
-        <Route
-          path="speaking/partner"
-          element={
-            <RequireAuth>
-              <SpeakingPartnerPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="speaking/partner/:sessionId"
-          element={
-            <RequireAuth>
-              <SpeakingPartnerPage />
-            </RequireAuth>
-          }
-        />
+        <Route path="speaking/partner/*" element={<Navigate to="/speaking" replace />} />
         <Route
           path="speaking/:sessionId"
           element={

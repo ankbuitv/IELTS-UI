@@ -23,6 +23,7 @@ import {
 import { Icon, type IconName } from '../../components/Icon';
 import { ResultSummary, type AttemptResultPayload } from '../../components/ResultView';
 import { ClassroomChatButton } from '../../components/ClassroomChat';
+import { ClassroomCallButton } from '../../components/ClassroomCallButton';
 import { AccuracyList } from '../../components/charts';
 import { SkillPerformanceTable, TrendBars } from './Dashboard';
 import { AttemptList, newestFirst } from '../../components/AttemptList';
@@ -905,6 +906,7 @@ export function StudentClassroomsPage() {
                   {classroom.activeAssignments} active assignment{classroom.activeAssignments === 1 ? '' : 's'}
                 </Badge>
                 <ClassroomChatButton classroomId={classroom.id} classroomName={classroom.name} />
+                <ClassroomCallButton classroomId={classroom.id} />
               </div>
             </div>
           ))}

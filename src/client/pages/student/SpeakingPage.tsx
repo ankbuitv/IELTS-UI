@@ -149,16 +149,6 @@ function SpeakingLobby({ onStarted }: { onStarted: (sessionId: string) => void }
       {topics.loading ? <Loading label="Đang tải chủ đề…" /> : null}
       {topics.error ? <Notice tone="danger">{topics.error}</Notice> : null}
 
-      <Link className="partner-banner" to="/speaking/partner">
-        <span className="partner-banner__icon">
-          <Icon name="sparkle" size={18} />
-        </span>
-        <span className="partner-banner__text">
-          <strong>Practise with the AI speaking partner</strong>
-          <span>One question at a time, coaching after every answer, no recording needed →</span>
-        </span>
-      </Link>
-
       <div className="speaking-topic-grid">
         <button
           type="button"

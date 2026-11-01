@@ -10,10 +10,13 @@ import { z } from 'zod';
 import type { AppBindings } from '../env';
 import { assertCsrf, assertSameOrigin } from '../lib/http';
 import { parseBody } from '../lib/validate';
+import { enforceRateLimit } from '../lib/rate-limit';
 import { currentUser, requireAuth } from '../middleware/auth';
 import {
   bookSession,
   classMessages,
+  classDirectMessages,
+  postClassDirectMessage,
   classRoomSessionId,
   cancelSession,
   completeSession,
@@ -55,6 +58,8 @@ import {
   saveWhiteboard,
 } from '../services/live-class-service';
 import { mentorEarnings, mentorInvoice } from '../services/digest-service';
+import { callReport, submitCallFeedback } from '../services/call-feedback-service';
+import { turnConfig } from '../services/turn-service';
 
 const router = new Hono<AppBindings>();
 
@@ -189,7 +194,7 @@ function mediaFromQuery(c: { req: { query: (key: string) => string | undefined }
   const cam = c.req.query('cam');
   const mic = c.req.query('mic');
   // Older clients send no flags: assume both devices are on.
-  return { cam: cam === undefined ? true : cam !== '0', mic: mic === undefined ? true : mic !== '0' };
+  return { cam: cam === undefined ? true : cam !== '0', mic: mic === undefined ? true : mic !== '0', screen: c.req.query('screen') === '1' };
 }
 
 router.get('/mentor/sessions/:sessionId/room', async (c) => {
@@ -200,11 +205,17 @@ router.get('/mentor/sessions/:sessionId/room', async (c) => {
   return c.json(state);
 });
 
+router.get('/mentor/sessions/:sessionId/ice', async (c) => {
+  const config = await turnConfig(c.env, currentUser(c), c.req.param('sessionId'));
+  c.header('Cache-Control', 'no-store');
+  return c.json(config);
+});
+
 router.post('/mentor/sessions/:sessionId/join', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
-  await joinRoom(c.env, user, c.req.param('sessionId'), c.req.query('room') || 'main', mediaFromQuery(c));
-  return c.json({ ok: true });
+  const result = await joinRoom(c.env, user, c.req.param('sessionId'), c.req.query('room') || 'main', mediaFromQuery(c));
+  return c.json(result);
 });
 
 router.post('/mentor/sessions/:sessionId/leave', async (c) => {
@@ -212,6 +223,17 @@ router.post('/mentor/sessions/:sessionId/leave', async (c) => {
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   await leaveRoom(c.env, user, c.req.param('sessionId'));
   return c.json({ ok: true });
+});
+
+router.get('/mentor/sessions/:sessionId/report', async (c) => {
+  return c.json(await callReport(c.env, currentUser(c), c.req.param('sessionId')));
+});
+router.post('/mentor/sessions/:sessionId/feedback', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ rating: z.number().int().min(1).max(5), comment: z.string().max(2000).default('') }));
+  await submitCallFeedback(c.env, user, c.req.param('sessionId'), body.rating, body.comment);
+  return c.json({ ok: true }, 201);
 });
 
 router.post('/mentor/sessions/:sessionId/hand', async (c) => {
@@ -426,6 +448,19 @@ router.post('/mentor/classes/:classId/messages', async (c) => {
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const body = await parseBody(c, z.object({ body: z.string().min(1).max(4000) }));
   const message = await postClassMessage(c.env, user, c.req.param('classId'), body.body);
+  return c.json({ message }, 201);
+});
+
+// Private, class-scoped messages; authorisation checks both participants on every request.
+router.get('/mentor/classes/:classId/direct/:peerId', async (c) => {
+  return c.json({ messages: await classDirectMessages(c.env, currentUser(c), c.req.param('classId'), c.req.param('peerId')) });
+});
+router.post('/mentor/classes/:classId/direct/:peerId', async (c) => {
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const user = currentUser(c);
+  await enforceRateLimit(c.env, { bucket: `class-dm:${user.id}`, windowSeconds: 60, limit: 30 }, 'Too many messages. Please try again shortly.');
+  const body = await parseBody(c, z.object({ body: z.string().min(1).max(4000) }));
+  const message = await postClassDirectMessage(c.env, user, c.req.param('classId'), c.req.param('peerId'), body.body);
   return c.json({ message }, 201);
 });
 

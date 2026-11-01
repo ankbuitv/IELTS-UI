@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { mentorApi } from '../../lib/mentor-api';
-import { describeError } from '../../lib/api';
+import { api, describeError, getCsrfToken, getSessionToken } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Button, Loading, Notice } from '../../components/ui';
+import { Button, Notice } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { MentorAvatar, formatWhen } from '../../components/mentor/MentorBits';
 import { UserAvatar } from '../../components/UserAvatar';
+import { BrandLogo } from '../../components/BrandLogo';
 import type { MentorChatMessage, MentorRoomState, MentorSignal, RoomParticipant } from '@shared/mentor';
 import type { BreakoutState, ClassPoll, WhiteboardStroke } from '@shared/live';
 
@@ -14,7 +15,7 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
-const POLL_MS = 1500;
+const POLL_MS = 1000;
 
 /** Human, actionable copy for a getUserMedia failure. */
 function describeDeviceError(kind: 'camera' | 'microphone', cause: unknown): string {
@@ -61,7 +62,7 @@ export function CallRoomPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [phase, setPhase] = useState<'loading' | 'prejoin' | 'room' | 'error'>('loading');
+  const [phase, setPhase] = useState<'loading' | 'prejoin' | 'room' | 'left' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   // True when the app sits inside another page's iframe (preview panel). The
@@ -109,6 +110,18 @@ export function CallRoomPage() {
   const [breakoutOpen, setBreakoutOpen] = useState(false);
   const [quizOpen, setQuizOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
+  const [timerOpen, setTimerOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [feedbackComment, setFeedbackComment] = useState('');
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(false);
+  const [leaveError, setLeaveError] = useState(false);
+  const [signalStatus, setSignalStatus] = useState<'connected' | 'reconnecting'>('connected');
+  const [latency, setLatency] = useState<number | null>(null);
+  const [peerIssue, setPeerIssue] = useState(false);
+  const [turnAvailable, setTurnAvailable] = useState<boolean | null>(null);
+  const iceServersRef = useRef<RTCIceServer[]>(ICE_SERVERS);
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
@@ -119,7 +132,10 @@ export function CallRoomPage() {
    * in the room; tracks land in this stream when WebRTC connects. */
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
   /** Device flags for the presence heartbeat (read inside the poll interval). */
-  const mediaRef = useRef({ cam: true, mic: true });
+  const mediaRef = useRef({ cam: true, mic: true, screen: false });
+  const negotiatingRef = useRef(new Set<string>());
+  const offerAtRef = useRef(new Map<string, number>());
+  const inRoomRef = useRef(false);
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const participantsRef = useRef<MentorRoomState['participants']>([]);
   const lastSignalIdRef = useRef<string | null>(null);
@@ -144,8 +160,8 @@ export function CallRoomPage() {
   const selfId = user?.id ?? '';
 
   useEffect(() => {
-    mediaRef.current = { cam: camOn, mic: micOn };
-  }, [camOn, micOn]);
+    mediaRef.current = { cam: camOn, mic: micOn, screen: screenOn };
+  }, [camOn, micOn, screenOn]);
 
   // ---------------------------------------------------------------- media
   const stopMedia = useCallback(() => {
@@ -348,7 +364,7 @@ export function CallRoomPage() {
     (userId: string, displayName: string): RTCPeerConnection => {
       const existing = pcsRef.current.get(userId);
       if (existing) return existing;
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
       pcsRef.current.set(userId, pc);
 
       const remoteStream = new MediaStream();
@@ -370,15 +386,15 @@ export function CallRoomPage() {
       };
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          void mentorApi
-            .signal(sessionRef.current, { kind: 'CANDIDATE', targetId: userId, payload: JSON.stringify(event.candidate) })
+          void sendSignal({ kind: 'CANDIDATE', targetId: userId, payload: JSON.stringify(event.candidate) })
             .catch(() => undefined);
         }
       };
       pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-          pc.close();
+        if ((pc.connectionState === 'failed' || pc.connectionState === 'closed') && pcsRef.current.get(userId) === pc) {
           pcsRef.current.delete(userId);
+          offerAtRef.current.delete(userId);
+          pc.close();
           remoteStreamsRef.current.delete(userId);
           setPeers((prev) => prev.filter((peer) => peer.userId !== userId));
         }
@@ -386,7 +402,10 @@ export function CallRoomPage() {
 
       // Attach whatever media is available now; late tracks are added by syncSenders.
       const local = localStreamRef.current;
-      local?.getTracks().forEach((track) => pc.addTrack(track, local));
+      local?.getAudioTracks().forEach((track) => pc.addTrack(track, local));
+      const screen = screenStreamRef.current;
+      const video = screen?.getVideoTracks()[0] ?? local?.getVideoTracks()[0];
+      if (video) pc.addTrack(video, screen ?? local!);
       return pc;
     },
     [],
@@ -396,13 +415,18 @@ export function CallRoomPage() {
   const negotiate = useCallback(
     async (userId: string) => {
       const pc = pcsRef.current.get(userId);
-      if (!pc || pc.signalingState !== 'stable') return;
+      if (!pc || pc.signalingState !== 'stable' || negotiatingRef.current.has(userId)) return;
+      negotiatingRef.current.add(userId);
       try {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
+        offerAtRef.current.set(userId, Date.now());
         await sendSignal({ kind: 'OFFER', targetId: userId, payload: JSON.stringify(offer) });
       } catch {
-        // The next poll or track change retries.
+        if ((pc.signalingState as RTCSignalingState) === 'have-local-offer') await pc.setLocalDescription({ type: 'rollback' }).catch(() => undefined);
+        offerAtRef.current.delete(userId);
+      } finally {
+        negotiatingRef.current.delete(userId);
       }
     },
     [],
@@ -413,12 +437,14 @@ export function CallRoomPage() {
     (userId: string) => {
       const pc = pcsRef.current.get(userId);
       const local = localStreamRef.current;
-      if (!pc || !local) return;
+      const screen = screenStreamRef.current;
+      if (!pc) return;
       let added = false;
-      for (const track of local.getTracks()) {
+      const tracks = [...(local?.getAudioTracks() ?? []), ...((screen?.getVideoTracks()[0] ?? local?.getVideoTracks()[0]) ? [screen?.getVideoTracks()[0] ?? local!.getVideoTracks()[0]!] : [])];
+      for (const track of tracks) {
         const has = pc.getSenders().some((sender) => sender.track?.kind === track.kind);
         if (!has) {
-          pc.addTrack(track, local);
+          pc.addTrack(track, track.kind === 'video' && screen ? screen : local!);
           added = true;
         }
       }
@@ -434,6 +460,7 @@ export function CallRoomPage() {
     pcsRef.current.forEach((pc, peerId) => {
       let added = false;
       for (const track of local.getTracks()) {
+        if (track.kind === 'video' && screenStreamRef.current) continue;
         const sender = pc.getSenders().find((item) => item.track?.kind === track.kind);
         if (sender) void sender.replaceTrack(track);
         else {
@@ -479,12 +506,14 @@ export function CallRoomPage() {
 
   const handleSignal = useCallback(
     async (signal: MentorSignal) => {
+      if (signal.targetId && signal.targetId !== selfId) return;
       const fromName = participantsRef.current.find((p) => p.userId === signal.senderId)?.displayName ?? 'Guest';
-      const pc = addPeer(signal.senderId, fromName);
+      const isMediaSignal = signal.kind === 'OFFER' || signal.kind === 'ANSWER' || signal.kind === 'CANDIDATE';
+      const pc = isMediaSignal ? addPeer(signal.senderId, fromName) : pcsRef.current.get(signal.senderId);
       const polite = selfId > signal.senderId;
 
       try {
-        if (signal.kind === 'OFFER') {
+        if (signal.kind === 'OFFER' && pc) {
           if (pc.signalingState !== 'stable') {
             if (!polite) return; // impolite peer keeps its own offer; the other side rolls back
             await pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit);
@@ -499,12 +528,13 @@ export function CallRoomPage() {
             payload: JSON.stringify(answer),
           });
           syncSenders(signal.senderId);
-        } else if (signal.kind === 'ANSWER') {
+        } else if (signal.kind === 'ANSWER' && pc) {
           if (pc.signalingState === 'have-local-offer') {
             await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(signal.payload)));
+            offerAtRef.current.delete(signal.senderId);
             await flushCandidates(signal.senderId, pc);
           }
-        } else if (signal.kind === 'CANDIDATE') {
+        } else if (signal.kind === 'CANDIDATE' && pc) {
           const candidate = JSON.parse(signal.payload) as RTCIceCandidateInit;
           if (!pc.remoteDescription) {
             const queued = pendingCandidatesRef.current.get(signal.senderId) ?? [];
@@ -514,7 +544,7 @@ export function CallRoomPage() {
             await pc.addIceCandidate(candidate);
           }
         } else if (signal.kind === 'BYE') {
-          pc.close();
+          pc?.close();
           pcsRef.current.delete(signal.senderId);
           setPeers((prev) => prev.filter((peer) => peer.userId !== signal.senderId));
         } else if (signal.kind === 'MUTE_MIC' || signal.kind === 'UNMUTE_MIC') {
@@ -562,7 +592,11 @@ export function CallRoomPage() {
   useEffect(() => {
     if (phase !== 'room' || !selfId) return;
     let alive = true;
+    let failures = 0;
+    let running = false;
     const tick = async () => {
+      if (running) return;
+      running = true;
       try {
         const next = await mentorApi.room(
           sessionId,
@@ -571,11 +605,11 @@ export function CallRoomPage() {
           mediaRef.current,
         );
         if (!alive) return;
+        failures = 0; setSignalStatus('connected');
         participantsRef.current = next.participants;
         setState(next);
-        const newest = next.signals.at(-1);
-        if (newest) lastSignalIdRef.current = newest.id;
         for (const signal of next.signals) await handleSignal(signal);
+        lastSignalIdRef.current = next.signalCursor;
 
         const presentIds = new Set(next.participants.map((p) => p.userId));
         // Everyone present (except me) gets a connection; the smaller id initiates
@@ -584,6 +618,12 @@ export function CallRoomPage() {
           if (participant.userId === selfId) continue;
           addPeer(participant.userId, participant.displayName);
           syncSenders(participant.userId);
+          const pc = pcsRef.current.get(participant.userId);
+          const offerAt = offerAtRef.current.get(participant.userId);
+          if (pc?.signalingState === 'have-local-offer' && offerAt && Date.now() - offerAt > 15000 && !negotiatingRef.current.has(participant.userId)) {
+            offerAtRef.current.delete(participant.userId);
+            await pc.setLocalDescription({ type: 'rollback' }).catch(() => undefined);
+          }
           if (!pcsRef.current.get(participant.userId)?.remoteDescription && selfId < participant.userId) {
             void negotiate(participant.userId);
           }
@@ -607,8 +647,9 @@ export function CallRoomPage() {
           }
         }
       } catch {
-        // Polling hiccup: the next tick retries.
-      }
+        failures += 1;
+        if (alive && failures >= 2) setSignalStatus('reconnecting');
+      } finally { running = false; }
     };
     void tick();
     const interval = window.setInterval(() => void tick(), POLL_MS);
@@ -622,6 +663,24 @@ export function CallRoomPage() {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [phase, sessionId, selfId, room, addPeer, handleSignal, syncSenders, negotiate]);
+
+  // Show observed peer round-trip latency, not a fabricated bandwidth/quality score.
+  useEffect(() => {
+    if (phase !== 'room') return;
+    let active = true;
+    const sample = async () => {
+      const pcs = [...pcsRef.current.values()];
+      const values: number[] = [];
+      let issue = false;
+      for (const pc of pcs) {
+        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') issue = true;
+        try { const stats = await pc.getStats(); stats.forEach((row) => { if (row.type === 'candidate-pair' && row.state === 'succeeded' && row.nominated && typeof row.currentRoundTripTime === 'number') values.push(row.currentRoundTripTime * 1000); }); } catch { /* closed while sampling */ }
+      }
+      if (active) { setLatency(values.length ? Math.round(Math.max(...values)) : null); setPeerIssue(issue); }
+    };
+    void sample(); const timer = window.setInterval(() => void sample(), 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [phase]);
 
   // Breakout rooms: refresh while the call is open so assignments and closing
   // reach participants without a reload.
@@ -712,11 +771,16 @@ export function CallRoomPage() {
   // Best-effort goodbye when the tab is closed, so tiles disappear immediately.
   useEffect(() => {
     const bye = () => {
-      if (leftRef.current) return;
+      if (leftRef.current || !inRoomRef.current) return;
       pcsRef.current.forEach((_pc, peerId) => {
         void sendSignal({ kind: 'BYE', targetId: peerId, payload: '' }).catch(() => undefined);
       });
-      void mentorApi.leave(sessionRef.current).catch(() => undefined);
+      // keepalive allows the explicit leave request to finish as the tab closes.
+      const csrf = getCsrfToken(); const token = getSessionToken();
+      void fetch(`/api/mentor/sessions/${encodeURIComponent(sessionRef.current)}/leave`, {
+        method: 'POST', credentials: 'same-origin', keepalive: true,
+        headers: { 'content-type': 'application/json', ...(csrf ? { 'x-csrf-token': csrf } : {}), ...(token ? { 'x-session-token': token } : {}) }, body: '{}',
+      }).catch(() => undefined);
     };
     window.addEventListener('pagehide', bye);
     return () => window.removeEventListener('pagehide', bye);
@@ -736,7 +800,13 @@ export function CallRoomPage() {
     setJoinBusy(true);
     const stream = await startMedia();
     try {
-      await mentorApi.join(sessionId, room, { cam: camOn, mic: micOn });
+      try {
+        const config = await api.get<{ iceServers: RTCIceServer[]; configured: boolean }>(`/api/mentor/sessions/${sessionId}/ice`);
+        iceServersRef.current = [...ICE_SERVERS, ...config.iceServers]; setTurnAvailable(config.configured);
+      } catch { setTurnAvailable(false); }
+      const joined = await mentorApi.join(sessionId, room, { cam: camOn, mic: micOn });
+      lastSignalIdRef.current = joined.signalCursor;
+      inRoomRef.current = true;
       setPhase('room');
       // Tracks are attached by the effect/callback refs on mount; make sure the
       // connection to an already-present peer renegotiates with the real media.
@@ -756,6 +826,8 @@ export function CallRoomPage() {
   const leave = async () => {
     if (leftRef.current) return;
     leftRef.current = true;
+    inRoomRef.current = false;
+    setPhase('left');
     pcsRef.current.forEach((pc, peerId) => {
       void sendSignal({ kind: 'BYE', targetId: peerId, payload: '' }).catch(() => undefined);
       pc.close();
@@ -765,45 +837,39 @@ export function CallRoomPage() {
     try {
       await mentorApi.leave(sessionId);
     } catch {
-      // Leaving is best-effort; presence times out on its own.
+      setLeaveError(true);
     }
-    navigate('/my-sessions');
   };
 
+  const stopScreen = () => {
+    const screen = screenStreamRef.current;
+    screenStreamRef.current = null;
+    if (screen) for (const track of screen.getTracks()) { track.onended = null; track.stop(); }
+    setScreenOn(false);
+    const video = localStreamRef.current?.getVideoTracks()[0] ?? null;
+    pcsRef.current.forEach((pc) => {
+      const sender = pc.getSenders().find((item) => item.track?.kind === 'video');
+      if (sender) void sender.replaceTrack(video).catch(() => setError('Không thể khôi phục camera. Hãy thử kết nối lại.'));
+    });
+    attachSelf();
+  };
   const toggleScreen = async () => {
-    if (screenOn) {
-      screenStreamRef.current?.getTracks().forEach((track) => track.stop());
-      screenStreamRef.current = null;
-      setScreenOn(false);
-      attachSelf();
-      // Restore the camera track on every peer.
-      const video = localStreamRef.current?.getVideoTracks()[0];
-      pcsRef.current.forEach((pc) => {
-        const sender = pc.getSenders().find((item) => item.track?.kind === 'video');
-        if (sender && video) void sender.replaceTrack(video);
-      });
-      return;
-    }
+    if (screenStreamRef.current) { stopScreen(); return; }
     try {
       const screen = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const [track] = screen.getVideoTracks();
+      if (!track) return;
       screenStreamRef.current = screen;
       setScreenOn(true);
-      const [track] = screen.getVideoTracks();
-      pcsRef.current.forEach((pc) => {
+      pcsRef.current.forEach((pc, peerId) => {
         const sender = pc.getSenders().find((item) => item.track?.kind === 'video');
-        if (sender && track) {
-          void sender.replaceTrack(track);
-        } else if (track) {
-          pc.addTrack(track, screen);
-          void negotiate(
-            [...pcsRef.current.entries()].find(([, item]) => item === pc)?.[0] ?? '',
-          );
-        }
+        if (sender) void sender.replaceTrack(track).catch(() => setError('Không thể chia sẻ màn hình. Hãy thử kết nối lại.'));
+        else { pc.addTrack(track, screen); void negotiate(peerId); }
       });
-      if (track) track.onended = () => void toggleScreen();
+      track.onended = stopScreen;
       attachSelf();
-    } catch {
-      // The user declined the picker.
+    } catch (cause) {
+      if ((cause as { name?: string })?.name !== 'NotAllowedError') setError('Không thể bắt đầu chia sẻ màn hình.');
     }
   };
 
@@ -929,6 +995,7 @@ export function CallRoomPage() {
           joinedAt: '',
           camOn: true,
           micOn: true,
+          screenOn: false,
         });
       }
     }
@@ -942,13 +1009,30 @@ export function CallRoomPage() {
         joinedAt: '',
         camOn,
         micOn,
+        screenOn,
       });
     }
     return [...byId.values()];
-  }, [state?.participants, peers, selfId, user?.displayName, handRaised, camOn, micOn]);
+  }, [state?.participants, peers, selfId, user?.displayName, handRaised, camOn, micOn, screenOn, user?.role]);
+
+  if (phase === 'left') {
+    const canReview = !isMentor && user?.role !== 'ADMIN';
+    return <div className="jr jr-after"><div className="jr-after__card"><BrandLogo theme="dark" height={32} /><h1>Đã rời buổi học</h1><p>Đánh giá giúp giáo viên hoặc mentor cải thiện buổi học tiếp theo.</p>
+      {leaveError && <p role="alert">Chưa xác nhận được việc rời phòng. Hãy kiểm tra mạng và thử lại.</p>}
+      {leaveError && <Button onClick={() => void mentorApi.leave(sessionId).then(() => setLeaveError(false)).catch(() => setLeaveError(true))}>Thử lại</Button>}
+      {canReview && !feedbackSent && <form onSubmit={(event) => { event.preventDefault(); setFeedbackBusy(true); void api.post(`/api/mentor/sessions/${sessionId}/feedback`, { rating, comment: feedbackComment }).then(() => setFeedbackSent(true)).catch((cause) => setError(describeError(cause))).finally(() => setFeedbackBusy(false)); }}>
+        <fieldset><legend>Buổi học của bạn thế nào?</legend><div className="jr-after__stars">{[1,2,3,4,5].map((value) => <button type="button" key={value} aria-label={`${value} sao`} aria-pressed={rating === value} onClick={() => setRating(value)}>{value <= rating ? '★' : '☆'}</button>)}</div></fieldset>
+        <label htmlFor="feedback-comment">Nhận xét (không bắt buộc)</label><textarea id="feedback-comment" maxLength={2000} value={feedbackComment} onChange={(event) => setFeedbackComment(event.target.value)} placeholder="Chia sẻ ý kiến của bạn…" />
+        {error && <p role="alert">{error}</p>}<Button type="submit" variant="primary" disabled={!rating || leaveError} loading={feedbackBusy}>Gửi đánh giá</Button>
+      </form>}
+      {feedbackSent && <p role="status">Cảm ơn bạn! Đánh giá đã gửi tới người chủ trì.</p>}
+      {isMentor && <Button onClick={() => setReportOpen(true)}>Xem điểm danh và đánh giá</Button>}
+      <Button onClick={() => navigate(isClass ? (session?.classId ? `/classes/${session.classId}` : user?.role === 'TEACHER' ? '/teacher' : '/classrooms') : '/my-sessions')}>Quay lại</Button>
+    </div>{reportOpen && <CallReport sessionId={sessionId} onClose={() => setReportOpen(false)} />}</div>;
+  }
 
   if (phase === 'loading') {
-    return <Loading label="Opening the call room…" />;
+    return <div className="jr jr-loading" role="status"><BrandLogo theme="dark" height={36} /><div className="jr-loading__spinner" aria-hidden="true" /><h1>Đang mở phòng học</h1><p>Vui lòng chờ trong giây lát…</p></div>;
   }
 
   if (phase === 'error') {
@@ -1035,8 +1119,7 @@ export function CallRoomPage() {
 
         <aside className="jr-prejoin__panel">
           <div className="jr-brand jr-brand--panel">
-            <span className="jr-brand__mark">AI</span>
-            <span>AI Eo</span>
+            <BrandLogo theme="dark" height={30} />
             <em>LIVE</em>
           </div>
           <span className="jr-eyebrow">{isClass ? 'Live class' : 'Coaching session'}</span>
@@ -1053,7 +1136,9 @@ export function CallRoomPage() {
             <input value={user?.displayName ?? 'Guest'} readOnly />
           </label>
 
-          {mediaError ? (
+          {signalStatus === 'reconnecting' || peerIssue ? <div className="jr-banner jr-banner--error" role="status"><Icon name="alert" size={16} /><span>Kết nối đang gián đoạn. Kiểm tra Wi-Fi, thử tắt camera hoặc đổi mạng.{turnAvailable === false ? ' Máy chủ chưa cấu hình TURN nên một số mạng có thể không kết nối được.' : ''}</span><button type="button" onClick={() => { pcsRef.current.forEach((pc, id) => { pc.restartIce(); void negotiate(id); }); }}>Thử kết nối lại</button></div> : null}
+
+      {mediaError ? (
             <div className="jr-alert">
               <Icon name="alert" size={16} />
               <div className="jr-alert__body">
@@ -1140,8 +1225,7 @@ export function CallRoomPage() {
     <div className="jr">
       <header className="jr-top">
         <div className="jr-brand">
-          <span className="jr-brand__mark">AI</span>
-          <span>AI Eo</span>
+          <BrandLogo theme="dark" height={25} />
           <em>LIVE</em>
         </div>
 
@@ -1158,6 +1242,7 @@ export function CallRoomPage() {
         </div>
 
         <div className="jr-top__right">
+          <span className={`jr-network${signalStatus === 'reconnecting' || peerIssue ? ' is-warning' : ''}`} role="status" title="Độ trễ khứ hồi WebRTC cao nhất đo được; không phải điểm chất lượng mạng.">{signalStatus === 'reconnecting' ? 'Đang kết nối lại' : peerIssue ? 'Kết nối không ổn định' : latency !== null ? `Độ trễ ${latency} ms` : 'Đang kết nối'}</span>
           <button
             type="button"
             className={`jr-pill${panelOpen ? ' is-on' : ''}`}
@@ -1622,6 +1707,21 @@ export function CallRoomPage() {
             <span className="jr-btn__label">Board</span>
           </button>
 
+          <button
+            type="button"
+            className={`jr-btn${breakoutOpen ? ' is-on' : ''}`}
+            onClick={() => { setBreakoutOpen(true); setQuizOpen(false); setBoardOpen(false); setPanelOpen(false); }}
+            aria-label="Breakout rooms"
+            title="Breakout rooms"
+          >
+            <span className="jr-ico"><Icon name="grid" size={20} /></span>
+            <span className="jr-btn__label">Nhóm nhỏ</span>
+          </button>
+
+          <button type="button" className={`jr-btn${timerOpen ? ' is-on' : ''}`} onClick={() => setTimerOpen((open) => !open)} aria-label="Đồng hồ luyện nói" title="Đồng hồ luyện nói">
+            <span className="jr-ico"><Icon name="clock" size={20} /></span><span className="jr-btn__label">Đồng hồ</span>
+          </button>
+
           <div className="jr-pop">
             <button
               type="button"
@@ -1673,10 +1773,6 @@ export function CallRoomPage() {
             </button>
             {moreOpen ? (
               <div className="jr-more" role="menu">
-                <button type="button" onClick={() => { setBreakoutOpen(true); setMoreOpen(false); }}>
-                  <Icon name="grid" size={15} />
-                  Breakout rooms
-                </button>
                 <button type="button" onClick={() => { setSettingsOpen(true); setMoreOpen(false); }}>
                   <Icon name="settings" size={15} />
                   Device settings
@@ -1703,6 +1799,7 @@ export function CallRoomPage() {
                 {isMentor ? (
                   <>
                     <span className="jr-more__sep" />
+                    <button type="button" onClick={() => { setMoreOpen(false); setReportOpen(true); }}><Icon name="users" size={15} /> Điểm danh & đánh giá</button>
                     <button
                       type="button"
                       className="is-danger"
@@ -1731,6 +1828,9 @@ export function CallRoomPage() {
           <Icon name="phoneOff" size={20} />
         </button>
       </footer>
+
+      {reportOpen ? <CallReport sessionId={sessionId} onClose={() => setReportOpen(false)} /> : null}
+      {timerOpen ? <SpeakingTimer onClose={() => setTimerOpen(false)} /> : null}
 
       {quizOpen ? (
         <QuizPanel sessionId={sessionId} room={room} host={isMentor} onClose={() => setQuizOpen(false)} />
@@ -1804,6 +1904,24 @@ export function CallRoomPage() {
  * shows while no live video is arriving (camera off / still connecting) — a
  * shared screen must never hide behind a placeholder.
  */
+/** Local speaking timer: it does not change other participants' timers. */
+function SpeakingTimer({ onClose }: { onClose: () => void }) {
+  const [remaining, setRemaining] = useState(60);
+  const [deadline, setDeadline] = useState<number | null>(null);
+  useEffect(() => {
+    if (deadline === null) return undefined;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setRemaining(left);
+      if (left === 0) setDeadline(null);
+    };
+    const id = window.setInterval(tick, 200);
+    return () => window.clearInterval(id);
+  }, [deadline]);
+  const choose = (seconds: number) => { setDeadline(null); setRemaining(seconds); };
+  return <aside className="jr-timer" aria-label="Đồng hồ luyện nói"><div className="jr-timer__head"><strong>Luyện nói</strong><button type="button" onClick={onClose} aria-label="Đóng đồng hồ">×</button></div><p>Đồng hồ riêng trên thiết bị này</p><output className="jr-timer__time" aria-live="off">{Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}</output><div className="jr-timer__presets"><button type="button" onClick={() => choose(60)}>Chuẩn bị · 1 phút</button><button type="button" onClick={() => choose(120)}>Trả lời · 2 phút</button></div><button type="button" className="jr-timer__start" onClick={() => deadline === null ? setDeadline(Date.now() + remaining * 1000) : (setRemaining(Math.max(0, Math.ceil((deadline - Date.now()) / 1000))), setDeadline(null))} disabled={remaining === 0}>{deadline === null ? 'Bắt đầu' : 'Tạm dừng'}</button>{remaining === 0 && <p role="status">Đã hết giờ. Chọn thời gian để bắt đầu lại.</p>}</aside>;
+}
+
 /**
  * Quiz & polls: the host writes a question, everyone answers, and results show
  * live. A closed quiz reveals the correct option (the API only sends it then).
@@ -2565,7 +2683,7 @@ function RemoteTile({ peer, participant }: { peer: Peer; participant?: RoomParti
   }, [peer.stream]);
 
   // Presence is authoritative for "camera is off"; default to on until it loads.
-  const cameraOn = participant?.camOn !== false;
+  const cameraOn = participant?.screenOn || participant?.camOn !== false;
   const showVideo = live && cameraOn;
   const muted = participant ? !participant.micOn : !micLive;
 
@@ -2598,7 +2716,7 @@ function RemoteTile({ peer, participant }: { peer: Peer; participant?: RoomParti
         </div>
       ) : null}
       <span className="jr-tile__label">
-        {peer.displayName}
+        {peer.displayName}{participant?.screenOn ? ' · đang trình chiếu' : ''}
         {muted ? (
           <i className="jr-tile__muted" title="Microphone off">
             <Icon name="mic" size={11} />
@@ -2708,3 +2826,24 @@ function DeviceSettingsDialog({
 }
 
 export default CallRoomPage;
+
+interface CallReportData {
+  attendance: Array<{ id: string; name: string; joinedAt: string; leftAt: string | null; lastSeenAt: string }>;
+  feedback: Array<{ id: string; name: string; rating: number; comment: string; createdAt: string }>;
+}
+function CallReport({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
+  const [report, setReport] = useState<CallReportData | null>(null);
+  const [failure, setFailure] = useState('');
+  useEffect(() => { let active = true; void api.get<CallReportData>(`/api/mentor/sessions/${sessionId}/report`).then((data) => { if (active) setReport(data); }).catch((cause) => { if (active) setFailure(describeError(cause)); }); return () => { active = false; }; }, [sessionId]);
+  const exportCsv = () => {
+    if (!report) return;
+    const cell = (value: string) => `"${(/^[=+@\-\t\r]/.test(value) ? "'" + value : value).replace(/"/g, '""')}"`;
+    const rows = [['Tên', 'Tham gia', 'Rời / lần cuối thấy', 'Trạng thái'], ...report.attendance.map((a) => [a.name, a.joinedAt, a.leftAt ?? a.lastSeenAt, a.leftAt ? 'Đã rời' : 'Lần cuối thấy'])];
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + rows.map((row) => row.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'diem-danh.csv'; document.body.appendChild(anchor); anchor.click(); anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  return <div className="jr-report-overlay" role="presentation"><section className="jr-report" role="dialog" aria-modal="true" aria-labelledby="call-report-title"><header><h2 id="call-report-title">Điểm danh & đánh giá</h2><button type="button" onClick={onClose} aria-label="Đóng">×</button></header><p>Thời điểm rời có thể không chính xác khi mất mạng hoặc đóng trình duyệt. Danh sách tối đa 200 lượt tham gia và 100 đánh giá gần nhất.</p>
+    {failure && <p role="alert">{failure}</p>}{!report && !failure && <p>Đang tải…</p>}
+    {report && <><button type="button" className="jr-report__export" onClick={exportCsv}>Tải điểm danh CSV</button><h3>Lượt tham gia ({report.attendance.length})</h3>{report.attendance.length === 0 && <p>Chưa có lượt tham gia.</p>}<ul>{report.attendance.map((a) => <li key={a.id}><strong>{a.name}</strong><span>Vào {new Date(a.joinedAt).toLocaleString('vi-VN')} · {a.leftAt ? `Rời ${new Date(a.leftAt).toLocaleString('vi-VN')}` : `Lần cuối thấy ${new Date(a.lastSeenAt).toLocaleString('vi-VN')}`}</span></li>)}</ul><h3>Đánh giá ({report.feedback.length})</h3>{report.feedback.length === 0 && <p>Chưa có đánh giá.</p>}<ul>{report.feedback.map((f) => <li key={f.id}><strong>{f.name} · {f.rating}/5</strong><span>{f.comment || 'Không có nhận xét.'}</span></li>)}</ul></>}
+  </section></div>;
+}

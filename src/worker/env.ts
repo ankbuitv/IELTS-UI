@@ -31,6 +31,10 @@ export interface Env {
   // --- Secrets (wrangler secret put ...) ----------------------------------
   /** Required in production: pepper for session ids and password derivation. */
   SESSION_SECRET?: string;
+  /** Coturn TURN REST secret (never sent to clients). */
+  TURN_SHARED_SECRET?: string;
+  /** Comma-separated turn:/turns: URLs; absent means STUN-only. */
+  TURN_URLS?: string;
   /** Optional: when unset, AI import reports itself as unavailable. */
   OPENAI_API_KEY?: string;
   /**

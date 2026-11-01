@@ -197,6 +197,7 @@ export interface RoomParticipant {
   /** Presence heartbeat flags: false means the tile should show an avatar. */
   camOn: boolean;
   micOn: boolean;
+  screenOn: boolean;
 }
 
 export interface MentorRoomState {
@@ -207,6 +208,7 @@ export interface MentorRoomState {
   messages: MentorChatMessage[];
   /** WebRTC signalling envelopes for the viewer since `since`. */
   signals: MentorSignal[];
+  signalCursor: string;
   serverTime: string;
 }
 

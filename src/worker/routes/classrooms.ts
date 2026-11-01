@@ -102,6 +102,43 @@ interface ChatMessage {
   attachmentName?: string | null;
 }
 
+/** Teachers open a reusable room; students may only enter an existing room. */
+router.post('/classrooms/:classroomId/room', async (c) => {
+  const user = currentUser(c);
+  assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const classroomId = c.req.param('classroomId');
+  await assertClassroomAccess(c.env, classroomId, user.id, user.role);
+  const klass = await c.env.DB.prepare('SELECT id, name, teacher_id, status FROM classrooms WHERE id = ?')
+    .bind(classroomId).first<{ id: string; name: string; teacher_id: string; status: string }>();
+  if (!klass || klass.status !== 'ACTIVE') throw ApiError.conflict('This classroom is archived.');
+  const host = user.id === klass.teacher_id || user.role === 'ADMIN';
+  const sessionId = `classroom-room-${classroomId}`;
+  const existing = await c.env.DB.prepare('SELECT session_id FROM classroom_call_rooms WHERE classroom_id = ?')
+    .bind(classroomId).first<{ session_id: string }>();
+  if (!existing && !host) throw ApiError.notFound('The teacher has not opened the classroom call yet.');
+  if (!existing) {
+    const timestamp = nowIso();
+    await c.env.DB.batch([
+      c.env.DB.prepare(`INSERT OR IGNORE INTO mentor_sessions
+        (id, mentor_id, student_id, class_id, kind, status, topic, starts_at, ends_at, created_at, updated_at)
+        VALUES (?, ?, ?, NULL, 'CLASS', 'SCHEDULED', ?, ?, ?, ?, ?)`)
+        .bind(sessionId, klass.teacher_id, klass.teacher_id, klass.name, timestamp, timestamp, timestamp, timestamp),
+      c.env.DB.prepare('INSERT OR IGNORE INTO classroom_call_rooms (classroom_id, session_id, created_at) VALUES (?, ?, ?)')
+        .bind(classroomId, sessionId, timestamp),
+    ]);
+  }
+  const roomId = existing?.session_id ?? sessionId;
+  // An ended class room can be opened again by the host, not by students.
+  const room = await c.env.DB.prepare('SELECT status FROM mentor_sessions WHERE id = ?').bind(roomId).first<{ status: string }>();
+  if (!room) throw ApiError.notFound('The classroom room is unavailable.');
+  if (room.status === 'COMPLETED' || room.status === 'CANCELLED') {
+    if (!host) throw ApiError.conflict('The teacher has ended this call.');
+    await c.env.DB.prepare("UPDATE mentor_sessions SET status = 'SCHEDULED', started_at = NULL, ended_at = NULL, updated_at = ? WHERE id = ?")
+      .bind(nowIso(), roomId).run();
+  }
+  return c.json({ sessionId: roomId });
+});
+
 /** The course chat stream, newest 100, oldest first. */
 router.get('/classrooms/:classroomId/messages', requireAuth, async (c) => {
   const user = currentUser(c);
@@ -158,13 +195,16 @@ router.post('/classrooms/:classroomId/messages', requireAuth, async (c) => {
     }),
   );
   const text = body.body.trim();
+  if (Boolean(body.attachmentBase64) !== Boolean(body.attachmentName)) throw ApiError.validation('Provide both a file and its name.');
   if (!text && !body.attachmentBase64) throw ApiError.validation('Write something or attach a file.');
 
   let attachmentUrl: string | null = null;
   let attachmentName: string | null = null;
   if (body.attachmentBase64 && body.attachmentName) {
     const payload = body.attachmentBase64.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
-    const size = Math.round((payload.length * 3) / 4);
+    if (payload.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(payload)) throw ApiError.validation('The file encoding is invalid.');
+    const size = (payload.length / 4) * 3 - (payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0);
+    if (size <= 0) throw ApiError.validation('The file is empty.');
     if (size > 10_485_760) throw ApiError.validation('Attachments are limited to 10 MB.');
     const assetId = newId('ast');
     const timestamp = nowIso();
