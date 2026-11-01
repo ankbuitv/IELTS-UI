@@ -71,7 +71,7 @@ export const CALENDAR_SUPPORT_SQL = `SELECT s.id,s.starts_at,s.ends_at,c.name AS
  AND ((s.teacher_id=?) OR (s.student_id=? AND s.status='BOOKED' AND EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=s.student_id AND m.role='STUDENT' AND m.status='ACTIVE')))
  ORDER BY s.starts_at LIMIT 500`;
 
-export const CALENDAR_TEACHING_SQL = `SELECT e.id,e.title,e.starts_at,e.ends_at,e.kind,e.note,c.name AS classroom_name FROM classroom_teaching_events e JOIN classrooms c ON c.id=e.classroom_id AND c.status='ACTIVE' JOIN users u ON u.id=e.teacher_id AND u.status='ACTIVE'
+export const CALENDAR_TEACHING_SQL = `SELECT e.id,e.title,e.starts_at,e.ends_at,e.kind,e.note,e.teacher_id,c.id AS classroom_id,c.name AS classroom_name FROM classroom_teaching_events e JOIN classrooms c ON c.id=e.classroom_id AND c.status='ACTIVE' JOIN users u ON u.id=e.teacher_id AND u.status='ACTIVE'
  WHERE e.ends_at>=? AND e.starts_at<=? AND (c.teacher_id=e.teacher_id OR EXISTS(SELECT 1 FROM classroom_members ct WHERE ct.classroom_id=c.id AND ct.user_id=e.teacher_id AND ct.role='CO_TEACHER' AND ct.status='ACTIVE'))
  AND (e.teacher_id=? OR EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=? AND m.role='STUDENT' AND m.status='ACTIVE')) ORDER BY e.starts_at LIMIT 500`;
 

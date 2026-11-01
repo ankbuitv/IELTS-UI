@@ -25,17 +25,25 @@ interface WritingQueueItem {
   feedback: string;
   scoringSource: string | null;
   needsRevisionReview:boolean;
+  classroomId:string|null;classroomName:string|null;markingDeadlineAt:string|null;
   criteria: Record<string, number>;
 }
 
 export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/teacher' }) {
   const [unmarkedOnly, setUnmarkedOnly] = useState(true);
   const [selected, setSelected] = useState<WritingQueueItem | null>(null);
-  const query = unmarkedOnly ? '?unmarked=1' : '';
+  const [classroom,setClassroom]=useState('all');
+  const [deadline,setDeadline]=useState('all');
+  const [sort,setSort]=useState('recent');
+  const query=new URLSearchParams();if(unmarkedOnly)query.set('unmarked','1');if(classroom!=='all')query.set('classroom',classroom);if(deadline!=='all')query.set('deadline',deadline);if(sort==='deadline')query.set('order','deadline');const queryString=query.toString();
+  const classroomList=useAsync(()=>api.get<{classrooms:Array<{id:string;name:string}>}>('/api/teacher/classrooms'),[]);
   const { data, loading, error, reload } = useAsync<{ submissions: WritingQueueItem[]; unmarkedCount: number }>(
-    () => api.get(`${apiBase}/writing-queue${query}`),
-    [apiBase, query],
+    () => api.get(`${apiBase}/writing-queue?${queryString}`),
+    [apiBase, queryString],
   );
+
+  const classes=[...new Map([...(classroomList.data?.classrooms??[]).map(c=>[c.id,c.name] as [string,string]),...(data?.submissions??[]).filter(row=>row.classroomId).map(row=>[row.classroomId!,row.classroomName??'Lớp'] as [string,string])]).entries()];
+  const filtered=data?.submissions??[];
 
   return (
     <div className="stack">
@@ -60,6 +68,7 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
       {loading ? <Loading label="Loading writing submissions…" /> : null}
       {error ? <Notice tone="danger">{error}</Notice> : null}
 
+      <div className="marking-filters" aria-label="Bộ lọc chấm bài"><label>Lớp<select value={classroom} onChange={e=>setClassroom(e.target.value)}><option value="all">Tất cả lớp</option>{classes.map(([id,name])=><option value={id} key={id}>{name}</option>)}</select></label><label>Hạn chấm<select value={deadline} onChange={e=>setDeadline(e.target.value)}><option value="all">Tất cả</option><option value="has">Có hạn</option><option value="none">Chưa có hạn</option></select></label><label>Sắp xếp<select value={sort} onChange={e=>setSort(e.target.value)}><option value="recent">Mặc định</option><option value="deadline">Hạn gần nhất</option></select></label><small>Lọc trên máy chủ; hiển thị tối đa 100 bài phù hợp. Chọn Writing hoặc Speaking ở phía trên.</small></div>
       <Card
         title="Submissions"
         hint="Practice writing only. The AI judges mark every essay automatically; a teacher’s band replaces their estimate. None of it is an official IELTS result."
@@ -71,7 +80,7 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
               <tr>
                 <th>Student</th>
                 <th>Test</th>
-                <th>Task</th>
+                <th>Task / Lớp</th><th>Hạn chấm</th>
                 <th className="num">Words</th>
                 <th className="num">Band</th>
                 <th>Submitted</th>
@@ -79,7 +88,7 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
               </tr>
             </thead>
             <tbody>
-              {data?.submissions.map((row) => (
+              {filtered.map((row) => (
                 <tr key={row.submissionId}>
                   <td>
                     {row.studentName}
@@ -89,7 +98,8 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
                     {row.testTitle}
                     <div className="tiny muted">{TEST_TYPE_LABELS[row.testType] ?? row.testType}</div>
                   </td>
-                  <td>{row.taskLabel}{row.needsRevisionReview&&<div><Badge tone="warning">Bản sửa chờ nhận xét</Badge></div>}</td>
+                  <td>{row.taskLabel}<div className="tiny muted">{row.classroomName??'Không thuộc lớp'}</div>{row.needsRevisionReview&&<div><Badge tone="warning">Bản sửa chờ nhận xét</Badge></div>}</td>
+                  <td>{row.markingDeadlineAt?formatDateTime(row.markingDeadlineAt):'—'}</td>
                   <td className="num">{row.wordCount}</td>
                   <td className="num">
                     {row.scoreBand != null ? (
@@ -116,7 +126,7 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
             </tbody>
           </table>
         </div>
-        {data && data.submissions.length === 0 ? (
+        {data && filtered.length === 0 ? (
           <EmptyState title={unmarkedOnly ? 'No essays are waiting for a teacher band' : 'No writing submissions yet'}>
             When a student submits Task 1 or Task 2, the essay appears here. The AI judges mark it automatically; you can add a teacher’s band.
           </EmptyState>

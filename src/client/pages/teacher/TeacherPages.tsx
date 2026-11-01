@@ -235,6 +235,30 @@ export function ClassroomPage() {
   if (error) return <Notice tone="danger">{error}</Notice>;
   if (!data) return null;
 
+  const availableTabs:Array<{id:typeof allowedTabs[number];label:string}>= [
+          { id: 'conversation', label: 'Hội thoại' },
+          { id: 'files', label: 'Tệp' },
+          { id: 'overview', label: 'Tổng quan' },
+          { id: 'board', label: 'Bảng lớp' },
+          { id: 'resources', label: 'Tài liệu giáo viên' },
+          ...(data.classroom.duties.attendance ? [{ id: 'attendance' as const, label: 'Điểm danh' }] : []),
+          { id: 'private-notes', label: 'Ghi chú riêng' },
+          { id: 'seating', label: 'Sơ đồ chỗ ngồi' },
+          { id: 'gradebook', label: 'Bảng điểm' },
+          { id: 'skill-progress', label: 'Tiến độ kỹ năng' },
+          { id: 'term-reports', label: 'Báo cáo học tập' },
+          { id: 'support', label: 'Lịch hỗ trợ' },
+          { id:'schedule',label:'Lịch dạy' },
+          ...(data.classroom.duties.grading ? [{id:'worksheets' as const,label:'Bài từ ngân hàng'}] : []),
+          ...(data.classroom.isOwner || user?.role === 'ADMIN' ? [{ id:'duties' as const,label:'Phân công' }] : []),
+          ...(data.classroom.isOwner || user?.role === 'ADMIN' ? [{ id: 'ratings' as const, label: 'Đánh giá buổi học' }] : []),
+          { id: 'students', label: `Students (${data.members.filter((member) => member.role === 'STUDENT').length})` },
+          { id: 'assignments', label: `Assignments (${data.assignments.length})` },
+          { id: 'invites', label: `Invitations (${data.invites.length})` },
+        ];
+  const primaryTabs=['conversation','files','overview','students','assignments','board'];
+  const changeTab=(next:typeof allowedTabs[number])=>{if(tab==='attendance'&&next!=='attendance'&&attendanceDirty&&!window.confirm('Điểm danh có thay đổi chưa lưu. Rời tab sẽ bỏ thay đổi, tiếp tục?'))return;if(tab==='private-notes'&&next!=='private-notes'&&notesDirty&&!window.confirm('Ghi chú chưa lưu. Rời tab sẽ bỏ thay đổi, tiếp tục?'))return;if(tab==='seating'&&next!=='seating'&&seatingDirty&&!window.confirm('Sơ đồ chưa lưu. Rời tab sẽ bỏ thay đổi, tiếp tục?'))return;setAttendanceDirty(false);setNotesDirty(false);setSeatingDirty(false);setTab(next);};
+
   return (
     <div className="stack">
       <div className="page-head">
@@ -259,31 +283,7 @@ export function ClassroomPage() {
       </div>
 
       <Modal open={editOpen} title="Chỉnh sửa lớp học" onClose={()=>setEditOpen(false)} actions={<><Button onClick={()=>setEditOpen(false)}>Hủy</Button><Button variant="primary" loading={editBusy} onClick={()=>{setEditBusy(true);void api.patch(`/api/teacher/classrooms/${encodeURIComponent(classroomId)}`,{name:editName.trim(),description:editDescription.trim()}).then(async()=>{await reload();await classList.reload();window.dispatchEvent(new Event('desktop-classrooms-changed'));setEditOpen(false);toast.push('Đã cập nhật lớp học.','success');}).catch(e=>toast.push(describeError(e),'error')).finally(()=>setEditBusy(false));}}>Lưu thay đổi</Button></>}><div className="stack"><Field label="Tên lớp" required>{id=><TextInput id={id} value={editName} maxLength={120} onChange={e=>setEditName(e.target.value)}/>}</Field><Field label="Mô tả">{id=><TextArea id={id} value={editDescription} maxLength={1000} onChange={e=>setEditDescription(e.target.value)}/>}</Field></div></Modal>
-      <Tabs
-        tabs={[
-          { id: 'conversation', label: 'Hội thoại' },
-          { id: 'files', label: 'Tệp' },
-          { id: 'overview', label: 'Tổng quan' },
-          { id: 'board', label: 'Bảng lớp' },
-          { id: 'resources', label: 'Tài liệu giáo viên' },
-          ...(data.classroom.duties.attendance ? [{ id: 'attendance' as const, label: 'Điểm danh' }] : []),
-          { id: 'private-notes', label: 'Ghi chú riêng' },
-          { id: 'seating', label: 'Sơ đồ chỗ ngồi' },
-          { id: 'gradebook', label: 'Bảng điểm' },
-          { id: 'skill-progress', label: 'Tiến độ kỹ năng' },
-          { id: 'term-reports', label: 'Báo cáo học tập' },
-          { id: 'support', label: 'Lịch hỗ trợ' },
-          { id:'schedule',label:'Lịch dạy' },
-          ...(data.classroom.duties.grading ? [{id:'worksheets' as const,label:'Bài từ ngân hàng'}] : []),
-          ...(data.classroom.isOwner || user?.role === 'ADMIN' ? [{ id:'duties' as const,label:'Phân công' }] : []),
-          ...(data.classroom.isOwner || user?.role === 'ADMIN' ? [{ id: 'ratings' as const, label: 'Đánh giá buổi học' }] : []),
-          { id: 'students', label: `Students (${data.members.filter((member) => member.role === 'STUDENT').length})` },
-          { id: 'assignments', label: `Assignments (${data.assignments.length})` },
-          { id: 'invites', label: `Invitations (${data.invites.length})` },
-        ]}
-        value={tab}
-        onChange={next=>{if(tab==='attendance'&&next!=='attendance'&&attendanceDirty&&!window.confirm('Điểm danh có thay đổi chưa lưu. Rời tab sẽ bỏ thay đổi, tiếp tục?'))return;if(tab==='private-notes'&&next!=='private-notes'&&notesDirty&&!window.confirm('Ghi chú chưa lưu. Rời tab sẽ bỏ thay đổi, tiếp tục?'))return;if(tab==='seating'&&next!=='seating'&&seatingDirty&&!window.confirm('Sơ đồ chưa lưu. Rời tab sẽ bỏ thay đổi, tiếp tục?'))return;setAttendanceDirty(false);setNotesDirty(false);setSeatingDirty(false);setTab(next);}}
-      />
+      <div className="classroom-tabs"><Tabs tabs={availableTabs.filter(item=>primaryTabs.includes(item.id))} value={tab} onChange={changeTab}/><label>Thêm công cụ<select aria-label="Thêm công cụ lớp" value={primaryTabs.includes(tab)?'':tab} onChange={e=>{const next=allowedTabs.find(item=>item===e.target.value);if(next)changeTab(next);}}><option value="">Chọn công cụ…</option>{availableTabs.filter(item=>!primaryTabs.includes(item.id)).map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label></div>
 
       {tab === 'conversation' || tab === 'files' ? <div className="teacher-conversations">
         <aside className="teacher-conversations__sidebar"><div className="teacher-conversations__sidebar-head"><h2>Trò chuyện</h2><Link to="/teacher" aria-label="Danh sách lớp"><Icon name="users" size={18} /></Link></div><p>Lớp học</p>

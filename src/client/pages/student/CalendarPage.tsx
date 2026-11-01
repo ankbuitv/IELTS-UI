@@ -1,3 +1,5 @@
+import {TeacherWeek} from './TeacherWeek';
+import {useAuth} from '../../context/AuthContext';
 import { useMemo, useState } from 'react';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
@@ -46,6 +48,7 @@ function dayHeading(key: string, todayKey: string): string {
 /** The learner/coach calendar: sessions, classes, deadlines and your own plans. */
 export function CalendarPage() {
   const toast = useToast();
+  const {user}=useAuth();const [view,setView]=useState<'month'|'week'>('month');
   const todayKey = dayKey(new Date().toISOString());
   const [anchor, setAnchor] = useState(() => new Date());
   const [selected, setSelected] = useState<string | null>(todayKey);
@@ -127,6 +130,8 @@ export function CalendarPage() {
     }
   };
 
+  if(view==='week'&&(user?.role==='TEACHER'||user?.role==='ADMIN'))return <TeacherWeek onMonth={()=>setView('month')}/>;
+
   return (
     <div className="stack">
       <div className="cal-top">
@@ -137,6 +142,7 @@ export function CalendarPage() {
           </p>
         </div>
         <div className="row gap-8">
+          {(user?.role==='TEACHER'||user?.role==='ADMIN')&&<Button size="sm" variant="secondary" onClick={()=>setView('week')}>Xem tuần</Button>}
           <Button size="sm" variant="ghost" onClick={jumpToToday}>
             Today
           </Button>

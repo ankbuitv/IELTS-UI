@@ -26,8 +26,9 @@ import {
   updateAssignment,
   updateClassroom,
 } from '../services/teacher-service';
+import {searchTeacherWorkspace} from '../services/teacher-workspace-search';
 import {setQuestionFeedback} from '../services/question-feedback-service';
-import {listTeachingSchedule,createTeachingEvent,updateTeachingEvent,deleteTeachingEvent} from '../services/class-teaching-schedule-service';
+import {listTeachingSchedule,createTeachingEvent,updateTeachingEvent,moveTeachingEvent,deleteTeachingEvent} from '../services/class-teaching-schedule-service';
 import {teacherWritingReview,saveWritingReview} from '../services/writing-revision-service';
 import {createWorksheet,listTeacherWorksheets,teacherWorksheetDetail,teacherWorksheetVersions,closeWorksheet,saveWorksheetFeedback} from '../services/class-worksheet-service';
 import {listRubrics,createRubric,updateRubric,deleteRubric} from '../services/teacher-rubrics-service';
@@ -59,6 +60,8 @@ router.use('*', async (c, next) => {
   assertSameOrigin(c);
   await next();
 });
+
+router.get('/search',async c=>c.json(await searchTeacherWorkspace(c.env,currentUser(c),c.req.query('q')??'')));
 
 // ---------------------------------------------------------------------------
 // Classrooms
@@ -100,6 +103,7 @@ const teachingOccurrence=z.object({startsAt:z.string().datetime(),endsAt:z.strin
 const teachingInput=teachingOccurrence.extend({title:z.string().trim().min(1).max(150),kind:z.enum(['REGULAR','MAKEUP']).optional(),note:z.string().trim().max(500).optional()});
 router.post('/classrooms/:id/schedule',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,teachingInput.extend({occurrences:z.array(teachingOccurrence).max(23).optional()}));return c.json(await createTeachingEvent(c.env,currentUser(c),c.req.param('id'),body),201);});
 router.put('/classrooms/:id/schedule/:eventId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,teachingInput);await updateTeachingEvent(c.env,currentUser(c),c.req.param('id'),c.req.param('eventId'),body);return c.json({ok:true});});
+router.patch('/classrooms/:id/schedule/:eventId/time',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,teachingOccurrence);await moveTeachingEvent(c.env,currentUser(c),c.req.param('id'),c.req.param('eventId'),body);return c.json({ok:true});});
 router.delete('/classrooms/:id/schedule/:eventId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteTeachingEvent(c.env,currentUser(c),c.req.param('id'),c.req.param('eventId'));return c.json({ok:true});});
 
 router.get('/classrooms/:id/worksheets',async c=>c.json({worksheets:await listTeacherWorksheets(c.env,currentUser(c),c.req.param('id'))}));
@@ -535,7 +539,8 @@ router.put('/writing-submissions/:submissionId/review',async c=>{assertCsrf(c,c.
 router.get('/writing-queue', async (c) => {
   const user = currentUser(c);
   const unmarkedOnly = c.req.query('unmarked') === '1' || c.req.query('unmarked') === 'true';
-  return c.json(await listWritingQueue(c.env, user, { unmarkedOnly }));
+  const classroomId=c.req.query('classroom')?.slice(0,100)||undefined;const deadline=c.req.query('deadline');const order=c.req.query('order');
+  return c.json(await listWritingQueue(c.env, user, { unmarkedOnly, classroomId, deadline:deadline==='has'||deadline==='none'?deadline:undefined, order:order==='deadline'?'deadline':undefined }));
 });
 
 router.put('/attempts/:attemptId/question-feedback',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({questionId:z.string().min(1).max(100),body:z.string().max(2000)}));await setQuestionFeedback(c.env,currentUser(c),c.req.param('attemptId'),body.questionId,body.body);return c.json({ok:true});});

@@ -118,6 +118,9 @@ router.get('/review-queue', requireRole('TEACHER', 'ADMIN'), async (c) => {
   const queue = await listSpeakingQueue(c.env, currentUser(c), {
     unmarkedOnly,
     limit: Number.isFinite(limit) ? limit : 50,
+    classroomId:c.req.query('classroom')?.slice(0,100)||undefined,
+    deadline:c.req.query('deadline')==='has'?'has':c.req.query('deadline')==='none'?'none':undefined,
+    order:c.req.query('order')==='deadline'?'deadline':undefined,
   });
   return c.json(queue);
 });

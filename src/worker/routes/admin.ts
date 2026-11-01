@@ -1156,7 +1156,8 @@ router.get('/writing-submissions/:submissionId/ai-draft', async (c) => {
 router.get('/writing-queue', async (c) => {
   const user = currentUser(c);
   const unmarkedOnly = c.req.query('unmarked') === '1' || c.req.query('unmarked') === 'true';
-  return c.json(await listWritingQueue(c.env, user, { unmarkedOnly }));
+  const classroomId=c.req.query('classroom')?.slice(0,100)||undefined;const deadline=c.req.query('deadline');const order=c.req.query('order');
+  return c.json(await listWritingQueue(c.env, user, { unmarkedOnly, classroomId, deadline:deadline==='has'||deadline==='none'?deadline:undefined, order:order==='deadline'?'deadline':undefined }));
 });
 
 router.post('/writing-scores', async (c) => {

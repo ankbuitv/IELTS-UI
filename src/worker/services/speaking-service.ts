@@ -257,6 +257,7 @@ export interface SpeakingQueueItem {
   words: number;
   createdAt: string;
   markedAt: string | null;
+  classroomId:string|null;classroomName:string|null;markingDeadlineAt:string|null;
 }
 
 /**
@@ -267,17 +268,20 @@ export interface SpeakingQueueItem {
 export async function listSpeakingQueue(
   env: Env,
   user: AuthUser,
-  options: { unmarkedOnly?: boolean; limit?: number } = {},
+  options: { unmarkedOnly?: boolean; limit?: number; classroomId?:string; deadline?:'has'|'none'; order?:'deadline' } = {},
 ): Promise<{ sessions: SpeakingQueueItem[]; unmarkedCount: number }> {
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
   const teacherFilter = user.role === 'ADMIN' ? '' : `AND EXISTS(SELECT 1 FROM attempts a WHERE a.id=s.source_attempt_id AND ${teacherAttemptScope('a',true)})`;
   const unmarkedFilter = options.unmarkedOnly ? 'AND s.overall_band IS NULL' : '';
   const bindings = user.role === 'ADMIN' ? [] : [user.id, user.id];
+  const filters=`${options.classroomId?' AND asg.classroom_id=?':''}${options.deadline==='has'?' AND md.deadline_at IS NOT NULL':options.deadline==='none'?' AND md.deadline_at IS NULL':''}`;
+  const filterBindings=options.classroomId?[...bindings,options.classroomId]:bindings;
+  const ordering=options.order==='deadline'?"CASE WHEN md.deadline_at IS NULL THEN 1 ELSE 0 END, md.deadline_at ASC, s.created_at DESC":"CASE WHEN s.overall_band IS NULL THEN 0 ELSE 1 END, COALESCE(s.marked_at, s.created_at) DESC";
 
   const rows = await env.DB.prepare(
     `SELECT s.id, s.user_id, s.mode, s.status, s.topic_title, s.overall_band, s.score_source, s.provider_model,
             s.feedback, s.created_at, s.marked_at,
-            u.email, p.display_name,
+            u.email, p.display_name, cls.id AS classroom_id,cls.name AS classroom_name,md.deadline_at AS marking_deadline_at,
             (SELECT COUNT(*) FROM speaking_responses r WHERE r.session_id = s.id) AS parts,
             (SELECT COUNT(*) FROM speaking_responses r
                JOIN speaking_recording_blobs b ON b.response_id = r.id
@@ -286,13 +290,18 @@ export async function listSpeakingQueue(
        FROM speaking_sessions s
        JOIN users u ON u.id = s.user_id
        LEFT JOIN user_profiles p ON p.user_id = u.id
+       LEFT JOIN attempts src ON src.id=s.source_attempt_id
+       LEFT JOIN assignments asg ON asg.id=src.assignment_id
+       LEFT JOIN classrooms cls ON cls.id=asg.classroom_id
+       LEFT JOIN assignment_marking_deadlines md ON md.assignment_id=asg.id
       WHERE s.status != 'IN_PROGRESS'
         ${teacherFilter}
         ${unmarkedFilter}
-      ORDER BY CASE WHEN s.overall_band IS NULL THEN 0 ELSE 1 END, COALESCE(s.marked_at, s.created_at) DESC
+        ${filters}
+      ORDER BY ${ordering}
       LIMIT ${limit}`,
   )
-    .bind(...bindings)
+    .bind(...filterBindings)
     .all<{
       id: string;
       user_id: string;
@@ -310,13 +319,14 @@ export async function listSpeakingQueue(
       parts: number;
       audio_parts: number;
       words: number;
+      classroom_id:string|null;classroom_name:string|null;marking_deadline_at:string|null;
     }>();
 
   const unmarked = await env.DB.prepare(
-    `SELECT COUNT(*) AS n FROM speaking_sessions s
-      WHERE s.status != 'IN_PROGRESS' AND s.overall_band IS NULL ${teacherFilter}`,
+    `SELECT COUNT(*) AS n FROM speaking_sessions s LEFT JOIN attempts src ON src.id=s.source_attempt_id LEFT JOIN assignments asg ON asg.id=src.assignment_id LEFT JOIN assignment_marking_deadlines md ON md.assignment_id=asg.id
+      WHERE s.status != 'IN_PROGRESS' AND s.overall_band IS NULL ${teacherFilter} ${filters}`,
   )
-    .bind(...bindings)
+    .bind(...filterBindings)
     .first<{ n: number }>();
 
   return {
@@ -338,6 +348,7 @@ export async function listSpeakingQueue(
       words: row.words,
       createdAt: row.created_at,
       markedAt: row.marked_at,
+      classroomId:row.classroom_id,classroomName:row.classroom_name,markingDeadlineAt:row.marking_deadline_at,
     })),
   };
 }

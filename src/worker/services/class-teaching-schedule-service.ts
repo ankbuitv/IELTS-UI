@@ -58,3 +58,13 @@ export async function deleteTeachingEvent(env: Env, user: AuthUser, classId: str
   const result = await env.DB.prepare('DELETE FROM classroom_teaching_events WHERE id=? AND classroom_id=? AND (teacher_id=? OR ?=1)').bind(id, classId, user.id, +(user.role === 'ADMIN' || c.teacher_id === user.id)).run();
   if (!result.meta.changes) throw ApiError.notFound();
 }
+
+export async function moveTeachingEvent(env:Env,user:AuthUser,classId:string,id:string,time:Occurrence){
+  const classroom=await requireClassroomAccess(env,user,classId);
+  if(classroom.status!=='ACTIVE')throw ApiError.conflict('Lớp đã lưu trữ.');
+  const next=validateTime(time),canManage=+(user.role==='ADMIN'||classroom.teacher_id===user.id);
+  const result=await env.DB.prepare(`UPDATE classroom_teaching_events SET starts_at=?,ends_at=? WHERE id=? AND classroom_id=? AND (teacher_id=? OR ?=1)`).bind(next.startsAt,next.endsAt,id,classId,user.id,canManage).run();
+  if(!result.meta.changes)throw ApiError.notFound();
+  const row=await env.DB.prepare('SELECT title,kind,note FROM classroom_teaching_events WHERE id=? AND classroom_id=?').bind(id,classId).first<{title:string;kind:'REGULAR'|'MAKEUP';note:string}>();
+  if(row)await notifyClass(env,classId,row.kind==='MAKEUP'?'Lịch dạy bù đã thay đổi':'Lịch dạy đã thay đổi',`${row.title}${row.note?` · ${row.note}`:''}`);
+}

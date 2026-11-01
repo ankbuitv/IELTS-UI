@@ -544,13 +544,14 @@ export interface WritingQueueItem {
   scoringSource: string | null;
   criteria: Record<string, number>;
   needsRevisionReview:boolean;
+  classroomId:string|null; classroomName:string|null; markingDeadlineAt:string|null;
 }
 
 /** Writing responses waiting for (or already given) a human band. */
 export async function listWritingQueue(
   env: Env,
   user: AuthUser,
-  options: { unmarkedOnly?: boolean; limit?: number } = {},
+  options: { unmarkedOnly?: boolean; limit?: number; classroomId?:string; deadline?:'has'|'none'; order?:'deadline' } = {},
 ): Promise<{ submissions: WritingQueueItem[]; unmarkedCount: number }> {
   const limit = Math.min(Math.max(options.limit ?? 100, 1), 200);
   const teacherFilter = user.role === 'ADMIN' ? '' : `AND ${teacherAttemptScope('a',true)}`;
@@ -558,26 +559,34 @@ export async function listWritingQueue(
   const needsAttention=`(ws.id IS NULL OR ws.band IS NULL OR ws.scoring_source='AI' OR ${revisionPending})`;
   const unmarkedFilter = options.unmarkedOnly ? `AND ${needsAttention}` : '';
   const bindings = user.role === 'ADMIN' ? [] : [user.id, user.id];
+  const filters = `${options.classroomId?' AND asg.classroom_id=?':''}${options.deadline==='has'?' AND md.deadline_at IS NOT NULL':options.deadline==='none'?' AND md.deadline_at IS NULL':''}`;
+  const filterBindings=options.classroomId?[...bindings,options.classroomId]:bindings;
+  const ordering=options.order==='deadline'?"CASE WHEN md.deadline_at IS NULL THEN 1 ELSE 0 END, md.deadline_at ASC, COALESCE(w.submitted_at, w.updated_at) DESC":"CASE WHEN ws.band IS NULL THEN 0 ELSE 1 END, COALESCE(w.submitted_at, w.updated_at) DESC";
 
   const rows = await env.DB.prepare(
     `SELECT w.id, w.attempt_id, w.task_label, w.word_count, w.response_text, w.submitted_at, w.prompt_snapshot,
             a.user_id, a.status AS attempt_status, a.test_type,
             t.title AS test_title, u.email, p.display_name,
-            ws.band, ws.feedback, ws.scoring_source, ws.criteria_json, ${revisionPending} AS revision_pending
+            ws.band, ws.feedback, ws.scoring_source, ws.criteria_json, ${revisionPending} AS revision_pending,
+            cls.id AS classroom_id, cls.name AS classroom_name, md.deadline_at AS marking_deadline_at
        FROM writing_submissions w
        JOIN attempts a ON a.id = w.attempt_id
        JOIN tests t ON t.id = a.test_id
        JOIN users u ON u.id = a.user_id
        LEFT JOIN user_profiles p ON p.user_id = u.id
        LEFT JOIN writing_scores ws ON ws.writing_submission_id = w.id
+       LEFT JOIN assignments asg ON asg.id=a.assignment_id
+       LEFT JOIN classrooms cls ON cls.id=asg.classroom_id
+       LEFT JOIN assignment_marking_deadlines md ON md.assignment_id=asg.id
       WHERE TRIM(w.response_text) != ''
         AND a.status IN ('SUBMITTED', 'EXPIRED')
         ${teacherFilter}
         ${unmarkedFilter}
-      ORDER BY CASE WHEN ws.band IS NULL THEN 0 ELSE 1 END, COALESCE(w.submitted_at, w.updated_at) DESC
+        ${filters}
+      ORDER BY ${ordering}
       LIMIT ${limit}`,
   )
-    .bind(...bindings)
+    .bind(...filterBindings)
     .all<{
       id: string;
       attempt_id: string;
@@ -597,6 +606,7 @@ export async function listWritingQueue(
       scoring_source: string | null;
       criteria_json: string | null;
       revision_pending: number;
+      classroom_id:string|null; classroom_name:string|null; marking_deadline_at:string|null;
     }>();
 
   const unmarked = await env.DB.prepare(
@@ -604,12 +614,15 @@ export async function listWritingQueue(
        FROM writing_submissions w
        JOIN attempts a ON a.id = w.attempt_id
        LEFT JOIN writing_scores ws ON ws.writing_submission_id = w.id
+       LEFT JOIN assignments asg ON asg.id=a.assignment_id
+       LEFT JOIN assignment_marking_deadlines md ON md.assignment_id=asg.id
       WHERE TRIM(w.response_text) != ''
         AND a.status IN ('SUBMITTED', 'EXPIRED')
         AND ${needsAttention}
-        ${teacherFilter}`,
+        ${teacherFilter}
+        ${filters}`,
   )
-    .bind(...bindings)
+    .bind(...filterBindings)
     .first<{ n: number }>();
 
   return {
@@ -632,6 +645,7 @@ export async function listWritingQueue(
       feedback: row.feedback ?? '',
       scoringSource: row.scoring_source,
       needsRevisionReview: !!row.revision_pending,
+      classroomId:row.classroom_id, classroomName:row.classroom_name, markingDeadlineAt:row.marking_deadline_at,
       criteria: parseJson<Record<string, number>>(row.criteria_json, {}),
     })),
   };

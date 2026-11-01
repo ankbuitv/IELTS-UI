@@ -125,3 +125,7 @@ Trạng thái: `[x]` đã có trong đợt mới; `[ ]` chưa hoàn thành. Các
 - [ ] 98. Cảnh báo mất kết nối và trạng thái lưu bài.
 - [ ] 99. Bảng tình trạng hệ thống.
 - [ ] 100. Kiểm tra người nhận trước khi chia sẻ.
+
+## Giao diện desktop giáo viên
+
+Đã bổ sung cửa sổ Hôm nay, lịch tuần có kéo thả/đổi giờ, bộ lọc hàng chờ Writing và Speaking, tab lớp gọn, tìm kiếm trong Start, lọc trung tâm thông báo, bố cục nhanh và chế độ tập trung. Bộ lọc hàng chờ chạy ở máy chủ, vẫn giới hạn 100 bài Writing / 50 Speaking mỗi lần tải; lớp trong thông báo được nhận diện từ đường dẫn hoặc tên trong nội dung. Mức “cần xử lý” chỉ là phân nhóm chấm bài/bài tập/lịch hẹn, không phải mức độ khẩn cấp do hệ thống xác định. Chế độ tập trung ẩn huy hiệu nhưng không xóa hoặc đánh dấu thông báo đã đọc. Lịch tuần cảnh báo trùng dựa trên các sự kiện của tuần đang tải, không phải khóa chống trùng trên máy chủ; việc đổi giờ chỉ áp dụng cho buổi dạy của giáo viên và thông báo cho lớp theo cơ chế best-effort. Trên thiết bị hẹp, nút đổi giờ thay thế thao tác kéo thả.
