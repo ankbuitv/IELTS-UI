@@ -111,6 +111,7 @@ export function CallRoomPage() {
   const [quizOpen, setQuizOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
   const [timerOpen, setTimerOpen] = useState(false);
+  const [layout, setLayout] = useState<'auto' | 'grid'>('auto');
   const [reportOpen, setReportOpen] = useState(false);
   const [rating, setRating] = useState(0);
   const [feedbackComment, setFeedbackComment] = useState('');
@@ -978,6 +979,9 @@ export function CallRoomPage() {
   const session = state?.session;
   const isMentor = session?.mentorId === user?.id;
   const isClass = session?.kind === 'CLASS';
+  // The first active remote presentation is featured; layout is a local choice.
+  const presenterId = layout === 'auto' ? state?.participants.find((p) => p.userId !== selfId && p.screenOn)?.userId : undefined;
+  const selfPresenting = layout === 'auto' && screenOn;
 
   // Roster = server presence ∪ live peer connections ∪ me. The chip can never
   // disagree with the tiles on screen.
@@ -1415,7 +1419,7 @@ export function CallRoomPage() {
           </aside>
         ) : null}
 
-        <main className={`jr-stage${peers.length === 0 ? ' jr-stage--solo' : ''}`}>
+        <main className={`jr-stage${peers.length === 0 ? ' jr-stage--solo' : ''}${selfPresenting && peers.length ? ' jr-stage--self-presenting' : ''}`}>
           {peers.length === 0 ? (
             <div className="jr-solo">
               <div className={`jr-solo__tile${camOn ? '' : ' is-off'}${screenOn ? ' is-screen' : ''}`}>
@@ -1458,11 +1462,12 @@ export function CallRoomPage() {
             </div>
           ) : (
             <>
-              <div className="jr-grid" data-count={Math.min(peers.length, 6)}>
+              <div className={`jr-grid${presenterId && !selfPresenting ? ' jr-grid--presentation' : ''}`} data-count={Math.min(peers.length, 6)}>
                 {peers.map((peer) => (
                   <RemoteTile
                     key={peer.userId}
                     peer={peer}
+                    featured={peer.userId === presenterId && !selfPresenting}
                     participant={state?.participants.find((item) => item.userId === peer.userId)}
                   />
                 ))}
@@ -1773,6 +1778,9 @@ export function CallRoomPage() {
             </button>
             {moreOpen ? (
               <div className="jr-more" role="menu">
+                <button type="button" onClick={() => { setLayout((current) => current === 'auto' ? 'grid' : 'auto'); setMoreOpen(false); }}>
+                  <Icon name="grid" size={15} /> {layout === 'auto' ? 'Dùng dạng lưới' : 'Tự động ưu tiên trình chiếu'}
+                </button>
                 <button type="button" onClick={() => { setSettingsOpen(true); setMoreOpen(false); }}>
                   <Icon name="settings" size={15} />
                   Device settings
@@ -2625,7 +2633,7 @@ function ChatMessageBody({ body }: { body: string }) {
   );
 }
 
-function RemoteTile({ peer, participant }: { peer: Peer; participant?: RoomParticipant }) {
+function RemoteTile({ peer, participant, featured = false }: { peer: Peer; participant?: RoomParticipant; featured?: boolean }) {
   const [live, setLive] = useState(false);
   const [micLive, setMicLive] = useState(true);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -2688,7 +2696,7 @@ function RemoteTile({ peer, participant }: { peer: Peer; participant?: RoomParti
   const muted = participant ? !participant.micOn : !micLive;
 
   return (
-    <div className={`jr-tile${showVideo ? '' : ' is-avatar'}`}>
+    <div className={`jr-tile${showVideo ? '' : ' is-avatar'}${featured ? ' is-featured' : ''}`}>
       <video
         ref={(el) => {
           videoRef.current = el;
