@@ -5,12 +5,12 @@ describe('staff desktop navigation',()=>{
     expect(homeForRole('STUDENT')).toBe('/dashboard');
     for(const role of ['TEACHER','MENTOR','ADMIN']) {
       expect(homeForRole(role)).toBe('/school-desktop');
-      for(const path of ['/','/dashboard','/teacher','/admin/users','/classes/a','/notifications','/join?token=a'])expect(isStaffDesktopPath(role,path)).toBe(true);
+      for(const path of ['/','/dashboard','/teacher','/admin/users','/classes/a','/notifications','/join?token=a','/exam/abc','/exam/abc/review'])expect(isStaffDesktopPath(role,path)).toBe(true);
     }
     expect(isStaffDesktopPath('STUDENT','/teacher')).toBe(false);
   });
   it('leaves authentication, calls and full-screen learning flows outside the desktop',()=>{
-    for(const path of ['/login','/register','/auth/magic','/reset-password','/school-desktop','/sessions/abc/room?room=one','/exam/abc/review','/learn/lesson/one','/learn/review'])expect(isStaffDesktopPath('TEACHER',path)).toBe(false);
+    for(const path of ['/login','/register','/auth/magic','/reset-password','/school-desktop','/sessions/abc/room?room=one','/learn/lesson/one','/learn/review'])expect(isStaffDesktopPath('TEACHER',path)).toBe(false);
     expect(isFullScreenPath('/learn/review?x=1')).toBe(true);
     expect(isFullScreenPath('/learn/reviewed')).toBe(false);
   });

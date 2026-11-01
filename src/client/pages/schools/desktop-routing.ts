@@ -1,7 +1,7 @@
-/** Staff use the desktop except for dedicated call, exam and lesson players. */
+/** Staff use the desktop except for dedicated call and lesson players. */
 export function isFullScreenPath(path:string):boolean {
   const pathname=path.split(/[?#]/,1)[0] ?? '';
-  return /^\/sessions\/[^/]+\/room$/.test(pathname) || pathname.startsWith('/exam/') || pathname.startsWith('/learn/lesson/') || pathname === '/learn/review';
+  return /^\/sessions\/[^/]+\/room$/.test(pathname) || pathname.startsWith('/learn/lesson/') || pathname === '/learn/review';
 }
 export function isStaffDesktopPath(role:string,path:string):boolean {
   if(role==='STUDENT' || isFullScreenPath(path))return false;

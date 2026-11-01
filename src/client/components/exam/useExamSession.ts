@@ -1,3 +1,4 @@
+import { useExamContainer, useExamEmbedded } from './ExamEmbeddedContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, describeError } from '../../lib/api';
 import type { CandidateResponse } from '@shared/answer-key';
@@ -162,6 +163,8 @@ export function useExamSession(attemptId: string): ExamSessionApi {
   /** Counted "left the tab" events, so the notice can say "2 of 3" before the server answers. */
   const strikes = useRef(0);
   const [connection, setConnection] = useState<'online' | 'offline'>(navigator.onLine ? 'online' : 'offline');
+  const examContainer = useExamContainer();
+  const embedded = useExamEmbedded();
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
 
   /** Answers not yet sent. */
@@ -342,6 +345,7 @@ export function useExamSession(attemptId: string): ExamSessionApi {
   useEffect(() => {
     if (!integrityPolicy || isSubmitted) return;
     const policy = integrityPolicy;
+    const inExam = (event: Event) => !embedded || (event.target instanceof Node && !!examContainer?.current?.contains(event.target));
     const cleanup: Array<() => void> = [];
 
     if (policy.monitorVisibility) {
@@ -425,6 +429,7 @@ export function useExamSession(attemptId: string): ExamSessionApi {
 
     if (!policy.allowCopy) {
       const onCopy = (event: Event) => {
+        if (!inExam(event)) return;
         event.preventDefault();
         logIntegrity('COPY_ATTEMPT');
         setWarning('Copying is disabled during this attempt.');
@@ -435,6 +440,7 @@ export function useExamSession(attemptId: string): ExamSessionApi {
 
     if (!policy.allowPaste) {
       const onPaste = (event: Event) => {
+        if (!inExam(event)) return;
         const target = event.target as HTMLElement | null;
         if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
           // Writing sections must remain usable; paste is recorded not blocked there.
@@ -450,6 +456,7 @@ export function useExamSession(attemptId: string): ExamSessionApi {
 
     if (!policy.allowContextMenu) {
       const onContextMenu = (event: Event) => {
+        if (!inExam(event)) return;
         event.preventDefault();
         logIntegrity('CONTEXT_MENU_ATTEMPT');
       };
@@ -474,7 +481,7 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     cleanup.push(() => window.removeEventListener('popstate', onPopState));
 
     return () => cleanup.forEach((fn) => fn());
-  }, [integrityPolicy, isSubmitted, logIntegrity]);
+  }, [integrityPolicy, isSubmitted, logIntegrity, embedded, examContainer]);
 
   // --------------------------------------------------------------- autosave
   /** Success bookkeeping shared by answer and essay saves. */
@@ -636,8 +643,9 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', flushNow);
+      if (embedded) flushNow();
     };
-  }, [flushAnswers, flushWriting, persistDraft]);
+  }, [flushAnswers, flushWriting, persistDraft, embedded]);
 
   // Connectivity monitoring.
   useEffect(() => {

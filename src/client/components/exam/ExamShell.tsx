@@ -20,19 +20,23 @@ import { ExamDictionary } from './ExamDictionary';
 import { missingQuestionIds } from './answer-coverage';
 import { TabLockOverlay } from './TabLockOverlay';
 import { useExamViewportLock } from './useExamViewport';
+import { useExamContainer, useExamEmbedded } from './ExamEmbeddedContext';
 import { useInputLockdown } from '../../hooks/useInputLockdown';
 
 export function ExamShell({ session, onFinished }: { session: ExamSessionApi; onFinished: () => void }) {
   // The exam owns the viewport: only its panes scroll (see exam.css).
   useExamViewportLock();
   // Discourage the right-click menu and open-devtools shortcuts during the exam.
-  useInputLockdown();
+  const embedded = useExamEmbedded();
+  const examContainer = useExamContainer();
+  useInputLockdown(true, examContainer);
 
   const { state } = session;
   const toast = useToast();
   const navigate = useNavigate();
   /** Phone-sized: one pane at a time, switched with Passage | Questions. */
-  const compact = useMediaQuery('(max-width: 719px)');
+  const narrowScreen = useMediaQuery('(max-width: 719px)');
+  const compact = embedded || narrowScreen;
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
   const [paneMode, setPaneMode] = useState<PaneMode>(readStoredPaneMode);
   const [compactMode, setCompactMode] = useState<'PASSAGE' | 'QUESTIONS'>('QUESTIONS');

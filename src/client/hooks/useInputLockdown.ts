@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type RefObject } from 'react';
 
 /**
  * Discourages casual inspection on the secure surfaces (the live exam and the
@@ -10,7 +10,7 @@ import { useEffect } from 'react';
  * the server's tab-lock and integrity events; this simply removes the obvious
  * in-page shortcuts so the exam conditions read clearly.
  */
-export function useInputLockdown(enabled = true) {
+export function useInputLockdown(enabled = true, scope: RefObject<HTMLElement | null> | null = null) {
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') return;
 
@@ -23,13 +23,14 @@ export function useInputLockdown(enabled = true) {
       return false;
     };
 
+    const inScope = (event: Event) => !scope || (event.target instanceof Node && !!scope.current?.contains(event.target));
     const onKey = (event: KeyboardEvent) => {
-      if (isBlocked(event)) {
+      if (inScope(event) && isBlocked(event)) {
         event.preventDefault();
         event.stopPropagation();
       }
     };
-    const onContextMenu = (event: MouseEvent) => event.preventDefault();
+    const onContextMenu = (event: MouseEvent) => { if (inScope(event)) event.preventDefault(); };
 
     window.addEventListener('keydown', onKey, true);
     window.addEventListener('contextmenu', onContextMenu, true);
@@ -37,5 +38,5 @@ export function useInputLockdown(enabled = true) {
       window.removeEventListener('keydown', onKey, true);
       window.removeEventListener('contextmenu', onContextMenu, true);
     };
-  }, [enabled]);
+  }, [enabled, scope]);
 }

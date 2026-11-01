@@ -42,7 +42,6 @@ import { AdminUsersPage } from './pages/admin/AdminUsers';
 import { AdminAttemptsPage } from './pages/admin/AdminAttempts';
 import { AdminSettingsPage } from './pages/admin/AdminSettings';
 import { AdminLearnPage } from './pages/admin/AdminLearn';
-import { AdminBillingPage } from './pages/admin/AdminBillingPage';
 import { MentorDirectoryPage } from './pages/mentor/MentorDirectoryPage';
 import { MentorProfilePage } from './pages/mentor/MentorProfilePage';
 import { MySessionsPage } from './pages/mentor/MySessionsPage';
@@ -460,7 +459,7 @@ export function App() {
           <Route path="attempts" element={<AdminAttemptsPage />} />
           <Route path="writing" element={<AdminWritingQueuePage />} />
           <Route path="learn" element={<AdminLearnPage />} />
-          <Route path="billing" element={<AdminBillingPage />} />
+          <Route path="billing" element={<Navigate to="/admin" replace />} />
           <Route path="settings" element={<AdminSettingsPage />} />
           <Route path="schools" element={<AdminSchoolsPage />} />
         </Route>

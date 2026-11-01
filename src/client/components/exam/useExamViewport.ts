@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useExamEmbedded } from './ExamEmbeddedContext';
 
 /**
  * Pins the exam to the visible viewport while it is mounted.
@@ -16,7 +17,9 @@ import { useEffect } from 'react';
  *   is undone.
  */
 export function useExamViewportLock(): void {
+  const embedded = useExamEmbedded();
   useEffect(() => {
+    if (embedded) return;
     const html = document.documentElement;
     const viewport = window.visualViewport;
 
@@ -47,5 +50,5 @@ export function useExamViewportLock(): void {
       html.style.removeProperty('--exam-vh');
       html.style.removeProperty('--exam-top');
     };
-  }, []);
+  }, [embedded]);
 }
