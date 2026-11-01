@@ -231,8 +231,8 @@ router.get('/mentor/sessions/:sessionId/report', async (c) => {
 router.post('/mentor/sessions/:sessionId/feedback', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
-  const body = await parseBody(c, z.object({ rating: z.number().int().min(1).max(5), comment: z.string().max(2000).default('') }));
-  await submitCallFeedback(c.env, user, c.req.param('sessionId'), body.rating, body.comment);
+  const body = await parseBody(c, z.object({ rating: z.number().int().min(1).max(5) }));
+  await submitCallFeedback(c.env, user, c.req.param('sessionId'), body.rating);
   return c.json({ ok: true }, 201);
 });
 

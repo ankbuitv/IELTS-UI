@@ -10,6 +10,7 @@ import { currentUser } from '../middleware/auth';
 import { acceptClassroomInvite, joinClassroomByCode } from '../services/teacher-service';
 import { newId } from '../lib/ids';
 import { nowIso } from '../lib/ids';
+import { classroomCallFeedback } from '../services/call-feedback-service';
 
 const router = new Hono<AppBindings>();
 
@@ -137,6 +138,12 @@ router.post('/classrooms/:classroomId/room', async (c) => {
       .bind(nowIso(), roomId).run();
   }
   return c.json({ sessionId: roomId });
+});
+
+/** Owner-only online ratings; reading them never starts a call. */
+router.get('/classrooms/:classroomId/call-feedback', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  return c.json(await classroomCallFeedback(c.env, currentUser(c), c.req.param('classroomId')));
 });
 
 /** The course chat stream, newest 100, oldest first. */

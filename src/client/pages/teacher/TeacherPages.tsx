@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
+import { useAuth } from '../../context/AuthContext';
 import {
   Badge,
   Button,
@@ -192,7 +193,8 @@ interface ClassroomDetailResponse {
 export function ClassroomPage() {
   const { classroomId = '' } = useParams();
   const toast = useToast();
-  const [tab, setTab] = useState<'conversation' | 'files' | 'overview' | 'students' | 'assignments' | 'invites'>('conversation');
+  const [tab, setTab] = useState<'conversation' | 'files' | 'overview' | 'students' | 'assignments' | 'invites' | 'ratings'>('conversation');
+  const { user } = useAuth();
   const { data, loading, error, reload } = useAsync<ClassroomDetailResponse>(
     () => api.get(`/api/teacher/classrooms/${classroomId}`),
     [classroomId],
@@ -235,6 +237,7 @@ export function ClassroomPage() {
           { id: 'conversation', label: 'Hội thoại' },
           { id: 'files', label: 'Tệp' },
           { id: 'overview', label: 'Tổng quan' },
+          ...(data.classroom.isOwner || user?.role === 'ADMIN' ? [{ id: 'ratings' as const, label: 'Đánh giá buổi học' }] : []),
           { id: 'students', label: `Students (${data.members.filter((member) => member.role === 'STUDENT').length})` },
           { id: 'assignments', label: `Assignments (${data.assignments.length})` },
           { id: 'invites', label: `Invitations (${data.invites.length})` },
@@ -250,6 +253,7 @@ export function ClassroomPage() {
         <section className="teacher-conversations__main"><header className="teacher-conversations__head"><span className="teacher-conversations__avatar">{data.classroom.name.trim().slice(0, 1).toLocaleUpperCase()}</span><div><h2>{data.classroom.name}</h2><p>{tab === 'files' ? 'Tệp đã chia sẻ trong lớp' : 'Hội thoại chung của lớp'}</p></div></header><ClassroomChat key={classroomId} classroomId={classroomId} view={tab === 'files' ? 'files' : 'messages'} /></section>
       </div> : null}
 
+      {tab === 'ratings' && (data.classroom.isOwner || user?.role === 'ADMIN') ? <ClassroomRatings classroomId={classroomId} /> : null}
       {tab === 'overview' ? (
         <>
           <div className="grid grid--4">
@@ -1241,4 +1245,14 @@ export function StudentDetailPage() {
       </Modal>
     </div>
   );
+}
+
+/** Online-only ratings: available to the class owner without opening the room. */
+function ClassroomRatings({ classroomId }: { classroomId: string }) {
+  const { data, loading, error, reload } = useAsync<{ feedback: Array<{ id: string; name: string; rating: number; createdAt: string }> }>(
+    () => api.get(`/api/classrooms/${encodeURIComponent(classroomId)}/call-feedback`), [classroomId]);
+  const feedback = data?.feedback ?? [];
+  return <section className="class-ratings"><header><div><h2>Đánh giá buổi học</h2><p>Đánh giá bằng sao từ học viên; tối đa 100 lượt gần nhất.</p></div><Button size="sm" onClick={() => void reload()}>Làm mới</Button></header>
+    {loading ? <Loading label="Đang tải đánh giá…" /> : error ? <Notice tone="danger">{error}</Notice> : feedback.length === 0 ? <EmptyState title="Chưa có đánh giá"><p>Học viên có thể đánh giá sau khi rời buổi học.</p></EmptyState> : <><p className="class-ratings__average"><strong>{(feedback.reduce((sum, item) => sum + item.rating, 0) / feedback.length).toFixed(1)} / 5</strong> · {feedback.length} lượt đánh giá gần nhất</p><ul>{feedback.map((item) => <li key={item.id}><div><strong>{item.name}</strong><time>{formatDateTime(item.createdAt)}</time></div><span aria-label={`${item.rating} trên 5 sao`}>{'★'.repeat(item.rating)}{'☆'.repeat(5 - item.rating)}</span></li>)}</ul></>}
+  </section>;
 }

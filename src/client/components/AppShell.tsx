@@ -46,7 +46,6 @@ const LEARN_GROUP: NavGroup = {
     { to: '/drills', label: 'Ôn dạng bài', icon: 'target' },
     { to: '/history', label: 'Kết quả', icon: 'award' },
     { to: '/vocabulary', label: 'Từ vựng', icon: 'layers' },
-    { to: '/tutor', label: 'AI Gia sư', icon: 'sparkle' },
     { to: '/dictionary', label: 'Từ điển', icon: 'search' },
   ],
 };

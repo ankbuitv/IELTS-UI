@@ -708,3 +708,15 @@
   .class-workspace__nav:not(.is-open) > :not(.class-workspace__nav-title) { display:none; }
   .class-workspace__nav.is-open { max-height:260px; overflow:auto; }
 }
+.class-ratings { background:var(--paper); border:1px solid var(--ink-200); border-radius:14px; padding:24px; }
+.class-ratings header { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap; }
+.class-ratings h2 { font-size:1.1rem; margin:0 0 5px; }
+.class-ratings p { color:var(--ink-600); margin:0; }
+.class-ratings__average { padding:20px 0 8px; }
+.class-ratings__average strong { font-size:1.3rem; color:var(--ink-900); }
+.class-ratings ul { list-style:none; padding:0; margin:0; }
+.class-ratings li { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:14px 0; border-top:1px solid var(--ink-200); }
+.class-ratings li div { display:grid; gap:3px; min-width:0; overflow-wrap:anywhere; }
+.class-ratings time { color:var(--ink-500); font-size:.75rem; }
+.class-ratings li > span { color:#c47b05; font-size:1.15rem; white-space:nowrap; }
+@media (max-width:450px) { .class-ratings { padding:16px; } }

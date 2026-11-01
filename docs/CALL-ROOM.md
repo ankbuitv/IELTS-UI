@@ -86,7 +86,7 @@ Phần UI mới chỉ thay lớp trình bày, không đổi giao thức.
 
 Deploy and maintain a TURN server separately (including firewall, TLS and relay ports). Configure `TURN_URLS` as comma-separated `turn:` / `turns:` URLs and set `TURN_SHARED_SECRET` as a Worker secret matching coturn's `static-auth-secret` with `use-auth-secret`. Authorized room users receive time-limited 24-hour HMAC credentials; the shared secret is never sent to clients. Without both settings the call remains STUN-only, and some networks will not connect. This configuration does not itself provision or verify a relay. Test from separate networks before relying on it.
 
-Attendance records explicit joins/leaves and the latest heartbeat, not proof of attention. A network loss or browser close can leave an open interval; reports label the last heartbeat rather than inventing an exact exit time. The host report is limited to the 200 most recent visits and 100 most recent reviews; CSV exports those visible visits. Feedback is non-anonymous and visible to the session host/admin.
+Attendance records explicit joins/leaves and the latest heartbeat, not proof of attention. A network loss or browser close can leave an open interval; reports label the last heartbeat rather than inventing an exact exit time. The host report is limited to the 200 most recent visits and 100 most recent reviews; CSV exports those visible visits. Star ratings are optional, non-anonymous and visible online to the session host/admin. Teacher classroom owners can review recent ratings on the classroom page without opening a call. There is no ratings CSV; the host-only CSV exports attendance only. Existing written comments remain stored but are no longer displayed.
 
 ### Triển khai sửa lỗi cuộc gọi
 

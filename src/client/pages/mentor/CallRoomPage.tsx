@@ -114,7 +114,6 @@ export function CallRoomPage() {
   const [layout, setLayout] = useState<'auto' | 'grid'>('auto');
   const [reportOpen, setReportOpen] = useState(false);
   const [rating, setRating] = useState(0);
-  const [feedbackComment, setFeedbackComment] = useState('');
   const [feedbackBusy, setFeedbackBusy] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [leaveError, setLeaveError] = useState(false);
@@ -1024,14 +1023,13 @@ export function CallRoomPage() {
     return <div className="jr jr-after"><div className="jr-after__card"><BrandLogo theme="dark" height={32} /><h1>Đã rời buổi học</h1><p>Đánh giá giúp giáo viên hoặc mentor cải thiện buổi học tiếp theo.</p>
       {leaveError && <p role="alert">Chưa xác nhận được việc rời phòng. Hãy kiểm tra mạng và thử lại.</p>}
       {leaveError && <Button onClick={() => void mentorApi.leave(sessionId).then(() => setLeaveError(false)).catch(() => setLeaveError(true))}>Thử lại</Button>}
-      {canReview && !feedbackSent && <form onSubmit={(event) => { event.preventDefault(); setFeedbackBusy(true); void api.post(`/api/mentor/sessions/${sessionId}/feedback`, { rating, comment: feedbackComment }).then(() => setFeedbackSent(true)).catch((cause) => setError(describeError(cause))).finally(() => setFeedbackBusy(false)); }}>
+      {canReview && !feedbackSent && <form onSubmit={(event) => { event.preventDefault(); setFeedbackBusy(true); void api.post(`/api/mentor/sessions/${sessionId}/feedback`, { rating }).then(() => setFeedbackSent(true)).catch((cause) => setError(describeError(cause))).finally(() => setFeedbackBusy(false)); }}>
         <fieldset><legend>Buổi học của bạn thế nào?</legend><div className="jr-after__stars">{[1,2,3,4,5].map((value) => <button type="button" key={value} aria-label={`${value} sao`} aria-pressed={rating === value} onClick={() => setRating(value)}>{value <= rating ? '★' : '☆'}</button>)}</div></fieldset>
-        <label htmlFor="feedback-comment">Nhận xét (không bắt buộc)</label><textarea id="feedback-comment" maxLength={2000} value={feedbackComment} onChange={(event) => setFeedbackComment(event.target.value)} placeholder="Chia sẻ ý kiến của bạn…" />
         {error && <p role="alert">{error}</p>}<Button type="submit" variant="primary" disabled={!rating || leaveError} loading={feedbackBusy}>Gửi đánh giá</Button>
       </form>}
       {feedbackSent && <p role="status">Cảm ơn bạn! Đánh giá đã gửi tới người chủ trì.</p>}
       {isMentor && <Button onClick={() => setReportOpen(true)}>Xem điểm danh và đánh giá</Button>}
-      <Button onClick={() => navigate(isClass ? (session?.classId ? `/classes/${session.classId}` : user?.role === 'TEACHER' ? '/teacher' : '/classrooms') : '/my-sessions')}>Quay lại</Button>
+      <Button disabled={feedbackBusy} onClick={() => navigate(isClass ? (session?.classId ? `/classes/${session.classId}` : user?.role === 'TEACHER' ? '/teacher' : '/classrooms') : '/my-sessions')}>{canReview && !feedbackSent ? 'Bỏ qua' : 'Quay lại'}</Button>
     </div>{reportOpen && <CallReport sessionId={sessionId} onClose={() => setReportOpen(false)} />}</div>;
   }
 
@@ -2837,7 +2835,7 @@ export default CallRoomPage;
 
 interface CallReportData {
   attendance: Array<{ id: string; name: string; joinedAt: string; leftAt: string | null; lastSeenAt: string }>;
-  feedback: Array<{ id: string; name: string; rating: number; comment: string; createdAt: string }>;
+  feedback: Array<{ id: string; name: string; rating: number; createdAt: string }>;
 }
 function CallReport({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
   const [report, setReport] = useState<CallReportData | null>(null);
@@ -2852,6 +2850,6 @@ function CallReport({ sessionId, onClose }: { sessionId: string; onClose: () => 
   };
   return <div className="jr-report-overlay" role="presentation"><section className="jr-report" role="dialog" aria-modal="true" aria-labelledby="call-report-title"><header><h2 id="call-report-title">Điểm danh & đánh giá</h2><button type="button" onClick={onClose} aria-label="Đóng">×</button></header><p>Thời điểm rời có thể không chính xác khi mất mạng hoặc đóng trình duyệt. Danh sách tối đa 200 lượt tham gia và 100 đánh giá gần nhất.</p>
     {failure && <p role="alert">{failure}</p>}{!report && !failure && <p>Đang tải…</p>}
-    {report && <><button type="button" className="jr-report__export" onClick={exportCsv}>Tải điểm danh CSV</button><h3>Lượt tham gia ({report.attendance.length})</h3>{report.attendance.length === 0 && <p>Chưa có lượt tham gia.</p>}<ul>{report.attendance.map((a) => <li key={a.id}><strong>{a.name}</strong><span>Vào {new Date(a.joinedAt).toLocaleString('vi-VN')} · {a.leftAt ? `Rời ${new Date(a.leftAt).toLocaleString('vi-VN')}` : `Lần cuối thấy ${new Date(a.lastSeenAt).toLocaleString('vi-VN')}`}</span></li>)}</ul><h3>Đánh giá ({report.feedback.length})</h3>{report.feedback.length === 0 && <p>Chưa có đánh giá.</p>}<ul>{report.feedback.map((f) => <li key={f.id}><strong>{f.name} · {f.rating}/5</strong><span>{f.comment || 'Không có nhận xét.'}</span></li>)}</ul></>}
+    {report && <><button type="button" className="jr-report__export" onClick={exportCsv}>Tải điểm danh CSV</button><h3>Lượt tham gia ({report.attendance.length})</h3>{report.attendance.length === 0 && <p>Chưa có lượt tham gia.</p>}<ul>{report.attendance.map((a) => <li key={a.id}><strong>{a.name}</strong><span>Vào {new Date(a.joinedAt).toLocaleString('vi-VN')} · {a.leftAt ? `Rời ${new Date(a.leftAt).toLocaleString('vi-VN')}` : `Lần cuối thấy ${new Date(a.lastSeenAt).toLocaleString('vi-VN')}`}</span></li>)}</ul><h3>Đánh giá ({report.feedback.length})</h3>{report.feedback.length === 0 && <p>Chưa có đánh giá.</p>}<ul>{report.feedback.map((f) => <li key={f.id}><strong>{f.name} · {f.rating}/5</strong><span>{new Date(f.createdAt).toLocaleString('vi-VN')}</span></li>)}</ul></>}
   </section></div>;
 }
