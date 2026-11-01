@@ -56,16 +56,18 @@ interface Peer {
  * - each tile only shows its avatar fallback while no live video track flows,
  *   so a shared screen is never hidden behind a placeholder.
  */
-export function CallRoomPage() {
+export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: boolean; onActiveChange?: (active: boolean) => void } = {}) {
   const { sessionId = '' } = useParams();
   const [searchParams] = useSearchParams();
   // A breakout room is the same session with a different `room` key; leaving
   // and re-entering swaps the whole call (see BreakoutPanel).
   const room = searchParams.get('room') || 'main';
   const navigate = useNavigate();
+  const changeRoom = useCallback((path: string) => { if (embedded) navigate(path, { replace: true }); else window.location.assign(path); }, [embedded, navigate]);
   const { user } = useAuth();
 
   const [phase, setPhase] = useState<'loading' | 'prejoin' | 'room' | 'left' | 'error'>('loading');
+  useEffect(() => { onActiveChange?.(phase === 'room'); return () => onActiveChange?.(false); }, [phase, onActiveChange]);
   const [error, setError] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   // True when the app sits inside another page's iframe (preview panel). The
@@ -79,7 +81,7 @@ export function CallRoomPage() {
       return true;
     }
   });
-  const openOwnTab = () => window.open(window.location.href, '_blank', 'noopener');
+  const openOwnTab = () => window.open(embedded ? `${window.location.origin}/sessions/${encodeURIComponent(sessionId)}/room${room === 'main' ? '' : `?room=${encodeURIComponent(room)}`}` : window.location.href, '_blank', 'noopener');
   const [state, setState] = useState<MentorRoomState | null>(null);
   const [schoolLogo, setSchoolLogo] = useState<string | null>(null);
   useEffect(() => {
@@ -142,6 +144,8 @@ export function CallRoomPage() {
   const [turnAvailable, setTurnAvailable] = useState<boolean | null>(null);
   const iceServersRef = useRef<RTCIceServer[]>(ICE_SERVERS);
 
+  const mountedRef = useRef(false);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -284,6 +288,7 @@ export function CallRoomPage() {
         stream = null;
       }
 
+      if (!mountedRef.current) { stream?.getTracks().forEach(track => track.stop()); return null; }
       if (!stream) {
         let video: MediaStream | null = null;
         let audio: MediaStream | null = null;
@@ -303,6 +308,7 @@ export function CallRoomPage() {
             if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'NotFoundError') break;
           }
         }
+        if (!mountedRef.current) { video?.getTracks().forEach(track => track.stop()); return null; }
         for (const constraints of [audioConstraints, true] as Array<boolean | MediaTrackConstraints>) {
           try {
             audio = await navigator.mediaDevices.getUserMedia({ audio: constraints });
@@ -315,6 +321,7 @@ export function CallRoomPage() {
           }
         }
 
+        if (!mountedRef.current) { video?.getTracks().forEach(track => track.stop()); audio?.getTracks().forEach(track => track.stop()); return null; }
         const tracks = [...(video?.getVideoTracks() ?? []), ...(audio?.getAudioTracks() ?? [])];
         if (tracks.length > 0) stream = new MediaStream(tracks);
 
@@ -799,7 +806,7 @@ export function CallRoomPage() {
         setBreakouts(next);
         // The host closed the rooms (or they expired): go back to the main call.
         if (room !== 'main' && !next.rooms.some((item) => item.roomKey === room)) {
-          window.location.assign(`/sessions/${sessionId}/room`);
+          changeRoom(`/sessions/${sessionId}/room`);
         }
       } catch {
         // A transient failure leaves the last known assignment on screen.
@@ -811,7 +818,7 @@ export function CallRoomPage() {
       alive = false;
       window.clearInterval(interval);
     };
-  }, [phase, sessionId, selfId, room]);
+  }, [phase, sessionId, selfId, room, changeRoom]);
 
   // When the breakout timer runs out, everybody returns to the main room.
   const breakoutEndsAt = breakouts?.endsAt ?? null;
@@ -819,9 +826,9 @@ export function CallRoomPage() {
     if (!breakoutEndsAt || room === 'main') return;
     const delay = Date.parse(breakoutEndsAt) - Date.now();
     if (!Number.isFinite(delay)) return;
-    const timer = window.setTimeout(() => window.location.assign(`/sessions/${sessionId}/room`), Math.max(1000, delay));
+    const timer = window.setTimeout(() => changeRoom(`/sessions/${sessionId}/room`), Math.max(1000, delay));
     return () => window.clearTimeout(timer);
-  }, [breakoutEndsAt, room, sessionId]);
+  }, [breakoutEndsAt, room, sessionId, changeRoom]);
 
   // Time in this call. The session's `started_at` can be hours (or days) old —
   // a mentor who opened the room early left every later visitor with a
@@ -877,6 +884,7 @@ export function CallRoomPage() {
   useEffect(() => {
     const bye = () => {
       if (leftRef.current || !inRoomRef.current) return;
+      leftRef.current = true; inRoomRef.current = false;
       pcsRef.current.forEach((_pc, peerId) => {
         void sendSignal({ kind: 'BYE', targetId: peerId, payload: '' }).catch(() => undefined);
       });
@@ -888,8 +896,8 @@ export function CallRoomPage() {
       }).catch(() => undefined);
     };
     window.addEventListener('pagehide', bye);
-    return () => window.removeEventListener('pagehide', bye);
-  }, []);
+    return () => { window.removeEventListener('pagehide', bye); if (embedded) bye(); };
+  }, [embedded]);
 
   // Clean up media + peers on exit.
   useEffect(
@@ -904,12 +912,15 @@ export function CallRoomPage() {
   const join = async () => {
     setJoinBusy(true);
     const stream = await startMedia();
+    if (!mountedRef.current) return;
     try {
       try {
         const config = await api.get<{ iceServers: RTCIceServer[]; configured: boolean }>(`/api/mentor/sessions/${sessionId}/ice`);
         iceServersRef.current = [...ICE_SERVERS, ...config.iceServers]; setTurnAvailable(config.configured);
       } catch { setTurnAvailable(false); }
+      if (!mountedRef.current) return;
       const joined = await mentorApi.join(sessionId, room, { cam: camOn, mic: micOn });
+      if (!mountedRef.current) { void mentorApi.leave(sessionId).catch(() => undefined); return; }
       lastSignalIdRef.current = joined.signalCursor;
       inRoomRef.current = true;
       setPhase('room');
@@ -954,10 +965,11 @@ export function CallRoomPage() {
     setSharingBusy(true);
     try {
       screen = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      if (!mountedRef.current) { screen.getTracks().forEach(track => track.stop()); return; }
       const [track] = screen.getVideoTracks();
       if (!track) return;
       await mentorApi.screenShare(sessionId, room, true);
-      if (track.readyState === 'ended') { await mentorApi.screenShare(sessionId, room, false); return; }
+      if (!mountedRef.current || track.readyState === 'ended') { screen.getTracks().forEach(item => item.stop()); await mentorApi.screenShare(sessionId, room, false).catch(() => undefined); return; }
       const chosenScreen = screen;
       screenClaimPollRef.current = pollSequenceRef.current;
       screenStreamRef.current = chosenScreen;
@@ -1683,13 +1695,13 @@ export function CallRoomPage() {
           {room === 'main' && breakouts.myRoom ? (
             <button
               type="button"
-              onClick={() => window.location.assign(`/sessions/${sessionId}/room?room=${encodeURIComponent(breakouts.myRoom!.roomKey)}`)}
+              onClick={() => changeRoom(`/sessions/${sessionId}/room?room=${encodeURIComponent(breakouts.myRoom!.roomKey)}`)}
             >
               Join
             </button>
           ) : null}
           {room !== 'main' ? (
-            <button type="button" onClick={() => window.location.assign(`/sessions/${sessionId}/room`)}>
+            <button type="button" onClick={() => changeRoom(`/sessions/${sessionId}/room`)}>
               Return to main
             </button>
           ) : null}
@@ -1972,6 +1984,7 @@ export function CallRoomPage() {
           host={isMentor}
           state={breakouts}
           onChanged={setBreakouts}
+          onEnter={(roomKey) => changeRoom(`/sessions/${sessionId}/room${roomKey === 'main' ? '' : `?room=${encodeURIComponent(roomKey)}`}`)}
           onClose={() => setBreakoutOpen(false)}
         />
       ) : null}
@@ -2594,12 +2607,14 @@ function BreakoutPanel({
   host,
   state,
   onChanged,
+  onEnter,
   onClose,
 }: {
   sessionId: string;
   host: boolean;
   state: BreakoutState | null;
   onChanged: (next: BreakoutState) => void;
+  onEnter: (roomKey: string) => void;
   onClose: () => void;
 }) {
   const [count, setCount] = useState(2);
@@ -2631,9 +2646,7 @@ function BreakoutPanel({
     }
   };
 
-  const enter = (roomKey: string) => {
-    window.location.assign(`/sessions/${sessionId}/room${roomKey === 'main' ? '' : `?room=${encodeURIComponent(roomKey)}`}`);
-  };
+  const enter = (roomKey: string) => onEnter(roomKey);
 
   return (
     <div

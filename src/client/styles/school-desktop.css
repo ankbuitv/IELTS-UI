@@ -44,3 +44,30 @@
 .sd-native-content .card{border:1px solid #d2e2eb;border-radius:4px;background:#fff}.sd-native-content .btn{border-radius:4px;font-size:12px}.sd-native-content .btn--primary{background:#288ab5;border-color:#19759f;color:#fff}.sd-native-content .subnav{border-radius:4px;border-color:#cedfe8}.sd-native-content input,.sd-native-content select,.sd-native-content textarea{border-radius:4px}
 /* Exams for staff live inside the application window, not the browser viewport. */
 .sd-native-content--exam{position:relative;padding:0;overflow:hidden;display:flex;flex-direction:column}.sd-native-content--exam .exam-root{position:absolute;inset:0;width:100%;height:100%;padding:0}.sd-native-content--exam .exam-topbar{min-height:44px;height:auto;overflow-x:auto}.sd-native-content--exam .tablock,.sd-native-content--exam .modal-backdrop{position:absolute;inset:0}.sd-native-content--exam .exam-root--center{position:absolute}.sd-native-content--exam .exam-topbar__actions{min-width:max-content}
+/* The staff call is an in-page window; its dialogs and controls stay inside it. */
+.sd-native-content--call{position:relative;padding:0;overflow:hidden;container-type:inline-size}
+.sd-native-content--call .jr{position:absolute;inset:0;z-index:1}
+.sd-native-content--call .jr h1,.sd-native-content--call .jr h2,.sd-native-content--call .jr h3{color:#f3f4ff}
+.sd-native-content--call .jr-after{min-height:0;overflow:auto}
+.sd-native-content--call .jr-modal-scrim,.sd-native-content--call .jr-report-overlay{position:absolute}
+.sd-native-content--call .jr-modal{max-height:100%}
+.sd-native-content--call .jr-prejoin__video{max-height:100%}
+@container (max-width: 700px){
+ .sd-native-content--call .jr--prejoin{grid-template-columns:1fr;grid-template-rows:minmax(120px,38%) minmax(0,1fr)}
+ .sd-native-content--call .jr-prejoin__stage{padding:10px}
+ .sd-native-content--call .jr-prejoin__panel{padding:16px;border-left:0;border-top:1px solid #313244}
+ .sd-native-content--call .jr-prejoin__panel h1{font-size:1.3rem}
+ .sd-native-content--call .jr-top{gap:6px;padding:0 8px}
+ .sd-native-content--call .jr-title{position:static;transform:none;flex:1;min-width:0;max-width:none}
+ .sd-native-content--call .jr-title strong{min-width:0;overflow:hidden;text-overflow:ellipsis}
+ .sd-native-content--call .jr-top .jr-brand svg{width:58px;height:auto}
+ .sd-native-content--call .jr-title__badge,.sd-native-content--call .jr-pill--invite{display:none}
+ .sd-native-content--call .jr-panel{position:absolute;inset:0;width:100%;z-index:8}
+ .sd-native-content--call .jr-panel+.jr-stage{visibility:hidden}
+ .sd-native-content--call .jr-btn{min-width:40px;height:42px;padding:3px}
+ .sd-native-content--call .jr-btn__label{display:none}
+ .sd-native-content--call .jr-toolbar{padding:5px}
+}
+.sd-native-toolbar button{white-space:nowrap;flex:none}
+.sd-native-content--lesson{position:relative;padding:0;overflow:hidden}
+.sd-native-content--lesson .lesson,.sd-native-content--lesson .lookup,.sd-native-content--lesson .fx-flash{position:absolute;inset:0}
