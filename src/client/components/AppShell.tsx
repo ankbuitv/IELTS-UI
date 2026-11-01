@@ -288,6 +288,12 @@ export function AppShell() {
     );
   }
 
+  // A School Desktop application is already inside its own window and taskbar.
+  // Keep the real routes/forms, but do not nest the full site navigation inside it.
+  if (typeof window !== 'undefined' && window.parent !== window && window.name === 'school-desktop-application') {
+    return <main className="desktop-embedded-app"><Outlet /></main>;
+  }
+
   const nav = navFor(user?.role);
   // The rail: six icon-only places, name shown on hover. Everything else is
   // behind "More", which groups what is left so many features stay scannable.

@@ -1,61 +1,136 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useAsync } from '../../hooks/useAsync';
-import { api } from '../../lib/api';
+import { api, describeError } from '../../lib/api';
 import { Icon, type IconName } from '../../components/Icon';
 import { Loading, Notice } from '../../components/ui';
 
-type School = {id:string;name:string;status:string;member_status:string};
-type ClassItem = {id:string;name:string};
-type Shortcut = {title:string;detail:string;icon:IconName;to:string;tone:string};
+type School = { id: string; name: string; status: string; member_status: string; member_role?: string; address?: string };
+type ClassItem = { id: string; name: string; studentCount?: number; status?: string };
+type Member = { user_id: string; role: string; status: string; email: string; display_name: string | null };
+type AppId = 'classes' | 'schools' | 'members' | 'assignments' | 'messages' | 'files' | 'marking' | 'calendar' | 'sessions' | 'learn' | 'admin';
+type DesktopApp = { id: AppId; title: string; icon: IconName; tone: string; group: string; path?: string };
+type WindowState = { id: AppId; x: number; y: number; z: number; minimized: boolean; maximized: boolean };
+const statusLabel = (s?: string) => ({ APPROVED: 'Đã duyệt', PENDING: 'Chờ duyệt', REJECTED: 'Từ chối', ACTIVE: 'Hoạt động', INVITED: 'Đã mời', DECLINED: 'Đã từ chối', REMOVED: 'Đã xóa', ARCHIVED: 'Lưu trữ', OWNER: 'Quản lý', TEACHER: 'Giáo viên' }[s ?? ''] ?? s ?? '—');
+
 export function SchoolDesktop() {
-  const {user}=useAuth();
-  const access=useAsync(()=>api.get<{isManager:boolean}>('/api/schools/access'),[]);
-  const schools=useAsync(()=>api.get<{schools:School[]}>('/api/schools'),[]);
-  const [schoolLogo,setSchoolLogo]=useState<{id:string;mime:string;data_b64:string}|null>(null);
-  const [schoolId,setSchoolId]=useState(''); const [classId,setClassId]=useState(''); const [query,setQuery]=useState(''); const [menu,setMenu]=useState(false);
-  const [wallpaper,setWallpaper]=useState(()=>localStorage.getItem('school-desktop-wallpaper') || 'mist');
-  const [recent,setRecent]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem('school-desktop-recent') || '[]') as string[];}catch{return [];}});
-  const staff=user?.role==='TEACHER'||user?.role==='MENTOR'||user?.role==='ADMIN';
-  const classes=useAsync(async()=>{
-    if(user?.role==='MENTOR') {const result=await api.get<{classes:Array<{id:string;title:string;mentorId:string}>}>('/api/mentor/classes/list');return result.classes.filter(c=>c.mentorId===user.id).map(c=>({id:c.id,name:c.title}));}
-    if(user?.role==='TEACHER'||user?.role==='ADMIN') {const result=await api.get<{classrooms:ClassItem[]}>('/api/teacher/classrooms');return result.classrooms;}
+  const { user } = useAuth();
+  const access = useAsync(() => api.get<{ isManager: boolean }>('/api/schools/access'), []);
+  const schools = useAsync(() => api.get<{ schools: School[] }>('/api/schools'), []);
+  const classes = useAsync(async () => {
+    if (user?.role === 'MENTOR') {
+      const result = await api.get<{ classes: Array<{ id: string; title: string; mentorId: string }> }>('/api/mentor/classes/list');
+      return result.classes.filter(c => c.mentorId === user.id).map(c => ({ id: c.id, name: c.title } as ClassItem));
+    }
+    if (user?.role === 'TEACHER' || user?.role === 'ADMIN') return (await api.get<{ classrooms: ClassItem[] }>('/api/teacher/classrooms')).classrooms;
     return [];
-  },[user?.id,user?.role]);
-  const approved=(schools.data?.schools??[]).filter(s=>s.status==='APPROVED'&&s.member_status==='ACTIVE');
-  const school=approved.find(s=>s.id===schoolId) ?? approved[0];
-  useEffect(()=>{if(!school?.id)return;let active=true;const id=school.id;void api.get<{logo:{mime:string;data_b64:string}|null}>(`/api/schools/${encodeURIComponent(id)}/logo`).then(result=>{if(active)setSchoolLogo(result.logo?{id,...result.logo}:null);}).catch(()=>{if(active)setSchoolLogo(null);});return()=>{active=false;};},[school?.id]);
-  useEffect(()=>{localStorage.setItem('school-desktop-wallpaper',wallpaper);},[wallpaper]);
-  if(access.loading)return <Loading label="Đang mở không gian làm việc…"/>;
-  if(!staff && !access.data?.isManager)return <Notice tone="danger">Không gian này dành cho nhân sự giảng dạy và quản lý trường.</Notice>;
-  const isMentor=user?.role==='MENTOR';
-  const selected=classes.data?.find(c=>c.id===classId)??classes.data?.[0];
-  const home=isMentor?'/mentor':'/teacher';
-  const classList=isMentor?'/classes':'/teacher';
-  const classPath=selected?(isMentor?`/classes/${selected.id}`:`/teacher/classrooms/${selected.id}`):classList;
-  const classTab=(tab:string)=>selected && !isMentor?`${classPath}?tab=${tab}`:classPath;
-  const shortcuts:Shortcut[]=[
-    {title:'Lớp học',detail:'Lớp và học viên',icon:'users',to:classList,tone:'blue'},
-    ...(!isMentor?[{title:'Bài tập',detail:'Giao và theo dõi bài',icon:'list' as const,to:classTab('assignments'),tone:'amber'}]:[]),
-    ...(!isMentor?[{title:'Chấm Writing',detail:'Hàng chờ chấm bài',icon:'pen' as const,to:'/teacher/marking',tone:'red'}]:[]),
-    {title:'Điểm danh',detail:'Mở phòng và báo cáo',icon:'checkCircle',to:classPath,tone:'green'},
-    {title:'Tin nhắn',detail:'Hội thoại lớp học',icon:'bubble',to:classTab('conversation'),tone:'blue'},
-    ...(!isMentor?[{title:'Tài liệu',detail:'Tệp của lớp',icon:'file' as const,to:classTab('files'),tone:'teal'}]:[]),
-    {title:'Đánh giá buổi học',detail:isMentor?'Xem báo cáo trong phòng':'Xem trong lớp',icon:'star',to:isMentor?classPath:classTab('ratings'),tone:'amber'},
-    {title:'Lịch dạy',detail:'Lịch và buổi học',icon:'calendar',to:'/calendar',tone:'green'},
-    {title:'Trường học',detail:'Thông tin và thành viên',icon:'graduation',to:'/schools',tone:'teal'},
-    {title:'Buổi học',detail:'Lịch sử và phòng call',icon:'video',to:'/my-sessions',tone:'blue'},
-    ...(user?.role==='ADMIN'?[{title:'Quản trị hệ thống',detail:'Tài khoản và xét duyệt',icon:'shield' as const,to:'/admin',tone:'red'}]:[]),
+  }, [user?.id, user?.role]);
+  const [schoolId, setSchoolId] = useState('');
+  const [classId, setClassId] = useState('');
+  const [members, setMembers] = useState<{ schoolId: string; items: Member[]; error?: string } | null>(null);
+  const [logo, setLogo] = useState<{ id: string; mime: string; data_b64: string } | null>(null);
+  const [windows, setWindows] = useState<WindowState[]>([]);
+  const [start, setStart] = useState(false);
+  const [submenu, setSubmenu] = useState<string | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteError, setInviteError] = useState('');
+  const [inviteNotice, setInviteNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [clock, setClock] = useState(() => new Date());
+  const desktopRef = useRef<HTMLDivElement>(null);
+  const zCounter = useRef(1);
+  const drag = useRef<{ id: AppId; startX: number; startY: number; x: number; y: number } | null>(null);
+  const approved = (schools.data?.schools ?? []).filter(s => s.status === 'APPROVED' && s.member_status === 'ACTIVE');
+  const school = approved.find(s => s.id === schoolId) ?? approved[0];
+  const selected = classes.data?.find(c => c.id === classId) ?? classes.data?.[0];
+  const isMentor = user?.role === 'MENTOR';
+  const owner = school?.member_role === 'OWNER';
+  const classList = isMentor ? '/classes' : '/teacher';
+  const classPath = selected ? (isMentor ? `/classes/${selected.id}` : `/teacher/classrooms/${selected.id}`) : classList;
+  const classTab = (tab: string) => selected && !isMentor ? `${classPath}?tab=${tab}` : classPath;
+  const apps: DesktopApp[] = [
+    { id: 'classes', title: 'Quản lý lớp học', icon: 'users', tone: 'blue', group: 'Giảng dạy' },
+    { id: 'schools', title: 'Trường học', icon: 'graduation', tone: 'cyan', group: 'Nhà trường' },
+    { id: 'members', title: 'Nhân sự giáo viên', icon: 'user', tone: 'orange', group: 'Nhà trường' },
+    ...(!isMentor ? [{ id: 'assignments' as const, title: 'Quản lý bài tập', icon: 'list' as const, tone: 'violet', group: 'Giảng dạy', path: classTab('assignments') }] : []),
+    { id: 'messages', title: 'Tin nhắn lớp', icon: 'bubble', tone: 'blue', group: 'Giảng dạy', path: classTab('conversation') },
+    ...(!isMentor ? [{ id: 'files' as const, title: 'Tài liệu lớp', icon: 'file' as const, tone: 'orange', group: 'Giảng dạy', path: classTab('files') }, { id: 'marking' as const, title: 'Chấm bài Writing', icon: 'pen' as const, tone: 'red', group: 'Giảng dạy', path: '/teacher/marking' }] : []),
+    { id: 'calendar', title: 'Lịch dạy', icon: 'calendar', tone: 'green', group: 'Tiện ích', path: '/calendar' },
+    { id: 'sessions', title: 'Buổi học', icon: 'video', tone: 'cyan', group: 'Tiện ích', path: '/my-sessions' },
+    { id: 'learn', title: 'Practice & Learn', icon: 'book', tone: 'green', group: 'Tiện ích', path: '/learn' },
+    ...(user?.role === 'ADMIN' ? [{ id: 'admin' as const, title: 'Quản trị hệ thống', icon: 'shield' as const, tone: 'red', group: 'Hệ thống', path: '/admin' }] : []),
   ];
-  const filtered=shortcuts.filter(x=>`${x.title} ${x.detail}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
-  const remember=(title:string)=>{const next=[title,...recent.filter(x=>x!==title)].slice(0,4);setRecent(next);localStorage.setItem('school-desktop-recent',JSON.stringify(next));};
-  return <div className={`school-desktop school-desktop--${wallpaper}`}>
-    <header className="sd-top"><div><span className="sd-wordmark">AI EO <i/> WORKSPACE</span><div className="sd-welcome"><div><p>KHÔNG GIAN LÀM VIỆC</p><h1>Xin chào, {user?.displayName}</h1><span>Mọi công cụ giảng dạy, gọn trong một nơi.</span></div></div></div><div className="sd-school">{schoolLogo && schoolLogo.id===school?.id?<img src={`data:${schoolLogo.mime};base64,${schoolLogo.data_b64}`} alt={`Logo ${school?.name}`}/>:<span className="sd-school__mark"><Icon name="graduation" size={23}/></span>}<div><small>ĐƠN VỊ CÔNG TÁC</small>{approved.length>1?<select value={school?.id??''} onChange={e=>setSchoolId(e.target.value)} aria-label="Chọn trường">{approved.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>:<strong>{school?.name || 'Cá nhân'}</strong>}</div></div></header>
-    <nav className="sd-modes" aria-label="Không gian làm việc"><Link to="/dashboard">Practice & Learn <span>Học tập cá nhân</span></Link><Link to={home}>Teaching <span>Giảng dạy</span></Link><span className="active">School Desktop <small>Không gian làm việc</small></span></nav>
-    <div className="sd-toolbar"><div><h2>Công cụ làm việc</h2><p>Chọn lớp để mở nhanh bài tập, tin nhắn và tài liệu.</p></div><div className="sd-tools"><label className="sd-class-select"><span>Lớp hiện tại</span><select value={selected?.id??''} onChange={e=>setClassId(e.target.value)} aria-label="Chọn lớp hiện tại">{selected?classes.data?.map(c=><option key={c.id} value={c.id}>{c.name}</option>):<option value="">Chưa có lớp</option>}</select></label><label className="sd-search"><Icon name="search" size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Tìm công cụ" aria-label="Tìm công cụ"/></label></div></div>
-    <div className="sd-icons">{filtered.map(item=><Link key={item.title} className="sd-icon" to={item.to} onClick={()=>remember(item.title)}><span className={`sd-icon__art sd-icon__art--${item.tone}`}><Icon name={item.icon} size={25}/></span><strong>{item.title}</strong><small>{item.detail}</small></Link>)}{!filtered.length?<p>Không tìm thấy công cụ phù hợp.</p>:null}</div>
-    <div className="sd-spacer"/>
-    <footer className="sd-dock"><div className="sd-dock__start"><button type="button" onClick={()=>setMenu(!menu)} aria-expanded={menu}><Icon name="grid" size={19}/> <span>Menu</span></button>{menu?<div className="sd-menu"><strong>Đi đến</strong><Link to="/dashboard">Practice & Learn</Link><Link to={home}>Teaching</Link><Link to="/schools">Trường học</Link></div>:null}</div><label className="sd-dock__search"><Icon name="search" size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Tìm công cụ" aria-label="Tìm trong desktop"/></label><div className="sd-recent"><span>Gần đây</span>{recent.map(name=>{const item=shortcuts.find(x=>x.title===name);return item?<Link key={name} to={item.to} title={name} aria-label={name} onClick={()=>remember(name)}><Icon name={item.icon} size={18}/></Link>:null;})}</div><div className="sd-dock__end"><label>Giao diện <select aria-label="Chọn hình nền" value={wallpaper} onChange={e=>setWallpaper(e.target.value)}><option value="mist">Sương</option><option value="paper">Giấy</option><option value="sage">Xanh lá</option></select></label><Link to="/notifications" aria-label="Thông báo" title="Thông báo"><Icon name="bell" size={20}/></Link></div></footer>
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    if (!school?.id) { setLogo(null); return; }
+    let active = true; const id = school.id;
+    void api.get<{ logo: { mime: string; data_b64: string } | null }>(`/api/schools/${encodeURIComponent(id)}/logo`).then(r => { if (active) setLogo(r.logo ? { id, ...r.logo } : null); }).catch(() => { if (active) setLogo(null); });
+    return () => { active = false; };
+  }, [school?.id]);
+  useEffect(() => {
+    if (!school?.id || !owner) { setMembers(null); return; }
+    let active = true; const id = school.id;
+    setMembers(null);
+    void api.get<{ members: Member[] }>(`/api/schools/${encodeURIComponent(id)}/members`).then(r => { if (active) setMembers({ schoolId: id, items: r.members }); }).catch(e => { if (active) setMembers({ schoolId: id, items: [], error: describeError(e) }); });
+    return () => { active = false; };
+  }, [school?.id, owner]);
+  useEffect(() => {
+    const keydown = (e: KeyboardEvent) => { if (e.key === 'Escape') { setStart(false); setSubmenu(null); setInviteOpen(false); } };
+    window.addEventListener('keydown', keydown); return () => window.removeEventListener('keydown', keydown);
+  }, []);
+
+  if (access.loading) return <Loading label="Đang mở không gian làm việc…" />;
+  if (!user || (!['TEACHER', 'MENTOR', 'ADMIN'].includes(user.role) && !access.data?.isManager)) return <Notice tone="danger">Không gian này dành cho nhân sự giảng dạy và quản lý trường.</Notice>;
+  const open = (id: AppId) => {
+    setStart(false); setSubmenu(null);
+    const z = ++zCounter.current;
+    setWindows(current => current.some(w => w.id === id) ? current.map(w => w.id === id ? { ...w, minimized: false, z } : w) : [...current, { id, x: 115 + (current.length % 4) * 32, y: 38 + (current.length % 4) * 28, z, minimized: false, maximized: false }]);
+  };
+  const update = (id: AppId, patch: Partial<WindowState>) => setWindows(current => current.map(w => w.id === id ? { ...w, ...patch } : w));
+  const focus = (id: AppId) => update(id, { z: ++zCounter.current });
+  const beginDrag = (event: ReactPointerEvent<HTMLElement>, w: WindowState) => {
+    if (w.maximized || (event.target as HTMLElement).closest('button') || window.innerWidth <= 700) return;
+    drag.current = { id: w.id, startX: event.clientX, startY: event.clientY, x: w.x, y: w.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const moveDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!drag.current || !desktopRef.current) return;
+    const { id, startX, startY, x, y } = drag.current; const bounds = desktopRef.current.getBoundingClientRect();
+    update(id, { x: Math.max(0, Math.min(bounds.width - 160, x + event.clientX - startX)), y: Math.max(0, Math.min(bounds.height - 90, y + event.clientY - startY)) });
+  };
+  const invite = async () => {
+    if (!school || !inviteEmail.trim()) return;
+    setBusy(true); setInviteError(''); setInviteNotice('');
+    try {
+      await api.post(`/api/schools/${encodeURIComponent(school.id)}/invite`, { email: inviteEmail.trim() });
+      const result = await api.get<{ members: Member[] }>(`/api/schools/${encodeURIComponent(school.id)}/members`);
+      setMembers({ schoolId: school.id, items: result.members }); setInviteEmail(''); setInviteOpen(false);
+      setInviteNotice('Đã gửi lời mời trong Ai eo. Giáo viên cần chấp nhận lời mời.');
+    } catch (e) { setInviteError(describeError(e)); } finally { setBusy(false); }
+  };
+  const groups = [...new Set(apps.map(app => app.group))];
+  return <div className="school-desktop" ref={desktopRef} onPointerDown={e => { if (e.target === e.currentTarget) { setStart(false); setSubmenu(null); } }}>
+    <div className="sd-brand"><div className="sd-brand__mark">A<span>i</span></div><div><b>Ai eo</b><small>SCHOOL DESKTOP</small></div></div>
+    <div className="sd-school-badge">{logo && logo.id === school?.id ? <img src={`data:${logo.mime};base64,${logo.data_b64}`} alt="" /> : <Icon name="graduation" size={21} />}<div><small>ĐƠN VỊ LÀM VIỆC</small>{approved.length > 1 ? <select aria-label="Chọn trường" value={school?.id ?? ''} onChange={e => setSchoolId(e.target.value)}>{approved.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <b>{school?.name || 'Không gian cá nhân'}</b>}</div></div>
+    <div className="sd-wallpaper-word" aria-hidden="true">Dạy học.<br/><strong>Thật đơn giản.</strong><span>Không gian làm việc của bạn</span></div>
+    <div className="sd-icons" aria-label="Ứng dụng trên desktop">{apps.map(app => <button className="sd-icon" key={app.id} type="button" onClick={() => open(app.id)}><span className={`sd-icon__art sd-icon__art--${app.tone}`}><Icon name={app.icon} size={27} /></span><span>{app.title}</span></button>)}</div>
+    {windows.map(w => {
+      const app = apps.find(a => a.id === w.id); if (!app) return null;
+      return <section key={w.id} className={`sd-window${w.maximized ? ' sd-window--max' : ''}${w.minimized ? ' sd-window--min' : ''}`} style={{ left: w.x, top: w.y, zIndex: w.z }} onPointerDown={() => focus(w.id)} aria-label={`Cửa sổ ${app.title}`}>
+        <header className="sd-window__title" onPointerDown={e => beginDrag(e, w)} onPointerMove={moveDrag} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} onDoubleClick={() => update(w.id, { maximized: !w.maximized })}><span><Icon name={app.icon} size={15} /> {app.title}</span><div><button type="button" title="Thu nhỏ" aria-label={`Thu nhỏ ${app.title}`} onClick={() => update(w.id, { minimized: true })}>−</button><button type="button" title={w.maximized ? 'Khôi phục' : 'Phóng to'} aria-label={`${w.maximized ? 'Khôi phục' : 'Phóng to'} ${app.title}`} onClick={() => update(w.id, { maximized: !w.maximized })}>□</button><button type="button" title="Đóng" aria-label={`Đóng ${app.title}`} onClick={() => setWindows(current => current.filter(win => win.id !== w.id))}>×</button></div></header>
+        {app.id === 'classes' ? <div className="sd-window__body"><div className="sd-appbar"><Link to={classList}><Icon name="plus" size={15} /> Mở quản lý lớp</Link><button onClick={() => void classes.reload()}><Icon name="rotate" size={15} /> Làm mới</button></div><div className="sd-appheading"><div><b>Danh sách lớp học</b><small>Chọn một lớp để mở các công cụ giảng dạy.</small></div><span>{classes.data?.length ?? 0} lớp</span></div>{classes.error ? <p className="sd-message">{classes.error}</p> : classes.loading && !classes.data ? <p className="sd-message">Đang tải lớp học…</p> : <div className="sd-table-wrap"><table><thead><tr><th>STT</th><th>Tên lớp</th><th>Học viên</th><th>Trạng thái</th><th></th></tr></thead><tbody>{classes.data?.map((c, i) => <tr key={c.id} className={selected?.id === c.id ? 'selected' : ''} onClick={() => setClassId(c.id)}><td>{i + 1}</td><td><button className="sd-row-select" onClick={() => setClassId(c.id)}>{c.name}</button></td><td>{c.studentCount ?? '—'}</td><td>{statusLabel(c.status)}</td><td><Link to={isMentor ? `/classes/${c.id}` : `/teacher/classrooms/${c.id}`}>Mở lớp ↗</Link></td></tr>)}</tbody></table>{!classes.data?.length && <p className="sd-message">Chưa có lớp học. Mở quản lý lớp để tạo lớp mới.</p>}</div>}<div className="sd-status">{selected ? `Lớp đang chọn: ${selected.name}` : 'Chưa chọn lớp'}<span>{classes.data?.length ?? 0} kết quả</span></div></div> : null}
+        {app.id === 'schools' ? <div className="sd-window__body"><div className="sd-appbar"><Link to="/schools"><Icon name="external" size={15} /> Quản lý trường và lời mời</Link><button onClick={() => void schools.reload()}><Icon name="rotate" size={15} /> Làm mới</button></div><div className="sd-appheading"><div><b>Trường và trung tâm</b><small>Danh sách đăng ký và lời mời của bạn.</small></div></div>{schools.error ? <p className="sd-message">{schools.error}</p> : <div className="sd-table-wrap"><table><thead><tr><th>STT</th><th>Tên trường</th><th>Vai trò</th><th>Trạng thái</th></tr></thead><tbody>{schools.data?.schools.map((s, i) => <tr key={s.id} onClick={() => { if (approved.some(a => a.id === s.id)) setSchoolId(s.id); }} className={school?.id === s.id ? 'selected' : ''}><td>{i + 1}</td><td>{s.name}</td><td>{statusLabel(s.member_role)}</td><td>{statusLabel(s.status)} · {statusLabel(s.member_status)}</td></tr>)}</tbody></table>{!schools.loading && !schools.data?.schools.length && <p className="sd-message">Bạn chưa có trường hoặc lời mời nào.</p>}</div>}<div className="sd-status">Chọn trường đã duyệt để làm việc<span>{schools.data?.schools.length ?? 0} kết quả</span></div></div> : null}
+        {app.id === 'members' ? <div className="sd-window__body"><div className="sd-appbar"><button disabled={!owner} onClick={() => { setInviteError(''); setInviteOpen(true); }}><Icon name="plus" size={15} /> Mời giáo viên</button><Link to="/schools"><Icon name="settings" size={15} /> Quản lý thành viên</Link></div><div className="sd-appheading"><div><b>Nhân sự giáo viên</b><small>{school?.name || 'Chưa chọn trường'}</small></div>{approved.length > 1 && <select aria-label="Chọn trường nhân sự" value={school?.id ?? ''} onChange={e => setSchoolId(e.target.value)}>{approved.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}</div>{inviteNotice && <p className="sd-notice">{inviteNotice}</p>}{!school ? <p className="sd-message">Bạn chưa thuộc trường đã được duyệt. Xem trường và lời mời để bắt đầu.</p> : !owner ? <p className="sd-message">Danh sách nhân sự chỉ dành cho người quản lý trường.</p> : !members || members.schoolId !== school.id ? <p className="sd-message">Đang tải nhân sự…</p> : members.error ? <p className="sd-message">{members.error}</p> : <div className="sd-table-wrap"><table><thead><tr><th>STT</th><th>Họ tên</th><th>Email</th><th>Vai trò</th><th>Trạng thái</th></tr></thead><tbody>{members.items.map((m, i) => <tr key={m.user_id}><td>{i + 1}</td><td>{m.display_name || '—'}</td><td>{m.email}</td><td>{statusLabel(m.role)}</td><td>{statusLabel(m.status)}</td></tr>)}</tbody></table>{!members.items.length && <p className="sd-message">Chưa có nhân sự.</p>}</div>}<div className="sd-status">Thông tin theo trường được chọn<span>{owner && members?.schoolId === school?.id ? members.items.length : 0} kết quả</span></div></div> : null}
+        {app.path ? <div className="sd-frame"><div className="sd-frame__bar"><span>Ứng dụng hiện có · {app.title}{['assignments', 'messages', 'files'].includes(app.id) && selected ? ` · ${selected.name}` : ''}</span><Link to={app.path}>Mở toàn trang ↗</Link></div><iframe title={app.title} name="school-desktop-application" src={app.path} allow="camera; microphone; display-capture; autoplay" /></div> : null}
+      </section>;
+    })}
+    {inviteOpen && school && owner && <div className="sd-dialog-backdrop" role="presentation"><form className="sd-dialog" role="dialog" aria-modal="true" aria-labelledby="sd-invite-title" onSubmit={e => { e.preventDefault(); void invite(); }}><header id="sd-invite-title">Mời giáo viên <button type="button" aria-label="Đóng" onClick={() => setInviteOpen(false)}>×</button></header><div><p>Gửi lời mời tham gia <strong>{school.name}</strong> đến tài khoản đã có trên Ai eo.</p><label>Email giáo viên hoặc mentor<input type="email" required autoFocus value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} /></label>{inviteError && <p className="sd-error" role="alert">{inviteError}</p>}<div className="sd-dialog__actions"><button type="button" onClick={() => setInviteOpen(false)}>Hủy</button><button type="submit" disabled={busy}>{busy ? 'Đang gửi…' : 'Gửi lời mời'}</button></div></div></form></div>}
+    {start && <div className="sd-start"><div className="sd-start__user"><span><Icon name="user" size={26} /></span><div><b>{user.displayName || user.email}</b><small>Không gian làm việc</small></div></div><div className="sd-start__content"><div className="sd-start__groups"><small>ỨNG DỤNG</small>{groups.map(group => <button key={group} type="button" className={submenu === group ? 'active' : ''} onMouseEnter={() => setSubmenu(group)} onFocus={() => setSubmenu(group)} onClick={() => setSubmenu(submenu === group ? null : group)}><Icon name={group === 'Giảng dạy' ? 'book' : group === 'Nhà trường' ? 'graduation' : group === 'Hệ thống' ? 'settings' : 'grid'} size={17}/><span>{group}</span><Icon name="chevronRight" size={14}/></button>)}<div className="sd-start__divider"/><Link to="/dashboard"><Icon name="home" size={17}/> Trang chủ Ai eo</Link><Link to="/schools"><Icon name="external" size={17}/> Trường và lời mời</Link></div>{submenu && <div className="sd-submenu"><small>{submenu.toLocaleUpperCase()}</small>{apps.filter(a => a.group === submenu).map(app => <button key={app.id} onClick={() => open(app.id)}><Icon name={app.icon} size={17}/>{app.title}</button>)}</div>}</div><div className="sd-start__footer">Ai eo · School Desktop <button onClick={() => { setStart(false); setSubmenu(null); }}>Đóng</button></div></div>}
+    <footer className="sd-taskbar"><button type="button" className={`sd-start-button${start ? ' active' : ''}`} aria-expanded={start} onClick={() => { setStart(!start); setSubmenu(null); }}><span className="sd-start-logo"><Icon name="grid" size={17}/></span> Start</button><div className="sd-taskbar__divider"/><div className="sd-tasks">{windows.map(w => { const app = apps.find(a => a.id === w.id); if (!app) return null; return <button key={w.id} className={!w.minimized ? 'active' : ''} title={app.title} onClick={() => w.minimized || w.z < Math.max(...windows.filter(win => !win.minimized).map(win => win.z)) ? open(w.id) : update(w.id, { minimized: true })}><Icon name={app.icon} size={15}/><span>{app.title}</span></button>; })}</div><div className="sd-taskbar__right"><span className="sd-online" title="Không gian làm việc">●</span><span>{clock.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}<small>{clock.toLocaleDateString('vi-VN')}</small></span></div></footer>
   </div>;
 }
