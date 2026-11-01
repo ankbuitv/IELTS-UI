@@ -58,6 +58,7 @@ const COACHING_GROUP: NavGroup = {
     { to: '/my-sessions', label: 'Buổi học của tôi', icon: 'video' },
     { to: '/classes', label: 'Lớp trực tiếp', icon: 'users' },
     { to: '/classrooms', label: 'Lớp của tôi', icon: 'presentation' },
+    { to: '/schools', label: 'Trường học', icon: 'graduation' },
   ],
 };
 
@@ -86,6 +87,7 @@ const MENTOR_GROUP: NavGroup = {
     { to: '/mentor', label: 'Bảng điều khiển', icon: 'presentation' },
     { to: '/my-sessions', label: 'Buổi học', icon: 'video' },
     { to: '/classes', label: 'Lớp của tôi', icon: 'users' },
+    { to: '/schools', label: 'Trường học', icon: 'graduation' },
     { to: '/mentors', label: 'Danh sách cố vấn', icon: 'graduation' },
   ],
 };

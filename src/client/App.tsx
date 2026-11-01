@@ -52,6 +52,7 @@ import { ClassDetailPage } from './pages/mentor/ClassDetailPage';
 import { CallRoomPage } from './pages/mentor/CallRoomPage';
 import { EarningsPage } from './pages/mentor/EarningsPage';
 import { NotificationsPage } from './components/NotificationBell';
+import { SchoolsPage, AdminSchoolsPage } from './pages/schools/SchoolsPage';
 import { CertificatePage } from './pages/student/CertificatePage';
 
 function RequireAuth({ children, roles }: { children: ReactNode; roles?: Array<'STUDENT' | 'TEACHER' | 'ADMIN' | 'MENTOR'> }) {
@@ -126,6 +127,7 @@ export function App() {
         <Route path="reset-password" element={<ResetPasswordPage />} />
         <Route path="register" element={<RegisterPage />} />
         <Route path="join" element={<JoinPage />} />
+        <Route path="schools" element={<RequireAuth><SchoolsPage /></RequireAuth>} />
 
         {/* Retired UI routes redirect without deleting existing data. */}
         <Route path="blog/*" element={<Navigate to="/" replace />} />
@@ -445,6 +447,7 @@ export function App() {
           <Route path="learn" element={<AdminLearnPage />} />
           <Route path="billing" element={<AdminBillingPage />} />
           <Route path="settings" element={<AdminSettingsPage />} />
+          <Route path="schools" element={<AdminSchoolsPage />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

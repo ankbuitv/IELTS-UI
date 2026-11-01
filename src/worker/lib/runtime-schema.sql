@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql, 0038_speaking_partner.sql, 0039_question_drills.sql, 0040_social_billing.sql, 0041_test_covers.sql, 0042_blog.sql, 0043_class_direct_messages.sql, 0044_classroom_call_rooms.sql, 0045_call_attendance_feedback.sql, 0046_call_signals_order.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql, 0038_speaking_partner.sql, 0039_question_drills.sql, 0040_social_billing.sql, 0041_test_covers.sql, 0042_blog.sql, 0043_class_direct_messages.sql, 0044_classroom_call_rooms.sql, 0045_call_attendance_feedback.sql, 0046_call_signals_order.sql, 0047_schools.sql, 0048_school_call_brand.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 101   Indexes: 115
+-- Tables: 105   Indexes: 118
 -- =============================================================================
 
 -- table: user_profiles
@@ -1368,6 +1368,49 @@ CREATE TABLE IF NOT EXISTS "mentor_room_presence" (
   PRIMARY KEY (session_id, user_id)
 );
 
+-- table: schools
+CREATE TABLE IF NOT EXISTS schools (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  address TEXT NOT NULL,
+  contact_email TEXT NOT NULL,
+  owner_user_id TEXT NOT NULL REFERENCES users(id),
+  status TEXT NOT NULL CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+  review_note TEXT,
+  reviewed_by TEXT REFERENCES users(id),
+  reviewed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- table: school_members
+CREATE TABLE IF NOT EXISTS school_members (
+  id TEXT PRIMARY KEY,
+  school_id TEXT NOT NULL REFERENCES schools(id),
+  user_id TEXT NOT NULL REFERENCES users(id),
+  role TEXT NOT NULL CHECK (role IN ('OWNER', 'TEACHER')),
+  status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'INVITED', 'DECLINED', 'REMOVED')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(school_id, user_id)
+);
+
+-- table: school_logos
+CREATE TABLE IF NOT EXISTS school_logos (
+  school_id TEXT PRIMARY KEY REFERENCES schools(id),
+  mime TEXT NOT NULL CHECK (mime IN ('image/png','image/jpeg','image/webp')),
+  data_b64 TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- table: school_call_brand
+CREATE TABLE IF NOT EXISTS school_call_brand (
+  session_id TEXT PRIMARY KEY REFERENCES mentor_sessions(id),
+  school_id TEXT NOT NULL REFERENCES schools(id),
+  selected_by TEXT NOT NULL REFERENCES users(id),
+  updated_at TEXT NOT NULL
+);
+
 -- index: idx_sessions_user
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
 
@@ -1721,3 +1764,12 @@ CREATE INDEX IF NOT EXISTS idx_mentor_signals_session ON mentor_signals (session
 
 -- index: idx_mentor_presence_room
 CREATE INDEX IF NOT EXISTS idx_mentor_presence_room ON mentor_room_presence (session_id, room_key, last_seen_at);
+
+-- index: idx_schools_owner
+CREATE INDEX IF NOT EXISTS idx_schools_owner ON schools(owner_user_id, created_at);
+
+-- index: idx_schools_status
+CREATE INDEX IF NOT EXISTS idx_schools_status ON schools(status, created_at);
+
+-- index: idx_school_members_user
+CREATE INDEX IF NOT EXISTS idx_school_members_user ON school_members(user_id, status);

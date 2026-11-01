@@ -815,3 +815,35 @@
   .jr-stage--self-presenting .jr-self { inset:6px; }
   .jr-stage--self-presenting .jr-grid { right:8px; bottom:8px; width:30%; height:20%; }
 }
+
+/* Classroom stage: the host is the main tile until someone presents. */
+.jr-stage--self-focus .jr-self { inset:10px; width:auto; height:auto; aspect-ratio:auto; z-index:1; }
+.jr-stage--self-focus .jr-grid { position:absolute; z-index:2; right:18px; bottom:18px; width:min(32%,300px); height:min(25%,160px); }
+
+/* Meeting chrome: restrained contrast and clear controls, independent of the
+   rest of the platform's light theme. */
+.jr-top { height:60px; background:#1e1e2e; padding-inline:20px; }
+.jr-brand em { background:#493759; color:#f1ddff; padding:4px 7px; }
+.jr-title strong { color:#edf0ff; font-size:.87rem; }
+.jr-title__timer { background:transparent; border:0; padding-inline:2px; }
+.jr-title__badge { background:#38304b; color:#d8bdf1; }
+.jr-pill--invite { background:#313244; border-color:#585b70; color:#f1eff8; }
+.jr-pill--invite:hover { background:#45475a; }
+.jr-iconbtn { color:#a6adc8; }
+.jr-tile__avatar { background:#292b3b; }
+.jr-tile__label { left:10px; right:auto; bottom:10px; max-width:calc(100% - 20px); padding:5px 8px; border-radius:5px; background:#11111bdd; }
+.jr-self .jr-tile__label { padding:5px 8px; }
+.jr-tile.is-featured { border-color:#7d698f; }
+.jr-toolbar { background:#1e1e2e; border-top:1px solid #313244; }
+.jr-btn:focus-visible,.jr-pill:focus-visible,.jr-iconbtn:focus-visible { outline:2px solid #cba6f7; outline-offset:2px; }
+@media (max-width:860px) {
+  .jr-top { height:52px; padding-inline:10px; }
+  .jr-stage--self-focus .jr-self { inset:6px; }
+  .jr-stage--self-focus .jr-grid { right:8px; bottom:8px; width:30%; height:20%; }
+  .jr-tile__label { left:6px; bottom:6px; padding:4px 6px; }
+}
+@media (prefers-reduced-motion:reduce) { .jr-waiting__pulse,.jr-reaction { animation:none; } }
+.jr-brand__cross { color:#a6adc8; font-weight:400; font-size:1rem; }
+.jr-brand__school-logo { display:block; width:auto; max-width:88px; height:30px; object-fit:contain; background:#fff; border-radius:4px; padding:2px 4px; }
+.jr-brand__school-name { max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#e6e9f8; font-size:.72rem; }
+@media(max-width:860px) { .jr-brand__school-logo { max-width:45px; height:24px; } .jr-brand__school-name { max-width:60px; font-size:.65rem; } }

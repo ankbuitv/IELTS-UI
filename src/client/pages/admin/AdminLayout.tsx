@@ -18,6 +18,7 @@ export function AdminLayout() {
     { to: '/admin/writing', label: 'Writing' },
     { to: '/admin/billing', label: 'Billing' },
     { to: '/admin/users', label: 'Users' },
+    { to: '/admin/schools', label: 'Trường học' },
     { to: '/admin/settings', label: 'Settings' },
   ];
 

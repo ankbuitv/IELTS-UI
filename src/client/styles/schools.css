@@ -1,0 +1,27 @@
+.school-page { max-width:1180px; margin-inline:auto; }
+.school-columns { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(300px,.8fr); gap:20px; align-items:start; }
+.school-form,.school-list { display:grid; gap:18px; }
+.school-form .btn { justify-self:start; }
+.school-disclaimer,.school-meta,.school-item p { color:var(--muted, #666); font-size:.86rem; line-height:1.6; margin:0; }
+.school-item { display:grid; gap:12px; border:1px solid var(--border, #e4e4ec); border-radius:10px; padding:18px; }
+.school-item__head { display:flex; align-items:start; justify-content:space-between; gap:12px; }
+.school-item h3,.school-item h4 { margin:0 0 4px; font-size:1rem; }
+.school-item > .btn { justify-self:start; }
+.school-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.school-note { background:var(--surface-soft,#f5f4f8); padding:10px 12px; border-radius:6px; }
+.school-members { display:grid; gap:12px; border-top:1px solid var(--border,#e4e4ec); padding-top:15px; }
+.school-member { display:flex; justify-content:space-between; align-items:center; gap:12px; font-size:.8rem; }
+.school-member span:first-child { display:grid; min-width:0; overflow-wrap:anywhere; }
+.school-member small { color:var(--muted,#777); }
+.school-invite { display:grid; gap:12px; padding-top:5px; }
+.school-invite .btn { justify-self:start; }
+@media(max-width:760px) { .school-columns { grid-template-columns:1fr; } .school-member { align-items:start; flex-direction:column; gap:3px; } }
+.teacher-school-banner { display:flex; align-items:center; gap:16px; padding:18px 20px; background:var(--surface,#fff); border:1px solid var(--border,#e4e4ec); border-radius:12px; }
+.teacher-school-banner__icon { width:44px; height:44px; flex:none; display:grid; place-items:center; border-radius:10px; color:#694994; background:#f2eaf9; }
+.teacher-school-banner h2 { margin:0 0 4px; font-size:1rem; }
+.teacher-school-banner p { margin:0; font-size:.85rem; color:var(--ink-600,#606276); line-height:1.5; }
+.teacher-school-banner__link { margin-left:auto; display:inline-flex; gap:12px; align-items:center; white-space:nowrap; color:#fff; background:#56377d; padding:10px 14px; border-radius:8px; font-size:.84rem; font-weight:700; text-decoration:none; }
+.teacher-school-banner__link:hover { color:#fff; background:#452b66; text-decoration:none; }
+.teacher-school-banner__secondary { color:#5d4971; white-space:nowrap; font-size:.82rem; font-weight:600; }
+.school-registration { scroll-margin-top:80px; }
+@media(max-width:760px) { .teacher-school-banner { display:grid; grid-template-columns:44px 1fr; gap:10px 14px; } .teacher-school-banner__link { margin-left:0; grid-column:2; justify-self:start; } .teacher-school-banner__secondary { grid-column:2; } }

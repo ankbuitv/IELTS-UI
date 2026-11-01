@@ -567,6 +567,7 @@ export async function roomState(
 ): Promise<{
   session: MentorSession;
   roomKey: string;
+  schoolBrand?: { id: string; name: string } | null;
   participants: RoomParticipant[];
   messages: MentorChatMessage[];
   signals: MentorSignal[];
@@ -577,6 +578,9 @@ export async function roomState(
   await assertSessionAccess(env, session, viewer);
   await assertRoomKey(env, session, viewer, roomKey);
 
+  const brand = await env.DB.prepare(`SELECT s.id,s.name FROM school_call_brand b JOIN schools s ON s.id=b.school_id
+    JOIN school_members m ON m.school_id=s.id AND m.user_id=b.selected_by
+    WHERE b.session_id=? AND s.status='APPROVED' AND m.status='ACTIVE'`).bind(sessionId).first<{id:string;name:string}>();
   const now = new Date();
   const timestamp = now.toISOString();
 
@@ -665,6 +669,7 @@ export async function roomState(
   return {
     session,
     roomKey,
+    schoolBrand: brand ?? null,
     participants: presence.results.map((row) => ({
       userId: row.user_id,
       displayName: row.display_name,

@@ -108,11 +108,18 @@ router.post('/classrooms/:classroomId/room', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const classroomId = c.req.param('classroomId');
+  const body = await parseBody(c, z.object({ schoolId: z.string().min(1).max(100).nullable().optional() }));
   await assertClassroomAccess(c.env, classroomId, user.id, user.role);
   const klass = await c.env.DB.prepare('SELECT id, name, teacher_id, status FROM classrooms WHERE id = ?')
     .bind(classroomId).first<{ id: string; name: string; teacher_id: string; status: string }>();
   if (!klass || klass.status !== 'ACTIVE') throw ApiError.conflict('This classroom is archived.');
   const host = user.id === klass.teacher_id || user.role === 'ADMIN';
+  if (body.schoolId !== undefined && user.id !== klass.teacher_id) throw ApiError.forbidden('Chỉ giáo viên chủ lớp được chọn trường.');
+  if (body.schoolId) {
+    const member = await c.env.DB.prepare(`SELECT 1 AS ok FROM school_members m JOIN schools s ON s.id=m.school_id
+      WHERE m.school_id=? AND m.user_id=? AND m.status='ACTIVE' AND s.status='APPROVED'`).bind(body.schoolId,user.id).first();
+    if (!member) throw ApiError.forbidden('Bạn không thuộc trường đã chọn hoặc trường chưa được duyệt.');
+  }
   const sessionId = `classroom-room-${classroomId}`;
   const existing = await c.env.DB.prepare('SELECT session_id FROM classroom_call_rooms WHERE classroom_id = ?')
     .bind(classroomId).first<{ session_id: string }>();
@@ -129,6 +136,16 @@ router.post('/classrooms/:classroomId/room', async (c) => {
     ]);
   }
   const roomId = existing?.session_id ?? sessionId;
+  if (body.schoolId !== undefined) {
+    const brand = await c.env.DB.prepare('SELECT school_id FROM school_call_brand WHERE session_id=?').bind(roomId).first<{school_id:string}>();
+    const active = await c.env.DB.prepare('SELECT 1 AS ok FROM mentor_room_presence WHERE session_id=? AND last_seen_at>=? LIMIT 1')
+      .bind(roomId,new Date(Date.now()-30000).toISOString()).first();
+    if (active && (brand?.school_id ?? null) !== body.schoolId) throw ApiError.conflict('Không thể đổi trường khi phòng đang có người.');
+    if (body.schoolId) await c.env.DB.prepare(`INSERT INTO school_call_brand (session_id,school_id,selected_by,updated_at) VALUES (?,?,?,?)
+      ON CONFLICT(session_id) DO UPDATE SET school_id=excluded.school_id,selected_by=excluded.selected_by,updated_at=excluded.updated_at`)
+      .bind(roomId,body.schoolId,user.id,nowIso()).run();
+    else await c.env.DB.prepare('DELETE FROM school_call_brand WHERE session_id=?').bind(roomId).run();
+  }
   // An ended class room can be opened again by the host, not by students.
   const room = await c.env.DB.prepare('SELECT status FROM mentor_sessions WHERE id = ?').bind(roomId).first<{ status: string }>();
   if (!room) throw ApiError.notFound('The classroom room is unavailable.');

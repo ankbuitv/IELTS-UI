@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f5f3f9"><title>Call Studio · Ai eo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header"><a class="brand" href="#top" aria-label="Ai eo - Call Studio"><span class="brand-mark"><img src="assets/logo.svg" alt="Ai eo"></span><span class="brand-divider"></span><span>Call Studio</span></a><span class="header-status"><span></span> BẢN XEM TRƯỚC</span></header>
+  <main id="top" class="main">
+    <div class="intro"><div><h1>Chọn không gian<br><em>cho buổi học.</em></h1><p>20 ý tưởng giao diện phòng call. Chọn một mẫu bạn thích, rồi gửi số mẫu cho mình để hoàn thiện.</p></div><div class="intro-side"><span>PHÒNG HỌC TRỰC TUYẾN</span><strong>20 <small>phương án</small></strong><p>Ảnh và nội dung chỉ để minh họa.<br>Đây không phải cuộc gọi thật.</p></div></div>
+    <div class="workspace">
+      <section class="preview-area" aria-labelledby="current-name">
+        <div class="preview-heading"><div class="preview-title"><span id="current-index" class="index-badge">01</span><div><h2 id="current-name">—</h2><p id="current-desc">—</p></div></div><div class="preview-nav"><button id="previous" class="icon-button" aria-label="Mẫu trước">‹</button><span id="counter">1 / 20</span><button id="next" class="icon-button" aria-label="Mẫu tiếp theo">›</button></div></div>
+        <div class="display-wrap"><div id="preview-scale" class="preview-scale"><div id="active-room" class="active-room"></div></div></div>
+        <div class="preview-footer"><div><span class="legend-dot"></span> <strong>Xem trước giao diện</strong><span class="footer-sep">·</span> Không kết nối camera hay mic</div><button class="select-button" id="choose">Chọn mẫu này <span>↗</span></button></div>
+        <p id="selected-message" class="selected-message" role="status" aria-live="polite"></p>
+      </section>
+      <aside class="side-panel"><div class="side-heading"><div><h2>Thư viện mẫu</h2><p>Chạm vào một mẫu để xem lớn hơn.</p></div><span class="side-count">20</span></div><div id="filters" class="filters" role="group" aria-label="Lọc mẫu"><button data-filter="all" class="active" aria-pressed="true">Tất cả</button><button data-filter="focus" aria-pressed="false">Tập trung</button><button data-filter="grid" aria-pressed="false">Lưới</button><button data-filter="lesson" aria-pressed="false">Lớp học</button></div><div id="gallery" class="gallery"></div></aside>
+    </div>
+    <footer class="bottom"><span>Ai eo <span> / </span> Call Studio</span><span>Chọn mẫu · Chia sẻ ý kiến · Hoàn thiện cùng nhau</span></footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

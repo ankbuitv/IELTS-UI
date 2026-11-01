@@ -204,6 +204,7 @@ export interface MentorRoomState {
   session: MentorSession;
   /** Room the state was requested for (main or a breakout key). */
   roomKey: string;
+  schoolBrand?: { id: string; name: string } | null;
   participants: RoomParticipant[];
   messages: MentorChatMessage[];
   /** WebRTC signalling envelopes for the viewer since `since`. */

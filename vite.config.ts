@@ -31,6 +31,17 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:8787',
         changeOrigin: true,
+        // The worker sees the proxy's origin. Rewrite only requests that were
+        // same-origin at the browser; never make cross-origin requests trusted.
+        configure(proxy) {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            const origin = req.headers.origin;
+            if (!origin || !req.headers.host) return;
+            try {
+              if (new URL(origin).host === req.headers.host) proxyReq.setHeader('origin', 'http://127.0.0.1:8787');
+            } catch { /* Leave malformed origins for the worker to reject. */ }
+          });
+        },
       },
     },
   },

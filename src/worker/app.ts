@@ -13,6 +13,7 @@ import studentRoutes from './routes/student';
 import classroomRoutes from './routes/classrooms';
 import teacherRoutes from './routes/teacher';
 import adminRoutes from './routes/admin';
+import schoolRoutes from './routes/schools';
 import fileRoutes from './routes/files';
 import importRoutes from './routes/imports';
 import speakingRoutes from './routes/speaking';
@@ -73,6 +74,7 @@ export function createApp() {
   app.route('/api/profile', profileRoutes);
   app.route('/api', classroomRoutes);
   app.route('/api/teacher', teacherRoutes);
+  app.route('/api/schools', schoolRoutes);
   app.route('/api/admin', adminRoutes);
   app.route('/api/admin/imports', importRoutes);
   app.route('/api/files', fileRoutes);

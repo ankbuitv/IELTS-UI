@@ -1,19 +1,38 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, describeError } from '../lib/api';
-import { Button, useToast } from './ui';
+import { Button, Field, Modal, Select, useToast } from './ui';
 import { Icon } from './Icon';
 
-/** Teachers create/reopen the room; students can enter once it exists. */
-export function ClassroomCallButton({ classroomId, label = 'Vào phòng học' }: { classroomId: string; label?: string }) {
+type School = { id: string; name: string; status: string; member_status: string };
+/** Teachers choose an approved school before starting; students join the existing room. */
+export function ClassroomCallButton({ classroomId, label = 'Vào phòng học', canChooseSchool = false }: { classroomId: string; label?: string; canChooseSchool?: boolean }) {
   const [busy, setBusy] = useState(false);
+  const [schools, setSchools] = useState<School[]>([]);
+  const [open, setOpen] = useState(false);
+  const [selection, setSelection] = useState('unchanged');
   const navigate = useNavigate();
   const toast = useToast();
-  return <Button variant="primary" loading={busy} onClick={async () => {
+  const enter = async (schoolId?: string | null) => {
     setBusy(true);
     try {
-      const room = await api.post<{ sessionId: string }>(`/api/classrooms/${encodeURIComponent(classroomId)}/room`, {});
-      navigate(`/sessions/${encodeURIComponent(room.sessionId)}/room`);
-    } catch (error) { toast.push(describeError(error), 'error'); setBusy(false); }
-  }}><Icon name="video" size={15} /> {label}</Button>;
+      const room = await api.post<{ sessionId: string }>(`/api/classrooms/${encodeURIComponent(classroomId)}/room`, schoolId === undefined ? {} : { schoolId });
+      setOpen(false); navigate(`/sessions/${encodeURIComponent(room.sessionId)}/room`);
+    } catch (error) { toast.push(describeError(error), 'error'); } finally { setBusy(false); }
+  };
+  const start = async () => {
+    if (!canChooseSchool) { await enter(); return; }
+    setBusy(true);
+    try {
+      const data = await api.get<{schools:School[]}>('/api/schools');
+      const approved = data.schools.filter(s => s.status === 'APPROVED' && s.member_status === 'ACTIVE');
+      if (!approved.length) { await enter(); return; }
+      setSchools(approved); setSelection('unchanged'); setOpen(true);
+    } catch (error) { toast.push(describeError(error), 'error'); } finally { setBusy(false); }
+  };
+  return <><Button variant="primary" loading={busy} onClick={() => void start()}><Icon name="video" size={15} /> {label}</Button>
+    <Modal open={open} title="Chọn trường cho buổi học" onClose={()=>setOpen(false)} actions={<><Button onClick={()=>setOpen(false)}>Hủy</Button><Button variant="primary" loading={busy} onClick={()=>void enter(selection==='unchanged'?undefined:selection==='none'?null:selection)}>Vào phòng</Button></>}>
+      <p>Chọn trường đã duyệt để hiện thương hiệu trong phòng. Không thể đổi trường khi phòng đang có người.</p>
+      <Field label="Trường của buổi học">{id=><Select id={id} value={selection} onChange={e=>setSelection(e.target.value)}><option value="unchanged">Giữ lựa chọn hiện tại (nếu có)</option><option value="none">Không dùng thương hiệu trường</option>{schools.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</Select>}</Field>
+    </Modal></>;
 }

@@ -16,6 +16,7 @@ import './styles/exam-tools.css';
 import './styles/mentor.css';
 import './styles/earnings.css';
 import './styles/callroom.css';
+import './styles/schools.css';
 import './styles/notifications.css';
 import './styles/action-plan.css';
 import './styles/tutor.css';

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { mentorApi } from '../../lib/mentor-api';
+import { selectCallFocus } from '../../lib/call-layout';
 import { api, describeError, getCsrfToken, getSessionToken } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Notice } from '../../components/ui';
@@ -78,6 +79,16 @@ export function CallRoomPage() {
   });
   const openOwnTab = () => window.open(window.location.href, '_blank', 'noopener');
   const [state, setState] = useState<MentorRoomState | null>(null);
+  const [schoolLogo, setSchoolLogo] = useState<string | null>(null);
+  useEffect(() => {
+    const id = state?.schoolBrand?.id;
+    setSchoolLogo(null);
+    if (!id) return;
+    let active = true;
+    void api.get<{ logo: { mime: string; data_b64: string } | null }>(`/api/schools/${encodeURIComponent(id)}/logo`)
+      .then(({ logo }) => { if (active && logo) setSchoolLogo(`data:${logo.mime};base64,${logo.data_b64}`); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [state?.schoolBrand?.id]);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [hasCamera, setHasCamera] = useState(false);
@@ -111,7 +122,9 @@ export function CallRoomPage() {
   const [quizOpen, setQuizOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
   const [timerOpen, setTimerOpen] = useState(false);
-  const [layout, setLayout] = useState<'auto' | 'grid'>('auto');
+  const [layout, setLayout] = useState<'auto' | 'grid'>(() => {
+    try { return localStorage.getItem('aieo-call-layout') === 'grid' ? 'grid' : 'auto'; } catch { return 'auto'; }
+  });
   const [reportOpen, setReportOpen] = useState(false);
   const [rating, setRating] = useState(0);
   const [feedbackBusy, setFeedbackBusy] = useState(false);
@@ -978,9 +991,11 @@ export function CallRoomPage() {
   const session = state?.session;
   const isMentor = session?.mentorId === user?.id;
   const isClass = session?.kind === 'CLASS';
-  // The first active remote presentation is featured; layout is a local choice.
-  const presenterId = layout === 'auto' ? state?.participants.find((p) => p.userId !== selfId && p.screenOn)?.userId : undefined;
-  const selfPresenting = layout === 'auto' && screenOn;
+  // Local viewing preference: presentation first, then the class host.
+  const { featuredId, selfPresenting, selfFocus } = selectCallFocus({
+    layout, isClass, selfId, hostId: session?.mentorId, selfScreenOn: screenOn,
+    peers, participants: state?.participants ?? [],
+  });
 
   // Roster = server presence ∪ live peer connections ∪ me. The chip can never
   // disagree with the tiles on screen.
@@ -1228,6 +1243,7 @@ export function CallRoomPage() {
       <header className="jr-top">
         <div className="jr-brand">
           <BrandLogo theme="dark" height={25} />
+          {state?.schoolBrand ? <><span className="jr-brand__cross" aria-hidden="true">×</span>{schoolLogo ? <img className="jr-brand__school-logo" src={schoolLogo} alt={state.schoolBrand.name} /> : <span className="jr-brand__school-name">{state.schoolBrand.name}</span>}</> : null}
           <em>LIVE</em>
         </div>
 
@@ -1237,7 +1253,7 @@ export function CallRoomPage() {
             <Icon name="clock" size={13} />
             {clock}
           </span>
-          {isClass ? <span className="jr-title__badge">Class</span> : null}
+          {isClass ? <span className="jr-title__badge">Lớp học</span> : null}
           <button type="button" className="jr-iconbtn" onClick={() => void copyRoomLink()} title="Copy meeting link" aria-label="Copy meeting link">
             <Icon name={copied ? 'check' : 'link'} size={15} />
           </button>
@@ -1259,7 +1275,7 @@ export function CallRoomPage() {
           </button>
           <button type="button" className="jr-pill jr-pill--invite" onClick={() => setInviteOpen(true)}>
             <Icon name="plus" size={15} />
-            Invite
+            Mời
           </button>
         </div>
       </header>
@@ -1417,7 +1433,7 @@ export function CallRoomPage() {
           </aside>
         ) : null}
 
-        <main className={`jr-stage${peers.length === 0 ? ' jr-stage--solo' : ''}${selfPresenting && peers.length ? ' jr-stage--self-presenting' : ''}`}>
+        <main className={`jr-stage${peers.length === 0 ? ' jr-stage--solo' : ''}${selfPresenting && peers.length ? ' jr-stage--self-presenting' : ''}${selfFocus && peers.length ? ' jr-stage--self-focus' : ''}`}>
           {peers.length === 0 ? (
             <div className="jr-solo">
               <div className={`jr-solo__tile${camOn ? '' : ' is-off'}${screenOn ? ' is-screen' : ''}`}>
@@ -1460,12 +1476,12 @@ export function CallRoomPage() {
             </div>
           ) : (
             <>
-              <div className={`jr-grid${presenterId && !selfPresenting ? ' jr-grid--presentation' : ''}`} data-count={Math.min(peers.length, 6)}>
+              <div className={`jr-grid${featuredId && !selfPresenting ? ' jr-grid--presentation' : ''}`} data-count={Math.min(peers.length, 6)}>
                 {peers.map((peer) => (
                   <RemoteTile
                     key={peer.userId}
                     peer={peer}
-                    featured={peer.userId === presenterId && !selfPresenting}
+                    featured={peer.userId === featuredId && !selfPresenting}
                     participant={state?.participants.find((item) => item.userId === peer.userId)}
                   />
                 ))}
@@ -1594,7 +1610,7 @@ export function CallRoomPage() {
             <span className="jr-ico">
               <Icon name="mic" size={20} />
             </span>
-            <span className="jr-btn__label">{micOn ? 'Mute' : 'Unmute'}</span>
+            <span className="jr-btn__label">{micOn ? 'Mic' : 'Bật mic'}</span>
           </button>
 
           <button
@@ -1607,7 +1623,7 @@ export function CallRoomPage() {
             <span className="jr-ico">
               <Icon name="video" size={20} />
             </span>
-            <span className="jr-btn__label">{camOn ? 'Camera' : 'Camera off'}</span>
+            <span className="jr-btn__label">{camOn ? 'Camera' : 'Bật camera'}</span>
           </button>
 
           <button
@@ -1620,7 +1636,7 @@ export function CallRoomPage() {
             <span className="jr-ico">
               <Icon name="monitor" size={20} />
             </span>
-            <span className="jr-btn__label">{screenOn ? 'Stop' : 'Share'}</span>
+            <span className="jr-btn__label">{screenOn ? 'Dừng chia sẻ' : 'Chia sẻ'}</span>
           </button>
 
           <span className="jr-sep" />
@@ -1654,7 +1670,7 @@ export function CallRoomPage() {
             <span className="jr-ico">
               <Icon name="hand" size={20} />
             </span>
-            <span className="jr-btn__label">{handRaised ? 'Lower' : 'Raise'}</span>
+            <span className="jr-btn__label">{handRaised ? 'Hạ tay' : 'Giơ tay'}</span>
           </button>
 
           <button
@@ -1673,7 +1689,7 @@ export function CallRoomPage() {
             <span className="jr-ico">
               <Icon name="users" size={20} />
             </span>
-            <span className="jr-btn__label">People</span>
+            <span className="jr-btn__label">Thành viên</span>
           </button>
 
           <button
@@ -1707,7 +1723,7 @@ export function CallRoomPage() {
             <span className="jr-ico">
               <Icon name="pen" size={20} />
             </span>
-            <span className="jr-btn__label">Board</span>
+            <span className="jr-btn__label">Bảng</span>
           </button>
 
           <button
@@ -1737,7 +1753,7 @@ export function CallRoomPage() {
               title="Reactions"
             >
               <span className="jr-ico">😊</span>
-              <span className="jr-btn__label">React</span>
+              <span className="jr-btn__label">Cảm xúc</span>
             </button>
             {reactionsOpen ? (
               <div className="jr-emoji" role="menu" aria-label="Send a reaction">
@@ -1772,11 +1788,11 @@ export function CallRoomPage() {
               <span className="jr-ico">
                 <Icon name="more" size={20} />
               </span>
-              <span className="jr-btn__label">More</span>
+              <span className="jr-btn__label">Thêm</span>
             </button>
             {moreOpen ? (
               <div className="jr-more" role="menu">
-                <button type="button" onClick={() => { setLayout((current) => current === 'auto' ? 'grid' : 'auto'); setMoreOpen(false); }}>
+                <button type="button" onClick={() => { const next = layout === 'auto' ? 'grid' : 'auto'; setLayout(next); try { localStorage.setItem('aieo-call-layout', next); } catch { /* Private browsing may block storage. */ } setMoreOpen(false); }}>
                   <Icon name="grid" size={15} /> {layout === 'auto' ? 'Dùng dạng lưới' : 'Tự động ưu tiên trình chiếu'}
                 </button>
                 <button type="button" onClick={() => { setSettingsOpen(true); setMoreOpen(false); }}>
