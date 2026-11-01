@@ -7,6 +7,7 @@ import { Badge, Button, Card, Chips, EmptyState, Loading, Notice, ProgressBar, S
 import { AccuracyList, BarChart, LineChart } from '../../components/charts';
 import { AttemptList, newestFirst } from '../../components/AttemptList';
 import { Icon } from '../../components/Icon';
+import { SchoolBanners } from '../../components/SchoolBanners';
 import { learnApi } from '../../lib/learn-api';
 import { BandEstimatesPanel } from '../../components/BandEstimates';
 import { LearnStrip } from '../../components/learn/LearnStrip';
@@ -78,6 +79,7 @@ export function StudentDashboardPage() {
 
   return (
     <div className="stack dash">
+      {user?.role === 'STUDENT' && <SchoolBanners />}
       <section className="dash-hero">
         <span className="dash-hero__bars" aria-hidden="true">
           <i />

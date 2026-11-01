@@ -14,9 +14,11 @@ export async function listMySchools(env: Env, user: AuthUser) {
   return result.results;
 }
 
-/** This is a separately granted capability; an ordinary teacher or learner cannot self-promote. */
+/** Teachers and admins may submit a school; mentors need a legacy explicit grant. */
 export async function isSchoolManager(env: Env, user: AuthUser): Promise<boolean> {
-  if (!['TEACHER','MENTOR','ADMIN'].includes(user.role)) return false;
+  if (user.status !== 'ACTIVE') return false;
+  if (user.role === 'ADMIN' || user.role === 'TEACHER') return true;
+  if (user.role !== 'MENTOR') return false;
   return !!(await env.DB.prepare('SELECT 1 AS ok FROM school_managers WHERE user_id=?').bind(user.id).first());
 }
 
@@ -35,13 +37,37 @@ export async function listSchoolManagers(env: Env, actor: AuthUser) {
 
 export async function revokeSchoolManager(env: Env, actor: AuthUser, userId: string) {
   if (actor.role !== 'ADMIN') throw ApiError.forbidden();
-  // Existing owners keep access to their own schools, but cannot create more.
+  // Existing owners keep access to their own schools; admin/teacher eligibility follows their role.
   await env.DB.prepare('DELETE FROM school_managers WHERE user_id=?').bind(userId).run();
   await recordAudit(env,{actorUserId:actor.id,action:'SCHOOL_MANAGER_REVOKE',entityType:'user',entityId:userId});
 }
 
+/** Separate platform-wide school-application review, delegated only by an admin. */
+export async function canReviewSchoolApplications(env: Env, user: AuthUser): Promise<boolean> {
+  if (user.status !== 'ACTIVE') return false;
+  if (user.role === 'ADMIN') return true;
+  if (!['TEACHER','MENTOR'].includes(user.role)) return false;
+  return !!(await env.DB.prepare('SELECT 1 AS ok FROM school_application_reviewers WHERE user_id=?').bind(user.id).first());
+}
+export async function listSchoolReviewers(env: Env, actor: AuthUser) {
+  if (actor.role !== 'ADMIN') throw ApiError.forbidden();
+  return (await env.DB.prepare(`SELECT u.id,u.email,u.role,p.display_name,r.granted_at FROM school_application_reviewers r JOIN users u ON u.id=r.user_id LEFT JOIN user_profiles p ON p.user_id=u.id ORDER BY r.granted_at DESC`).all()).results;
+}
+export async function grantSchoolReviewer(env: Env, actor: AuthUser, email: string) {
+  if (actor.role !== 'ADMIN') throw ApiError.forbidden('Chỉ admin được chỉ định cán bộ duyệt trường.');
+  const target=await env.DB.prepare("SELECT id FROM users WHERE lower(email)=? AND status='ACTIVE' AND role IN ('TEACHER','MENTOR')").bind(email.toLowerCase()).first<{id:string}>();
+  if (!target) throw ApiError.notFound('Cần tài khoản giáo viên hoặc mentor đang hoạt động.');
+  await env.DB.prepare('INSERT OR IGNORE INTO school_application_reviewers(user_id,granted_by,granted_at) VALUES(?,?,?)').bind(target.id,actor.id,nowIso()).run();
+  await recordAudit(env,{actorUserId:actor.id,action:'SCHOOL_REVIEWER_GRANT',entityType:'user',entityId:target.id});
+}
+export async function revokeSchoolReviewer(env: Env, actor: AuthUser, userId: string) {
+  if (actor.role !== 'ADMIN') throw ApiError.forbidden();
+  await env.DB.prepare('DELETE FROM school_application_reviewers WHERE user_id=?').bind(userId).run();
+  await recordAudit(env,{actorUserId:actor.id,action:'SCHOOL_REVIEWER_REVOKE',entityType:'user',entityId:userId});
+}
+
 export async function registerSchool(env: Env, user: AuthUser, input: { name: string; address: string; contactEmail: string }) {
-  if (!await isSchoolManager(env,user)) throw ApiError.forbidden('Chỉ tài khoản được cấp quyền quản lý trường mới có thể đăng ký trường.');
+  if (!await isSchoolManager(env,user)) throw ApiError.forbidden('Chỉ giáo viên, admin hoặc mentor được cấp quyền mới có thể đăng ký trường.');
   const id = newId('sch'); const now = nowIso();
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO schools (id,name,address,contact_email,owner_user_id,status,created_at,updated_at)
@@ -54,15 +80,18 @@ export async function registerSchool(env: Env, user: AuthUser, input: { name: st
 }
 
 export async function listSchoolApplications(env: Env, user: AuthUser) {
-  if (user.role !== 'ADMIN') throw ApiError.forbidden();
+  if (!await canReviewSchoolApplications(env,user)) throw ApiError.forbidden();
   return (await env.DB.prepare(`SELECT s.id,s.name,s.address,s.contact_email,s.status,s.review_note,s.created_at,
     s.owner_user_id,u.email AS owner_email FROM schools s JOIN users u ON u.id=s.owner_user_id
     ORDER BY CASE WHEN s.status='PENDING' THEN 0 ELSE 1 END,s.created_at DESC LIMIT 200`).all()).results;
 }
 
 export async function reviewSchool(env: Env, user: AuthUser, id: string, status: 'APPROVED' | 'REJECTED', note: string) {
-  if (user.role !== 'ADMIN') throw ApiError.forbidden();
-  if (status === 'APPROVED') { const owner = await env.DB.prepare(`SELECT u.role FROM schools s JOIN users u ON u.id=s.owner_user_id WHERE s.id=?`).bind(id).first<{role:string}>(); if (!owner || !['TEACHER','MENTOR','ADMIN'].includes(owner.role)) throw ApiError.conflict('Đại diện trường phải là giáo viên, mentor hoặc quản trị viên.'); }
+  if (!await canReviewSchoolApplications(env,user)) throw ApiError.forbidden();
+  const owner = await env.DB.prepare(`SELECT u.role,s.owner_user_id FROM schools s JOIN users u ON u.id=s.owner_user_id WHERE s.id=?`).bind(id).first<{role:string;owner_user_id:string}>();
+  if (!owner) throw ApiError.notFound('Trường không tồn tại.');
+  if (owner.owner_user_id === user.id) throw ApiError.forbidden('Không thể tự duyệt hồ sơ trường do mình đăng ký.');
+  if (status === 'APPROVED' && !['TEACHER','MENTOR','ADMIN'].includes(owner.role)) throw ApiError.conflict('Đại diện trường phải là giáo viên, mentor hoặc quản trị viên.');
   if (status === 'REJECTED' && !note.trim()) throw ApiError.validation('Vui lòng nhập lý do từ chối.');
   const result = await env.DB.prepare(`UPDATE schools SET status=?, review_note=?, reviewed_by=?, reviewed_at=?, updated_at=?
     WHERE id=? AND status='PENDING'`).bind(status, note || null, user.id, nowIso(), nowIso(), id).run();

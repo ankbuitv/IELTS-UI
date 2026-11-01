@@ -9,18 +9,29 @@ import { listLessonPlans, createLessonPlan, updateLessonPlan, deleteLessonPlan, 
 import { listSubjectGroups, saveSubjectGroup, deleteSubjectGroup, listSchoolEvents, saveSchoolEvent, deleteSchoolEvent, groupStaffDirectory } from '../services/school-operations-service';
 import { schoolPermissions, listSchoolPermissions, setSchoolPermissions } from '../services/school-permissions';
 import { enforceRateLimit } from '../lib/rate-limit';
-import { createSchoolTeacher, isSchoolManager, grantSchoolManager, listSchoolManagers, revokeSchoolManager, getSchoolLogo, inviteTeacher, listMySchools, listSchoolApplications, listSchoolMembers, registerSchool, removeSchoolMember, respondSchoolInvitation, reviewSchool, saveSchoolLogo } from '../services/school-service';
+import { schoolOverview, eligibleSchoolClasses, setSchoolClassLink, getSchoolBanner, saveSchoolBanner, studentSchoolBanners } from '../services/school-insights-service';
+import { createSchoolTeacher, isSchoolManager, canReviewSchoolApplications, listSchoolReviewers, grantSchoolReviewer, revokeSchoolReviewer, grantSchoolManager, listSchoolManagers, revokeSchoolManager, getSchoolLogo, inviteTeacher, listMySchools, listSchoolApplications, listSchoolMembers, registerSchool, removeSchoolMember, respondSchoolInvitation, reviewSchool, saveSchoolLogo } from '../services/school-service';
 
 const router = new Hono<AppBindings>();
 router.use('*', requireAuth, async (c, next) => { assertSameOrigin(c); if (!['GET', 'HEAD'].includes(c.req.method)) assertCsrf(c, c.get('session')?.csrfToken ?? null); await next(); });
-router.get('/access', async c => c.json({isManager:await isSchoolManager(c.env,currentUser(c))}));
+router.get('/overview', async c => c.json({schools:await schoolOverview(c.env,currentUser(c))}));
+router.get('/my-banners', async c => c.json({banners:await studentSchoolBanners(c.env,currentUser(c))}));
+router.get('/:id/classroom-links', async c => c.json({classes:await eligibleSchoolClasses(c.env,currentUser(c),c.req.param('id'))}));
+router.put('/:id/classroom-links/:classId', async c => {await setSchoolClassLink(c.env,currentUser(c),c.req.param('id'),c.req.param('classId'),true);return c.json({ok:true});});
+router.delete('/:id/classroom-links/:classId', async c => {await setSchoolClassLink(c.env,currentUser(c),c.req.param('id'),c.req.param('classId'),false);return c.json({ok:true});});
+router.get('/:id/banner', async c => c.json({banner:await getSchoolBanner(c.env,currentUser(c),c.req.param('id'))}));
+router.put('/:id/banner', async c => {const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(120),message:z.string().trim().max(500),theme:z.enum(['blue','green','amber']),active:z.boolean(),image:z.object({mime:z.enum(['image/png','image/jpeg','image/webp']),base64:z.string().max(140000)}).nullable()}));await saveSchoolBanner(c.env,currentUser(c),c.req.param('id'),body);return c.json({ok:true});});
+router.get('/access', async c => c.json({isManager:await isSchoolManager(c.env,currentUser(c)),canReviewSchools:await canReviewSchoolApplications(c.env,currentUser(c))}));
+router.get('/reviewers', async c => c.json({reviewers:await listSchoolReviewers(c.env,currentUser(c))}));
+router.post('/reviewers', async c => {const body=await parseBody(c,z.object({email:z.string().trim().email().max(254)}));await grantSchoolReviewer(c.env,currentUser(c),body.email);return c.json({ok:true});});
+router.delete('/reviewers/:userId', async c => {await revokeSchoolReviewer(c.env,currentUser(c),c.req.param('userId'));return c.json({ok:true});});
 router.get('/managers', async c => c.json({managers:await listSchoolManagers(c.env,currentUser(c))}));
 router.post('/managers', async c => { const body=await parseBody(c,z.object({email:z.string().trim().email().max(254)})); await grantSchoolManager(c.env,currentUser(c),body.email); return c.json({ok:true}); });
 router.delete('/managers/:userId', async c => {await revokeSchoolManager(c.env,currentUser(c),c.req.param('userId'));return c.json({ok:true});});
 router.get('/', async (c) => c.json({ schools: await listMySchools(c.env, currentUser(c)) }));
 router.post('/', async (c) => {
   const user = currentUser(c);
-  if (!await isSchoolManager(c.env,user)) throw ApiError.forbidden('Chỉ tài khoản quản lý trường mới có thể đăng ký trường.');
+  if (!await isSchoolManager(c.env,user)) throw ApiError.forbidden('Chỉ giáo viên, admin hoặc mentor được cấp quyền mới có thể đăng ký trường.');
   await enforceRateLimit(c.env, { bucket: `school-register:${user.id}`, limit: 5, windowSeconds: 3600 }, 'Quá nhiều đăng ký, vui lòng thử lại sau.');
   const body = await parseBody(c, z.object({ name: z.string().trim().min(2).max(120), address: z.string().trim().min(3).max(300), contactEmail: z.string().trim().email().max(254) }));
   return c.json({ school: await registerSchool(c.env, user, body) }, 201);

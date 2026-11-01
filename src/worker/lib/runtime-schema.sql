@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql, 0038_speaking_partner.sql, 0039_question_drills.sql, 0040_social_billing.sql, 0041_test_covers.sql, 0042_blog.sql, 0043_class_direct_messages.sql, 0044_classroom_call_rooms.sql, 0045_call_attendance_feedback.sql, 0046_call_signals_order.sql, 0047_schools.sql, 0048_school_call_brand.sql, 0049_screen_share_lock.sql, 0050_class_logos.sql, 0051_school_managers.sql, 0052_school_lesson_plans.sql, 0053_school_operations.sql, 0054_desktop_preferences.sql, 0055_lesson_workflow.sql, 0056_school_delegated_permissions.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql, 0038_speaking_partner.sql, 0039_question_drills.sql, 0040_social_billing.sql, 0041_test_covers.sql, 0042_blog.sql, 0043_class_direct_messages.sql, 0044_classroom_call_rooms.sql, 0045_call_attendance_feedback.sql, 0046_call_signals_order.sql, 0047_schools.sql, 0048_school_call_brand.sql, 0049_screen_share_lock.sql, 0050_class_logos.sql, 0051_school_managers.sql, 0052_school_lesson_plans.sql, 0053_school_operations.sql, 0054_desktop_preferences.sql, 0055_lesson_workflow.sql, 0056_school_delegated_permissions.sql, 0057_school_application_reviewers.sql, 0058_school_reporting_banner.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 116   Indexes: 123
+-- Tables: 119   Indexes: 124
 -- =============================================================================
 
 -- table: user_profiles
@@ -1523,6 +1523,34 @@ CREATE TABLE IF NOT EXISTS school_staff_permissions (
   PRIMARY KEY(school_id,user_id,permission)
 );
 
+-- table: school_application_reviewers
+CREATE TABLE IF NOT EXISTS school_application_reviewers (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  granted_by TEXT NOT NULL REFERENCES users(id),
+  granted_at TEXT NOT NULL
+);
+
+-- table: school_classroom_links
+CREATE TABLE IF NOT EXISTS school_classroom_links (
+  classroom_id TEXT PRIMARY KEY REFERENCES classrooms(id) ON DELETE CASCADE,
+  school_id TEXT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+  linked_by TEXT NOT NULL REFERENCES users(id),
+  linked_at TEXT NOT NULL
+);
+
+-- table: school_banners
+CREATE TABLE IF NOT EXISTS school_banners (
+  school_id TEXT PRIMARY KEY REFERENCES schools(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL DEFAULT '',
+  theme TEXT NOT NULL CHECK(theme IN ('blue','green','amber')),
+  image_mime TEXT,
+  image_b64 TEXT,
+  active INTEGER NOT NULL DEFAULT 0 CHECK(active IN (0,1)),
+  updated_by TEXT NOT NULL REFERENCES users(id),
+  updated_at TEXT NOT NULL
+);
+
 -- index: idx_sessions_user
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
 
@@ -1900,3 +1928,6 @@ CREATE INDEX IF NOT EXISTS idx_lesson_submissions_school ON school_lesson_submis
 
 -- index: idx_lesson_submissions_pending
 CREATE UNIQUE INDEX IF NOT EXISTS idx_lesson_submissions_pending ON school_lesson_submissions(plan_id) WHERE status='PENDING';
+
+-- index: idx_school_classroom_links_school
+CREATE INDEX IF NOT EXISTS idx_school_classroom_links_school ON school_classroom_links(school_id);

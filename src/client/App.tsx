@@ -78,7 +78,7 @@ export function App() {
   const location=useLocation();
   const path=location.pathname;
   // Staff work in the desktop; a direct link opens its destination in a window.
-  // Calls, exam taking and lesson playback keep their dedicated full-screen flows.
+  // Students keep their existing full-screen flows.
   if (!loading && user && isStaffDesktopPath(user.role,path)) {
     return <SchoolDesktop key={path+location.search} initialPath={path === '/' || path === '/dashboard' ? undefined : path+location.search+location.hash}/>;
   }

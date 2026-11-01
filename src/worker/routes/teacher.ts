@@ -31,6 +31,7 @@ import { buildResultView } from '../services/attempt-service';
 import { listWritingQueue, markQuestionManually, setWritingScore } from '../services/marking-service';
 import { loadWritingMarks, scoreWritingSubmissionWithAi } from '../services/ai-marking-service';
 import { recordAudit } from '../lib/audit';
+import { teacherProgress } from '../services/teacher-progress-service';
 import { EXAM_MODES, RESULT_VISIBILITIES, TIMING_POLICIES } from '../../shared/types';
 
 const router = new Hono<AppBindings>();
@@ -44,6 +45,8 @@ router.use('*', async (c, next) => {
 // ---------------------------------------------------------------------------
 // Classrooms
 // ---------------------------------------------------------------------------
+router.get('/progress', async c => c.json({assignments:await teacherProgress(c.env,currentUser(c))}));
+
 router.get('/classrooms', async (c) => {
   const user = currentUser(c);
   return c.json({ classrooms: await listClassroomsForTeacher(c.env, user) });
