@@ -853,3 +853,7 @@
 .jr .jr-presenter-cam video { width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
 .jr .jr-presenter-cam span { position:absolute; bottom:5px; left:5px; max-width:calc(100% - 10px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:3px 5px; border-radius:4px; color:#fff; background:#11111bdb; font-size:.62rem; }
 @media(max-width:860px) { .jr .jr-presenter-cam { right:6px; top:6px; width:100px; } }
+.jr-brand .class-logo { margin:0; }
+.jr-brand .class-logo img { width:30px; height:30px; border-radius:5px; background:#fff; }
+.jr-brand .class-logo__fallback { display:none; }
+@media(max-width:860px){.jr-brand .class-logo img{width:24px;height:24px;}}

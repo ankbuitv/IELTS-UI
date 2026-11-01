@@ -25,3 +25,11 @@
 .teacher-school-banner__secondary { color:#5d4971; white-space:nowrap; font-size:.82rem; font-weight:600; }
 .school-registration { scroll-margin-top:80px; }
 @media(max-width:760px) { .teacher-school-banner { display:grid; grid-template-columns:44px 1fr; gap:10px 14px; } .teacher-school-banner__link { margin-left:0; grid-column:2; justify-self:start; } .teacher-school-banner__secondary { grid-column:2; } }
+.class-logo { display:flex; align-items:center; gap:12px; margin:12px 0; }
+.class-logo img,.class-logo__fallback { width:56px; height:56px; border-radius:10px; object-fit:contain; background:#f2eef7; border:1px solid #e5deed; }
+.class-logo__fallback { display:grid; place-items:center; font-weight:700; font-size:1.3rem; color:#674489; }
+.class-logo__controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:.8rem; }
+.class-logo__upload { cursor:pointer; color:#65438b; font-weight:700; text-decoration:underline; text-underline-offset:3px; }
+.class-logo__upload input { position:absolute; width:1px; height:1px; opacity:0; }
+.class-logo__upload:focus-within { outline:2px solid #7749ae; outline-offset:3px; }
+.class-logo__controls [role="alert"] { color:#b32638; }

@@ -8,6 +8,7 @@ import { Button, Notice } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { MentorAvatar, formatWhen } from '../../components/mentor/MentorBits';
 import { UserAvatar } from '../../components/UserAvatar';
+import { ClassLogo } from '../../components/ClassLogo';
 import { BrandLogo } from '../../components/BrandLogo';
 import type { MentorChatMessage, MentorRoomState, MentorSignal, RoomParticipant } from '@shared/mentor';
 import type { BreakoutState, ClassPoll, WhiteboardStroke } from '@shared/live';
@@ -95,6 +96,9 @@ export function CallRoomPage() {
   const [hasCamera, setHasCamera] = useState(false);
   const [cameraPreview, setCameraPreview] = useState<MediaStream | null>(null);
   const [screenOn, setScreenOn] = useState(false);
+  const [sharingBusy, setSharingBusy] = useState(false);
+  const pollSequenceRef = useRef(0);
+  const screenClaimPollRef = useRef(0);
   const [handRaised, setHandRaised] = useState(false);
   const [panel, setPanel] = useState<'chat' | 'notes' | 'people'>('chat');
   const [panelOpen, setPanelOpen] = useState(false);
@@ -656,6 +660,25 @@ export function CallRoomPage() {
   );
 
   // ---------------------------------------------------------------- poll
+  const stopScreen = useCallback(() => {
+    const screen = screenStreamRef.current;
+    screenStreamRef.current = null;
+    if (screen) for (const track of screen.getTracks()) { track.onended = null; track.stop(); }
+    setScreenOn(false);
+    void mentorApi.screenShare(sessionId, room, false).catch(() => undefined);
+    const video = localStreamRef.current?.getVideoTracks()[0] ?? null;
+    pcsRef.current.forEach((pc, peerId) => {
+      const extra = cameraSendersRef.current.get(peerId);
+      const sender = pc.getSenders().find((item) => item !== extra && item.track?.kind === 'video');
+      // Detach the duplicate before putting the camera back on the main sender.
+      void (async () => {
+        if (extra) await extra.replaceTrack(null);
+        if (sender) await sender.replaceTrack(video);
+      })().catch(() => setError('Không thể khôi phục camera. Hãy thử kết nối lại.'));
+    });
+    attachSelf();
+  }, [sessionId, room, attachSelf]);
+
   useEffect(() => {
     if (phase !== 'room' || !selfId) return;
     let alive = true;
@@ -664,6 +687,7 @@ export function CallRoomPage() {
     const tick = async () => {
       if (running) return;
       running = true;
+      const pollSequence = ++pollSequenceRef.current;
       try {
         const next = await mentorApi.room(
           sessionId,
@@ -675,6 +699,11 @@ export function CallRoomPage() {
         failures = 0; setSignalStatus('connected');
         participantsRef.current = next.participants;
         setState(next);
+        // Ignore responses to polls started before the claim completed.
+        if (screenStreamRef.current && pollSequence > screenClaimPollRef.current && next.screenShare?.userId !== selfId) {
+          stopScreen();
+          setError('Quyền trình chiếu đã hết hoặc được chuyển cho người khác.');
+        }
         for (const signal of next.signals) await handleSignal(signal);
         lastSignalIdRef.current = next.signalCursor;
 
@@ -738,7 +767,7 @@ export function CallRoomPage() {
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [phase, sessionId, selfId, room, addPeer, handleSignal, syncSenders, negotiate]);
+  }, [phase, sessionId, selfId, room, addPeer, handleSignal, syncSenders, negotiate, stopScreen]);
 
   // Show observed peer round-trip latency, not a fabricated bandwidth/quality score.
   useEffect(() => {
@@ -917,38 +946,29 @@ export function CallRoomPage() {
     }
   };
 
-  const stopScreen = () => {
-    const screen = screenStreamRef.current;
-    screenStreamRef.current = null;
-    if (screen) for (const track of screen.getTracks()) { track.onended = null; track.stop(); }
-    setScreenOn(false);
-    const video = localStreamRef.current?.getVideoTracks()[0] ?? null;
-    pcsRef.current.forEach((pc, peerId) => {
-      const extra = cameraSendersRef.current.get(peerId);
-      const sender = pc.getSenders().find((item) => item !== extra && item.track?.kind === 'video');
-      // Detach the duplicate before putting the camera back on the main sender.
-      void (async () => {
-        if (extra) await extra.replaceTrack(null);
-        if (sender) await sender.replaceTrack(video);
-      })().catch(() => setError('Không thể khôi phục camera. Hãy thử kết nối lại.'));
-    });
-    attachSelf();
-  };
   const toggleScreen = async () => {
     if (screenStreamRef.current) { stopScreen(); return; }
+    if (!state?.canShare) { setError('Chỉ giáo viên chủ trì hoặc quản trị viên được trình chiếu.'); return; }
+    if (state.screenShare && state.screenShare.userId !== selfId) { setError(`${state.screenShare.name} đang trình chiếu. Vui lòng chờ họ dừng chia sẻ.`); return; }
+    let screen: MediaStream | null = null;
+    setSharingBusy(true);
     try {
-      const screen = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      screen = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       const [track] = screen.getVideoTracks();
       if (!track) return;
-      screenStreamRef.current = screen;
+      await mentorApi.screenShare(sessionId, room, true);
+      if (track.readyState === 'ended') { await mentorApi.screenShare(sessionId, room, false); return; }
+      const chosenScreen = screen;
+      screenClaimPollRef.current = pollSequenceRef.current;
+      screenStreamRef.current = chosenScreen;
       setScreenOn(true);
       pcsRef.current.forEach((pc, peerId) => {
         void (async () => {
           const extra = cameraSendersRef.current.get(peerId);
           const sender = pc.getSenders().find((item) => item !== extra && item.track?.kind === 'video');
           if (sender) await sender.replaceTrack(track);
-          else { pc.addTrack(track, screen); pendingNegotiationRef.current.add(peerId); }
-          if (screenStreamRef.current !== screen || pcsRef.current.get(peerId) !== pc) return;
+          else { pc.addTrack(track, chosenScreen); pendingNegotiationRef.current.add(peerId); }
+          if (screenStreamRef.current !== chosenScreen || pcsRef.current.get(peerId) !== pc) return;
           const camera = cameraStream();
           const cameraTrack = camera?.getVideoTracks()[0];
           if (camera && cameraTrack) {
@@ -960,8 +980,9 @@ export function CallRoomPage() {
       track.onended = stopScreen;
       attachSelf();
     } catch (cause) {
-      if ((cause as { name?: string })?.name !== 'NotAllowedError') setError('Không thể bắt đầu chia sẻ màn hình.');
-    }
+      screen?.getTracks().forEach(track => track.stop());
+      if ((cause as { name?: string })?.name !== 'NotAllowedError') setError(describeError(cause));
+    } finally { setSharingBusy(false); }
   };
 
   const toggleHand = async () => {
@@ -1215,7 +1236,8 @@ export function CallRoomPage() {
         <aside className="jr-prejoin__panel">
           <div className="jr-brand jr-brand--panel">
             <BrandLogo theme="dark" height={30} />
-            <em>LIVE</em>
+            {state?.classBrand ? <ClassLogo type={state.classBrand.type} id={state.classBrand.id} name={state.classBrand.name} /> : null}
+          <em>LIVE</em>
           </div>
           <span className="jr-eyebrow">{isClass ? 'Live class' : 'Coaching session'}</span>
           <h1>{session?.topic ?? 'Coaching session'}</h1>
@@ -1711,7 +1733,8 @@ export function CallRoomPage() {
             className={`jr-btn${screenOn ? ' is-on' : ''}`}
             onClick={() => void toggleScreen()}
             aria-label="Share screen"
-            title="Share your screen"
+            disabled={sharingBusy || (!screenOn && (!state?.canShare || (!!state?.screenShare && state.screenShare.userId !== selfId)))}
+            title={!state?.canShare ? 'Chỉ giáo viên chủ trì hoặc quản trị viên được trình chiếu' : state.screenShare && state.screenShare.userId !== selfId ? `${state.screenShare.name} đang trình chiếu` : 'Chia sẻ màn hình'}
           >
             <span className="jr-ico">
               <Icon name="monitor" size={20} />
@@ -2839,13 +2862,13 @@ function RemoteTile({ peer, participant, featured = false }: { peer: Peer; parti
         playsInline
         className={showVideo ? undefined : 'is-hidden'}
       />
-      {participant?.screenOn && participant.camOn ? <PresenterCamera stream={peer.cameraStream} label={`Camera ${peer.displayName}`} muted /> : null}
+      {participant?.screenOn && participant.camOn ? <PresenterCamera stream={peer.cameraStream} label={`Camera ${participant?.displayName || peer.displayName}`} muted /> : null}
       {!showVideo ? (
         <div className="jr-tile__avatar">
           <UserAvatar
             userId={peer.userId}
             avatarUpdatedAt={participant?.avatarUpdatedAt}
-            name={peer.displayName}
+            name={participant?.displayName || peer.displayName}
             size={92}
           />
           <span className="jr-tile__avatar-note">
@@ -2855,7 +2878,7 @@ function RemoteTile({ peer, participant, featured = false }: { peer: Peer; parti
         </div>
       ) : null}
       <span className="jr-tile__label">
-        {peer.displayName}{participant?.screenOn ? ' · đang trình chiếu' : ''}
+        {participant?.displayName || peer.displayName}{participant?.screenOn ? ' · đang trình chiếu' : ''}
         {muted ? (
           <i className="jr-tile__muted" title="Microphone off">
             <Icon name="mic" size={11} />

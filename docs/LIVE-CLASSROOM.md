@@ -90,3 +90,5 @@ API: `GET /api/mentor/me/earnings?from=&to=`,
   nhận giờ nằm ở cột `confirmation`, UI đã hiển thị đúng “Awaiting mentor”.
 - **Signal REACTION/MUTE_MIC/KICK bị SQLite từ chối**: CHECK cũ chỉ cho 4 loại
   SDP; migration 0033 mở rộng và thêm `room_key`.
+
+Class owners can edit the name and description and upload a class logo. Mentor class creation also accepts an optional logo. School and class logos are resized in the browser (original PNG, JPEG, or WebP up to 10 MB) and stored as a compressed image of at most 100 KB. Only teachers, mentors and platform administrators may register a school; approval is still required, and approved school owners manage the school logo and teacher invitations.

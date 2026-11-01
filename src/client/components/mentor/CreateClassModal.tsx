@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { describeError } from '../../lib/api';
+import { api, describeError } from '../../lib/api';
+import { prepareLogo } from '../../lib/prepare-logo';
 import { mentorApi } from '../../lib/mentor-api';
 import { Button, Field, Modal, Select, TextInput, useToast } from '../ui';
 import type { MentorClass } from '@shared/mentor';
@@ -35,6 +36,7 @@ export function CreateClassModal({
   const [startsAt, setStartsAt] = useState(isoLocal(3, 19));
   const [endsAt, setEndsAt] = useState(isoLocal(10, 21));
   const [busy, setBusy] = useState(false);
+  const [logo,setLogo] = useState<File | null>(null);
 
   return (
     <Modal
@@ -66,6 +68,11 @@ export function CreateClassModal({
                   startsAt,
                   endsAt,
                 });
+                if (logo) {
+                  try { await api.post(`/api/class-logos/mentor/${encodeURIComponent(result.class.id)}`, await prepareLogo(logo)); }
+                  catch (cause) { toast.push(`Lớp đã tạo nhưng chưa tải được logo: ${describeError(cause)}. Bạn có thể đổi logo trong trang lớp.`, 'error'); }
+                }
+                setLogo(null);
                 onCreated?.(result.class);
                 onClose();
               } catch (createError) {
@@ -104,6 +111,7 @@ export function CreateClassModal({
             />
           )}
         </Field>
+        <Field label="Logo lớp (không bắt buộc)" hint="PNG, JPG hoặc WebP, tối đa 10 MB; ảnh sẽ được tự nén.">{id=><input id={id} type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>setLogo(e.target.files?.[0] ?? null)} />}</Field>
         <Field label="Level">
           {(id) => (
             <Select id={id} value={level} onChange={(event) => setLevel(event.target.value)}>

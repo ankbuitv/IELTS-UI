@@ -122,9 +122,10 @@ export async function getMentorProfile(env: Env, mentorId: string, viewer: AuthU
 export async function getMentorReviews(env: Env, mentorId: string) {
   const rows = await env.DB.prepare(
     `SELECT r.id, r.mentor_id, r.student_id, r.session_id, r.rating, r.comment, r.created_at,
-            COALESCE(NULLIF(p.display_name, ''), 'Student') AS display_name,
+            COALESCE(NULLIF(TRIM(p.display_name), ''),NULLIF(TRIM(u.username), ''),NULLIF(substr(u.email,1,instr(u.email,'@')-1),''),'Học viên') AS display_name,
             p.avatar_updated_at
        FROM mentor_reviews r
+       LEFT JOIN users u ON u.id = r.student_id
        LEFT JOIN user_profiles p ON p.user_id = r.student_id
       WHERE r.mentor_id = ?
       ORDER BY r.created_at DESC
@@ -188,7 +189,7 @@ const SESSION_SELECT = `
   SELECT s.*, 
          COALESCE(NULLIF(pm.display_name, ''), 'Mentor') AS mentor_name,
          pm.avatar_updated_at AS mentor_avatar_at,
-         COALESCE(NULLIF(ps.display_name, ''), 'Student') AS student_name,
+         COALESCE(NULLIF(TRIM(ps.display_name), ''),NULLIF(TRIM(us.username), ''),NULLIF(substr(us.email,1,instr(us.email,'@')-1),''),'Học viên') AS student_name,
          ps.avatar_updated_at AS student_avatar_at,
          mc.title AS class_title,
          (SELECT r.id FROM mentor_sessions r
@@ -197,6 +198,7 @@ const SESSION_SELECT = `
     FROM mentor_sessions s
     LEFT JOIN user_profiles pm ON pm.user_id = s.mentor_id
     LEFT JOIN user_profiles ps ON ps.user_id = s.student_id
+    LEFT JOIN users us ON us.id = s.student_id
     LEFT JOIN mentor_classes mc ON mc.id = s.class_id`;
 
 function toSession(row: SessionRow): MentorSession {
@@ -335,6 +337,8 @@ export async function assertSessionAccess(env: Env, session: MentorSession, view
     if (room) {
       if (room.status !== 'ACTIVE') throw ApiError.forbidden('This classroom is archived.');
       if (viewer.role === 'ADMIN' || viewer.id === room.teacher_id) return;
+      const schoolOwner = await env.DB.prepare(`SELECT 1 AS ok FROM school_call_brand b JOIN schools s ON s.id=b.school_id JOIN school_members sm ON sm.school_id=s.id AND sm.user_id=b.selected_by AND sm.status='ACTIVE' WHERE b.session_id=? AND s.owner_user_id=? AND s.status='APPROVED'`).bind(session.id, viewer.id).first();
+      if (schoolOwner && ['TEACHER','MENTOR','ADMIN'].includes(viewer.role)) return;
       const member = await env.DB.prepare(`SELECT 1 AS ok FROM classroom_call_rooms r
         JOIN classroom_members m ON m.classroom_id = r.classroom_id
         WHERE r.session_id = ? AND m.user_id = ? AND m.status = 'ACTIVE'`).bind(session.id, viewer.id).first<{ ok: number }>();
@@ -540,6 +544,7 @@ export async function joinRoom(
 
 export async function leaveRoom(env: Env, viewer: AuthUser, sessionId: string): Promise<{ ok: true }> {
   const now = nowIso();
+  await env.DB.prepare('DELETE FROM call_screen_shares WHERE session_id=? AND user_id=?').bind(sessionId,viewer.id).run();
   await env.DB.prepare('UPDATE call_attendance SET left_at = ?, last_seen_at = ? WHERE session_id = ? AND user_id = ? AND left_at IS NULL')
     .bind(now, now, sessionId, viewer.id).run();
   await env.DB.prepare('DELETE FROM mentor_room_presence WHERE session_id = ? AND user_id = ?')
@@ -557,6 +562,32 @@ export async function setHandRaised(env: Env, viewer: AuthUser, sessionId: strin
   return { ok: true };
 }
 
+/** Only the host, platform admin, or verified school owner may present. The
+ * per-room lease is claimed atomically so two allowed presenters cannot replace
+ * one another. A disconnected presenter loses the lease after 30 seconds. */
+export async function setScreenShare(env: Env, viewer: AuthUser, sessionId: string, roomKey: string, start: boolean) {
+  const session = await getSession(env, sessionId);
+  await assertSessionAccess(env, session, viewer);
+  await assertRoomKey(env, session, viewer, roomKey);
+  if (!start) {
+    await env.DB.prepare('DELETE FROM call_screen_shares WHERE session_id=? AND room_key=? AND user_id=?').bind(sessionId,roomKey,viewer.id).run();
+    return { ok: true };
+  }
+  const schoolOwner = await env.DB.prepare(`SELECT 1 AS ok FROM school_call_brand b JOIN schools s ON s.id=b.school_id JOIN school_members sm ON sm.school_id=s.id AND sm.user_id=b.selected_by AND sm.status='ACTIVE'
+    WHERE b.session_id=? AND s.owner_user_id=? AND s.status='APPROVED'`).bind(sessionId,viewer.id).first();
+  if (viewer.id !== session.mentorId && viewer.role !== 'ADMIN' && !(schoolOwner && ['TEACHER','MENTOR'].includes(viewer.role))) throw ApiError.forbidden('Chỉ giáo viên chủ trì hoặc quản trị viên được trình chiếu.');
+  const present = await env.DB.prepare('SELECT 1 AS ok FROM mentor_room_presence WHERE session_id=? AND room_key=? AND user_id=?').bind(sessionId,roomKey,viewer.id).first();
+  if (!present) throw ApiError.conflict('Hãy vào phòng trước khi trình chiếu.');
+  const now = nowIso();
+  const old = new Date(Date.now() - 30_000).toISOString();
+  const result = await env.DB.prepare(`INSERT INTO call_screen_shares(session_id,room_key,user_id,updated_at) VALUES(?,?,?,?)
+    ON CONFLICT(session_id,room_key) DO UPDATE SET user_id=excluded.user_id, updated_at=excluded.updated_at
+    WHERE call_screen_shares.user_id=excluded.user_id OR call_screen_shares.updated_at < ?`)
+    .bind(sessionId,roomKey,viewer.id,now,old).run();
+  if (!result.meta.changes) throw ApiError.conflict('Đang có người trình chiếu. Vui lòng chờ họ dừng chia sẻ.');
+  return { ok: true };
+}
+
 export async function roomState(
   env: Env,
   viewer: AuthUser,
@@ -568,6 +599,9 @@ export async function roomState(
   session: MentorSession;
   roomKey: string;
   schoolBrand?: { id: string; name: string } | null;
+  classBrand: { id: string; type: 'teacher' | 'mentor'; name: string } | null;
+  screenShare: { userId: string; name: string } | null;
+  canShare: boolean;
   participants: RoomParticipant[];
   messages: MentorChatMessage[];
   signals: MentorSignal[];
@@ -578,16 +612,27 @@ export async function roomState(
   await assertSessionAccess(env, session, viewer);
   await assertRoomKey(env, session, viewer, roomKey);
 
+  const teacherClass = !session.classId ? await env.DB.prepare(`SELECT c.id,c.name FROM classroom_call_rooms r JOIN classrooms c ON c.id=r.classroom_id WHERE r.session_id=?`).bind(sessionId).first<{id:string;name:string}>() : null;
+  const classBrand = session.classId ? {id:session.classId,type:'mentor' as const,name:session.topic} : teacherClass ? {id:teacherClass.id,type:'teacher' as const,name:teacherClass.name} : null;
   const brand = await env.DB.prepare(`SELECT s.id,s.name FROM school_call_brand b JOIN schools s ON s.id=b.school_id
     JOIN school_members m ON m.school_id=s.id AND m.user_id=b.selected_by
     WHERE b.session_id=? AND s.status='APPROVED' AND m.status='ACTIVE'`).bind(sessionId).first<{id:string;name:string}>();
   const now = new Date();
   const timestamp = now.toISOString();
 
+  // Renew only the presenter's lease; other clients cannot claim by changing a query flag.
+  if (media.screen) await env.DB.prepare(`UPDATE call_screen_shares SET updated_at=? WHERE session_id=? AND room_key=? AND user_id=?
+    AND EXISTS (SELECT 1 FROM mentor_room_presence WHERE session_id=? AND room_key=? AND user_id=?)`)
+    .bind(timestamp,sessionId,roomKey,viewer.id,sessionId,roomKey,viewer.id).run();
+  const share = await env.DB.prepare(`SELECT l.user_id, COALESCE(NULLIF(TRIM(p.display_name),''),NULLIF(TRIM(u.username),''),substr(u.email,1,instr(u.email,'@')-1),'Giáo viên') AS name
+    FROM call_screen_shares l JOIN users u ON u.id=l.user_id LEFT JOIN user_profiles p ON p.user_id=u.id
+    WHERE l.session_id=? AND l.room_key=? AND l.updated_at>=?`).bind(sessionId,roomKey,new Date(now.getTime()-30000).toISOString()).first<{user_id:string;name:string}>();
+  const schoolOwner = await env.DB.prepare(`SELECT 1 AS ok FROM school_call_brand b JOIN schools s ON s.id=b.school_id JOIN school_members sm ON sm.school_id=s.id AND sm.user_id=b.selected_by AND sm.status='ACTIVE' WHERE b.session_id=? AND s.owner_user_id=? AND s.status='APPROVED'`).bind(sessionId,viewer.id).first();
+  const canShare = viewer.id===session.mentorId || viewer.role==='ADMIN' || (!!schoolOwner && ['TEACHER','MENTOR'].includes(viewer.role));
   // A read before joining, or an in-flight poll after leave, must not create presence.
   await env.DB.prepare(`UPDATE mentor_room_presence SET last_seen_at = ?, cam_on = ?, mic_on = ?, screen_on = ?
     WHERE session_id = ? AND user_id = ? AND room_key = ?`)
-    .bind(timestamp, media.cam ? 1 : 0, media.mic ? 1 : 0, media.screen ? 1 : 0, sessionId, viewer.id, roomKey).run();
+    .bind(timestamp, media.cam ? 1 : 0, media.mic ? 1 : 0, media.screen && share?.user_id === viewer.id ? 1 : 0, sessionId, viewer.id, roomKey).run();
   await env.DB.prepare(`UPDATE call_attendance SET last_seen_at = ? WHERE session_id = ? AND user_id = ? AND left_at IS NULL
     AND EXISTS (SELECT 1 FROM mentor_room_presence WHERE session_id = ? AND user_id = ? AND room_key = ?)`)
     .bind(timestamp, sessionId, viewer.id, sessionId, viewer.id, roomKey).run();
@@ -599,7 +644,7 @@ export async function roomState(
 
   const presence = await env.DB.prepare(
     `SELECT pr.user_id, pr.joined_at, pr.hand_raised, pr.cam_on, pr.mic_on, pr.screen_on,
-            COALESCE(NULLIF(p.display_name, ''), u.username, u.email) AS display_name,
+            COALESCE(NULLIF(TRIM(p.display_name), ''), NULLIF(TRIM(u.username), ''), NULLIF(substr(u.email, 1, instr(u.email, '@') - 1), ''), 'Học viên') AS display_name,
             p.avatar_updated_at,
             u.role
        FROM mentor_room_presence pr
@@ -623,7 +668,7 @@ export async function roomState(
 
   const messages = await env.DB.prepare(
     `SELECT m.id, m.session_id, m.sender_id, m.kind, m.body, m.created_at,
-            COALESCE(NULLIF(p.display_name, ''), u.username, 'Someone') AS display_name,
+            COALESCE(NULLIF(TRIM(p.display_name), ''), NULLIF(TRIM(u.username), ''), NULLIF(substr(u.email, 1, instr(u.email, '@') - 1), ''), 'Học viên') AS display_name,
             p.avatar_updated_at
        FROM mentor_messages m
        JOIN users u ON u.id = m.sender_id
@@ -670,6 +715,9 @@ export async function roomState(
     session,
     roomKey,
     schoolBrand: brand ?? null,
+    classBrand,
+    screenShare: share ? {userId:share.user_id, name:share.name} : null,
+    canShare,
     participants: presence.results.map((row) => ({
       userId: row.user_id,
       displayName: row.display_name,
@@ -679,7 +727,7 @@ export async function roomState(
       avatarUpdatedAt: row.avatar_updated_at,
       camOn: row.cam_on !== 0,
       micOn: row.mic_on !== 0,
-      screenOn: row.screen_on !== 0,
+      screenOn: row.screen_on !== 0 && share?.user_id === row.user_id,
     })),
     messages: messages.results
       .map((row) => ({
@@ -732,7 +780,7 @@ export async function postMessage(
     id,
     sessionId,
     senderId: viewer.id,
-    senderName: viewer.displayName || viewer.username || 'Someone',
+    senderName: viewer.displayName?.trim() || viewer.username?.trim() || viewer.email.split('@')[0] || 'Học viên',
     senderAvatarUpdatedAt: null,
     kind,
     body: text,
@@ -846,7 +894,7 @@ async function classMembers(env: Env, classIds: string[]): Promise<Map<string, M
   const placeholders = classIds.map(() => '?').join(', ');
   const rows = await env.DB.prepare(
     `SELECT m.class_id, m.user_id, m.joined_at,
-            COALESCE(NULLIF(p.display_name, ''), u.username, u.email) AS display_name,
+            COALESCE(NULLIF(TRIM(p.display_name), ''), NULLIF(TRIM(u.username), ''), NULLIF(substr(u.email, 1, instr(u.email, '@') - 1), ''), 'Học viên') AS display_name,
             p.avatar_updated_at
        FROM mentor_class_members m
        JOIN users u ON u.id = m.user_id
@@ -881,6 +929,18 @@ export async function listClasses(env: Env, viewer: AuthUser): Promise<MentorCla
     .all<ClassRow>();
   const members = await classMembers(env, rows.results.map((row) => row.id));
   return rows.results.map((row) => toClass(row, viewer.id, members.get(row.id) ?? []));
+}
+
+export async function updateMentorClass(env: Env, viewer: AuthUser, id: string, input: {title:string;description:string}) {
+  const klass=await env.DB.prepare('SELECT mentor_id FROM mentor_classes WHERE id=?').bind(id).first<{mentor_id:string}>();
+  if(!klass) throw ApiError.notFound('Không tìm thấy lớp.');
+  if(klass.mentor_id!==viewer.id && viewer.role!=='ADMIN') throw ApiError.forbidden('Chỉ chủ lớp được chỉnh sửa.');
+  const now=nowIso();
+  await env.DB.batch([
+    env.DB.prepare('UPDATE mentor_classes SET title=?,description=?,updated_at=? WHERE id=?').bind(input.title.trim(),input.description.trim(),now,id),
+    env.DB.prepare('UPDATE mentor_sessions SET topic=?,updated_at=? WHERE class_id=? AND student_id=mentor_id').bind(input.title.trim(),now,id),
+  ]);
+  return getClass(env,viewer,id);
 }
 
 export async function getClass(env: Env, viewer: AuthUser, classId: string): Promise<MentorClass> {
@@ -994,7 +1054,7 @@ export async function classMessages(env: Env, viewer: AuthUser, classId: string)
   await classAccess(env, classId, viewer);
   const rows = await env.DB.prepare(
     `SELECT m.id, m.class_id, m.sender_id, m.body, m.created_at,
-            COALESCE(NULLIF(p.display_name, ''), u.username, 'Someone') AS display_name,
+            COALESCE(NULLIF(TRIM(p.display_name), ''), NULLIF(TRIM(u.username), ''), NULLIF(substr(u.email, 1, instr(u.email, '@') - 1), ''), 'Học viên') AS display_name,
             p.avatar_updated_at
        FROM mentor_class_messages m
        JOIN users u ON u.id = m.sender_id
@@ -1033,7 +1093,7 @@ export async function postClassMessage(env: Env, viewer: AuthUser, classId: stri
     id,
     classId,
     senderId: viewer.id,
-    senderName: viewer.displayName || viewer.username || 'Someone',
+    senderName: viewer.displayName?.trim() || viewer.username?.trim() || viewer.email.split('@')[0] || 'Học viên',
     senderAvatarUpdatedAt: null,
     body: text,
     createdAt: timestamp,
@@ -1056,7 +1116,7 @@ export async function classDirectMessages(env: Env, viewer: AuthUser, classId: s
   await assertDirectClassPair(env, classId, viewer.id, peerId);
   const rows = await env.DB.prepare(
     `SELECT m.id, m.sender_id, m.body, m.created_at,
-      COALESCE(NULLIF(p.display_name, ''), u.username, 'Someone') AS display_name, p.avatar_updated_at
+      COALESCE(NULLIF(TRIM(p.display_name), ''), NULLIF(TRIM(u.username), ''), NULLIF(substr(u.email, 1, instr(u.email, '@') - 1), ''), 'Học viên') AS display_name, p.avatar_updated_at
      FROM class_direct_messages m JOIN users u ON u.id = m.sender_id
      LEFT JOIN user_profiles p ON p.user_id = m.sender_id
      WHERE m.class_id = ? AND ((m.sender_id = ? AND m.recipient_id = ?) OR (m.sender_id = ? AND m.recipient_id = ?))
@@ -1073,7 +1133,7 @@ export async function postClassDirectMessage(env: Env, viewer: AuthUser, classId
   const timestamp = nowIso();
   await env.DB.prepare('INSERT INTO class_direct_messages (id, class_id, sender_id, recipient_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?)')
     .bind(id, classId, viewer.id, peerId, text, timestamp).run();
-  return { id, classId, senderId: viewer.id, senderName: viewer.displayName || viewer.username || 'Someone', senderAvatarUpdatedAt: null, body: text, createdAt: timestamp };
+  return { id, classId, senderId: viewer.id, senderName: viewer.displayName?.trim() || viewer.username?.trim() || viewer.email.split('@')[0] || 'Học viên', senderAvatarUpdatedAt: null, body: text, createdAt: timestamp };
 }
 
 /** The shared call room of a class (created on demand for older classes). */
@@ -1177,6 +1237,7 @@ export async function deleteClass(
     // Children first and explicitly: the batch must not depend on the
     // connection's foreign-key pragma to leave no orphans behind.
     for (const sql of [
+      `DELETE FROM call_screen_shares WHERE session_id IN (${placeholders})`,
       `DELETE FROM call_feedback WHERE session_id IN (${placeholders})`,
       `DELETE FROM call_attendance WHERE session_id IN (${placeholders})`,
       `DELETE FROM mentor_messages WHERE session_id IN (${placeholders})`,
@@ -1199,6 +1260,7 @@ export async function deleteClass(
     env.DB.prepare('DELETE FROM mentor_class_members WHERE class_id = ?').bind(classId),
     env.DB.prepare('DELETE FROM mentor_class_messages WHERE class_id = ?').bind(classId),
     env.DB.prepare('DELETE FROM class_direct_messages WHERE class_id = ?').bind(classId),
+    env.DB.prepare("DELETE FROM class_logos WHERE class_type='MENTOR' AND class_id=?").bind(classId),
     env.DB.prepare('DELETE FROM mentor_classes WHERE id = ?').bind(classId),
   );
   await env.DB.batch(statements);
@@ -1247,11 +1309,12 @@ export async function mentorConsole(env: Env, viewer: AuthUser) {
 
   const students = await env.DB.prepare(
     `SELECT DISTINCT s.student_id AS id,
-            COALESCE(NULLIF(p.display_name, ''), 'Student') AS display_name,
+            COALESCE(NULLIF(TRIM(p.display_name), ''),NULLIF(TRIM(u.username), ''),NULLIF(substr(u.email,1,instr(u.email,'@')-1),''),'Học viên') AS display_name,
             p.avatar_updated_at,
             COUNT(*) AS sessions_together,
             MAX(s.starts_at) AS last_session
        FROM mentor_sessions s
+       LEFT JOIN users u ON u.id=s.student_id
        LEFT JOIN user_profiles p ON p.user_id = s.student_id
       WHERE s.mentor_id = ? AND s.student_id <> s.mentor_id
       GROUP BY s.student_id

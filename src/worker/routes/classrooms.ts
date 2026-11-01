@@ -170,7 +170,7 @@ router.get('/classrooms/:classroomId/messages', requireAuth, async (c) => {
   await assertClassroomAccess(c.env, classroomId, user.id, user.role);
   const rows = await c.env.DB.prepare(
     `SELECT m.id, m.sender_id, m.body, m.created_at, m.attachment_url, m.attachment_name,
-            COALESCE(NULLIF(p.display_name, ''), u.username, 'Someone') AS display_name
+            COALESCE(NULLIF(TRIM(p.display_name), ''), NULLIF(TRIM(u.username), ''), NULLIF(substr(u.email, 1, instr(u.email, '@') - 1), ''), 'Học viên') AS display_name
        FROM classroom_messages m
        JOIN users u ON u.id = m.sender_id
        LEFT JOIN user_profiles p ON p.user_id = m.sender_id
@@ -253,7 +253,7 @@ router.post('/classrooms/:classroomId/messages', requireAuth, async (c) => {
   const message: ChatMessage = {
     id,
     senderId: user.id,
-    senderName: user.displayName || user.username || 'Someone',
+    senderName: user.displayName?.trim() || user.username?.trim() || user.email.split('@')[0] || 'Học viên',
     body: text,
     createdAt: timestamp,
     attachmentUrl,

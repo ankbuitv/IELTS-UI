@@ -23,6 +23,7 @@ import {
 } from '../../components/ui';
 import { AccuracyList, BarChart, type ChartTone } from '../../components/charts';
 import { ClassroomChat, ClassroomChatButton } from '../../components/ClassroomChat';
+import { ClassLogo } from '../../components/ClassLogo';
 import { ClassroomCallButton } from '../../components/ClassroomCallButton';
 import { Icon } from '../../components/Icon';
 import { ResultSummary, WritingMarkForm, type AttemptResultPayload } from '../../components/ResultView';
@@ -131,7 +132,7 @@ export function TeacherHomePage() {
 // Classroom detail
 // ---------------------------------------------------------------------------
 interface ClassroomDetailResponse {
-  classroom: { id: string; name: string; status: string; isOwner: boolean };
+  classroom: { id: string; name: string; description: string; status: string; isOwner: boolean };
   members: Array<{
     userId: string;
     email: string;
@@ -207,6 +208,10 @@ export function ClassroomPage() {
   const [inviteResult, setInviteResult] = useState<{ shareUrl: string; expiresAt: string } | null>(null);
   const [addEmail, setAddEmail] = useState('');
   const [assignOpen, setAssignOpen] = useState(false);
+  const [editOpen,setEditOpen] = useState(false);
+  const [editName,setEditName] = useState('');
+  const [editDescription,setEditDescription] = useState('');
+  const [editBusy,setEditBusy] = useState(false);
 
   if (loading) return <Loading label="Loading classroom…" />;
   if (error) return <Notice tone="danger">{error}</Notice>;
@@ -220,12 +225,14 @@ export function ClassroomPage() {
             ← All classrooms
           </Link>
           <h1>{data.classroom.name}</h1>
+          <ClassLogo type="teacher" id={classroomId} name={data.classroom.name} editable={data.classroom.isOwner || user?.role === 'ADMIN'} />
           <p className="page-head__meta">
             {data.analytics.studentCount} students · {data.analytics.assignmentCount} assignments
           </p>
         </div>
         <div className="row">
           {data.classroom.status === 'ACTIVE' && <ClassroomCallButton classroomId={classroomId} label="Mở phòng học" canChooseSchool={data.classroom.isOwner} />}
+          {(data.classroom.isOwner || user?.role === 'ADMIN') && <Button onClick={() => {setEditName(data.classroom.name);setEditDescription(data.classroom.description || '');setEditOpen(true);}}>Chỉnh sửa lớp</Button>}
           <Button onClick={() => setInviteOpen(true)}>Invite students</Button>
           <Button variant="primary" onClick={() => setAssignOpen(true)}>
             New assignment
@@ -233,6 +240,7 @@ export function ClassroomPage() {
         </div>
       </div>
 
+      <Modal open={editOpen} title="Chỉnh sửa lớp học" onClose={()=>setEditOpen(false)} actions={<><Button onClick={()=>setEditOpen(false)}>Hủy</Button><Button variant="primary" loading={editBusy} onClick={()=>{setEditBusy(true);void api.patch(`/api/teacher/classrooms/${encodeURIComponent(classroomId)}`,{name:editName.trim(),description:editDescription.trim()}).then(async()=>{await reload();await classList.reload();setEditOpen(false);toast.push('Đã cập nhật lớp học.','success');}).catch(e=>toast.push(describeError(e),'error')).finally(()=>setEditBusy(false));}}>Lưu thay đổi</Button></>}><div className="stack"><Field label="Tên lớp" required>{id=><TextInput id={id} value={editName} maxLength={120} onChange={e=>setEditName(e.target.value)}/>}</Field><Field label="Mô tả">{id=><TextArea id={id} value={editDescription} maxLength={1000} onChange={e=>setEditDescription(e.target.value)}/>}</Field></div></Modal>
       <Tabs
         tabs={[
           { id: 'conversation', label: 'Hội thoại' },

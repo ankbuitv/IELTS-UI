@@ -34,6 +34,7 @@ describe('school registration and invitation permissions', () => {
         ('admin','admin@example.test','ADMIN','ACTIVE','now','now');`);
       const env = { DB: adapter(db) } as unknown as Env;
       const owner=user('owner','TEACHER'), teacher=user('teacher','TEACHER'), student=user('student','STUDENT'), admin=user('admin','ADMIN');
+      await expect(registerSchool(env,student,{name:'Không hợp lệ',address:'Biên Hòa',contactEmail:'x@example.test'})).rejects.toMatchObject({status:403});
       const school = await registerSchool(env,owner,{name:'Trường thử',address:'Biên Hòa',contactEmail:'CONTACT@example.test'});
       await expect(inviteTeacher(env,owner,school.id,teacher.email)).rejects.toMatchObject({status:409});
       await expect(listSchoolApplications(env,student)).rejects.toMatchObject({status:403});

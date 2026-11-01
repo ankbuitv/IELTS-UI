@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { describeError } from '../../lib/api';
+import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { mentorApi } from '../../lib/mentor-api';
 import { useAuth } from '../../context/AuthContext';
 import { formatDateTime } from '../../lib/format';
-import { Button, EmptyState, Loading, Notice, useToast } from '../../components/ui';
+import { Button, EmptyState, Field, Loading, Modal, Notice, TextArea, TextInput, useToast } from '../../components/ui';
+import { ClassLogo } from '../../components/ClassLogo';
 import { Icon } from '../../components/Icon';
 import { MentorAvatar } from '../../components/mentor/MentorBits';
 import type { MentorClassMessage } from '@shared/mentor';
@@ -34,6 +35,7 @@ export function ClassDetailPage() {
   const [callBusy, setCallBusy] = useState(false);
   const [joinBusy, setJoinBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [editOpen,setEditOpen]=useState(false); const [editTitle,setEditTitle]=useState(''); const [editDescription,setEditDescription]=useState(''); const [editBusy,setEditBusy]=useState(false);
 
   useEffect(() => {
     if (!canSeeClassChat) return undefined;
@@ -98,9 +100,10 @@ export function ClassDetailPage() {
   return (
     <div className="class-workspace">
       <div className="class-workspace__top">
-        <div><Link to="/classes" className="class-workspace__back">← Tất cả lớp học</Link><h1>{klass.title}</h1><p>{klass.level} · {klass.mentorName}</p></div>
+        <div><Link to="/classes" className="class-workspace__back">← Tất cả lớp học</Link><h1>{klass.title}</h1><p>{klass.level} · {klass.mentorName}</p><ClassLogo type="mentor" id={classId} name={klass.title} editable={canDelete} />{canDelete && <Button size="sm" onClick={()=>{setEditTitle(klass.title);setEditDescription(klass.description);setEditOpen(true);}}>Chỉnh sửa lớp</Button>}</div>
         {canSeeClassChat ? <Button variant="primary" loading={callBusy} disabled={klass.status !== 'OPEN'} onClick={() => void joinCall()}><Icon name="video" size={16} /> Vào phòng học</Button> : <Button variant="primary" loading={joinBusy} disabled={klass.status !== 'OPEN'} onClick={() => void joinClass()}><Icon name="plus" size={16} /> Tham gia lớp</Button>}
       </div>
+      <Modal open={editOpen} title="Chỉnh sửa lớp học" onClose={()=>setEditOpen(false)} actions={<><Button onClick={()=>setEditOpen(false)}>Hủy</Button><Button variant="primary" loading={editBusy} onClick={()=>{setEditBusy(true);void api.patch(`/api/mentor/classes/${encodeURIComponent(classId)}`,{title:editTitle.trim(),description:editDescription.trim()}).then(async()=>{await reload();setEditOpen(false);toast.push('Đã cập nhật lớp học.','success');}).catch(e=>toast.push(describeError(e),'error')).finally(()=>setEditBusy(false));}}>Lưu thay đổi</Button></>}><div className="stack"><Field label="Tên lớp" required>{id=><TextInput id={id} value={editTitle} maxLength={140} onChange={e=>setEditTitle(e.target.value)}/>}</Field><Field label="Mô tả">{id=><TextArea id={id} value={editDescription} maxLength={2000} onChange={e=>setEditDescription(e.target.value)}/>}</Field></div></Modal>
       <div className="class-workspace__layout">
         <aside className={`class-workspace__nav${navOpen ? ' is-open' : ''}`} aria-label="Hội thoại lớp học">
           <div className="class-workspace__nav-title"><h2>Hội thoại</h2><button type="button" className="class-workspace__nav-toggle" aria-expanded={navOpen} onClick={() => setNavOpen((value) => !value)}>{navOpen ? 'Đóng' : 'Chọn hội thoại'}</button></div>

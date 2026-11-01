@@ -1,3 +1,4 @@
+import { ClassLogo } from '../../components/ClassLogo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiRequestError, api, describeError, queryString } from '../../lib/api';
@@ -899,6 +900,7 @@ export function StudentClassroomsPage() {
         <div className="grid grid--3">
           {data?.classrooms.map((classroom) => (
             <div className="card" key={classroom.id}>
+              <ClassLogo type="teacher" id={classroom.id} name={classroom.name} />
               <h3>{classroom.name}</h3>
               <p className="small muted">{classroom.description || 'No description.'}</p>
               <div className="row gap-8" style={{ alignItems: 'center' }}>

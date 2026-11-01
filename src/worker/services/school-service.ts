@@ -15,6 +15,7 @@ export async function listMySchools(env: Env, user: AuthUser) {
 }
 
 export async function registerSchool(env: Env, user: AuthUser, input: { name: string; address: string; contactEmail: string }) {
+  if (!['TEACHER', 'MENTOR', 'ADMIN'].includes(user.role)) throw ApiError.forbidden('Chỉ giáo viên, mentor hoặc quản trị viên có thể đăng ký trường.');
   const id = newId('sch'); const now = nowIso();
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO schools (id,name,address,contact_email,owner_user_id,status,created_at,updated_at)
@@ -35,6 +36,7 @@ export async function listSchoolApplications(env: Env, user: AuthUser) {
 
 export async function reviewSchool(env: Env, user: AuthUser, id: string, status: 'APPROVED' | 'REJECTED', note: string) {
   if (user.role !== 'ADMIN') throw ApiError.forbidden();
+  if (status === 'APPROVED') { const owner = await env.DB.prepare(`SELECT u.role FROM schools s JOIN users u ON u.id=s.owner_user_id WHERE s.id=?`).bind(id).first<{role:string}>(); if (!owner || !['TEACHER','MENTOR','ADMIN'].includes(owner.role)) throw ApiError.conflict('Đại diện trường phải là giáo viên, mentor hoặc quản trị viên.'); }
   if (status === 'REJECTED' && !note.trim()) throw ApiError.validation('Vui lòng nhập lý do từ chối.');
   const result = await env.DB.prepare(`UPDATE schools SET status=?, review_note=?, reviewed_by=?, reviewed_at=?, updated_at=?
     WHERE id=? AND status='PENDING'`).bind(status, note || null, user.id, nowIso(), nowIso(), id).run();
@@ -43,6 +45,7 @@ export async function reviewSchool(env: Env, user: AuthUser, id: string, status:
 }
 
 async function requireSchoolOwner(env: Env, user: AuthUser, id: string) {
+  if (!['TEACHER','MENTOR','ADMIN'].includes(user.role)) throw ApiError.forbidden('Tài khoản không có quyền đại diện trường.');
   const school = await env.DB.prepare('SELECT * FROM schools WHERE id=?').bind(id).first<School>();
   if (!school || school.owner_user_id !== user.id) throw ApiError.forbidden('Chỉ đại diện trường mới quản lý giáo viên.');
   if (school.status !== 'APPROVED') throw ApiError.conflict('Trường cần được duyệt trước.');
@@ -91,6 +94,14 @@ export async function removeSchoolMember(env: Env, user: AuthUser, id: string, m
 /** A small, raster-only logo avoids loading third-party trackers in classrooms. */
 export async function saveSchoolLogo(env: Env, user: AuthUser, id: string, mime: string, base64: string) {
   await requireSchoolOwner(env, user, id);
+  validateLogo(mime,base64);
+  await env.DB.prepare(`INSERT INTO school_logos (school_id,mime,data_b64,updated_at) VALUES (?,?,?,?)
+    ON CONFLICT(school_id) DO UPDATE SET mime=excluded.mime,data_b64=excluded.data_b64,updated_at=excluded.updated_at`)
+    .bind(id,mime,base64,nowIso()).run();
+  await recordAudit(env,{actorUserId:user.id,action:'SCHOOL_LOGO_UPDATE',entityType:'school',entityId:id});
+}
+
+export function validateLogo(mime: string, base64: string) {
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64) || base64.length > 140_000) throw ApiError.validation('Logo không hợp lệ hoặc lớn hơn 100 KB.');
   let bytes: Uint8Array;
   try { const binary = atob(base64); bytes = Uint8Array.from(binary, c => c.charCodeAt(0)); } catch { throw ApiError.validation('Dữ liệu logo không hợp lệ.'); }
@@ -99,10 +110,6 @@ export async function saveSchoolLogo(env: Env, user: AuthUser, id: string, mime:
   const jpeg = bytes.length >= 3 && bytes[0]===255 && bytes[1]===216 && bytes[2]===255;
   const webp = bytes.length >= 12 && String.fromCharCode(...bytes.slice(0,4))==='RIFF' && String.fromCharCode(...bytes.slice(8,12))==='WEBP';
   if (!(mime==='image/png' && png || mime==='image/jpeg' && jpeg || mime==='image/webp' && webp)) throw ApiError.validation('Chỉ nhận ảnh PNG, JPEG hoặc WebP hợp lệ.');
-  await env.DB.prepare(`INSERT INTO school_logos (school_id,mime,data_b64,updated_at) VALUES (?,?,?,?)
-    ON CONFLICT(school_id) DO UPDATE SET mime=excluded.mime,data_b64=excluded.data_b64,updated_at=excluded.updated_at`)
-    .bind(id,mime,base64,nowIso()).run();
-  await recordAudit(env,{actorUserId:user.id,action:'SCHOOL_LOGO_UPDATE',entityType:'school',entityId:id});
 }
 
 export async function getSchoolLogo(env: Env, id: string) {

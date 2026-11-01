@@ -97,3 +97,7 @@ Attendance records explicit joins/leaves and the latest heartbeat, not proof of 
 ### Triển khai sửa lỗi cuộc gọi
 
 Migration D1 `0046` xây lại bảng tín hiệu theo sequence tăng dần và giữ dữ liệu cũ. Runtime schema cũng có quy tắc sửa bảng tín hiệu cũ; kiểm tra trạng thái thực tế và lịch sử migration trước khi deploy, không chạy repair và migration đồng thời. Xem `docs/DEPLOYMENT.md` trước khi thao tác trên production. Sau deploy, mọi người cần tải lại trang để cùng dùng giao thức mới. Trên môi trường nhiều mạng khác nhau, cần TURN thật; STUN không đảm bảo kết nối xuyên NAT/firewall. Với mạng mất đột ngột, presence vẫn dựa vào heartbeat và timeout (không thể đảm bảo thông báo rời tức thời khi trình duyệt bị hệ điều hành dừng).
+
+### Screen-share ownership
+
+In each room only the host, a platform administrator, or the approved owner of the selected school (with access to that session) can start presenting. The server atomically grants one presenter a renewable 30-second lease; a second eligible presenter must wait until it is released or expires. The client stops capture if it loses the lease. Room presence reports screen sharing only for the lease holder. These controls coordinate the application UI and signalling; WebRTC remains peer-to-peer, not a media server that can inspect or prevent a modified client from sending arbitrary video as its camera.

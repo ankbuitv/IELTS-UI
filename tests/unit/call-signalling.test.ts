@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import schemaSql from '@worker/lib/runtime-schema.sql';
-import { joinRoom, leaveRoom, postSignal, roomState, setHandRaised } from '@worker/services/mentor-service';
+import { joinRoom, leaveRoom, postSignal, roomState, setHandRaised, setScreenShare } from '@worker/services/mentor-service';
 import type { Env } from '@worker/env';
 import type { AuthUser } from '@worker/lib/auth-types';
 
@@ -11,7 +11,7 @@ function adapter(db: SqliteDb) {
     const bound = { bind(...values: unknown[]) { params = values; return bound; },
       async first<T>() { return (statement.get(...params) as T | undefined) ?? null; },
       async all<T>() { return { results: statement.all(...params) as T[] }; },
-      async run() { return statement.run(...params); } }; return bound;
+      async run() { const result = statement.run(...params) as { changes: number }; return { meta: { changes: Number(result.changes) } }; } }; return bound;
   } };
 }
 function user(id: string, role: AuthUser['role']): AuthUser {
@@ -27,17 +27,36 @@ describe('call signalling and presence', () => {
     try {
       db.exec(schemaSql); db.exec('PRAGMA foreign_keys = OFF');
       db.exec(`INSERT INTO users (id,email,role,status,created_at,updated_at) VALUES
-        ('teacher','t@test','TEACHER','ACTIVE','now','now'),('student','s@test','STUDENT','ACTIVE','now','now'),('other','o@test','STUDENT','ACTIVE','now','now');
+        ('teacher','t@test','TEACHER','ACTIVE','now','now'),('student','s@test','STUDENT','ACTIVE','now','now'),('other','o@test','STUDENT','ACTIVE','now','now'),('school','school@test','TEACHER','ACTIVE','now','now'),('admin','admin@test','ADMIN','ACTIVE','now','now');
+        INSERT INTO user_profiles (user_id,display_name,created_at,updated_at) VALUES ('student','Nguyễn Học Viên','now','now');
         INSERT INTO classrooms (id,name,teacher_id,join_code,status,created_at,updated_at) VALUES ('class','Class','teacher','1234','ACTIVE','now','now');
         INSERT INTO classroom_members (id,classroom_id,user_id,role,status,joined_at,updated_at) VALUES
           ('m1','class','student','STUDENT','ACTIVE','now','now'),('m2','class','other','STUDENT','ACTIVE','now','now');
         INSERT INTO mentor_sessions (id,mentor_id,student_id,kind,status,topic,starts_at,ends_at,created_at,updated_at) VALUES ('room','teacher','teacher','CLASS','ACTIVE','Class','now','later','now','now');
-        INSERT INTO classroom_call_rooms (classroom_id,session_id,created_at) VALUES ('class','room','now');`);
+        INSERT INTO classroom_call_rooms (classroom_id,session_id,created_at) VALUES ('class','room','now');
+        INSERT INTO schools(id,name,address,contact_email,owner_user_id,status,created_at,updated_at) VALUES('school','School','Address','s@test','school','APPROVED','now','now');
+        INSERT INTO school_members(id,school_id,user_id,role,status,created_at,updated_at) VALUES('sm','school','teacher','TEACHER','ACTIVE','now','now');
+        INSERT INTO school_call_brand(session_id,school_id,selected_by,updated_at) VALUES('room','school','teacher','now');`);
       const env = { DB: adapter(db) } as unknown as Env;
-      const host = user('teacher', 'TEACHER'); const student = user('student', 'STUDENT'); const other = user('other', 'STUDENT');
+      const schoolOwner = user('school','TEACHER'); const admin = user('admin', 'ADMIN'); const host = user('teacher', 'TEACHER'); const student = user('student', 'STUDENT'); const other = user('other', 'STUDENT');
       expect((await roomState(env, student, 'room', null)).participants).toHaveLength(0);
       const joining = await joinRoom(env, student, 'room');
-      await joinRoom(env, host, 'room'); await joinRoom(env, other, 'room');
+      await joinRoom(env, host, 'room'); await joinRoom(env, other, 'room'); await joinRoom(env,admin,'room'); await joinRoom(env,schoolOwner,'room');
+      await expect(setScreenShare(env,student,'room','main',true)).rejects.toMatchObject({status:403});
+      await setScreenShare(env,host,'room','main',true);
+      await expect(setScreenShare(env,admin,'room','main',true)).rejects.toMatchObject({status:409});
+      expect((await roomState(env,host,'room',null,'main',{cam:true,mic:true,screen:true})).screenShare?.userId).toBe('teacher');
+      db.exec("UPDATE call_screen_shares SET updated_at='2000-01-01T00:00:00.000Z'");
+      await setScreenShare(env,admin,'room','main',true);
+      expect((await roomState(env,student,'room',null)).participants.find(p=>p.userId==='teacher')?.screenOn).toBe(false);
+      await setScreenShare(env,host,'room','main',false); // a former presenter cannot release someone else's lease
+      expect((await roomState(env,student,'room',null)).screenShare?.userId).toBe('admin');
+      await setScreenShare(env,admin,'room','main',false);
+      await setScreenShare(env,schoolOwner,'room','main',true); await setScreenShare(env,schoolOwner,'room','main',false);
+      const claims = await Promise.allSettled([setScreenShare(env,host,'room','main',true),setScreenShare(env,admin,'room','main',true)]);
+      expect(claims.filter(x=>x.status==='fulfilled')).toHaveLength(1);
+      expect(claims.filter(x=>x.status==='rejected')).toHaveLength(1);
+      await setScreenShare(env,host,'room','main',false); await setScreenShare(env,admin,'room','main',false);
       // Deliberately reverse lexical ID order: a random ID must never be used as a cursor.
       db.exec(`INSERT INTO mentor_signals(id,session_id,sender_id,target_id,room_key,kind,payload,created_at) VALUES
         ('sig_z','room','teacher','student','main','OFFER','one','now'),
@@ -46,7 +65,7 @@ describe('call signalling and presence', () => {
         ('sig_c','room','teacher',NULL,'main','REACTION','wave','now');`);
       const received = await roomState(env, student, 'room', joining.signalCursor, 'main', { cam: false, mic: true, screen: true });
       expect(received.signals.map((s) => s.id)).toEqual(['sig_z', 'sig_b', 'sig_c']);
-      expect(received.participants.find((p) => p.userId === 'student')).toMatchObject({ camOn: false, screenOn: true });
+      expect(received.participants.find((p) => p.userId === 'student')).toMatchObject({ displayName: 'Nguyễn Học Viên', camOn: false, screenOn: false });
       expect((await roomState(env, student, 'room', received.signalCursor)).signals).toHaveLength(0);
       await setHandRaised(env, student, 'room', true);
       expect((await roomState(env, host, 'room', null)).participants.find((p) => p.userId === 'student')?.handRaised).toBe(true);

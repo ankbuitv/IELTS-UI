@@ -140,6 +140,7 @@ export async function updateClassroom(
       env.DB.prepare('UPDATE classrooms SET name = COALESCE(?, name), description = COALESCE(?, description), updated_at = ? WHERE id = ?')
         .bind(input.name?.trim() ?? null, input.description?.trim() ?? null, timestamp, classroom.id),
     );
+    if (input.name !== undefined) statements.push(env.DB.prepare(`UPDATE mentor_sessions SET topic=?,updated_at=? WHERE id IN (SELECT session_id FROM classroom_call_rooms WHERE classroom_id=?)`).bind(input.name.trim(),timestamp,classroom.id));
   }
   if (input.status) {
     statements.push(

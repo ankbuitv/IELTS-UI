@@ -21,6 +21,7 @@ import {
   cancelSession,
   completeSession,
   createClass,
+  updateMentorClass,
   deleteClass,
   getClass,
   getMentorProfile,
@@ -43,6 +44,7 @@ import {
   roomState,
   setAvailability,
   setHandRaised,
+  setScreenShare,
   upsertMentorProfile,
 } from '../services/mentor-service';
 import { notify } from '../services/notification-service';
@@ -234,6 +236,12 @@ router.post('/mentor/sessions/:sessionId/feedback', async (c) => {
   const body = await parseBody(c, z.object({ rating: z.number().int().min(1).max(5) }));
   await submitCallFeedback(c.env, user, c.req.param('sessionId'), body.rating);
   return c.json({ ok: true }, 201);
+});
+
+router.post('/mentor/sessions/:sessionId/screen-share', async (c) => {
+  const user = currentUser(c); assertCsrf(c, c.get('session')?.csrfToken ?? null);
+  const body = await parseBody(c, z.object({ start: z.boolean(), room: z.string().max(40).default('main') }));
+  return c.json(await setScreenShare(c.env,user,c.req.param('sessionId'),body.room,body.start));
 });
 
 router.post('/mentor/sessions/:sessionId/hand', async (c) => {
@@ -432,6 +440,12 @@ router.delete('/mentor/classes/:classId', async (c) => {
 });
 
 // ------------------------------------------------------------------------------ class chat & room
+
+router.patch('/mentor/classes/:classId', async (c) => {
+  assertCsrf(c,c.get('session')?.csrfToken ?? null);
+  const body=await parseBody(c,z.object({title:z.string().trim().min(3).max(140),description:z.string().trim().max(2000)}));
+  return c.json({class:await updateMentorClass(c.env,currentUser(c),c.req.param('classId'),body)});
+});
 
 router.get('/mentor/classes/:classId', async (c) => {
   const user = currentUser(c);

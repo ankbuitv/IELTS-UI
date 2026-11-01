@@ -81,6 +81,7 @@ router.get('/classrooms/:id', async (c) => {
     classroom: {
       id: classroom.id,
       name: classroom.name,
+      description: (await c.env.DB.prepare('SELECT description FROM classrooms WHERE id=?').bind(classroomId).first<{ description: string }>())?.description ?? '',
       status: classroom.status,
       isOwner: classroom.teacher_id === user.id,
     },

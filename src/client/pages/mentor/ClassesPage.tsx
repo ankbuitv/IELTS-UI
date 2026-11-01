@@ -5,6 +5,7 @@ import { mentorApi } from '../../lib/mentor-api';
 import { describeError } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, EmptyState, Loading, Notice, useToast } from '../../components/ui';
+import { ClassLogo } from '../../components/ClassLogo';
 import { Icon } from '../../components/Icon';
 import { formatWhen } from '../../components/mentor/MentorBits';
 import { CreateClassModal } from '../../components/mentor/CreateClassModal';
@@ -41,7 +42,7 @@ export function ClassesPage() {
     const full = item.memberCount >= item.capacity && !item.joined;
     const owned = item.mentorId === user?.id;
     return <article className="class-tile" key={item.id}>
-      <div className="class-tile__header"><span className="class-tile__mark" aria-hidden="true">{item.title.trim().slice(0, 1).toLocaleUpperCase()}</span><span className="class-tile__status">{item.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}</span></div>
+      <div className="class-tile__header"><ClassLogo type="mentor" id={item.id} name={item.title} /><span className="class-tile__status">{item.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}</span></div>
       <h3><Link to={`/classes/${item.id}`}>{item.title}</Link></h3><p className="class-tile__mentor">{item.mentorName} · {item.level}</p>
       <p className="class-tile__description">{item.description || 'Luyện tập trực tiếp cùng cố vấn và các thành viên.'}</p>
       <div className="class-tile__meta"><span><Icon name="calendar" size={14} /> {formatWhen(item.startsAt)}</span><span><Icon name="users" size={14} /> {item.memberCount}/{item.capacity}</span></div>

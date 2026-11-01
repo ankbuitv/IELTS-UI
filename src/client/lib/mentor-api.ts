@@ -75,6 +75,8 @@ export const mentorApi = {
     api.post<{ session: MentorSession }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/decline`, reason ? { reason } : {}),
   kick: (sessionId: string, userId: string, ban = false) =>
     api.post<{ ok: true }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/kick`, { userId, ban }),
+  screenShare: (sessionId: string, room: string, start: boolean) =>
+    api.post<{ ok: true }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/screen-share`, { room, start }),
   raiseHand: (sessionId: string, raised: boolean) =>
     api.post<{ ok: true }>(`/api/mentor/sessions/${encodeURIComponent(sessionId)}/hand`, { raised }),
   sendMessage: (sessionId: string, body: string, kind: 'CHAT' | 'NOTE' = 'CHAT', room = 'main') =>
