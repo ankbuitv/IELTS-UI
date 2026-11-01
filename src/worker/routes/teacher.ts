@@ -27,7 +27,7 @@ import {
   updateClassroom,
 } from '../services/teacher-service';
 import {setQuestionFeedback} from '../services/question-feedback-service';
-import {listTeachingSchedule,createTeachingEvent,deleteTeachingEvent} from '../services/class-teaching-schedule-service';
+import {listTeachingSchedule,createTeachingEvent,updateTeachingEvent,deleteTeachingEvent} from '../services/class-teaching-schedule-service';
 import {teacherWritingReview,saveWritingReview} from '../services/writing-revision-service';
 import {createWorksheet,listTeacherWorksheets,teacherWorksheetDetail,teacherWorksheetVersions,closeWorksheet,saveWorksheetFeedback} from '../services/class-worksheet-service';
 import {listRubrics,createRubric,updateRubric,deleteRubric} from '../services/teacher-rubrics-service';
@@ -96,7 +96,10 @@ router.get('/classrooms/:id/private-notes', async c=>c.json(await listPrivateNot
 router.put('/classrooms/:id/private-notes/:studentId', async c=>{assertCsrf(c,c.get('session')?.csrfToken ?? null);const body=await parseBody(c,z.object({body:z.string().max(4000)}));await savePrivateNote(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'),body.body);return c.json({ok:true});});
 
 router.get('/classrooms/:id/schedule',async c=>c.json({events:await listTeachingSchedule(c.env,currentUser(c),c.req.param('id'))}));
-router.post('/classrooms/:id/schedule',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(150),startsAt:z.string().datetime(),endsAt:z.string().datetime()}));return c.json(await createTeachingEvent(c.env,currentUser(c),c.req.param('id'),body),201);});
+const teachingOccurrence=z.object({startsAt:z.string().datetime(),endsAt:z.string().datetime()});
+const teachingInput=teachingOccurrence.extend({title:z.string().trim().min(1).max(150),kind:z.enum(['REGULAR','MAKEUP']).optional(),note:z.string().trim().max(500).optional()});
+router.post('/classrooms/:id/schedule',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,teachingInput.extend({occurrences:z.array(teachingOccurrence).max(23).optional()}));return c.json(await createTeachingEvent(c.env,currentUser(c),c.req.param('id'),body),201);});
+router.put('/classrooms/:id/schedule/:eventId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,teachingInput);await updateTeachingEvent(c.env,currentUser(c),c.req.param('id'),c.req.param('eventId'),body);return c.json({ok:true});});
 router.delete('/classrooms/:id/schedule/:eventId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteTeachingEvent(c.env,currentUser(c),c.req.param('id'),c.req.param('eventId'));return c.json({ok:true});});
 
 router.get('/classrooms/:id/worksheets',async c=>c.json({worksheets:await listTeacherWorksheets(c.env,currentUser(c),c.req.param('id'))}));

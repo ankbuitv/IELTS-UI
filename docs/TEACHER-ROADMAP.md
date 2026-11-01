@@ -4,7 +4,7 @@ This tracks the 20 teacher ideas agreed in the conversation. The initial impleme
 
 | # | Idea | Status |
 |---|---|---|
-| 1 | Personal timetable with teaching, grading deadlines and meetings | Class teaching events, assignment marking deadlines, personal plans, support appointments, mentor sessions and school events in the calendar. Class teaching events are individual entries, not recurring rules. Marking deadlines are shared with class staff. |
+| 1 | Personal timetable with teaching, grading deadlines and meetings | Class teaching events, assignment marking deadlines, personal plans, support appointments, mentor sessions and school events in the calendar. Class teaching events can be created as a bounded weekly/monthly series; edits apply to an individual occurrence. Marking deadlines are shared with class staff. |
 | 2 | Manual attendance | Implemented: daily present/absent/late, history and authorized teacher access (migration 0060). |
 | 3 | Seating chart | Implemented: shared seating order with drag-and-drop and accessible move buttons, up to 200 students (migration 0062). |
 | 4 | Lesson templates, copy and versions | Implemented: two starter templates, duplicate text and version history. Attachments and review history are not copied. |

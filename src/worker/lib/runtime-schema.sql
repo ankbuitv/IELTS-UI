@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql, 0038_speaking_partner.sql, 0039_question_drills.sql, 0040_social_billing.sql, 0041_test_covers.sql, 0042_blog.sql, 0043_class_direct_messages.sql, 0044_classroom_call_rooms.sql, 0045_call_attendance_feedback.sql, 0046_call_signals_order.sql, 0047_schools.sql, 0048_school_call_brand.sql, 0049_screen_share_lock.sql, 0050_class_logos.sql, 0051_school_managers.sql, 0052_school_lesson_plans.sql, 0053_school_operations.sql, 0054_desktop_preferences.sql, 0055_lesson_workflow.sql, 0056_school_delegated_permissions.sql, 0057_school_application_reviewers.sql, 0058_school_reporting_banner.sql, 0059_lesson_plan_attachments.sql, 0060_teacher_attendance.sql, 0061_teacher_private_notes.sql, 0062_classroom_seating.sql, 0063_classroom_announcements_polls.sql, 0064_teacher_feedback_templates.sql, 0065_teacher_question_bank.sql, 0066_teacher_resources.sql, 0067_assignment_reminders.sql, 0068_class_term_reports.sql, 0069_assignment_audiences.sql, 0070_marking_deadlines.sql, 0071_teacher_support_slots.sql, 0072_co_teacher_duties.sql, 0073_teacher_rubrics.sql, 0074_class_worksheets.sql, 0075_writing_revision_feedback.sql, 0076_class_teaching_schedule.sql, 0077_worksheet_reminders.sql, 0078_question_feedback.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql, 0038_speaking_partner.sql, 0039_question_drills.sql, 0040_social_billing.sql, 0041_test_covers.sql, 0042_blog.sql, 0043_class_direct_messages.sql, 0044_classroom_call_rooms.sql, 0045_call_attendance_feedback.sql, 0046_call_signals_order.sql, 0047_schools.sql, 0048_school_call_brand.sql, 0049_screen_share_lock.sql, 0050_class_logos.sql, 0051_school_managers.sql, 0052_school_lesson_plans.sql, 0053_school_operations.sql, 0054_desktop_preferences.sql, 0055_lesson_workflow.sql, 0056_school_delegated_permissions.sql, 0057_school_application_reviewers.sql, 0058_school_reporting_banner.sql, 0059_lesson_plan_attachments.sql, 0060_teacher_attendance.sql, 0061_teacher_private_notes.sql, 0062_classroom_seating.sql, 0063_classroom_announcements_polls.sql, 0064_teacher_feedback_templates.sql, 0065_teacher_question_bank.sql, 0066_teacher_resources.sql, 0067_assignment_reminders.sql, 0068_class_term_reports.sql, 0069_assignment_audiences.sql, 0070_marking_deadlines.sql, 0071_teacher_support_slots.sql, 0072_co_teacher_duties.sql, 0073_teacher_rubrics.sql, 0074_class_worksheets.sql, 0075_writing_revision_feedback.sql, 0076_class_teaching_schedule.sql, 0077_worksheet_reminders.sql, 0078_question_feedback.sql, 0079_teaching_event_series.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 149   Indexes: 142
+-- Tables: 149   Indexes: 143
 -- =============================================================================
 
 -- table: user_profiles
@@ -1830,7 +1830,7 @@ CREATE TABLE IF NOT EXISTS classroom_teaching_events (
  starts_at TEXT NOT NULL,
  ends_at TEXT NOT NULL,
  created_at TEXT NOT NULL
-);
+, series_id TEXT, kind TEXT NOT NULL DEFAULT 'REGULAR' CHECK (kind IN ('REGULAR','MAKEUP')), note TEXT NOT NULL DEFAULT '');
 
 -- table: worksheet_reminders
 CREATE TABLE IF NOT EXISTS worksheet_reminders (
@@ -2286,3 +2286,6 @@ CREATE INDEX IF NOT EXISTS idx_class_teaching_events ON classroom_teaching_event
 
 -- index: idx_teacher_teaching_events
 CREATE INDEX IF NOT EXISTS idx_teacher_teaching_events ON classroom_teaching_events(teacher_id,starts_at);
+
+-- index: idx_class_teaching_series
+CREATE INDEX IF NOT EXISTS idx_class_teaching_series ON classroom_teaching_events(classroom_id,series_id);
