@@ -1,3 +1,4 @@
+import { homeForRole, safeInternalPath } from '../schools/desktop-routing';
 /**
  * Email-link entry points.
  *
@@ -30,19 +31,14 @@ const POINTS = [
   },
 ];
 
-function homeFor(role: string): string {
-  if (role === 'ADMIN') return '/admin';
-  if (role === 'TEACHER') return '/teacher';
-  if (role === 'MENTOR') return '/mentor';
-  return '/dashboard';
-}
 
 export function MagicLinkPage() {
   const { consumeMagicLink, verifyTwoFactor } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
-  const next = params.get('next');
+  const nextParam = params.get('next');
+  const next = safeInternalPath(nextParam);
   const started = useRef(false);
 
   const [state, setState] = useState<'working' | 'code' | 'error'>('working');
@@ -67,7 +63,7 @@ export function MagicLinkPage() {
           setState('code');
           return;
         }
-        navigate(next ?? homeFor(result.role), { replace: true });
+        navigate(next ?? homeForRole(result.role), { replace: true });
       } catch (cause) {
         setState('error');
         setError(describeError(cause));
@@ -82,7 +78,7 @@ export function MagicLinkPage() {
     setError(null);
     try {
       const user = await verifyTwoFactor(ticket, code.trim());
-      navigate(next ?? homeFor(user.role), { replace: true });
+      navigate(next ?? homeForRole(user.role), { replace: true });
     } catch (cause) {
       setError(describeError(cause));
     } finally {

@@ -1157,7 +1157,7 @@ export async function setMentorClassBrand(env: Env, viewer: AuthUser, classId: s
   const {sessionId}=await classRoomSessionId(env,viewer,classId);
   const brand=await env.DB.prepare('SELECT school_id FROM school_call_brand WHERE session_id=?').bind(sessionId).first<{school_id:string}>();
   const active=await env.DB.prepare('SELECT 1 AS ok FROM mentor_room_presence WHERE session_id=? AND last_seen_at>=? LIMIT 1').bind(sessionId,new Date(Date.now()-30000).toISOString()).first();
-  if(active && (brand?.school_id ?? null)!==schoolId) throw ApiError.conflict('Không thể đổi nhận diện khi phòng đang có người.');
+  if(active && (brand?.school_id ?? null)!==schoolId) throw ApiError.conflict('Không thể đổi tư cách khi phòng đang có người.');
   if(schoolId) await env.DB.prepare(`INSERT INTO school_call_brand(session_id,school_id,selected_by,updated_at) VALUES(?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET school_id=excluded.school_id,selected_by=excluded.selected_by,updated_at=excluded.updated_at`).bind(sessionId,schoolId,viewer.id,nowIso()).run();
   else await env.DB.prepare('DELETE FROM school_call_brand WHERE session_id=?').bind(sessionId).run();
   return {sessionId};

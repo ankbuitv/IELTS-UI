@@ -53,6 +53,7 @@ import { ClassDetailPage } from './pages/mentor/ClassDetailPage';
 import { CallRoomPage } from './pages/mentor/CallRoomPage';
 import { EarningsPage } from './pages/mentor/EarningsPage';
 import { NotificationsPage } from './components/NotificationBell';
+import { isStaffDesktopPath } from './pages/schools/desktop-routing';
 import { SchoolDesktop } from './pages/schools/SchoolDesktop';
 import { SchoolsPage, AdminSchoolsPage } from './pages/schools/SchoolsPage';
 import { CertificatePage } from './pages/student/CertificatePage';
@@ -62,7 +63,7 @@ function RequireAuth({ children, roles }: { children: ReactNode; roles?: Array<'
   const location = useLocation();
 
   if (loading) return <Loading label="Checking your session…" />;
-  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname)}`} replace />;
+  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search + location.hash)}`} replace />;
   if (roles && !roles.includes(user.role)) {
     return (
       <Notice tone="danger" title="Not authorized">
@@ -74,6 +75,14 @@ function RequireAuth({ children, roles }: { children: ReactNode; roles?: Array<'
 }
 
 export function App() {
+  const {user,loading}=useAuth();
+  const location=useLocation();
+  const path=location.pathname;
+  // Staff work in the desktop; a direct link opens its destination in a window.
+  // Calls, exam taking and lesson playback keep their dedicated full-screen flows.
+  if (!loading && user && isStaffDesktopPath(user.role,path)) {
+    return <SchoolDesktop key={path+location.search} initialPath={path === '/' || path === '/dashboard' ? undefined : path+location.search+location.hash}/>;
+  }
   return (
     <Routes>
       {/* Full-screen exam experience: deliberately outside the app chrome. */}

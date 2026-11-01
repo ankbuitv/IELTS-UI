@@ -70,7 +70,7 @@ export async function reviewSchool(env: Env, user: AuthUser, id: string, status:
   await recordAudit(env, { actorUserId: user.id, action: `SCHOOL_${status}`, entityType: 'school', entityId: id, metadata: { note } });
 }
 
-async function requireSchoolOwner(env: Env, user: AuthUser, id: string) {
+export async function requireSchoolOwner(env: Env, user: AuthUser, id: string) {
   if (!['TEACHER','MENTOR','ADMIN'].includes(user.role)) throw ApiError.forbidden('Tài khoản không có quyền đại diện trường.');
   const school = await env.DB.prepare('SELECT * FROM schools WHERE id=?').bind(id).first<School>();
   if (!school || school.owner_user_id !== user.id) throw ApiError.forbidden('Chỉ đại diện trường mới quản lý giáo viên.');
@@ -121,10 +121,11 @@ export async function respondSchoolInvitation(env: Env, user: AuthUser, id: stri
 
 export async function removeSchoolMember(env: Env, user: AuthUser, id: string, memberId: string) {
   await requireSchoolOwner(env, user, id);
-  const result = await env.DB.prepare(`UPDATE school_members SET status='REMOVED',updated_at=?
-    WHERE school_id=? AND user_id=? AND role='TEACHER' AND status IN ('ACTIVE','INVITED')`)
-    .bind(nowIso(), id, memberId).run();
-  if (!result.meta.changes) throw ApiError.conflict('Thành viên hoặc lời mời không còn hiệu lực.');
+  const results = await env.DB.batch([
+    env.DB.prepare(`UPDATE school_members SET status='REMOVED',updated_at=? WHERE school_id=? AND user_id=? AND role='TEACHER' AND status IN ('ACTIVE','INVITED')`).bind(nowIso(),id,memberId),
+    env.DB.prepare(`DELETE FROM school_staff_permissions WHERE school_id=? AND user_id=? AND EXISTS (SELECT 1 FROM school_members WHERE school_id=? AND user_id=? AND role='TEACHER' AND status='REMOVED')`).bind(id,memberId,id,memberId),
+  ]);
+  if (!results[0]?.meta.changes) throw ApiError.conflict('Thành viên hoặc lời mời không còn hiệu lực.');
   await recordAudit(env, { actorUserId: user.id, action: 'SCHOOL_MEMBER_REMOVE', entityType: 'school', entityId: id, metadata: { userId: memberId } });
 }
 

@@ -1,3 +1,4 @@
+import { homeForRole, safeInternalPath } from '../schools/desktop-routing';
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -343,7 +344,7 @@ export function LandingPage() {
     if (target) requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
   }, [hash]);
 
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) return <Navigate to={homeForRole(user.role)} replace />;
 
   return (
     <div className="lp">
@@ -668,11 +669,12 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (user) return <Navigate to="/dashboard" replace />;
+  const next = new URLSearchParams(location.search).get('next');
+  const target = next?.startsWith('/login') ? null : safeInternalPath(next);
+  if (user) return <Navigate to={target ?? homeForRole(user.role)} replace />;
 
-  const target = new URLSearchParams(location.search).get('next');
   const goHome = (role: string) =>
-    navigate(target ?? (role === 'ADMIN' ? '/admin' : role === 'TEACHER' ? '/teacher' : '/dashboard'), { replace: true });
+    navigate(target ?? homeForRole(role), { replace: true });
 
   const afterAuth = (next: Awaited<ReturnType<typeof login>>) => {
     if ('twoFactorRequired' in next) {
@@ -942,7 +944,7 @@ export function RegisterPage() {
       .catch(() => setNeedsBootstrap(false));
   }, []);
 
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) return <Navigate to={homeForRole(user.role)} replace />;
 
   if (!registrationOpen && !needsBootstrap) {
     return (

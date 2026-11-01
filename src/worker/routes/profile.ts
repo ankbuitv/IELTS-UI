@@ -16,6 +16,7 @@ import { ApiError } from '../lib/errors';
 import { nowIso } from '../lib/ids';
 import { currentUser, requireAuth } from '../middleware/auth';
 import { avatarUrlFor } from '../lib/auth-types';
+import { enforceRateLimit } from '../lib/rate-limit';
 import { deleteBlob, putBlob } from '../services/blob-store';
 
 const router = new Hono<AppBindings>();
@@ -24,6 +25,34 @@ router.use('*', requireAuth);
 router.use('*', async (c, next) => {
   assertSameOrigin(c);
   await next();
+});
+
+const desktopPreferences = z.object({
+  background: z.object({
+    choice: z.enum(['sky','forest','sunset','midnight','ocean','lavender','custom']),
+    image: z.string().max(1_800_000).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/).nullable(),
+    fit: z.enum(['cover','contain','center']), dim: z.number().min(0).max(70),
+  }).refine(value => value.choice !== 'custom' || value.image !== null),
+  iconsVisible: z.boolean(),
+  iconOrder: z.array(z.string().min(1).max(40)).max(40),
+  pinned: z.array(z.string().min(1).max(40)).max(6).default([]),
+  folders: z.array(z.object({id:z.string().min(1).max(60),name:z.string().trim().min(1).max(60),apps:z.array(z.string().min(1).max(40)).max(40)})).max(20).default([]),
+  windows: z.array(z.object({ id:z.string().min(1).max(40), x:z.number().min(0).max(10000), y:z.number().min(0).max(10000), z:z.number().int().min(0).max(1_000_000), minimized:z.boolean(), maximized:z.boolean(), snap:z.enum(['left','right']).nullable() })).max(40),
+});
+function requireDesktopStaff(role:string) { if (!['TEACHER','MENTOR','ADMIN'].includes(role)) throw ApiError.forbidden(); }
+router.get('/desktop-preferences', async c => {
+  const user = currentUser(c); requireDesktopStaff(user.role);
+  const row=await c.env.DB.prepare('SELECT preferences_json,updated_at FROM school_desktop_preferences WHERE user_id=?').bind(user.id).first<{preferences_json:string;updated_at:string}>();
+  c.header('Cache-Control','private, no-store');
+  return c.json({preferences:row ? JSON.parse(row.preferences_json) as unknown : null, updatedAt:row?.updated_at ?? null});
+});
+router.put('/desktop-preferences', async c => {
+  const user=currentUser(c);requireDesktopStaff(user.role);assertCsrf(c,c.get('session')?.csrfToken ?? null);
+  await enforceRateLimit(c.env,{bucket:`desktop-sync:${user.id}`,windowSeconds:3600,limit:60},'Quá nhiều lần lưu cấu hình. Hãy thử lại sau.');
+  const body=await parseBody(c,desktopPreferences);
+  await c.env.DB.prepare(`INSERT INTO school_desktop_preferences(user_id,preferences_json,updated_at) VALUES(?,?,?)
+    ON CONFLICT(user_id) DO UPDATE SET preferences_json=excluded.preferences_json,updated_at=excluded.updated_at`).bind(user.id,JSON.stringify(body),nowIso()).run();
+  return c.json({ok:true});
 });
 
 const ALLOWED_MIME: Record<string, string> = {

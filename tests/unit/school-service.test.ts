@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import schemaSql from '@worker/lib/runtime-schema.sql';
 import { grantSchoolManager, revokeSchoolManager, getSchoolLogo, saveSchoolLogo, inviteTeacher, listMySchools, listSchoolApplications, listSchoolMembers, registerSchool, removeSchoolMember, respondSchoolInvitation, reviewSchool } from '@worker/services/school-service';
+import { setSchoolPermissions, schoolPermissions } from '@worker/services/school-permissions';
 import type { AuthUser } from '@worker/lib/auth-types';
 import type { Env } from '@worker/env';
 interface Statement { get(...params: unknown[]): unknown; all(...params: unknown[]): unknown[]; run(...params: unknown[]): { changes: number | bigint } }
@@ -60,9 +61,13 @@ describe('school registration and invitation permissions', () => {
       await expect(removeSchoolMember(env,student,school.id,teacher.id)).rejects.toMatchObject({status:403});
       await respondSchoolInvitation(env,teacher,school.id,true);
       expect(await listSchoolMembers(env,owner,school.id)).toEqual(expect.arrayContaining([expect.objectContaining({user_id:'teacher',status:'ACTIVE'})]));
+      await setSchoolPermissions(env,owner,school.id,teacher.id,['MANAGE_CALENDAR']);
+      expect(await schoolPermissions(env,teacher,school.id)).toContain('MANAGE_CALENDAR');
       await removeSchoolMember(env,owner,school.id,teacher.id);
       await expect(respondSchoolInvitation(env,teacher,school.id,true)).rejects.toMatchObject({status:409});
       await inviteTeacher(env,owner,school.id,teacher.email);
+      await respondSchoolInvitation(env,teacher,school.id,true);
+      expect(await schoolPermissions(env,teacher,school.id)).toEqual([]);
       await removeSchoolMember(env,owner,school.id,teacher.id);
       await expect(respondSchoolInvitation(env,teacher,school.id,true)).rejects.toMatchObject({status:409});
       await expect(removeSchoolMember(env,owner,school.id,owner.id)).rejects.toMatchObject({status:409});

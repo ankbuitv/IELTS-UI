@@ -5,7 +5,9 @@ import type { AppBindings } from '../env';
 import { currentUser, requireAuth } from '../middleware/auth';
 import { assertCsrf, assertSameOrigin } from '../lib/http';
 import { parseBody } from '../lib/validate';
-import { listLessonPlans, createLessonPlan, updateLessonPlan, deleteLessonPlan } from '../services/lesson-plan-service';
+import { listLessonPlans, createLessonPlan, updateLessonPlan, deleteLessonPlan, listPlanVersions, mySubjectGroups, reviewAccess, submitLessonPlan, mySubmissions, reviewSubmissions, reviewLessonSubmission } from '../services/lesson-plan-service';
+import { listSubjectGroups, saveSubjectGroup, deleteSubjectGroup, listSchoolEvents, saveSchoolEvent, deleteSchoolEvent, groupStaffDirectory } from '../services/school-operations-service';
+import { schoolPermissions, listSchoolPermissions, setSchoolPermissions } from '../services/school-permissions';
 import { enforceRateLimit } from '../lib/rate-limit';
 import { createSchoolTeacher, isSchoolManager, grantSchoolManager, listSchoolManagers, revokeSchoolManager, getSchoolLogo, inviteTeacher, listMySchools, listSchoolApplications, listSchoolMembers, registerSchool, removeSchoolMember, respondSchoolInvitation, reviewSchool, saveSchoolLogo } from '../services/school-service';
 
@@ -28,10 +30,31 @@ router.post('/:id/review', async (c) => {
   const body = await parseBody(c, z.object({ status: z.enum(['APPROVED', 'REJECTED']), note: z.string().trim().max(500).default('') }));
   await reviewSchool(c.env, currentUser(c), c.req.param('id'), body.status, body.note); return c.json({ ok: true });
 });
+router.get('/:id/my-permissions',async c=>c.json({permissions:await schoolPermissions(c.env,currentUser(c),c.req.param('id'))}));
+router.get('/:id/staff-permissions',async c=>c.json({permissions:await listSchoolPermissions(c.env,currentUser(c),c.req.param('id'))}));
+router.put('/:id/staff-permissions/:userId',async c=>{const body=await parseBody(c,z.object({permissions:z.array(z.enum(['MANAGE_GROUPS','MANAGE_CALENDAR','REVIEW_ALL'])).max(3)}));await setSchoolPermissions(c.env,currentUser(c),c.req.param('id'),c.req.param('userId'),body.permissions);return c.json({ok:true});});
+router.get('/:id/group-staff-directory',async c=>c.json({members:await groupStaffDirectory(c.env,currentUser(c),c.req.param('id'))}));
+const groupSchema = z.object({ name:z.string().trim().min(1).max(120), leaderId:z.string().min(1).max(64).nullable(), memberIds:z.array(z.string().min(1).max(64)).max(200) });
+router.get('/:id/subject-groups', async c=>c.json({groups:await listSubjectGroups(c.env,currentUser(c),c.req.param('id'))}));
+router.post('/:id/subject-groups', async c=>c.json({group:await saveSubjectGroup(c.env,currentUser(c),c.req.param('id'),null,await parseBody(c,groupSchema))},201));
+router.put('/:id/subject-groups/:groupId', async c=>c.json({group:await saveSubjectGroup(c.env,currentUser(c),c.req.param('id'),c.req.param('groupId'),await parseBody(c,groupSchema))}));
+router.delete('/:id/subject-groups/:groupId', async c=>{await deleteSubjectGroup(c.env,currentUser(c),c.req.param('id'),c.req.param('groupId'));return c.json({ok:true});});
+const eventSchema=z.object({title:z.string().trim().min(1).max(200),description:z.string().trim().max(5000).default(''),startsAt:z.string().datetime(),endsAt:z.string().datetime()});
+router.get('/:id/events',async c=>c.json({events:await listSchoolEvents(c.env,currentUser(c),c.req.param('id'))}));
+router.post('/:id/events',async c=>c.json({event:await saveSchoolEvent(c.env,currentUser(c),c.req.param('id'),null,await parseBody(c,eventSchema))},201));
+router.put('/:id/events/:eventId',async c=>c.json({event:await saveSchoolEvent(c.env,currentUser(c),c.req.param('id'),c.req.param('eventId'),await parseBody(c,eventSchema))}));
+router.delete('/:id/events/:eventId',async c=>{await deleteSchoolEvent(c.env,currentUser(c),c.req.param('id'),c.req.param('eventId'));return c.json({ok:true});});
 const lessonPlanSchema = z.object({
   title: z.string().trim().min(1).max(200), subject: z.string().trim().max(120).default(''),
   week: z.number().int().min(1).max(53).nullable().default(null), content: z.string().max(30000).default(''),
 });
+router.get('/:id/my-subject-groups',async c=>c.json({groups:await mySubjectGroups(c.env,currentUser(c),c.req.param('id'))}));
+router.get('/:id/lesson-review-access',async c=>c.json({canReview:await reviewAccess(c.env,currentUser(c),c.req.param('id'))}));
+router.get('/:id/lesson-reviews',async c=>c.json({submissions:await reviewSubmissions(c.env,currentUser(c),c.req.param('id'))}));
+router.post('/:id/lesson-reviews/:submissionId',async c=>{const body=await parseBody(c,z.object({status:z.enum(['APPROVED','RETURNED']),comment:z.string().trim().max(5000).default('')}));await reviewLessonSubmission(c.env,currentUser(c),c.req.param('id'),c.req.param('submissionId'),body.status,body.comment);return c.json({ok:true});});
+router.get('/:id/lesson-plans/:planId/versions',async c=>c.json({versions:await listPlanVersions(c.env,currentUser(c),c.req.param('id'),c.req.param('planId'))}));
+router.get('/:id/lesson-plans/:planId/submissions',async c=>c.json({submissions:await mySubmissions(c.env,currentUser(c),c.req.param('id'),c.req.param('planId'))}));
+router.post('/:id/lesson-plans/:planId/submit',async c=>{const body=await parseBody(c,z.object({groupId:z.string().min(1).max(64)}));await submitLessonPlan(c.env,currentUser(c),c.req.param('id'),c.req.param('planId'),body.groupId);return c.json({ok:true});});
 router.get('/:id/lesson-plans', async c => c.json({ plans: await listLessonPlans(c.env, currentUser(c), c.req.param('id')) }));
 router.post('/:id/lesson-plans', async c => {
   const body = await parseBody(c, lessonPlanSchema);

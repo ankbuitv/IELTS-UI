@@ -12,7 +12,7 @@ function adapter(db: Database) {
     async first() { return stmt.get(...values) ?? null; },
     async all() { return { results: stmt.all(...values) }; },
     async run() { return { meta: { changes: Number(stmt.run(...values).changes) } }; },
-  }; } };
+  }; }, async batch(statements: Array<{run: () => Promise<unknown>}>) { db.exec('BEGIN'); try { const rows=[]; for (const stmt of statements) rows.push(await stmt.run()); db.exec('COMMIT'); return rows; } catch (e) { db.exec('ROLLBACK'); throw e; } } };
 }
 function user(id: string, role: AuthUser['role'] = 'TEACHER'): AuthUser {
   return { id, role, email: `${id}@example.test`, username: null, status: 'ACTIVE', displayName: id, avatarUrl: null, createdAt: '', lastLoginAt: null };

@@ -140,7 +140,7 @@ router.post('/classrooms/:classroomId/room', async (c) => {
     const brand = await c.env.DB.prepare('SELECT school_id FROM school_call_brand WHERE session_id=?').bind(roomId).first<{school_id:string}>();
     const active = await c.env.DB.prepare('SELECT 1 AS ok FROM mentor_room_presence WHERE session_id=? AND last_seen_at>=? LIMIT 1')
       .bind(roomId,new Date(Date.now()-30000).toISOString()).first();
-    if (active && (brand?.school_id ?? null) !== body.schoolId) throw ApiError.conflict('Không thể đổi trường khi phòng đang có người.');
+    if (active && (brand?.school_id ?? null) !== body.schoolId) throw ApiError.conflict('Không thể đổi tư cách khi phòng đang có người.');
     if (body.schoolId) await c.env.DB.prepare(`INSERT INTO school_call_brand (session_id,school_id,selected_by,updated_at) VALUES (?,?,?,?)
       ON CONFLICT(session_id) DO UPDATE SET school_id=excluded.school_id,selected_by=excluded.selected_by,updated_at=excluded.updated_at`)
       .bind(roomId,body.schoolId,user.id,nowIso()).run();
