@@ -17,7 +17,7 @@ trái, danh sách người tham gia bên phải.
 | Nút | Chức năng |
 |---|---|
 | Mic / Camera | Bật tắt track thật (peers thấy ngay) |
-| Share | Chia sẻ màn hình; tự quay lại camera khi dừng |
+| Share | Màn hình là tile chính; camera người trình chiếu có ô nhỏ riêng nếu đang bật. Tự quay lại camera khi dừng |
 | Chat | Bảng Chat / Notes / People bên trái |
 | Raise | Giơ tay, mọi người thấy chip ✋ |
 | People | Danh sách + mentor mute/kick/ban |
@@ -80,7 +80,13 @@ Checklist khi vẫn lỗi:
 WebRTC mesh (mỗi cặp peer một `RTCPeerConnection`), SDP/ICE đi qua D1
 (`mentor_signals`), presence poll 1 giây (các request được tuần tự hóa). Perfect negotiation + rollback xử lý
 glare; track đến muộn (camera bật sau, screen share) được thêm và renegotiate.
-Phần UI mới chỉ thay lớp trình bày, không đổi giao thức.
+Khi trình chiếu, video chính vẫn mang màn hình để tương thích với cách hiển thị cũ;
+client mới gửi thêm một track camera và gắn ID stream camera vào OFFER/ANSWER để
+client mới tách hai hình. Người vào sau và người vào lại đều nhận được cả hai.
+Mọi người nên tải lại trang sau khi cập nhật; client cũ không đảm bảo hiển thị
+ô camera bổ sung. Hai luồng video tới mỗi peer làm tăng băng thông trong mesh,
+nên cần kiểm thử mạng thật, thiết bị và số học viên dự kiến; TURN vẫn cần được
+cấu hình riêng cho các mạng hạn chế.
 
 ### Optional TURN relay (coturn REST credentials)
 
@@ -90,4 +96,4 @@ Attendance records explicit joins/leaves and the latest heartbeat, not proof of 
 
 ### Triển khai sửa lỗi cuộc gọi
 
-Chạy migration D1 `0043`–`0046` trước khi deploy phiên bản Worker/client mới; `0046` xây lại bảng tín hiệu theo sequence tăng dần và giữ dữ liệu cũ. Migration này cần được chạy qua Wrangler, runtime schema tự sửa không thể thêm primary key sequence vào bảng cũ. Sau deploy, mọi người cần tải lại trang để cùng dùng giao thức mới. Trên môi trường nhiều mạng khác nhau, cần TURN thật; STUN không đảm bảo kết nối xuyên NAT/firewall. Với mạng mất đột ngột, presence vẫn dựa vào heartbeat và timeout (không thể đảm bảo thông báo rời tức thời khi trình duyệt bị hệ điều hành dừng).
+Migration D1 `0046` xây lại bảng tín hiệu theo sequence tăng dần và giữ dữ liệu cũ. Runtime schema cũng có quy tắc sửa bảng tín hiệu cũ; kiểm tra trạng thái thực tế và lịch sử migration trước khi deploy, không chạy repair và migration đồng thời. Xem `docs/DEPLOYMENT.md` trước khi thao tác trên production. Sau deploy, mọi người cần tải lại trang để cùng dùng giao thức mới. Trên môi trường nhiều mạng khác nhau, cần TURN thật; STUN không đảm bảo kết nối xuyên NAT/firewall. Với mạng mất đột ngột, presence vẫn dựa vào heartbeat và timeout (không thể đảm bảo thông báo rời tức thời khi trình duyệt bị hệ điều hành dừng).

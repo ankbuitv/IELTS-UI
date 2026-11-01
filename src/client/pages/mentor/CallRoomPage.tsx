@@ -40,6 +40,7 @@ interface Peer {
   userId: string;
   displayName: string;
   stream: MediaStream;
+  cameraStream: MediaStream;
 }
 
 /**
@@ -92,6 +93,7 @@ export function CallRoomPage() {
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [hasCamera, setHasCamera] = useState(false);
+  const [cameraPreview, setCameraPreview] = useState<MediaStream | null>(null);
   const [screenOn, setScreenOn] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
   const [panel, setPanel] = useState<'chat' | 'notes' | 'people'>('chat');
@@ -144,6 +146,19 @@ export function CallRoomPage() {
   /** One stable MediaStream per remote peer. Tiles exist as soon as the person is
    * in the room; tracks land in this stream when WebRTC connects. */
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
+  const remoteCameraStreamsRef = useRef<Map<string, MediaStream>>(new Map());
+  const remoteCameraStreamIdsRef = useRef<Map<string, string>>(new Map());
+  const cameraSendersRef = useRef<Map<string, RTCRtpSender>>(new Map());
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const pendingNegotiationRef = useRef(new Set<string>());
+  const cameraStream = () => {
+    const track = localStreamRef.current?.getVideoTracks()[0];
+    if (!track) return null;
+    if (!cameraStreamRef.current) cameraStreamRef.current = new MediaStream();
+    for (const old of cameraStreamRef.current.getTracks()) if (old !== track) cameraStreamRef.current.removeTrack(old);
+    if (!cameraStreamRef.current.getTracks().includes(track)) cameraStreamRef.current.addTrack(track);
+    return cameraStreamRef.current;
+  };
   /** Device flags for the presence heartbeat (read inside the poll interval). */
   const mediaRef = useRef({ cam: true, mic: true, screen: false });
   const negotiatingRef = useRef(new Set<string>());
@@ -180,6 +195,7 @@ export function CallRoomPage() {
   const stopMedia = useCallback(() => {
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     setHasCamera(false);
+    setCameraPreview(null);
     screenStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
     screenStreamRef.current = null;
@@ -330,6 +346,7 @@ export function CallRoomPage() {
       });
 
       localStreamRef.current = stream;
+      setCameraPreview(stream);
       setHasCamera(stream.getVideoTracks().length > 0);
       setCamOn(stream.getVideoTracks().length > 0);
       setMicOn(stream.getAudioTracks().length > 0);
@@ -381,21 +398,28 @@ export function CallRoomPage() {
       pcsRef.current.set(userId, pc);
 
       const remoteStream = new MediaStream();
+      const remoteCamera = new MediaStream();
       remoteStreamsRef.current.set(userId, remoteStream);
+      remoteCameraStreamsRef.current.set(userId, remoteCamera);
       // A tile exists the moment someone is present — before media negotiates.
       setPeers((prev) =>
-        prev.some((peer) => peer.userId === userId) ? prev : [...prev, { userId, displayName, stream: remoteStream }],
+        prev.some((peer) => peer.userId === userId) ? prev : [...prev, { userId, displayName, stream: remoteStream, cameraStream: remoteCamera }],
       );
       pc.ontrack = (event) => {
         // Reuse the same track objects so <video> keeps playing across renegotiations.
-        if (!remoteStream.getTracks().includes(event.track)) remoteStream.addTrack(event.track);
+        const isCameraOverlay = event.track.kind === 'video' && event.streams.some((stream) => stream.id === remoteCameraStreamIdsRef.current.get(userId));
+        const destination = isCameraOverlay ? remoteCamera : remoteStream;
+        // A renegotiation can replace a transceiver; remove its stale video so
+        // the element does not keep rendering an old, muted track instead.
+        if (event.track.kind === 'video') for (const old of destination.getVideoTracks()) if (old !== event.track) destination.removeTrack(old);
+        if (!destination.getTracks().includes(event.track)) destination.addTrack(event.track);
         event.track.addEventListener('mute', () => {
-          setPeers((prev) => [...prev.filter((p) => p.userId !== userId), { userId, displayName, stream: remoteStream }]);
+          setPeers((prev) => [...prev.filter((p) => p.userId !== userId), { userId, displayName, stream: remoteStream, cameraStream: remoteCamera }]);
         });
         event.track.addEventListener('unmute', () => {
-          setPeers((prev) => [...prev.filter((p) => p.userId !== userId), { userId, displayName, stream: remoteStream }]);
+          setPeers((prev) => [...prev.filter((p) => p.userId !== userId), { userId, displayName, stream: remoteStream, cameraStream: remoteCamera }]);
         });
-        setPeers((prev) => [...prev.filter((p) => p.userId !== userId), { userId, displayName, stream: remoteStream }]);
+        setPeers((prev) => [...prev.filter((p) => p.userId !== userId), { userId, displayName, stream: remoteStream, cameraStream: remoteCamera }]);
       };
       pc.onicecandidate = (event) => {
         if (event.candidate) {
@@ -409,6 +433,10 @@ export function CallRoomPage() {
           offerAtRef.current.delete(userId);
           pc.close();
           remoteStreamsRef.current.delete(userId);
+          remoteCameraStreamsRef.current.delete(userId);
+          remoteCameraStreamIdsRef.current.delete(userId);
+          cameraSendersRef.current.delete(userId);
+          pendingNegotiationRef.current.delete(userId);
           setPeers((prev) => prev.filter((peer) => peer.userId !== userId));
         }
       };
@@ -419,6 +447,11 @@ export function CallRoomPage() {
       const screen = screenStreamRef.current;
       const video = screen?.getVideoTracks()[0] ?? local?.getVideoTracks()[0];
       if (video) pc.addTrack(video, screen ?? local!);
+      if (screen) {
+        const camera = cameraStream();
+        const track = camera?.getVideoTracks()[0];
+        if (camera && track) { cameraSendersRef.current.set(userId, pc.addTrack(track, camera)); pendingNegotiationRef.current.add(userId); }
+      }
       return pc;
     },
     [],
@@ -434,7 +467,7 @@ export function CallRoomPage() {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         offerAtRef.current.set(userId, Date.now());
-        await sendSignal({ kind: 'OFFER', targetId: userId, payload: JSON.stringify(offer) });
+        await sendSignal({ kind: 'OFFER', targetId: userId, payload: JSON.stringify({ ...offer, cameraStreamId: cameraSendersRef.current.has(userId) ? cameraStreamRef.current?.id : undefined }) });
       } catch {
         if ((pc.signalingState as RTCSignalingState) === 'have-local-offer') await pc.setLocalDescription({ type: 'rollback' }).catch(() => undefined);
         offerAtRef.current.delete(userId);
@@ -461,6 +494,12 @@ export function CallRoomPage() {
           added = true;
         }
       }
+      const camera = screen ? cameraStream() : null;
+      const cameraTrack = camera?.getVideoTracks()[0];
+      if (screen && camera && cameraTrack && !cameraSendersRef.current.has(userId) && !pc.getSenders().some((sender) => sender.track === cameraTrack)) {
+        cameraSendersRef.current.set(userId, pc.addTrack(cameraTrack, camera));
+        pendingNegotiationRef.current.add(userId);
+      }
       if (added) void negotiate(userId);
     },
     [negotiate],
@@ -473,7 +512,11 @@ export function CallRoomPage() {
     pcsRef.current.forEach((pc, peerId) => {
       let added = false;
       for (const track of local.getTracks()) {
-        if (track.kind === 'video' && screenStreamRef.current) continue;
+        if (track.kind === 'video' && screenStreamRef.current) {
+          const sender = cameraSendersRef.current.get(peerId);
+          if (sender) { cameraStream(); void sender.replaceTrack(track); }
+          continue;
+        }
         const sender = pc.getSenders().find((item) => item.track?.kind === track.kind);
         if (sender) void sender.replaceTrack(track);
         else {
@@ -530,20 +573,25 @@ export function CallRoomPage() {
           if (pc.signalingState !== 'stable') {
             if (!polite) return; // impolite peer keeps its own offer; the other side rolls back
             await pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit);
+            if (cameraSendersRef.current.has(signal.senderId) && screenStreamRef.current) pendingNegotiationRef.current.add(signal.senderId);
           }
-          await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(signal.payload)));
+          const description = JSON.parse(signal.payload) as RTCSessionDescriptionInit & { cameraStreamId?: string };
+          if (description.cameraStreamId) remoteCameraStreamIdsRef.current.set(signal.senderId, description.cameraStreamId);
+          await pc.setRemoteDescription(new RTCSessionDescription(description));
           await flushCandidates(signal.senderId, pc);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           await sendSignal({
             kind: 'ANSWER',
             targetId: signal.senderId,
-            payload: JSON.stringify(answer),
+            payload: JSON.stringify({ ...answer, cameraStreamId: cameraSendersRef.current.has(signal.senderId) ? cameraStreamRef.current?.id : undefined }),
           });
           syncSenders(signal.senderId);
         } else if (signal.kind === 'ANSWER' && pc) {
           if (pc.signalingState === 'have-local-offer') {
-            await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(signal.payload)));
+            const description = JSON.parse(signal.payload) as RTCSessionDescriptionInit & { cameraStreamId?: string };
+            if (description.cameraStreamId) remoteCameraStreamIdsRef.current.set(signal.senderId, description.cameraStreamId);
+            await pc.setRemoteDescription(new RTCSessionDescription(description));
             offerAtRef.current.delete(signal.senderId);
             await flushCandidates(signal.senderId, pc);
           }
@@ -559,6 +607,12 @@ export function CallRoomPage() {
         } else if (signal.kind === 'BYE') {
           pc?.close();
           pcsRef.current.delete(signal.senderId);
+          remoteStreamsRef.current.delete(signal.senderId);
+          remoteCameraStreamsRef.current.delete(signal.senderId);
+          remoteCameraStreamIdsRef.current.delete(signal.senderId);
+          cameraSendersRef.current.delete(signal.senderId);
+          pendingNegotiationRef.current.delete(signal.senderId);
+          pendingCandidatesRef.current.delete(signal.senderId);
           setPeers((prev) => prev.filter((peer) => peer.userId !== signal.senderId));
         } else if (signal.kind === 'MUTE_MIC' || signal.kind === 'UNMUTE_MIC') {
           // The mentor is managing this mic — obey silently.
@@ -632,6 +686,10 @@ export function CallRoomPage() {
           addPeer(participant.userId, participant.displayName);
           syncSenders(participant.userId);
           const pc = pcsRef.current.get(participant.userId);
+          if (pc?.signalingState === 'stable' && !negotiatingRef.current.has(participant.userId) && pendingNegotiationRef.current.has(participant.userId)) {
+            pendingNegotiationRef.current.delete(participant.userId);
+            void negotiate(participant.userId);
+          }
           const offerAt = offerAtRef.current.get(participant.userId);
           if (pc?.signalingState === 'have-local-offer' && offerAt && Date.now() - offerAt > 15000 && !negotiatingRef.current.has(participant.userId)) {
             offerAtRef.current.delete(participant.userId);
@@ -649,6 +707,7 @@ export function CallRoomPage() {
             userId: participant.userId,
             displayName: participant.displayName,
             stream: remoteStreamsRef.current.get(participant.userId) ?? new MediaStream(),
+            cameraStream: remoteCameraStreamsRef.current.get(participant.userId) ?? new MediaStream(),
           })),
         );
         for (const [peerId, pc] of pcsRef.current) {
@@ -656,6 +715,10 @@ export function CallRoomPage() {
             pc.close();
             pcsRef.current.delete(peerId);
             remoteStreamsRef.current.delete(peerId);
+            remoteCameraStreamsRef.current.delete(peerId);
+            remoteCameraStreamIdsRef.current.delete(peerId);
+            cameraSendersRef.current.delete(peerId);
+            pendingNegotiationRef.current.delete(peerId);
             pendingCandidatesRef.current.delete(peerId);
           }
         }
@@ -860,9 +923,14 @@ export function CallRoomPage() {
     if (screen) for (const track of screen.getTracks()) { track.onended = null; track.stop(); }
     setScreenOn(false);
     const video = localStreamRef.current?.getVideoTracks()[0] ?? null;
-    pcsRef.current.forEach((pc) => {
-      const sender = pc.getSenders().find((item) => item.track?.kind === 'video');
-      if (sender) void sender.replaceTrack(video).catch(() => setError('Không thể khôi phục camera. Hãy thử kết nối lại.'));
+    pcsRef.current.forEach((pc, peerId) => {
+      const extra = cameraSendersRef.current.get(peerId);
+      const sender = pc.getSenders().find((item) => item !== extra && item.track?.kind === 'video');
+      // Detach the duplicate before putting the camera back on the main sender.
+      void (async () => {
+        if (extra) await extra.replaceTrack(null);
+        if (sender) await sender.replaceTrack(video);
+      })().catch(() => setError('Không thể khôi phục camera. Hãy thử kết nối lại.'));
     });
     attachSelf();
   };
@@ -875,9 +943,19 @@ export function CallRoomPage() {
       screenStreamRef.current = screen;
       setScreenOn(true);
       pcsRef.current.forEach((pc, peerId) => {
-        const sender = pc.getSenders().find((item) => item.track?.kind === 'video');
-        if (sender) void sender.replaceTrack(track).catch(() => setError('Không thể chia sẻ màn hình. Hãy thử kết nối lại.'));
-        else { pc.addTrack(track, screen); void negotiate(peerId); }
+        void (async () => {
+          const extra = cameraSendersRef.current.get(peerId);
+          const sender = pc.getSenders().find((item) => item !== extra && item.track?.kind === 'video');
+          if (sender) await sender.replaceTrack(track);
+          else { pc.addTrack(track, screen); pendingNegotiationRef.current.add(peerId); }
+          if (screenStreamRef.current !== screen || pcsRef.current.get(peerId) !== pc) return;
+          const camera = cameraStream();
+          const cameraTrack = camera?.getVideoTracks()[0];
+          if (camera && cameraTrack) {
+            if (extra) await extra.replaceTrack(cameraTrack);
+            else { cameraSendersRef.current.set(peerId, pc.addTrack(cameraTrack, camera)); pendingNegotiationRef.current.add(peerId); }
+          }
+        })().catch(() => setError('Không thể chia sẻ màn hình. Hãy thử kết nối lại.'));
       });
       track.onended = stopScreen;
       attachSelf();
@@ -1451,6 +1529,7 @@ export function CallRoomPage() {
                   playsInline
                   muted
                 />
+                {screenOn && camOn && hasCamera && cameraPreview ? <PresenterCamera stream={cameraPreview} label="Camera của bạn" muted /> : null}
                 {!selfVideoVisible ? (
                   <div className="jr-tile__avatar">
                     <UserAvatar src={user?.avatarUrl ?? null} userId={user?.id} name={user?.displayName ?? 'Me'} size={110} />
@@ -1501,6 +1580,7 @@ export function CallRoomPage() {
                   playsInline
                   muted
                 />
+                {screenOn && camOn && hasCamera && cameraPreview ? <PresenterCamera stream={cameraPreview} label="Camera của bạn" muted /> : null}
                 {!selfVideoVisible ? (
                   <div className="jr-tile__avatar jr-tile__avatar--small">
                     <UserAvatar src={user?.avatarUrl ?? null} userId={user?.id} name={user?.displayName ?? 'Me'} size={48} />
@@ -2647,6 +2727,42 @@ function ChatMessageBody({ body }: { body: string }) {
   );
 }
 
+/** Separate video element so a shared screen and the presenter's camera can
+ * play simultaneously. It is muted because audio stays on the main tile. */
+function PresenterCamera({ stream, label, muted }: { stream: MediaStream; label: string; muted: boolean }) {
+  const [live, setLive] = useState(false);
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return;
+    const update = () => {
+      setLive(stream.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled && !track.muted));
+      if (video.srcObject !== stream) video.srcObject = stream;
+      void video.play().catch(() => undefined);
+    };
+    const observed = new Set<MediaStreamTrack>();
+    const observe = (track: MediaStreamTrack) => {
+      if (observed.has(track)) return;
+      observed.add(track);
+      track.addEventListener('mute', update); track.addEventListener('unmute', update); track.addEventListener('ended', update);
+    };
+    const handleTrack = (event: MediaStreamTrackEvent) => {
+      observe(event.track);
+      update();
+    };
+    stream.getVideoTracks().forEach(observe);
+    stream.addEventListener('addtrack', handleTrack);
+    stream.addEventListener('removetrack', update);
+    update();
+    return () => {
+      stream.removeEventListener('addtrack', handleTrack);
+      stream.removeEventListener('removetrack', update);
+      observed.forEach(track => { track.removeEventListener('mute', update); track.removeEventListener('unmute', update); track.removeEventListener('ended', update); });
+    };
+  }, [stream]);
+  return <div className={`jr-presenter-cam${live ? '' : ' is-hidden'}`} aria-label={label}><video ref={ref} autoPlay playsInline muted={muted} /><span>{label}</span></div>;
+}
+
 function RemoteTile({ peer, participant, featured = false }: { peer: Peer; participant?: RoomParticipant; featured?: boolean }) {
   const [live, setLive] = useState(false);
   const [micLive, setMicLive] = useState(true);
@@ -2723,6 +2839,7 @@ function RemoteTile({ peer, participant, featured = false }: { peer: Peer; parti
         playsInline
         className={showVideo ? undefined : 'is-hidden'}
       />
+      {participant?.screenOn && participant.camOn ? <PresenterCamera stream={peer.cameraStream} label={`Camera ${peer.displayName}`} muted /> : null}
       {!showVideo ? (
         <div className="jr-tile__avatar">
           <UserAvatar
