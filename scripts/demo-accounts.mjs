@@ -19,8 +19,14 @@
  *   npm run db:demo   # in another
  */
 import process from 'node:process';
+import { randomInt } from 'node:crypto';
 
 const BASE = (process.env.DEMO_BASE_URL ?? 'http://localhost:8787').replace(/\/$/, '');
+const baseUrl = new URL(BASE);
+if (!['localhost', '127.0.0.1', '[::1]'].includes(baseUrl.hostname) || baseUrl.protocol !== 'http:') {
+  throw new Error('Demo provisioning is restricted to a local HTTP Worker.');
+}
+const DEMO_IP = `198.18.${randomInt(0, 256)}.${randomInt(1, 255)}`;
 const PASSWORD = process.env.DEMO_PASSWORD ?? 'Demo-Passw0rd!23';
 
 const ACCOUNTS = {
@@ -36,7 +42,9 @@ function createClient() {
   let csrfToken = null;
 
   async function request(path, { method = 'GET', json } = {}) {
-    const headers = { accept: 'application/json' };
+    // Provisioning runs only against loopback. Keep its sign-ins out of the
+    // preview user's shared IP bucket without weakening Worker rate limits.
+    const headers = { accept: 'application/json', 'cf-connecting-ip': DEMO_IP };
     if (json !== undefined) headers['content-type'] = 'application/json';
     if (sessionToken) headers['x-session-token'] = sessionToken;
     if (method !== 'GET' && csrfToken) headers['x-csrf-token'] = csrfToken;

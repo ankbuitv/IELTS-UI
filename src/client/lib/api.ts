@@ -23,8 +23,12 @@ export function getCsrfToken(): string | null {
  */
 const SESSION_TOKEN_KEY = 'ielts_session_token';
 
-let sessionToken: string | null =
-  typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SESSION_TOKEN_KEY) : null;
+let sessionToken: string | null = null;
+try {
+  sessionToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SESSION_TOKEN_KEY) : null;
+} catch {
+  // Storage can be blocked by the browser. Cookie auth must still be usable.
+}
 
 export function setSessionToken(token: string | null): void {
   sessionToken = token;

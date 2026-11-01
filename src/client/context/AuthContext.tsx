@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, setCsrfToken, setSessionToken, type ApiUser } from '../lib/api';
 
 /** A password (or OTP) was accepted; the account still wants its authenticator code. */
@@ -49,18 +49,23 @@ interface LoginResponse {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ApiUser | null>(null);
   const [loading, setLoading] = useState(true);
+  // A slow initial /me must not undo a later sign-in or sign-out.
+  const authRevision = useRef(0);
 
   const refresh = useCallback(async () => {
+    const revision = ++authRevision.current;
     try {
       const result = await api.get<{ user: ApiUser | null; csrfToken: string | null; sessionToken?: string | null }>('/api/auth/me');
+      if (revision !== authRevision.current) return;
       setUser(result.user);
       setCsrfToken(result.csrfToken);
       setSessionToken(result.sessionToken ?? null);
     } catch {
+      if (revision !== authRevision.current) return;
       setUser(null);
       setCsrfToken(null);
     } finally {
-      setLoading(false);
+      if (revision === authRevision.current) setLoading(false);
     }
   }, []);
 
@@ -69,6 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const finishLogin = useCallback((result: LoginResponse) => {
+    authRevision.current += 1;
+    setLoading(false);
     setUser(result.user);
     setCsrfToken(result.csrfToken);
     setSessionToken(result.sessionToken ?? null);
@@ -144,12 +151,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    const revision = ++authRevision.current;
     try {
       await api.post('/api/auth/logout');
     } finally {
-      setUser(null);
-      setCsrfToken(null);
-      setSessionToken(null);
+      if (revision === authRevision.current) {
+        setUser(null);
+        setCsrfToken(null);
+        setSessionToken(null);
+        setLoading(false);
+      }
     }
   }, []);
 
