@@ -122,6 +122,9 @@ export function App() {
         }
       />
 
+      {/* The school workspace has its own desktop shell and taskbar. */}
+      <Route path="/school-desktop" element={<RequireAuth><SchoolDesktop /></RequireAuth>} />
+
       <Route element={<AppShell />}>
         <Route index element={<LandingPage />} />
         <Route path="login" element={<LoginPage />} />
@@ -129,7 +132,6 @@ export function App() {
         <Route path="reset-password" element={<ResetPasswordPage />} />
         <Route path="register" element={<RegisterPage />} />
         <Route path="join" element={<JoinPage />} />
-        <Route path="school-desktop" element={<RequireAuth><SchoolDesktop /></RequireAuth>} />
         <Route path="schools" element={<RequireAuth><SchoolsPage /></RequireAuth>} />
 
         {/* Retired UI routes redirect without deleting existing data. */}

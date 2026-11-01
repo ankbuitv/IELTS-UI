@@ -5,6 +5,7 @@ import type { AppBindings } from '../env';
 import { currentUser, requireAuth } from '../middleware/auth';
 import { assertCsrf, assertSameOrigin } from '../lib/http';
 import { parseBody } from '../lib/validate';
+import { listLessonPlans, createLessonPlan, updateLessonPlan, deleteLessonPlan } from '../services/lesson-plan-service';
 import { enforceRateLimit } from '../lib/rate-limit';
 import { createSchoolTeacher, isSchoolManager, grantSchoolManager, listSchoolManagers, revokeSchoolManager, getSchoolLogo, inviteTeacher, listMySchools, listSchoolApplications, listSchoolMembers, registerSchool, removeSchoolMember, respondSchoolInvitation, reviewSchool, saveSchoolLogo } from '../services/school-service';
 
@@ -26,6 +27,22 @@ router.get('/applications', async (c) => c.json({ schools: await listSchoolAppli
 router.post('/:id/review', async (c) => {
   const body = await parseBody(c, z.object({ status: z.enum(['APPROVED', 'REJECTED']), note: z.string().trim().max(500).default('') }));
   await reviewSchool(c.env, currentUser(c), c.req.param('id'), body.status, body.note); return c.json({ ok: true });
+});
+const lessonPlanSchema = z.object({
+  title: z.string().trim().min(1).max(200), subject: z.string().trim().max(120).default(''),
+  week: z.number().int().min(1).max(53).nullable().default(null), content: z.string().max(30000).default(''),
+});
+router.get('/:id/lesson-plans', async c => c.json({ plans: await listLessonPlans(c.env, currentUser(c), c.req.param('id')) }));
+router.post('/:id/lesson-plans', async c => {
+  const body = await parseBody(c, lessonPlanSchema);
+  return c.json({ plan: await createLessonPlan(c.env, currentUser(c), c.req.param('id'), body) }, 201);
+});
+router.patch('/:id/lesson-plans/:planId', async c => {
+  const body = await parseBody(c, lessonPlanSchema);
+  await updateLessonPlan(c.env, currentUser(c), c.req.param('id'), c.req.param('planId'), body); return c.json({ ok: true });
+});
+router.delete('/:id/lesson-plans/:planId', async c => {
+  await deleteLessonPlan(c.env, currentUser(c), c.req.param('id'), c.req.param('planId')); return c.json({ ok: true });
 });
 router.get('/:id/logo', async (c) => { c.header('Cache-Control', 'private, no-store'); return c.json({ logo: await getSchoolLogo(c.env, c.req.param('id')) }); });
 router.post('/:id/logo', async (c) => {

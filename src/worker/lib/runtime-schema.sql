@@ -1799,3 +1799,18 @@ CREATE INDEX IF NOT EXISTS idx_schools_status ON schools(status, created_at);
 
 -- index: idx_school_members_user
 CREATE INDEX IF NOT EXISTS idx_school_members_user ON school_members(user_id, status);
+
+-- table: school_lesson_plans
+CREATE TABLE IF NOT EXISTS school_lesson_plans (
+  id TEXT PRIMARY KEY,
+  school_id TEXT NOT NULL REFERENCES schools(id),
+  author_id TEXT NOT NULL REFERENCES users(id),
+  title TEXT NOT NULL,
+  subject TEXT NOT NULL DEFAULT '',
+  week INTEGER,
+  content TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+-- index: idx_school_lesson_plans_owner
+CREATE INDEX IF NOT EXISTS idx_school_lesson_plans_owner ON school_lesson_plans(school_id, author_id, updated_at DESC);
