@@ -1,3 +1,4 @@
+import {assignmentEligible} from '../services/assignment-audience';
 /**
  * The four SQL queries behind `GET /api/student/calendar`, kept as plain
  * exported strings so a unit test can run them against the real runtime schema
@@ -38,7 +39,7 @@ export const CALENDAR_CLASSES_SQL = `SELECT c.id, c.title, c.starts_at, c.ends_a
 export const CALENDAR_DEADLINES_SQL = `SELECT a.id, a.title, a.deadline_at
    FROM assignments a
    JOIN classroom_members m ON m.classroom_id = a.classroom_id AND m.user_id = ? AND m.status = 'ACTIVE'
-  WHERE a.status = 'ACTIVE' AND a.deadline_at IS NOT NULL AND a.deadline_at >= ? AND a.deadline_at <= ?
+  WHERE a.status = 'ACTIVE' AND ${assignmentEligible('a','m.user_id')} AND a.deadline_at IS NOT NULL AND a.deadline_at >= ? AND a.deadline_at <= ?
   ORDER BY a.deadline_at`;
 
 /** Teaching deadlines for classes owned or actively co-taught by the current user. */
@@ -54,3 +55,24 @@ export const CALENDAR_STAFF_SCHOOL_EVENTS_SQL = `SELECT e.id,e.title,e.descripti
  JOIN school_members m ON m.school_id=s.id AND m.user_id=? AND m.status='ACTIVE'
  WHERE s.status='APPROVED' AND e.ends_at>=? AND e.starts_at<=?
  ORDER BY e.starts_at LIMIT 500`;
+
+/** Internal marking deadlines are visible only to class owner and co-teachers. */
+export const CALENDAR_MARKING_DEADLINES_SQL = `SELECT a.id,a.title,md.deadline_at,c.name AS classroom_name
+ FROM assignment_marking_deadlines md JOIN assignments a ON a.id=md.assignment_id JOIN classrooms c ON c.id=a.classroom_id
+ WHERE c.status='ACTIVE' AND a.status IN ('ACTIVE','CLOSED') AND md.deadline_at>=? AND md.deadline_at<=?
+ AND (c.teacher_id=? OR EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=? AND m.role='CO_TEACHER' AND m.status='ACTIVE'))
+ ORDER BY md.deadline_at LIMIT 500`;
+
+export const CALENDAR_SUPPORT_SQL = `SELECT s.id,s.starts_at,s.ends_at,c.name AS classroom_name,s.status,s.teacher_id,s.student_id
+ FROM teacher_support_slots s JOIN classrooms c ON c.id=s.classroom_id AND c.status='ACTIVE'
+ JOIN users teacher ON teacher.id=s.teacher_id AND teacher.status='ACTIVE'
+ WHERE s.status IN ('OPEN','BOOKED') AND s.ends_at>=? AND s.starts_at<=?
+ AND (c.teacher_id=s.teacher_id OR EXISTS(SELECT 1 FROM classroom_members ct WHERE ct.classroom_id=c.id AND ct.user_id=s.teacher_id AND ct.role='CO_TEACHER' AND ct.status='ACTIVE'))
+ AND ((s.teacher_id=?) OR (s.student_id=? AND s.status='BOOKED' AND EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=s.student_id AND m.role='STUDENT' AND m.status='ACTIVE')))
+ ORDER BY s.starts_at LIMIT 500`;
+
+export const CALENDAR_TEACHING_SQL = `SELECT e.id,e.title,e.starts_at,e.ends_at,c.name AS classroom_name FROM classroom_teaching_events e JOIN classrooms c ON c.id=e.classroom_id AND c.status='ACTIVE' JOIN users u ON u.id=e.teacher_id AND u.status='ACTIVE'
+ WHERE e.ends_at>=? AND e.starts_at<=? AND (c.teacher_id=e.teacher_id OR EXISTS(SELECT 1 FROM classroom_members ct WHERE ct.classroom_id=c.id AND ct.user_id=e.teacher_id AND ct.role='CO_TEACHER' AND ct.status='ACTIVE'))
+ AND (e.teacher_id=? OR EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=? AND m.role='STUDENT' AND m.status='ACTIVE')) ORDER BY e.starts_at LIMIT 500`;
+
+export const CALENDAR_WORKSHEET_DEADLINES_SQL = `SELECT w.id,w.title,w.deadline_at,c.name AS classroom_name FROM class_worksheets w JOIN classrooms c ON c.id=w.classroom_id AND c.status='ACTIVE' WHERE w.status='ACTIVE' AND w.deadline_at>=? AND w.deadline_at<=? AND (c.teacher_id=? OR EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=? AND m.status='ACTIVE' AND (m.role='STUDENT' OR (m.role='CO_TEACHER' AND COALESCE((SELECT d.can_grade FROM classroom_co_teacher_duties d WHERE d.member_id=m.id),1)=1)))) ORDER BY w.deadline_at LIMIT 500`;

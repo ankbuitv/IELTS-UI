@@ -1,3 +1,5 @@
+import {TeacherWritingReview,StudentWritingReview} from './WritingReview';
+import {RubricPanel} from './RubricPanel';
 import { useMemo, useRef, useState } from 'react';
 import type { CandidateResponse } from '@shared/answer-key';
 import { api, describeError } from '../lib/api';
@@ -18,6 +20,7 @@ import type { AiMarkView } from '@shared/judges';
 
 export interface AttemptResultPayload {
   attemptId: string;
+  canMark?: boolean;
   testId: string;
   testTitle: string;
   testType: string;
@@ -90,6 +93,7 @@ export interface AttemptResultPayload {
       questionType: string;
       evidence: string | null;
       explanation: string | null;
+      teacherFeedback:string|null;
       sectionId: string | null;
       sectionLabel: string | null;
       sectionOrder: number | null;
@@ -163,13 +167,15 @@ export function ResultSummary({
   result,
   marking,
   onRefresh,
+  viewerStaff=false,
 }: {
   result: AttemptResultPayload;
+  viewerStaff?:boolean;
   marking?: { apiBase: '/api/admin' | '/api/teacher'; onSaved: () => Promise<void> };
   /** Re-fetches this result view; called after the judges have answered. */
   onRefresh?: () => Promise<void>;
 }) {
-  const isOwner = !marking;
+  const isOwner = !marking && !viewerStaff;
   const writingTasks = result.sessions.flatMap((session) => session.writing);
   const needsAi =
     isOwner &&
@@ -347,6 +353,7 @@ export function ResultSummary({
                     ) : null
                   ) : null}
 
+                  {isOwner && result.release.reviewAvailable && <StudentWritingReview attemptId={result.attemptId} submissionId={writing.submissionId}/>}
                   {marking ? (
                     <WritingMarkForm
                       apiBase={marking.apiBase}
@@ -455,16 +462,19 @@ function QuestionMarkControls({
   attemptId,
   questionId,
   current,
+  feedback,
   onSaved,
 }: {
   apiBase: '/api/admin' | '/api/teacher';
   attemptId: string;
   questionId: string;
   current: boolean | null;
+  feedback:string|null;
   onSaved: () => Promise<void>;
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [comment,setComment]=useState(feedback??'');
   const mark = async (isCorrect: boolean | null) => {
     setBusy(true);
     try {
@@ -488,6 +498,7 @@ function QuestionMarkControls({
       <Button size="sm" variant="ghost" disabled={busy} onClick={() => void mark(null)}>
         Clear
       </Button>
+      <label>Nhận xét câu hỏi<textarea maxLength={2000} value={comment} onChange={e=>setComment(e.target.value)}/></label><Button size="sm" disabled={busy} onClick={()=>{setBusy(true);void api.put(`/api/teacher/attempts/${encodeURIComponent(attemptId)}/question-feedback`,{questionId,body:comment}).then(onSaved).then(()=>toast.push('Đã lưu nhận xét câu hỏi.','success')).catch(e=>toast.push(describeError(e),'error')).finally(()=>setBusy(false));}}>Lưu nhận xét</Button>
     </div>
   );
 }
@@ -562,6 +573,7 @@ export function WritingMarkForm({
   const [feedback, setFeedback] = useState(existing?.feedback ?? '');
   const [criteria, setCriteria] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
+    for(const [key,value] of Object.entries(existing?.criteria??{}))if(key.startsWith('Custom:'))initial[key]=String(value);
     for (const item of visibleCriteria) {
       const value = existing?.criteria?.[item.key];
       initial[item.key] = value != null ? String(value) : '';
@@ -574,9 +586,10 @@ export function WritingMarkForm({
   const [draftError, setDraftError] = useState<string | null>(null);
   const templates = useAsync(()=>api.get<{templates:Array<{id:string;title:string;body:string}>}>('/api/teacher/feedback-templates'),[]);
   const [templateName,setTemplateName]=useState('');
+  const [templateEdit,setTemplateEdit]=useState('');
   const [templateBusy,setTemplateBusy]=useState(false);
   const [templateError,setTemplateError]=useState('');
-  const saveTemplate=async()=>{if(templateBusy||!templateName.trim()||!feedback.trim())return;setTemplateBusy(true);setTemplateError('');try{await api.post('/api/teacher/feedback-templates',{title:templateName,body:feedback});setTemplateName('');await templates.reload();}catch(e){setTemplateError(describeError(e));}finally{setTemplateBusy(false);}};
+  const saveTemplate=async()=>{if(templateBusy||!templateName.trim()||!feedback.trim())return;setTemplateBusy(true);setTemplateError('');try{if(templateEdit)await api.put(`/api/teacher/feedback-templates/${encodeURIComponent(templateEdit)}`,{title:templateName,body:feedback});else await api.post('/api/teacher/feedback-templates',{title:templateName,body:feedback});setTemplateName('');setTemplateEdit('');await templates.reload();}catch(e){setTemplateError(describeError(e));}finally{setTemplateBusy(false);}};
 
   const loadAiDraft = async () => {
     setDraftBusy(true);
@@ -706,7 +719,9 @@ export function WritingMarkForm({
       <Field label="Feedback to the student">
         {(id) => <TextArea id={id} rows={5} value={feedback} onChange={(event) => setFeedback(event.target.value)} />}
       </Field>
-      <details className="feedback-templates"><summary>Mẫu nhận xét cá nhân</summary><p className="tiny muted">Mẫu chỉ thuộc tài khoản của bạn. Chọn để thêm vào nhận xét; hãy kiểm tra trước khi lưu điểm.</p>{templates.error&&<p role="alert">{templates.error}</p>}{templateError&&<p role="alert">{templateError}</p>}<div className="quick-notes">{templates.data?.templates.map(item=><span key={item.id}><button type="button" onClick={()=>addQuickNote(item.body)} title={item.body}>+ {item.title}</button><button type="button" aria-label={`Xóa mẫu ${item.title}`} disabled={templateBusy} onClick={()=>{if(!window.confirm(`Xóa mẫu “${item.title}”?`))return;setTemplateBusy(true);setTemplateError('');void api.delete(`/api/teacher/feedback-templates/${encodeURIComponent(item.id)}`).then(()=>templates.reload()).catch(e=>setTemplateError(describeError(e))).finally(()=>setTemplateBusy(false));}}>×</button></span>)}</div><div className="row"><label>Tên mẫu <input maxLength={100} value={templateName} onChange={e=>setTemplateName(e.target.value)}/></label><Button size="sm" disabled={!feedback.trim()||!templateName.trim()||templateBusy||feedback.length>3000} onClick={()=>void saveTemplate()}>Lưu nhận xét hiện tại làm mẫu</Button></div><small>Tối đa 50 mẫu; mỗi mẫu không quá 3000 ký tự.</small></details>
+      <RubricPanel skill="WRITING" values={criteria} onChange={setCriteria}/>
+      <TeacherWritingReview submissionId={submissionId}/>
+      <details className="feedback-templates"><summary>Mẫu nhận xét cá nhân</summary><p className="tiny muted">Mẫu chỉ thuộc tài khoản của bạn. Chọn để thêm vào nhận xét; hãy kiểm tra trước khi lưu điểm.</p>{templates.error&&<p role="alert">{templates.error}</p>}{templateError&&<p role="alert">{templateError}</p>}<div className="quick-notes">{templates.data?.templates.map(item=><span key={item.id}><button type="button" onClick={()=>addQuickNote(item.body)} title={item.body}>+ {item.title}</button><button type="button" onClick={()=>{setTemplateEdit(item.id);setTemplateName(item.title);setFeedback(item.body);}}>Sửa</button><button type="button" aria-label={`Xóa mẫu ${item.title}`} disabled={templateBusy} onClick={()=>{if(!window.confirm(`Xóa mẫu “${item.title}”?`))return;setTemplateBusy(true);setTemplateError('');void api.delete(`/api/teacher/feedback-templates/${encodeURIComponent(item.id)}`).then(()=>templates.reload()).catch(e=>setTemplateError(describeError(e))).finally(()=>setTemplateBusy(false));}}>×</button></span>)}</div><div className="row"><label>Tên mẫu <input maxLength={100} value={templateName} onChange={e=>setTemplateName(e.target.value)}/></label><Button size="sm" disabled={!feedback.trim()||!templateName.trim()||templateBusy||feedback.length>3000} onClick={()=>void saveTemplate()}>{templateEdit?'Lưu thay đổi mẫu':'Lưu nhận xét hiện tại làm mẫu'}</Button>{templateEdit&&<Button size="sm" onClick={()=>{setTemplateEdit('');setTemplateName('');}}>Hủy sửa mẫu</Button>}</div><small>Tối đa 50 mẫu; mỗi mẫu không quá 3000 ký tự.</small></details>
       <div className="quick-notes" aria-label="Quick comments">
         <span className="quick-notes__label">Thêm nhanh</span>
         {QUICK_NOTES.map((note) => (
@@ -944,6 +959,7 @@ function SectionReview({
                           Evidence: {item.evidence}
                         </div>
                       ) : null}
+                      {item.teacherFeedback&&<div className="tiny">Giáo viên: {item.teacherFeedback}</div>}
                       {item.explanation ? (
                         <div className="tiny muted" style={{ marginTop: 2 }}>
                           {item.explanation}
@@ -964,6 +980,7 @@ function SectionReview({
                           attemptId={attemptId}
                           questionId={item.questionId}
                           current={item.isCorrect}
+                          feedback={item.teacherFeedback}
                           onSaved={marking.onSaved}
                         />
                       </td>

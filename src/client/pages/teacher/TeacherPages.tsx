@@ -28,6 +28,10 @@ import { ClassAttendance } from './ClassAttendance';
 import { ClassGradebook } from './ClassGradebook';
 import { ClassPrivateNotes } from './ClassPrivateNotes';
 import { ClassSeating } from './ClassSeating';
+import { ClassSchedule } from './ClassSchedule';
+import { ClassWorksheets } from './ClassWorksheets';
+import { ClassDuties } from './ClassDuties';
+import { ClassSupport } from './ClassSupport';
 import { ClassTermReports } from './ClassTermReports';
 import { ClassSkillProgress } from './ClassSkillProgress';
 import { ClassResources } from '../../components/ClassResources';
@@ -140,7 +144,7 @@ export function TeacherHomePage() {
 // Classroom detail
 // ---------------------------------------------------------------------------
 interface ClassroomDetailResponse {
-  classroom: { id: string; name: string; description: string; status: string; isOwner: boolean };
+  classroom: { id: string; name: string; description: string; status: string; isOwner: boolean; duties:{grading:boolean;attendance:boolean;resources:boolean} };
   members: Array<{
     userId: string;
     email: string;
@@ -204,7 +208,7 @@ export function ClassroomPage() {
   const { classroomId = '' } = useParams();
   const toast = useToast();
   const [searchParams] = useSearchParams();
-  const allowedTabs = ['conversation','files','overview','students','assignments','invites','ratings','attendance','gradebook','private-notes','seating','board','resources','skill-progress','term-reports'] as const;
+  const allowedTabs = ['conversation','files','overview','students','assignments','invites','ratings','attendance','gradebook','private-notes','seating','board','resources','skill-progress','term-reports','support','duties','worksheets','schedule'] as const;
   const initialTab = allowedTabs.find(value => value === searchParams.get('tab')) ?? 'conversation';
   const [tab, setTab] = useState<typeof allowedTabs[number]>(initialTab);
   const [attendanceDirty,setAttendanceDirty] = useState(false);
@@ -262,12 +266,16 @@ export function ClassroomPage() {
           { id: 'overview', label: 'Tổng quan' },
           { id: 'board', label: 'Bảng lớp' },
           { id: 'resources', label: 'Tài liệu giáo viên' },
-          { id: 'attendance', label: 'Điểm danh' },
+          ...(data.classroom.duties.attendance ? [{ id: 'attendance' as const, label: 'Điểm danh' }] : []),
           { id: 'private-notes', label: 'Ghi chú riêng' },
           { id: 'seating', label: 'Sơ đồ chỗ ngồi' },
           { id: 'gradebook', label: 'Bảng điểm' },
           { id: 'skill-progress', label: 'Tiến độ kỹ năng' },
           { id: 'term-reports', label: 'Báo cáo học tập' },
+          { id: 'support', label: 'Lịch hỗ trợ' },
+          { id:'schedule',label:'Lịch dạy' },
+          ...(data.classroom.duties.grading ? [{id:'worksheets' as const,label:'Bài từ ngân hàng'}] : []),
+          ...(data.classroom.isOwner || user?.role === 'ADMIN' ? [{ id:'duties' as const,label:'Phân công' }] : []),
           ...(data.classroom.isOwner || user?.role === 'ADMIN' ? [{ id: 'ratings' as const, label: 'Đánh giá buổi học' }] : []),
           { id: 'students', label: `Students (${data.members.filter((member) => member.role === 'STUDENT').length})` },
           { id: 'assignments', label: `Assignments (${data.assignments.length})` },
@@ -284,6 +292,10 @@ export function ClassroomPage() {
         <section className="teacher-conversations__main"><header className="teacher-conversations__head"><span className="teacher-conversations__avatar">{data.classroom.name.trim().slice(0, 1).toLocaleUpperCase()}</span><div><h2>{data.classroom.name}</h2><p>{tab === 'files' ? 'Tệp đã chia sẻ trong lớp' : 'Hội thoại chung của lớp'}</p></div></header><ClassroomChat key={classroomId} classroomId={classroomId} view={tab === 'files' ? 'files' : 'messages'} /></section>
       </div> : null}
 
+      {tab === 'schedule' && <ClassSchedule key={classroomId} classroomId={classroomId} isOwner={data.classroom.isOwner}/> }
+      {tab === 'worksheets' && data.classroom.duties.grading && <ClassWorksheets key={classroomId} classroomId={classroomId}/> }
+      {tab === 'duties' && (data.classroom.isOwner || user?.role === 'ADMIN') && <ClassDuties key={classroomId} classroomId={classroomId}/> }
+      {tab === 'support' && <ClassSupport key={classroomId} classroomId={classroomId}/> }
       {tab === 'term-reports' && <ClassTermReports key={classroomId} classroomId={classroomId}/> }
       {tab === 'skill-progress' && <ClassSkillProgress key={classroomId} classroomId={classroomId}/> }
       {tab === 'resources' && <ClassResources key={classroomId} classroomId={classroomId}/> }
@@ -291,7 +303,7 @@ export function ClassroomPage() {
       {tab === 'seating' && <ClassSeating key={classroomId} classroomId={classroomId} onDirtyChange={setSeatingDirty}/> }
       {tab === 'private-notes' && <ClassPrivateNotes key={classroomId} classroomId={classroomId} onDirtyChange={setNotesDirty}/> }
       {tab === 'gradebook' && <ClassGradebook key={classroomId} classroomId={classroomId}/> }
-      {tab === 'attendance' && <ClassAttendance key={classroomId} classroomId={classroomId} onDirtyChange={setAttendanceDirty}/> }
+      {tab === 'attendance' && data.classroom.duties.attendance && <ClassAttendance key={classroomId} classroomId={classroomId} onDirtyChange={setAttendanceDirty}/> }
       {tab === 'ratings' && (data.classroom.isOwner || user?.role === 'ADMIN') ? <ClassroomRatings classroomId={classroomId} /> : null}
       {tab === 'overview' ? (
         <>
@@ -665,6 +677,7 @@ export function ClassroomPage() {
         open={assignOpen}
         onClose={() => setAssignOpen(false)}
         classroomId={classroomId}
+        students={data.members.filter(m=>m.role==='STUDENT'&&m.status==='ACTIVE')}
         onCreated={async () => {
           await reload();
           setAssignOpen(false);
@@ -678,14 +691,18 @@ function CreateAssignmentModal({
   open,
   onClose,
   classroomId,
+  students,
   onCreated,
 }: {
   open: boolean;
   onClose: () => void;
   classroomId: string;
+  students: Array<{userId:string;displayName:string;email:string}>;
   onCreated: () => Promise<void>;
 }) {
   const toast = useToast();
+  const [audience,setAudience]=useState<'ALL'|'SELECTED'>('ALL');
+  const [studentIds,setStudentIds]=useState<string[]>([]);
   const { data } = useAsync<{ tests: Array<{ id: string; title: string; type: string; versionId: string; versionNumber: number; totalQuestions: number }> }>(
     () => api.get('/api/tests'),
     [open],
@@ -718,11 +735,12 @@ function CreateAssignmentModal({
           <Button onClick={onClose}>Cancel</Button>
           <Button
             variant="primary"
-            disabled={!form.versionId}
+            disabled={!form.versionId||(audience==='SELECTED'&&(!studentIds.length||studentIds.length>200))}
             onClick={async () => {
               try {
                 await api.post('/api/teacher/assignments', {
                   classroomId,
+                  ...(audience==='SELECTED'?{studentIds}:{}),
                   testVersionId: form.versionId,
                   title: form.title || undefined,
                   startAt: form.start ? new Date(form.start).toISOString() : null,
@@ -764,6 +782,10 @@ function CreateAssignmentModal({
         )}
       </Field>
 
+      <Field label="Giao cho">
+        {(id)=><Select id={id} value={audience} onChange={e=>setAudience(e.target.value as 'ALL'|'SELECTED')}><option value="ALL">Cả lớp</option><option value="SELECTED">Chọn nhóm học viên</option></Select>}
+      </Field>
+      {audience==='SELECTED'&&<fieldset className="assignment-audience"><legend>Chọn học viên ({studentIds.length}/200)</legend><p className="tiny muted">Chỉ học viên được chọn nhận và làm bài này. Danh sách cố định khi tạo; nếu cần đổi nhóm hãy tạo bài mới.</p>{students.map(student=><label key={student.userId}><input type="checkbox" checked={studentIds.includes(student.userId)} disabled={studentIds.length>=200&&!studentIds.includes(student.userId)} onChange={e=>setStudentIds(current=>e.target.checked?[...current,student.userId]:current.filter(id=>id!==student.userId))}/> {student.displayName||student.email} <small>{student.email}</small></label>)}{!students.length&&<p>Chưa có học viên trong lớp.</p>}</fieldset>}
       <div className="grid grid--2">
         <Field label="Assignment title" hint="Defaults to the test title.">
           {(id) => <TextInput id={id} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />}
@@ -873,6 +895,7 @@ interface AssignmentDetail {
   versionNumber: number;
   startAt: string | null;
   deadlineAt: string | null;
+  markingDeadlineAt: string | null;
   maxAttempts: number;
   timingPolicy: string;
   mode: string;
@@ -902,6 +925,8 @@ export function AssignmentPage() {
     [assignmentId],
   );
   const [editing, setEditing] = useState(false);
+  const [markingOpen,setMarkingOpen]=useState(false);
+  const [markingDeadline,setMarkingDeadline]=useState('');
   const [deadline, setDeadline] = useState('');
   const [maxAttempts, setMaxAttempts] = useState(1);
   const toast = useToast();
@@ -926,6 +951,7 @@ export function AssignmentPage() {
           </p>
         </div>
         <div className="row">
+          <Button onClick={()=>{setMarkingDeadline(data.markingDeadlineAt?toLocalInput(data.markingDeadlineAt):'');setMarkingOpen(true);}}>Hạn chấm bài</Button>
           <Button
             onClick={() => {
               setDeadline(data.deadlineAt ? toLocalInput(data.deadlineAt) : '');
@@ -954,7 +980,7 @@ export function AssignmentPage() {
         <Stat label="Assigned" value={data.report.length} />
         <Stat label="Submitted" value={submitted} hint={`${data.report.length ? Math.round((submitted / data.report.length) * 100) : 0}% completion`} />
         <Stat label="Deadline" value={data.deadlineAt ? formatDateTime(data.deadlineAt) : 'None'} />
-        <Stat label="Attempts allowed" value={data.maxAttempts} />
+        <Stat label="Hạn chấm bài" value={data.markingDeadlineAt ? formatDateTime(data.markingDeadlineAt) : 'Chưa đặt'} />
       </div>
 
       <Card title="Students" hint="Ordered by name. Integrity counts are observable events, not verdicts." flush>
@@ -1009,6 +1035,9 @@ export function AssignmentPage() {
         {data.report.length === 0 ? <EmptyState title="No students enrolled" /> : null}
       </Card>
 
+      <Modal open={markingOpen} title="Hạn chấm bài" onClose={()=>setMarkingOpen(false)} actions={<><Button onClick={()=>setMarkingOpen(false)}>Hủy</Button><Button variant="primary" onClick={async()=>{try{await api.put(`/api/teacher/assignments/${assignmentId}/marking-deadline`,{deadlineAt:markingDeadline?new Date(markingDeadline).toISOString():null});await reload();setMarkingOpen(false);toast.push('Đã cập nhật hạn chấm bài.','success');}catch(error){toast.push(describeError(error),'error');}}}>Lưu</Button></>}>
+        <Field label="Thời hạn chấm" hint="Hiện trên lịch của giáo viên lớp. Để trống để xóa.">{id=><TextInput id={id} type="datetime-local" value={markingDeadline} onChange={e=>setMarkingDeadline(e.target.value)}/>}</Field>
+      </Modal>
       <Modal
         open={editing}
         title="Assignment settings"
@@ -1245,7 +1274,7 @@ export function StudentDetailPage() {
         {attempt.loading ? <Loading label="Loading attempt…" /> : null}
         {attempt.error ? <Notice tone="danger">{attempt.error}</Notice> : null}
         {attempt.data ? (
-          <ResultSummary result={attempt.data} marking={{ apiBase: '/api/teacher', onSaved: attempt.reload }} />
+          <ResultSummary result={attempt.data} viewerStaff marking={attempt.data.canMark?{ apiBase: '/api/teacher', onSaved: attempt.reload }:undefined} />
         ) : null}
       </Modal>
 

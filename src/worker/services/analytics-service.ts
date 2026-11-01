@@ -1,3 +1,4 @@
+import {assignmentEligible} from './assignment-audience';
 import {teacherAttemptScope} from './teacher-attempt-scope';
 import type { Env } from '../env';
 import type { Skill, TestType } from '../../shared/types';
@@ -133,7 +134,7 @@ export async function listStudentAssignments(env: Env, userId: string): Promise<
        JOIN tests t ON t.id = a.test_id
        JOIN test_versions v ON v.id = a.test_version_id
        JOIN classroom_members m ON m.classroom_id = a.classroom_id AND m.user_id = ? AND m.status = 'ACTIVE'
-      WHERE a.status IN ('ACTIVE')
+      WHERE a.status IN ('ACTIVE') AND ${assignmentEligible('a','m.user_id')}
       ORDER BY (a.deadline_at IS NULL), a.deadline_at, a.start_at`,
   )
     .bind(userId, userId, userId, userId, userId, userId, userId)
@@ -827,9 +828,9 @@ export async function getClassroomAnalytics(env: Env, classroomId: string): Prom
 
   const assignmentRows = await env.DB.prepare(
     `SELECT a.id, a.title, t.title AS test_title, t.type AS test_type, v.version_number, a.deadline_at,
-            (SELECT COUNT(*) FROM classroom_members m WHERE m.classroom_id = a.classroom_id AND m.status = 'ACTIVE' AND m.role = 'STUDENT') AS assigned_count,
-            (SELECT COUNT(DISTINCT x.user_id) FROM attempts x WHERE x.assignment_id = a.id AND x.status != 'ABANDONED') AS started_count,
-            (SELECT COUNT(DISTINCT x.user_id) FROM attempts x WHERE x.assignment_id = a.id AND x.status IN ('SUBMITTED','EXPIRED')) AS submitted_count,
+            (SELECT COUNT(*) FROM classroom_members m WHERE m.classroom_id = a.classroom_id AND m.status = 'ACTIVE' AND m.role = 'STUDENT' AND ${assignmentEligible('a','m.user_id')}) AS assigned_count,
+            (SELECT COUNT(DISTINCT x.user_id) FROM attempts x JOIN classroom_members m ON m.classroom_id=a.classroom_id AND m.user_id=x.user_id AND m.role='STUDENT' AND m.status='ACTIVE' WHERE x.assignment_id = a.id AND ${assignmentEligible('a','m.user_id')} AND x.status != 'ABANDONED') AS started_count,
+            (SELECT COUNT(DISTINCT x.user_id) FROM attempts x JOIN classroom_members m ON m.classroom_id=a.classroom_id AND m.user_id=x.user_id AND m.role='STUDENT' AND m.status='ACTIVE' WHERE x.assignment_id = a.id AND ${assignmentEligible('a','m.user_id')} AND x.status IN ('SUBMITTED','EXPIRED')) AS submitted_count,
             (SELECT AVG(x.raw_score) FROM attempts x WHERE x.assignment_id = a.id AND x.status IN ('SUBMITTED','EXPIRED')) AS avg_raw,
             (SELECT AVG(x.total_questions) FROM attempts x WHERE x.assignment_id = a.id AND x.status IN ('SUBMITTED','EXPIRED')) AS avg_total,
             (SELECT AVG(x.estimated_band) FROM attempts x WHERE x.assignment_id = a.id AND x.estimated_band IS NOT NULL) AS avg_band,

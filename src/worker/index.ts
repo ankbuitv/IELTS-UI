@@ -1,6 +1,7 @@
 import type { Env, ImportQueueMessage } from './env';
 import { createApp } from './app';
 import { pruneRateLimits } from './lib/rate-limit';
+import {sendWorksheetReminders} from './services/worksheet-reminder-service';
 import { sendAssignmentReminders } from './services/assignment-reminder-service';
 import { runWeeklyDigests } from './services/digest-service';
 import { runImportStage } from './services/import-service';
@@ -35,6 +36,7 @@ export default {
       (async () => {
         await pruneRateLimits(env);
         await sendAssignmentReminders(env,new Date(controller.scheduledTime)).catch((error)=>console.error('assignment_reminders_failed',(error as Error).message));
+        await sendWorksheetReminders(env,new Date(controller.scheduledTime)).catch((error)=>console.error('worksheet_reminders_failed',(error as Error).message));
         // Monday 08:00 Vietnam time (01:00 UTC): the weekly recap email.
         if (!controller.cron || controller.cron === '0 1 * * 1') {
           await runWeeklyDigests(env).catch((error) => console.error('digest_failed', (error as Error).message));

@@ -14,3 +14,5 @@ export async function createFeedbackTemplate(env:Env,user:AuthUser,title:string,
 export async function deleteFeedbackTemplate(env:Env,user:AuthUser,id:string) {
  const result=await env.DB.prepare('DELETE FROM teacher_feedback_templates WHERE id=? AND author_id=?').bind(id,user.id).run();if(!result.meta.changes)throw ApiError.notFound();
 }
+
+export async function updateFeedbackTemplate(env:Env,user:AuthUser,id:string,title:string,body:string) {const result=await env.DB.prepare('UPDATE teacher_feedback_templates SET title=?,body=? WHERE id=? AND author_id=?').bind(title,body,id,user.id).run();if(!result.meta.changes)throw ApiError.notFound();}

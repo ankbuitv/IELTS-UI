@@ -1,3 +1,4 @@
+import {studentWritingReview,submitWritingRevision} from '../services/writing-revision-service';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
@@ -287,6 +288,9 @@ router.post('/:id/submit', async (c) => {
 
   return c.json(result);
 });
+
+router.get('/:id/writing/:submissionId/review',async c=>c.json(await studentWritingReview(c.env,currentUser(c),c.req.param('id'),c.req.param('submissionId'))));
+router.post('/:id/writing/:submissionId/revision',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({response:z.string().trim().min(1).max(20000)}));await submitWritingRevision(c.env,currentUser(c),c.req.param('id'),c.req.param('submissionId'),body.response);return c.json({ok:true});});
 
 router.get('/:id/result', async (c) => {
   const user = currentUser(c);

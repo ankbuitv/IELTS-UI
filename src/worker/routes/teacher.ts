@@ -26,6 +26,14 @@ import {
   updateAssignment,
   updateClassroom,
 } from '../services/teacher-service';
+import {setQuestionFeedback} from '../services/question-feedback-service';
+import {listTeachingSchedule,createTeachingEvent,deleteTeachingEvent} from '../services/class-teaching-schedule-service';
+import {teacherWritingReview,saveWritingReview} from '../services/writing-revision-service';
+import {createWorksheet,listTeacherWorksheets,teacherWorksheetDetail,teacherWorksheetVersions,closeWorksheet,saveWorksheetFeedback} from '../services/class-worksheet-service';
+import {listRubrics,createRubric,updateRubric,deleteRubric} from '../services/teacher-rubrics-service';
+import {classDuties,listDuties,setDuties,requireTeacherAttempt} from '../services/co-teacher-duties-service';
+import {listTeacherSupport,createSupportSlot,cancelTeacherSlot} from '../services/teacher-support-service';
+import {setMarkingDeadline} from '../services/marking-deadline-service';
 import {teacherAttemptScope} from '../services/teacher-attempt-scope';
 import { getClassroomAnalytics, getSkillPerformance, getTaskTypePerformance, getTrends, listAttempts } from '../services/analytics-service';
 import { buildResultView } from '../services/attempt-service';
@@ -39,7 +47,7 @@ import {readTermReport,saveTermReport,releaseTermReport} from '../services/class
 import {classStudentProgress} from '../services/teacher-student-progress-service';
 import {listResources,createResource,updateResource,deleteResource,readOwnResource} from '../services/teacher-resources-service';
 import { listQuestions,createQuestion,updateQuestion,deleteQuestion } from '../services/teacher-question-bank-service';
-import { listFeedbackTemplates,createFeedbackTemplate,deleteFeedbackTemplate } from '../services/teacher-feedback-templates-service';
+import { listFeedbackTemplates,createFeedbackTemplate,deleteFeedbackTemplate,updateFeedbackTemplate } from '../services/teacher-feedback-templates-service';
 import { readSeating, saveSeating } from '../services/teacher-seating-service';
 import { listPrivateNotes, savePrivateNote } from '../services/teacher-private-notes-service';
 import { EXAM_MODES, RESULT_VISIBILITIES, TIMING_POLICIES } from '../../shared/types';
@@ -68,8 +76,15 @@ router.post('/questions',async c=>{assertCsrf(c,c.get('session')?.csrfToken??nul
 router.put('/questions/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,questionSchema);await updateQuestion(c.env,currentUser(c),c.req.param('id'),body);return c.json({ok:true});});
 router.delete('/questions/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteQuestion(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
 
+const rubricSchema=z.object({skill:z.enum(['WRITING','SPEAKING']),title:z.string().trim().min(1).max(100),criteria:z.array(z.string().trim().min(1).max(60)).min(1).max(8)});
+router.get('/rubrics',async c=>{const skill=z.enum(['WRITING','SPEAKING']).safeParse(c.req.query('skill'));if(!skill.success)throw ApiError.validation('Kỹ năng không hợp lệ.');return c.json({rubrics:await listRubrics(c.env,currentUser(c),skill.data)});});
+router.post('/rubrics',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);return c.json({id:await createRubric(c.env,currentUser(c),await parseBody(c,rubricSchema))},201);});
+router.put('/rubrics/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await updateRubric(c.env,currentUser(c),c.req.param('id'),await parseBody(c,rubricSchema));return c.json({ok:true});});
+router.delete('/rubrics/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteRubric(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
+
 router.get('/feedback-templates',async c=>c.json({templates:await listFeedbackTemplates(c.env,currentUser(c))}));
 router.post('/feedback-templates',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(100),body:z.string().trim().min(1).max(3000)}));return c.json({id:await createFeedbackTemplate(c.env,currentUser(c),body.title,body.body)},201);});
+router.put('/feedback-templates/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(100),body:z.string().trim().min(1).max(3000)}));await updateFeedbackTemplate(c.env,currentUser(c),c.req.param('id'),body.title,body.body);return c.json({ok:true});});
 router.delete('/feedback-templates/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteFeedbackTemplate(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
 
 router.get('/progress', async c => c.json({assignments:await teacherProgress(c.env,currentUser(c))}));
@@ -79,6 +94,24 @@ router.put('/classrooms/:id/seating', async c=>{assertCsrf(c,c.get('session')?.c
 
 router.get('/classrooms/:id/private-notes', async c=>c.json(await listPrivateNotes(c.env,currentUser(c),c.req.param('id'))));
 router.put('/classrooms/:id/private-notes/:studentId', async c=>{assertCsrf(c,c.get('session')?.csrfToken ?? null);const body=await parseBody(c,z.object({body:z.string().max(4000)}));await savePrivateNote(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'),body.body);return c.json({ok:true});});
+
+router.get('/classrooms/:id/schedule',async c=>c.json({events:await listTeachingSchedule(c.env,currentUser(c),c.req.param('id'))}));
+router.post('/classrooms/:id/schedule',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(150),startsAt:z.string().datetime(),endsAt:z.string().datetime()}));return c.json(await createTeachingEvent(c.env,currentUser(c),c.req.param('id'),body),201);});
+router.delete('/classrooms/:id/schedule/:eventId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteTeachingEvent(c.env,currentUser(c),c.req.param('id'),c.req.param('eventId'));return c.json({ok:true});});
+
+router.get('/classrooms/:id/worksheets',async c=>c.json({worksheets:await listTeacherWorksheets(c.env,currentUser(c),c.req.param('id'))}));
+router.post('/classrooms/:id/worksheets',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(150),deadlineAt:z.string().datetime().nullable(),questionIds:z.array(z.string().min(1)).min(1).max(20)}));return c.json(await createWorksheet(c.env,currentUser(c),c.req.param('id'),body),201);});
+router.get('/classrooms/:id/worksheets/:worksheetId',async c=>c.json(await teacherWorksheetDetail(c.env,currentUser(c),c.req.param('id'),c.req.param('worksheetId'))));
+router.get('/classrooms/:id/worksheets/:worksheetId/students/:studentId',async c=>c.json({versions:await teacherWorksheetVersions(c.env,currentUser(c),c.req.param('id'),c.req.param('worksheetId'),c.req.param('studentId'))}));
+router.post('/classrooms/:id/worksheets/:worksheetId/close',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await closeWorksheet(c.env,currentUser(c),c.req.param('id'),c.req.param('worksheetId'));return c.json({ok:true});});
+router.put('/classrooms/:id/worksheets/:worksheetId/versions/:versionId/feedback',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({comments:z.array(z.object({questionId:z.string().min(1),start:z.number().int().min(0),end:z.number().int().min(0),text:z.string().trim().min(1).max(2000)})).max(100),publish:z.boolean()}));await saveWorksheetFeedback(c.env,currentUser(c),c.req.param('id'),c.req.param('worksheetId'),c.req.param('versionId'),body.comments,body.publish);return c.json({ok:true});});
+
+router.get('/classrooms/:id/duties',async c=>c.json({members:await listDuties(c.env,currentUser(c),c.req.param('id'))}));
+router.put('/classrooms/:id/duties/:userId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({grading:z.boolean(),attendance:z.boolean(),resources:z.boolean()}));await setDuties(c.env,currentUser(c),c.req.param('id'),c.req.param('userId'),body);return c.json({ok:true});});
+
+router.get('/classrooms/:id/support',async c=>c.json({slots:await listTeacherSupport(c.env,currentUser(c),c.req.param('id'))}));
+router.post('/classrooms/:id/support',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({startsAt:z.string().datetime(),endsAt:z.string().datetime()}));return c.json(await createSupportSlot(c.env,currentUser(c),c.req.param('id'),body.startsAt,body.endsAt),201);});
+router.delete('/classrooms/:id/support/:slotId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await cancelTeacherSlot(c.env,currentUser(c),c.req.param('id'),c.req.param('slotId'));return c.json({ok:true});});
 
 router.get('/classrooms/:id/term-reports/:studentId',async c=>c.json(await readTermReport(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'))));
 router.put('/classrooms/:id/term-reports/:studentId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(150),fromDate:z.string().length(10),toDate:z.string().length(10),feedback:z.string().trim().max(4000)}));await saveTermReport(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'),body);return c.json({ok:true});});
@@ -117,11 +150,12 @@ router.get('/classrooms/:id', async (c) => {
   const user = currentUser(c);
   const classroomId = c.req.param('id');
   const classroom = await requireClassroomAccess(c.env, user, classroomId);
-  const [members, assignments, invites, analytics] = await Promise.all([
+  const [members, assignments, invites, analytics, duties] = await Promise.all([
     listClassroomMembers(c.env, classroomId),
     listAssignmentsForClassroom(c.env, classroomId),
     listInvites(c.env, classroomId),
     getClassroomAnalytics(c.env, classroomId),
+    classDuties(c.env,user,classroomId),
   ]);
   return c.json({
     classroom: {
@@ -130,6 +164,7 @@ router.get('/classrooms/:id', async (c) => {
       description: (await c.env.DB.prepare('SELECT description FROM classrooms WHERE id=?').bind(classroomId).first<{ description: string }>())?.description ?? '',
       status: classroom.status,
       isOwner: classroom.teacher_id === user.id,
+      duties,
     },
     members,
     assignments,
@@ -259,6 +294,7 @@ const assignmentSchema = z.object({
   integrityOverrides: z.record(z.string(), z.union([z.boolean(), z.number(), z.null()])).optional(),
   resultVisibility: z.enum(RESULT_VISIBILITIES).optional(),
   publish: z.boolean().optional(),
+  studentIds: z.array(z.string().min(1)).min(1).max(200).optional(),
 });
 
 router.post('/assignments', async (c) => {
@@ -282,10 +318,12 @@ router.get('/assignments/:id', async (c) => {
   return c.json(await getAssignmentDetail(c.env, user, c.req.param('id')));
 });
 
+router.put('/assignments/:id/marking-deadline',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({deadlineAt:z.string().datetime().nullable()}));await setMarkingDeadline(c.env,currentUser(c),c.req.param('id'),body.deadlineAt);return c.json({ok:true});});
+
 router.patch('/assignments/:id', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
-  const body = await parseBody(c, assignmentSchema.partial().omit({ classroomId: true, testVersionId: true }));
+  const body = await parseBody(c, assignmentSchema.partial().omit({ classroomId: true, testVersionId: true, studentIds: true }));
   await updateAssignment(c.env, user, c.req.param('id'), body);
   return c.json({ ok: true });
 });
@@ -335,7 +373,7 @@ router.get('/students/:userId', async (c) => {
          JOIN attempts a ON a.id = w.attempt_id
          JOIN tests t ON t.id = a.test_id
          LEFT JOIN writing_scores ws ON ws.writing_submission_id = w.id
-        WHERE a.user_id = ? AND TRIM(w.response_text) != '' ${teacherId?`AND ${teacherAttemptScope('a')}`:''}
+        WHERE a.user_id = ? AND TRIM(w.response_text) != '' ${teacherId?`AND ${teacherAttemptScope('a',true)}`:''}
         ORDER BY w.created_at DESC LIMIT 50`,
     )
       .bind(studentId,...scopedBindings)
@@ -424,9 +462,10 @@ router.get('/attempts/:attemptId', async (c) => {
     .first<import('../services/attempt-service').AttemptRow>();
   if (!attempt) throw ApiError.notFound('Attempt not found.');
 
-  await requireStudentAccess(c.env, user, attempt.user_id);
+  await requireTeacherAttempt(c.env,user,attempt.id);
   const view = await buildResultView(c.env, attempt, { includeReview: true, viewerIsStaff: true });
-  return c.json(view);
+  const canMark=user.role==='ADMIN'||!!(await c.env.DB.prepare(`SELECT 1 FROM attempts a WHERE a.id=? AND ${teacherAttemptScope('a',true)}`).bind(attempt.id,user.id,user.id).first());
+  return c.json({...view,canMark});
 });
 
 router.get('/classrooms/:id/analytics', async (c) => {
@@ -487,11 +526,16 @@ router.get('/classrooms/:id/students', async (c) => {
 });
 
 
+router.get('/writing-submissions/:submissionId/review',async c=>c.json(await teacherWritingReview(c.env,currentUser(c),c.req.param('submissionId'))));
+router.put('/writing-submissions/:submissionId/review',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({version:z.number().int().min(1).max(10),comments:z.array(z.object({start:z.number().int().min(0),end:z.number().int().min(0),text:z.string().trim().min(1).max(2000)})).max(100),publish:z.boolean()}));await saveWritingReview(c.env,currentUser(c),c.req.param('submissionId'),body.version,body.comments,body.publish);return c.json({ok:true});});
+
 router.get('/writing-queue', async (c) => {
   const user = currentUser(c);
   const unmarkedOnly = c.req.query('unmarked') === '1' || c.req.query('unmarked') === 'true';
   return c.json(await listWritingQueue(c.env, user, { unmarkedOnly }));
 });
+
+router.put('/attempts/:attemptId/question-feedback',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({questionId:z.string().min(1).max(100),body:z.string().max(2000)}));await setQuestionFeedback(c.env,currentUser(c),c.req.param('attemptId'),body.questionId,body.body);return c.json({ok:true});});
 
 router.post('/attempts/:attemptId/question-marks', async (c) => {
   const user = currentUser(c);
@@ -501,7 +545,7 @@ router.post('/attempts/:attemptId/question-marks', async (c) => {
     .bind(attemptId)
     .first<{ id: string; user_id: string }>();
   if (!attempt) throw ApiError.notFound('Attempt not found.');
-  await requireStudentAccess(c.env, user, attempt.user_id);
+  await requireTeacherAttempt(c.env,user,attempt.id,true);
 
   const body = await parseBody(
     c,
@@ -533,12 +577,12 @@ router.get('/writing-submissions/:submissionId/ai-draft', async (c) => {
   const user = currentUser(c);
   const submissionId = c.req.param('submissionId');
   const submission = await c.env.DB.prepare(
-    `SELECT w.id, a.user_id FROM writing_submissions w JOIN attempts a ON a.id = w.attempt_id WHERE w.id = ?`,
+    `SELECT w.id, a.user_id, a.id AS attempt_id FROM writing_submissions w JOIN attempts a ON a.id = w.attempt_id WHERE w.id = ?`,
   )
     .bind(submissionId)
-    .first<{ id: string; user_id: string }>();
+    .first<{ id: string; user_id: string; attempt_id:string }>();
   if (!submission) throw ApiError.notFound('Writing submission not found.');
-  await requireStudentAccess(c.env, user, submission.user_id);
+  await requireTeacherAttempt(c.env,user,submission.attempt_id,true);
   const marks = await loadWritingMarks(c.env, [submissionId]);
   return c.json({ mark: marks.get(submissionId) ?? null });
 });
@@ -547,12 +591,12 @@ router.post('/writing-submissions/:submissionId/ai-score', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const submission = await c.env.DB.prepare(
-    `SELECT w.id, a.user_id FROM writing_submissions w JOIN attempts a ON a.id = w.attempt_id WHERE w.id = ?`,
+    `SELECT w.id, a.user_id, a.id AS attempt_id FROM writing_submissions w JOIN attempts a ON a.id = w.attempt_id WHERE w.id = ?`,
   )
     .bind(c.req.param('submissionId'))
-    .first<{ id: string; user_id: string }>();
+    .first<{ id: string; user_id: string; attempt_id:string }>();
   if (!submission) throw ApiError.notFound('Writing submission not found.');
-  await requireStudentAccess(c.env, user, submission.user_id);
+  await requireTeacherAttempt(c.env,user,submission.attempt_id,true);
 
   const body = await parseBody(c, z.object({ force: z.boolean().optional() }).optional());
   let grade: Awaited<ReturnType<typeof scoreWritingSubmissionWithAi>>;
@@ -595,12 +639,12 @@ router.post('/writing-scores', async (c) => {
   );
 
   const submission = await c.env.DB.prepare(
-    `SELECT w.id, a.user_id FROM writing_submissions w JOIN attempts a ON a.id = w.attempt_id WHERE w.id = ?`,
+    `SELECT w.id, a.user_id, a.id AS attempt_id FROM writing_submissions w JOIN attempts a ON a.id = w.attempt_id WHERE w.id = ?`,
   )
     .bind(body.writingSubmissionId)
-    .first<{ id: string; user_id: string }>();
+    .first<{ id: string; user_id: string; attempt_id:string }>();
   if (!submission) throw ApiError.notFound('Writing submission not found.');
-  await requireStudentAccess(c.env, user, submission.user_id);
+  await requireTeacherAttempt(c.env,user,submission.attempt_id,true);
 
   const result = await setWritingScore(c.env, {
     writingSubmissionId: body.writingSubmissionId,

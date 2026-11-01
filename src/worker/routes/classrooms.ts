@@ -1,3 +1,6 @@
+import {listStudentWorksheets,studentWorksheetDetail,submitWorksheet} from '../services/class-worksheet-service';
+import {listStudentSupport,bookSupport,cancelStudentBooking} from '../services/teacher-support-service';
+import {assignmentEligible} from '../services/assignment-audience';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppBindings, Env } from '../env';
@@ -50,7 +53,7 @@ router.get('/classrooms/mine', requireAuth, async (c) => {
   const user = currentUser(c);
   const rows = await c.env.DB.prepare(
     `SELECT c.id, c.name, c.description, c.status, m.role, m.joined_at,
-            (SELECT COUNT(*) FROM assignments a WHERE a.classroom_id = c.id AND a.status = 'ACTIVE') AS active_assignments
+            (SELECT COUNT(*) FROM assignments a WHERE a.classroom_id = c.id AND a.status = 'ACTIVE' AND (m.role!='STUDENT' OR ${assignmentEligible('a','m.user_id')})) AS active_assignments
        FROM classroom_members m
        JOIN classrooms c ON c.id = m.classroom_id
       WHERE m.user_id = ? AND m.status = 'ACTIVE'
@@ -105,6 +108,14 @@ interface ChatMessage {
   attachmentUrl?: string | null;
   attachmentName?: string | null;
 }
+
+router.get('/classrooms/:classroomId/worksheets',async c=>c.json({worksheets:await listStudentWorksheets(c.env,currentUser(c),c.req.param('classroomId'))}));
+router.get('/classrooms/:classroomId/worksheets/:worksheetId',async c=>c.json(await studentWorksheetDetail(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('worksheetId'))));
+router.post('/classrooms/:classroomId/worksheets/:worksheetId/submit',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({answers:z.array(z.object({questionId:z.string().min(1),answer:z.string().max(8000)})).min(1).max(20)}));return c.json(await submitWorksheet(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('worksheetId'),body.answers),201);});
+
+router.get('/classrooms/:classroomId/support',async c=>c.json({slots:await listStudentSupport(c.env,currentUser(c),c.req.param('classroomId'))}));
+router.post('/classrooms/:classroomId/support/:slotId/book',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({note:z.string().trim().max(500).default('')}));await bookSupport(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('slotId'),body.note);return c.json({ok:true});});
+router.post('/classrooms/:classroomId/support/:slotId/cancel',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await cancelStudentBooking(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('slotId'));return c.json({ok:true});});
 
 router.get('/classrooms/:classroomId/term-reports',async c=>c.json({reports:await studentTermReports(c.env,currentUser(c),c.req.param('classroomId'))}));
 

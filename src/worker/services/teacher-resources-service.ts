@@ -1,3 +1,4 @@
+import {requireDuty} from './co-teacher-duties-service';
 import type {Env} from '../env';
 import type {AuthUser} from '../lib/auth-types';
 import {ApiError} from '../lib/errors';
@@ -6,6 +7,7 @@ import {requireClassroomAccess} from './teacher-service';
 
 async function validateShare(env:Env,user:AuthUser,classId:string|null) {
  if(!classId)return;
+ await requireDuty(env,user,classId,'resources');
  const classroom=await requireClassroomAccess(env,user,classId);
  if(classroom.status!=='ACTIVE')throw ApiError.conflict('Chỉ có thể chia sẻ vào lớp đang hoạt động.');
 }
@@ -35,7 +37,7 @@ async function canViewClass(env:Env,user:AuthUser,classId:string) {
  if(user.role!=='STUDENT')throw ApiError.forbidden();
  const membership=await env.DB.prepare("SELECT 1 FROM classroom_members WHERE classroom_id=? AND user_id=? AND role='STUDENT' AND status='ACTIVE'").bind(classId,user.id).first();if(!membership)throw ApiError.forbidden();
 }
-const sharedCondition=`r.shared_classroom_id=c.id AND (r.author_id=c.teacher_id OR EXISTS(SELECT 1 FROM users au WHERE au.id=r.author_id AND au.role='ADMIN' AND au.status='ACTIVE') OR EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=r.author_id AND m.role='CO_TEACHER' AND m.status='ACTIVE'))`;
+const sharedCondition=`r.shared_classroom_id=c.id AND (r.author_id=c.teacher_id OR EXISTS(SELECT 1 FROM users au WHERE au.id=r.author_id AND au.role='ADMIN' AND au.status='ACTIVE') OR EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=r.author_id AND m.role='CO_TEACHER' AND m.status='ACTIVE' AND COALESCE((SELECT d.can_resource FROM classroom_co_teacher_duties d WHERE d.member_id=m.id),1)=1))`;
 export async function listSharedResources(env:Env,user:AuthUser,classId:string) {
  await canViewClass(env,user,classId);
  return (await env.DB.prepare(`SELECT r.id,r.filename,r.subject,r.topic,r.bytes,r.created_at,COALESCE(p.display_name,u.email) AS author_name FROM teacher_resources r

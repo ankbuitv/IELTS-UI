@@ -14,6 +14,7 @@ import {
   createSpeakingSession,
   deleteSpeakingSession,
   listSpeakingQueue,
+  requireSpeakingMarking,
   listSpeakingSessions,
   loadSpeakingAudio,
   loadSpeakingSession,
@@ -129,6 +130,7 @@ router.post('/sessions/:id/score', requireRole('TEACHER', 'ADMIN'), async (c) =>
     z.object({
       band: z.number().min(0).max(9).nullable(),
       feedback: z.string().max(4000).optional(),
+      criteria:z.record(z.string().max(80),z.number().min(0).max(9)).optional(),
     }),
   );
   const session = await setSpeakingBand(c.env, currentUser(c), c.req.param('id'), body);
@@ -206,10 +208,8 @@ router.post('/sessions/:id/ai-mark', async (c) => {
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const sessionId = c.req.param('id');
   const body = await parseBody(c, z.object({ force: z.boolean().optional() }).optional());
-  if (user.role === 'STUDENT' || user.role === 'MENTOR') {
-    // Ownership check: throws unless the session is the candidate's own.
-    await loadSpeakingSession(c.env, user, sessionId);
-  }
+  if (user.role === 'TEACHER' || user.role === 'ADMIN') await requireSpeakingMarking(c.env,user,sessionId);
+  else await loadSpeakingSession(c.env,user,sessionId);
   await enforceRateLimit(
     c.env,
     { bucket: `ai-mark:${user.id}`, windowSeconds: 3600, limit: Number(c.env.AI_RATE_LIMIT_PER_HOUR || 30) },

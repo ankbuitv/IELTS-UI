@@ -1,3 +1,4 @@
+import {requireDuty} from './co-teacher-duties-service';
 import type { Env } from '../env';
 import type { AuthUser } from '../lib/auth-types';
 import { ApiError } from '../lib/errors';
@@ -11,6 +12,7 @@ export function validAttendanceDate(date:string) {
 }
 export async function readAttendance(env:Env,user:AuthUser,classId:string,date:string) {
   if(!validAttendanceDate(date))throw ApiError.validation('Ngày không hợp lệ.');
+  await requireDuty(env,user,classId,'attendance');
   const classroom=await requireClassroomAccess(env,user,classId);
   const students=await env.DB.prepare(`SELECT cm.user_id,u.email,p.display_name,cm.status AS member_status,a.status
     FROM classroom_members cm JOIN users u ON u.id=cm.user_id LEFT JOIN user_profiles p ON p.user_id=cm.user_id
@@ -22,6 +24,7 @@ export async function readAttendance(env:Env,user:AuthUser,classId:string,date:s
 }
 export async function saveAttendance(env:Env,user:AuthUser,classId:string,date:string,rows:Array<{studentId:string;status:'PRESENT'|'ABSENT'|'LATE'|'UNMARKED'}>) {
   if(!validAttendanceDate(date))throw ApiError.validation('Ngày không hợp lệ.');
+  await requireDuty(env,user,classId,'attendance');
   const classroom=await requireClassroomAccess(env,user,classId);
   if(classroom.status!=='ACTIVE')throw ApiError.conflict('Lớp đã lưu trữ; không thể sửa điểm danh.');
   if(new Set(rows.map(r=>r.studentId)).size!==rows.length)throw ApiError.validation('Danh sách học viên bị trùng.');

@@ -35,6 +35,10 @@ import {
   CALENDAR_PERSONAL_SQL,
   CALENDAR_SESSIONS_SQL,
   CALENDAR_TEACHER_DEADLINES_SQL,
+  CALENDAR_MARKING_DEADLINES_SQL,
+  CALENDAR_SUPPORT_SQL,
+  CALENDAR_TEACHING_SQL,
+  CALENDAR_WORKSHEET_DEADLINES_SQL,
   CALENDAR_STAFF_SCHOOL_EVENTS_SQL,
 } from './calendar-queries';
 import { getStudentInsights } from '../services/insights-service';
@@ -158,9 +162,17 @@ router.get('/calendar', async (c) => {
   const staff = user.role === 'TEACHER' || user.role === 'MENTOR' || user.role === 'ADMIN';
   const teacherDeadlines = user.role === 'TEACHER' || user.role === 'ADMIN'
     ? (await c.env.DB.prepare(CALENDAR_TEACHER_DEADLINES_SQL).bind(from,to,user.id,user.id).all<{id:string;title:string;deadline_at:string;classroom_name:string}>()).results : [];
+  const markingDeadlines=user.role==='TEACHER'||user.role==='ADMIN' ? (await c.env.DB.prepare(CALENDAR_MARKING_DEADLINES_SQL).bind(from,to,user.id,user.id).all<{id:string;title:string;deadline_at:string;classroom_name:string}>()).results : [];
+  const supportEvents=(await c.env.DB.prepare(CALENDAR_SUPPORT_SQL).bind(from,to,user.id,user.id).all<{id:string;starts_at:string;ends_at:string;classroom_name:string;status:string;teacher_id:string;student_id:string|null}>()).results;
+  const teachingEvents=(await c.env.DB.prepare(CALENDAR_TEACHING_SQL).bind(from,to,user.id,user.id).all<{id:string;title:string;starts_at:string;ends_at:string;classroom_name:string}>()).results;
+  const worksheetDeadlines=(await c.env.DB.prepare(CALENDAR_WORKSHEET_DEADLINES_SQL).bind(from,to,user.id,user.id).all<{id:string;title:string;deadline_at:string;classroom_name:string}>()).results;
   const schoolEvents = staff
     ? (await c.env.DB.prepare(CALENDAR_STAFF_SCHOOL_EVENTS_SQL).bind(user.id,from,to).all<{id:string;title:string;description:string;starts_at:string;ends_at:string;school_name:string}>()).results : [];
   const events = [
+    ...worksheetDeadlines.map(row=>({kind:'DEADLINE' as const,id:`worksheet:${row.id}`,title:`Hạn nộp · ${row.title}`,note:`Lớp ${row.classroom_name}`,startsAt:row.deadline_at,endsAt:row.deadline_at})),
+    ...teachingEvents.map(row=>({kind:'CLASS' as const,id:`teaching-event:${row.id}`,title:row.title,note:`Lớp ${row.classroom_name}`,startsAt:row.starts_at,endsAt:row.ends_at})),
+    ...supportEvents.map(row=>({kind:'CLASS' as const,id:`support:${row.id}`,title:row.teacher_id===user.id?(row.status==='BOOKED'?'Lịch hỗ trợ đã đặt':'Khung giờ hỗ trợ'):'Lịch hỗ trợ với giáo viên',note:`Lớp ${row.classroom_name}`,startsAt:row.starts_at,endsAt:row.ends_at})),
+    ...markingDeadlines.map(row=>({kind:'DEADLINE' as const,id:`marking:${row.id}`,title:`Hạn chấm · ${row.title}`,note:`Lớp ${row.classroom_name}`,startsAt:row.deadline_at,endsAt:row.deadline_at})),
     ...teacherDeadlines.map(row=>({kind:'DEADLINE' as const,id:`teaching:${row.id}`,title:`Hạn nộp · ${row.title}`,note:`Lớp ${row.classroom_name}`,startsAt:row.deadline_at,endsAt:row.deadline_at})),
     ...schoolEvents.map(row=>({kind:'CLASS' as const,id:`school:${row.id}`,title:row.title,note:`${row.school_name}${row.description ? ` · ${row.description}` : ''}`,startsAt:row.starts_at,endsAt:row.ends_at})),
     ...personal.results.map((row) => ({

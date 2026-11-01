@@ -1,3 +1,4 @@
+import {assignmentEligible} from './assignment-audience';
 import type { Env } from '../env';
 import { ApiError } from '../lib/errors';
 import { newId, nowIso, parseJson } from '../lib/ids';
@@ -16,6 +17,7 @@ export interface ClassroomView {
   studentCount: number;
   assignmentCount: number;
   isOwner: boolean;
+  canShareResources: boolean;
 }
 
 /**
@@ -54,14 +56,15 @@ export async function listClassroomsForTeacher(env: Env, user: AuthUser): Promis
   const rows = await env.DB.prepare(
     `SELECT c.id, c.name, c.description, c.join_code, c.status, c.created_at, c.teacher_id,
             (SELECT COUNT(*) FROM classroom_members m WHERE m.classroom_id = c.id AND m.status = 'ACTIVE' AND m.role = 'STUDENT') AS student_count,
-            (SELECT COUNT(*) FROM assignments a WHERE a.classroom_id = c.id AND a.status != 'ARCHIVED') AS assignment_count
+            (SELECT COUNT(*) FROM assignments a WHERE a.classroom_id = c.id AND a.status != 'ARCHIVED') AS assignment_count,
+            COALESCE((SELECT d.can_resource FROM classroom_members cm JOIN classroom_co_teacher_duties d ON d.member_id=cm.id WHERE cm.classroom_id=c.id AND cm.user_id=? AND cm.role='CO_TEACHER' AND cm.status='ACTIVE'),1) AS can_share_resources
        FROM classrooms c
       WHERE c.teacher_id = ?
          OR EXISTS (SELECT 1 FROM classroom_members m2
                      WHERE m2.classroom_id = c.id AND m2.user_id = ? AND m2.role = 'CO_TEACHER' AND m2.status = 'ACTIVE')
       ORDER BY (c.status = 'ARCHIVED'), c.created_at DESC`,
   )
-    .bind(user.id, user.id)
+    .bind(user.id,user.id, user.id)
     .all<{
       id: string;
       name: string;
@@ -72,6 +75,7 @@ export async function listClassroomsForTeacher(env: Env, user: AuthUser): Promis
       teacher_id: string;
       student_count: number;
       assignment_count: number;
+      can_share_resources: number;
     }>();
 
   return rows.results.map((row) => ({
@@ -84,6 +88,7 @@ export async function listClassroomsForTeacher(env: Env, user: AuthUser): Promis
     studentCount: row.student_count,
     assignmentCount: row.assignment_count,
     isOwner: row.teacher_id === user.id,
+    canShareResources: row.teacher_id===user.id||user.role==='ADMIN'||!!row.can_share_resources,
   }));
 }
 
@@ -113,6 +118,7 @@ export async function createClassroom(
     studentCount: 0,
     assignmentCount: 0,
     isOwner: true,
+    canShareResources: true,
   };
 }
 
@@ -432,6 +438,7 @@ export interface AssignmentInput {
   integrityOverrides?: Partial<IntegrityPolicy> | null;
   resultVisibility?: ResultVisibility;
   publish?: boolean;
+  studentIds?: string[];
 }
 
 export const INTEGRITY_OVERRIDE_KEYS = [
@@ -471,7 +478,8 @@ export async function createAssignment(
   user: AuthUser,
   input: AssignmentInput,
 ): Promise<{ assignmentId: string }> {
-  await requireClassroomAccess(env, user, input.classroomId);
+  const classroom=await requireClassroomAccess(env, user, input.classroomId);
+  if(classroom.status!=='ACTIVE')throw ApiError.conflict('Archived classrooms are read-only.');
 
   const version = await env.DB.prepare(
     `SELECT v.id, v.status, v.test_id, t.title AS test_title, t.status AS test_status
@@ -496,7 +504,9 @@ export async function createAssignment(
   const timestamp = nowIso();
   const mode: ExamMode = input.mode ?? 'STANDARD_EXAM';
 
-  await env.DB.prepare(
+  const selected=input.studentIds;
+  if(selected && (!selected.length || selected.length>200 || new Set(selected).size!==selected.length)) throw ApiError.validation('Choose 1–200 distinct students.');
+  const create=env.DB.prepare(
     `INSERT INTO assignments (id, classroom_id, teacher_id, test_id, test_version_id, title, instructions,
                               start_at, deadline_at, max_attempts, timing_policy, custom_duration_seconds, mode,
                               integrity_policy_json, result_visibility, allow_reattempt, status, created_at, updated_at)
@@ -521,8 +531,21 @@ export async function createAssignment(
       input.publish === false ? 'DRAFT' : 'ACTIVE',
       timestamp,
       timestamp,
-    )
-    .run();
+    );
+
+  if(selected) {
+    const ids=JSON.stringify(selected);
+    // The CHECK constraint makes membership validation part of the same atomic D1 batch.
+    try { await env.DB.batch([create,
+      env.DB.prepare(`INSERT INTO assignment_audiences(assignment_id,expected_count,verified_count)
+       SELECT ?,?,COUNT(DISTINCT m.user_id) FROM classroom_members m JOIN users u ON u.id=m.user_id AND u.status='ACTIVE'
+       WHERE m.classroom_id=? AND m.role='STUDENT' AND m.status='ACTIVE' AND m.user_id IN (SELECT value FROM json_each(?))`).bind(id,selected.length,input.classroomId,ids),
+      env.DB.prepare(`INSERT INTO assignment_audience_students(assignment_id,student_id) SELECT ?,value FROM json_each(?)`).bind(id,ids),
+    ]); } catch(error) {
+      if((error as Error).message.includes('CHECK constraint failed')) throw ApiError.validation('One or more selected students are no longer active members of the class.');
+      throw error;
+    }
+  } else await create.run();
 
   return { assignmentId: id };
 }
@@ -615,6 +638,7 @@ export interface AssignmentDetail {
   versionNumber: number;
   startAt: string | null;
   deadlineAt: string | null;
+  markingDeadlineAt: string | null;
   maxAttempts: number;
   timingPolicy: string;
   customDurationSeconds: number | null;
@@ -645,11 +669,12 @@ export async function getAssignmentDetail(
   assignmentId: string,
 ): Promise<AssignmentDetail> {
   const assignment = await env.DB.prepare(
-    `SELECT a.*, c.name AS classroom_name, t.title AS test_title, t.type AS test_type, v.version_number
+    `SELECT a.*, c.name AS classroom_name, t.title AS test_title, t.type AS test_type, v.version_number, md.deadline_at AS marking_deadline_at
        FROM assignments a
        JOIN classrooms c ON c.id = a.classroom_id
        JOIN tests t ON t.id = a.test_id
        JOIN test_versions v ON v.id = a.test_version_id
+       LEFT JOIN assignment_marking_deadlines md ON md.assignment_id=a.id
       WHERE a.id = ?`,
   )
     .bind(assignmentId)
@@ -666,6 +691,7 @@ export async function getAssignmentDetail(
       version_number: number;
       start_at: string | null;
       deadline_at: string | null;
+      marking_deadline_at: string | null;
       max_attempts: number;
       timing_policy: string;
       custom_duration_seconds: number | null;
@@ -696,6 +722,7 @@ export async function getAssignmentDetail(
        JOIN users u ON u.id = m.user_id
        LEFT JOIN user_profiles p ON p.user_id = m.user_id
       WHERE m.classroom_id = ? AND m.status = 'ACTIVE' AND m.role = 'STUDENT'
+        AND ${assignmentEligible('{id}', 'm.user_id').replaceAll('{id}.id', '?')}
       ORDER BY p.display_name, u.email`,
   )
     .bind(
@@ -709,6 +736,7 @@ export async function getAssignmentDetail(
       assignmentId,
       assignmentId,
       assignment.classroom_id,
+      assignmentId, assignmentId,
     )
     .all<{
       user_id: string;
@@ -741,6 +769,7 @@ export async function getAssignmentDetail(
     versionNumber: assignment.version_number,
     startAt: assignment.start_at,
     deadlineAt: assignment.deadline_at,
+    markingDeadlineAt: assignment.marking_deadline_at,
     maxAttempts: assignment.max_attempts,
     timingPolicy: assignment.timing_policy,
     customDurationSeconds: assignment.custom_duration_seconds,

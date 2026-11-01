@@ -1,3 +1,5 @@
+import {teacherAttemptScope} from './teacher-attempt-scope';
+import {requireTeacherAttempt} from './co-teacher-duties-service';
 import type { Env } from '../env';
 import { describeAiFailure } from '../ai/failure';
 import { ApiError } from '../lib/errors';
@@ -64,6 +66,7 @@ export interface SpeakingSessionView {
     hasAudio: boolean;
   }>;
   score: AiMarkView | null;
+  teacherRubric: Record<string,number>;
 }
 
 /** Catalog set first, else the session's own snapshot (custom/AI topics). */
@@ -139,7 +142,7 @@ export async function saveSpeakingResponse(
   sessionId: string,
   input: SpeakingResponseInput,
 ): Promise<SpeakingSessionView> {
-  const session = await requireOwnedSession(env, user, sessionId);
+  const session = await requireCandidateOwnedSession(env, user, sessionId);
   if (session.status === 'MARKED') {
     throw ApiError.conflict('This session has already been marked and cannot be changed.');
   }
@@ -207,7 +210,7 @@ export async function submitSpeakingSession(
   sessionId: string,
   options: { force?: boolean } = {},
 ): Promise<SpeakingSessionView & { aiError: string | null }> {
-  await requireOwnedSession(env, user, sessionId);
+  await requireCandidateOwnedSession(env, user, sessionId);
 
   let aiError: string | null = null;
   try {
@@ -267,22 +270,7 @@ export async function listSpeakingQueue(
   options: { unmarkedOnly?: boolean; limit?: number } = {},
 ): Promise<{ sessions: SpeakingQueueItem[]; unmarkedCount: number }> {
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
-  const teacherFilter =
-    user.role === 'ADMIN'
-      ? ''
-      : `AND (
-           EXISTS (
-             SELECT 1 FROM classroom_members student
-             JOIN classrooms c ON c.id = student.classroom_id
-            WHERE student.user_id = s.user_id AND student.status = 'ACTIVE'
-              AND (c.teacher_id = ?
-                   OR EXISTS (
-                     SELECT 1 FROM classroom_members ct
-                      WHERE ct.classroom_id = c.id AND ct.user_id = ?
-                        AND ct.role = 'CO_TEACHER' AND ct.status = 'ACTIVE'
-                   ))
-           )
-         )`;
+  const teacherFilter = user.role === 'ADMIN' ? '' : `AND EXISTS(SELECT 1 FROM attempts a WHERE a.id=s.source_attempt_id AND ${teacherAttemptScope('a',true)})`;
   const unmarkedFilter = options.unmarkedOnly ? 'AND s.overall_band IS NULL' : '';
   const bindings = user.role === 'ADMIN' ? [] : [user.id, user.id];
 
@@ -359,15 +347,15 @@ export async function setSpeakingBand(
   env: Env,
   user: AuthUser,
   sessionId: string,
-  input: { band: number | null; feedback?: string },
+  input: { band: number | null; feedback?: string; criteria?:Record<string,number> },
 ): Promise<SpeakingSessionView> {
-  const session = await requireOwnedSession(env, user, sessionId);
+  const session = await requireSpeakingMarking(env, user, sessionId);
   const band =
     input.band === null || Number.isNaN(input.band)
       ? null
       : Math.min(9, Math.max(0, Math.round(input.band * 2) / 2));
   const timestamp = nowIso();
-  await env.DB.prepare(
+  const update=env.DB.prepare(
     `UPDATE speaking_sessions
         SET overall_band = ?, feedback = ?, score_source = ?, scored_by = ?, scored_at = ?, marked_at = ?,
             status = CASE WHEN ? IS NULL THEN 'SUBMITTED' ELSE 'MARKED' END, updated_at = ?
@@ -383,13 +371,13 @@ export async function setSpeakingBand(
       band,
       timestamp,
       session.id,
-    )
-    .run();
+    );
+  await env.DB.batch([update,env.DB.prepare(`INSERT INTO teacher_speaking_rubric_scores(session_id,criteria_json,updated_by,updated_at) VALUES(?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET criteria_json=excluded.criteria_json,updated_by=excluded.updated_by,updated_at=excluded.updated_at`).bind(session.id,JSON.stringify(input.criteria??{}),user.id,timestamp)]);
   return requireSession(env, user, sessionId);
 }
 
 export async function deleteSpeakingSession(env: Env, user: AuthUser, sessionId: string): Promise<void> {
-  const session = await requireOwnedSession(env, user, sessionId);
+  const session = await requireCandidateOwnedSession(env, user, sessionId);
   await env.DB.prepare('DELETE FROM speaking_sessions WHERE id = ?').bind(session.id).run();
 }
 
@@ -414,18 +402,22 @@ async function requireOwnedSession(
   env: Env,
   user: AuthUser,
   sessionId: string,
-): Promise<{ id: string; user_id: string; status: string; topic_set_id: string; topic_json: string | null }> {
+): Promise<{ id: string; user_id: string; status: string; topic_set_id: string; topic_json: string | null;source_attempt_id:string|null }> {
   const session = await env.DB.prepare(
-    'SELECT id, user_id, status, topic_set_id, topic_json FROM speaking_sessions WHERE id = ?',
+    'SELECT id, user_id, status, topic_set_id, topic_json, source_attempt_id FROM speaking_sessions WHERE id = ?',
   )
     .bind(sessionId)
-    .first<{ id: string; user_id: string; status: string; topic_set_id: string; topic_json: string | null }>();
+    .first<{ id: string; user_id: string; status: string; topic_set_id: string; topic_json: string | null; source_attempt_id:string|null }>();
   if (!session) throw ApiError.notFound('Speaking session not found.');
-  if (session.user_id !== user.id && (user.role === 'STUDENT' || user.role === 'MENTOR')) {
-    throw ApiError.forbidden('That speaking session belongs to another candidate.');
+  if(session.user_id!==user.id && user.role!=='ADMIN'){
+    if(user.role!=='TEACHER'||!session.source_attempt_id)throw ApiError.forbidden('That speaking session belongs to another candidate.');
+    await requireTeacherAttempt(env,user,session.source_attempt_id);
   }
   return session;
 }
+
+async function requireCandidateOwnedSession(env:Env,user:AuthUser,sessionId:string){const session=await requireOwnedSession(env,user,sessionId);if(session.user_id!==user.id&&user.role!=='ADMIN')throw ApiError.forbidden('Only the candidate can change this response.');return session;}
+export async function requireSpeakingMarking(env:Env,user:AuthUser,sessionId:string){const session=await requireOwnedSession(env,user,sessionId);if(user.role!=='ADMIN'){if(user.role!=='TEACHER'||!session.source_attempt_id)throw ApiError.forbidden();await requireTeacherAttempt(env,user,session.source_attempt_id,true);}return session;}
 
 async function requireSession(env: Env, user: AuthUser, sessionId: string): Promise<SpeakingSessionView> {
   const session = await requireOwnedSession(env, user, sessionId);
@@ -486,6 +478,7 @@ async function requireSession(env: Env, user: AuthUser, sessionId: string): Prom
       hasAudio: response.has_audio === 1,
     })),
     score: await loadSpeakingScore(env, session.id),
+    teacherRubric: parseJson<Record<string,number>>((await env.DB.prepare('SELECT criteria_json FROM teacher_speaking_rubric_scores WHERE session_id=?').bind(session.id).first<{criteria_json:string}>())?.criteria_json ?? '{}',{}),
   };
 }
 

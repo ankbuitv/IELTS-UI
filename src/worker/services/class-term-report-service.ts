@@ -1,3 +1,4 @@
+import {assignmentEligible} from './assignment-audience';
 import type {Env} from '../env';
 import type {AuthUser} from '../lib/auth-types';
 import {ApiError} from '../lib/errors';
@@ -30,7 +31,7 @@ export async function releaseTermReport(env:Env,user:AuthUser,classId:string,stu
  FROM classroom_attendance WHERE classroom_id=? AND student_id=? AND attendance_date>=? AND attendance_date<=?`).bind(classId,studentId,draft.from_date,draft.to_date).first();
  const assignments=await env.DB.prepare(`SELECT COUNT(*) AS assigned,COUNT(t.id) AS submitted,AVG(t.estimated_band) AS average_band FROM assignments a
  LEFT JOIN attempts t ON t.id=(SELECT x.id FROM attempts x WHERE x.assignment_id=a.id AND x.user_id=? AND x.status IN ('SUBMITTED','EXPIRED') AND x.submitted_at<date(?,'+1 day') ORDER BY x.submitted_at DESC,x.id DESC LIMIT 1)
- WHERE a.classroom_id=? AND a.status IN ('ACTIVE','CLOSED') AND a.deadline_at>=? AND a.deadline_at<date(?,'+1 day')`).bind(studentId,draft.to_date,classId,draft.from_date,draft.to_date).first();
+ WHERE a.classroom_id=? AND ${assignmentEligible('a','?')} AND a.status IN ('ACTIVE','CLOSED') AND a.deadline_at>=? AND a.deadline_at<date(?,'+1 day')`).bind(studentId,draft.to_date,classId,studentId,draft.from_date,draft.to_date).first();
  const summary=JSON.stringify({attendance,assignments});const id=newId('trp'),now=nowIso(),notificationId=newId('ntf',16);
  const result=await env.DB.batch([
   env.DB.prepare(`INSERT INTO class_term_report_releases(id,classroom_id,student_id,title,from_date,to_date,feedback,summary_json,approved_by,approved_at)

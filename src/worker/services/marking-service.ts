@@ -1,3 +1,4 @@
+import {teacherAttemptScope} from './teacher-attempt-scope';
 import type { Env } from '../env';
 import { ApiError } from '../lib/errors';
 import { newId, nowIso, parseJson } from '../lib/ids';
@@ -542,6 +543,7 @@ export interface WritingQueueItem {
   feedback: string;
   scoringSource: string | null;
   criteria: Record<string, number>;
+  needsRevisionReview:boolean;
 }
 
 /** Writing responses waiting for (or already given) a human band. */
@@ -551,31 +553,17 @@ export async function listWritingQueue(
   options: { unmarkedOnly?: boolean; limit?: number } = {},
 ): Promise<{ submissions: WritingQueueItem[]; unmarkedCount: number }> {
   const limit = Math.min(Math.max(options.limit ?? 100, 1), 200);
-  const teacherFilter =
-    user.role === 'ADMIN'
-      ? ''
-      : `AND (
-           EXISTS (
-             SELECT 1 FROM classroom_members student
-             JOIN classrooms c ON c.id = student.classroom_id
-            WHERE student.user_id = a.user_id AND student.status = 'ACTIVE'
-              AND (c.teacher_id = ?
-                   OR EXISTS (
-                     SELECT 1 FROM classroom_members ct
-                      WHERE ct.classroom_id = c.id AND ct.user_id = ?
-                        AND ct.role = 'CO_TEACHER' AND ct.status = 'ACTIVE'
-                   ))
-           )
-           OR a.assignment_id IN (SELECT id FROM assignments WHERE teacher_id = ?)
-         )`;
-  const unmarkedFilter = options.unmarkedOnly ? 'AND (ws.id IS NULL OR ws.band IS NULL)' : '';
-  const bindings = user.role === 'ADMIN' ? [] : [user.id, user.id, user.id];
+  const teacherFilter = user.role === 'ADMIN' ? '' : `AND ${teacherAttemptScope('a',true)}`;
+  const revisionPending="EXISTS(SELECT 1 FROM writing_review_versions rv WHERE rv.writing_submission_id=w.id AND rv.version>1 AND rv.state='SUBMITTED' AND rv.version=(SELECT MAX(rv2.version) FROM writing_review_versions rv2 WHERE rv2.writing_submission_id=w.id))";
+  const needsAttention=`(ws.id IS NULL OR ws.band IS NULL OR ws.scoring_source='AI' OR ${revisionPending})`;
+  const unmarkedFilter = options.unmarkedOnly ? `AND ${needsAttention}` : '';
+  const bindings = user.role === 'ADMIN' ? [] : [user.id, user.id];
 
   const rows = await env.DB.prepare(
     `SELECT w.id, w.attempt_id, w.task_label, w.word_count, w.response_text, w.submitted_at, w.prompt_snapshot,
             a.user_id, a.status AS attempt_status, a.test_type,
             t.title AS test_title, u.email, p.display_name,
-            ws.band, ws.feedback, ws.scoring_source, ws.criteria_json
+            ws.band, ws.feedback, ws.scoring_source, ws.criteria_json, ${revisionPending} AS revision_pending
        FROM writing_submissions w
        JOIN attempts a ON a.id = w.attempt_id
        JOIN tests t ON t.id = a.test_id
@@ -608,6 +596,7 @@ export async function listWritingQueue(
       feedback: string | null;
       scoring_source: string | null;
       criteria_json: string | null;
+      revision_pending: number;
     }>();
 
   const unmarked = await env.DB.prepare(
@@ -617,7 +606,7 @@ export async function listWritingQueue(
        LEFT JOIN writing_scores ws ON ws.writing_submission_id = w.id
       WHERE TRIM(w.response_text) != ''
         AND a.status IN ('SUBMITTED', 'EXPIRED')
-        AND (ws.id IS NULL OR ws.band IS NULL)
+        AND ${needsAttention}
         ${teacherFilter}`,
   )
     .bind(...bindings)
@@ -642,6 +631,7 @@ export async function listWritingQueue(
       scoreBand: row.band,
       feedback: row.feedback ?? '',
       scoringSource: row.scoring_source,
+      needsRevisionReview: !!row.revision_pending,
       criteria: parseJson<Record<string, number>>(row.criteria_json, {}),
     })),
   };

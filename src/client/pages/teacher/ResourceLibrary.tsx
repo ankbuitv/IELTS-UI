@@ -2,12 +2,12 @@ import {useState,type FormEvent} from 'react';
 import {api,describeError} from '../../lib/api';
 import {useAsync} from '../../hooks/useAsync';
 import {downloadResource,type ResourceFile} from '../../components/ClassResources';
-type ClassItem={id:string;name:string;status:string};
+type ClassItem={id:string;name:string;status:string;canShareResources:boolean};
 export function ResourceLibrary() {
  const data=useAsync(()=>api.get<{files:ResourceFile[]}>('/api/teacher/resources'),[]);const classes=useAsync(()=>api.get<{classrooms:ClassItem[]}>('/api/teacher/classrooms'),[]);
  const [query,setQuery]=useState('');const [subject,setSubject]=useState('');const [topic,setTopic]=useState('');const [classId,setClassId]=useState('');const [file,setFile]=useState<File|null>(null);const [busy,setBusy]=useState(false);const [message,setMessage]=useState('');const [editing,setEditing]=useState<string|null>(null);const [inputKey,setInputKey]=useState(0);
  const visible=(data.data?.files??[]).filter(x=>`${x.filename} ${x.subject} ${x.topic} ${x.classroom_name??''}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
- const active=(classes.data?.classrooms??[]).filter(c=>c.status==='ACTIVE');
+ const active=(classes.data?.classrooms??[]).filter(c=>c.status==='ACTIVE'&&c.canShareResources);
  const reset=()=>{setFile(null);setSubject('');setTopic('');setClassId('');setEditing(null);setInputKey(x=>x+1);};
  const edit=(r:ResourceFile)=>{setEditing(r.id);setSubject(r.subject);setTopic(r.topic);setClassId(r.shared_classroom_id??'');setFile(null);setMessage('');};
  const save=async(e:FormEvent)=>{e.preventDefault();if(busy||(!editing&&!file))return;if(file&&(file.size===0||file.size>512_000)){setMessage('Tệp phải có nội dung và tối đa 500 KB.');return;}setBusy(true);setMessage('');try{const meta={subject,topic,classroomId:classId||null};if(editing)await api.put(`/api/teacher/resources/${encodeURIComponent(editing)}`,meta);else if(file){const base64=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>typeof reader.result==='string'?resolve(reader.result.split(',')[1]??''):reject(new Error('Không thể đọc tệp.'));reader.onerror=()=>reject(new Error('Không thể đọc tệp.'));reader.readAsDataURL(file);});await api.post('/api/teacher/resources',{...meta,filename:file.name,base64});}await data.reload();reset();setMessage('Đã lưu tài liệu.');}catch(e){setMessage(describeError(e));}finally{setBusy(false);}};

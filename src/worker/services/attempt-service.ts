@@ -1,3 +1,5 @@
+import {assignmentEligible} from './assignment-audience';
+import {teacherAttemptScope} from './teacher-attempt-scope';
 import type { Env } from '../env';
 import { ApiError } from '../lib/errors';
 import { newId, nowIso, parseJson } from '../lib/ids';
@@ -699,9 +701,9 @@ export async function requireAssignmentAccess(env: Env, user: AuthUser, assignme
   if (user.role === 'TEACHER' && assignment.teacher_id === user.id) return assignment;
 
   const membership = await env.DB.prepare(
-    `SELECT id FROM classroom_members WHERE classroom_id = ? AND user_id = ? AND status = 'ACTIVE'`,
+    `SELECT m.id FROM classroom_members m JOIN assignments a ON a.classroom_id=m.classroom_id WHERE a.id=? AND m.user_id=? AND m.status='ACTIVE' AND (m.role='CO_TEACHER' OR (m.role='STUDENT' AND ${assignmentEligible('a','m.user_id')}))`,
   )
-    .bind(assignment.classroom_id, user.id)
+    .bind(assignment.id, user.id)
     .first<{ id: string }>();
   if (!membership) throw ApiError.forbidden('This assignment is not available to you.');
   return assignment;
@@ -719,22 +721,9 @@ export async function requireOwnedAttempt(env: Env, user: AuthUser, attemptId: s
 }
 
 async function teacherCanReadAttempt(env: Env, user: AuthUser, attempt: AttemptRow): Promise<boolean> {
-  if (attempt.assignment_id) {
-    const assignment = await env.DB.prepare('SELECT teacher_id FROM assignments WHERE id = ?')
-      .bind(attempt.assignment_id)
-      .first<{ teacher_id: string }>();
-    if (assignment?.teacher_id === user.id) return true;
-  }
-  const shared = await env.DB.prepare(
-    `SELECT 1 AS ok
-       FROM classroom_members tm
-       JOIN classroom_members sm ON sm.classroom_id = tm.classroom_id AND sm.status = 'ACTIVE'
-      WHERE tm.user_id = ? AND sm.user_id = ? AND tm.status = 'ACTIVE'
-      LIMIT 1`,
-  )
-    .bind(user.id, attempt.user_id)
-    .first<{ ok: number }>();
-  return Boolean(shared);
+  if(!attempt.assignment_id)return false;
+  const row=await env.DB.prepare(`SELECT 1 FROM attempts a WHERE a.id=? AND ${teacherAttemptScope('a')}`).bind(attempt.id,user.id,user.id).first();
+  return Boolean(row);
 }
 
 // -----------------------------------------------------------------------------
@@ -1791,6 +1780,7 @@ export interface QuestionReview {
   questionType: string;
   evidence: string | null;
   explanation: string | null;
+  teacherFeedback: string | null;
   /** Section/part the question belongs to (37, review grouping). */
   sectionId: string | null;
   sectionLabel: string | null;
@@ -1802,11 +1792,7 @@ export async function loadAttemptResult(
   user: AuthUser,
   attemptId: string,
 ): Promise<AttemptResultView> {
-  const attempt = await env.DB.prepare('SELECT * FROM attempts WHERE id = ?').bind(attemptId).first<AttemptRow>();
-  if (!attempt) throw ApiError.notFound('Attempt not found.');
-  if (attempt.user_id !== user.id && (user.role === 'STUDENT' || user.role === 'MENTOR')) {
-    throw ApiError.forbidden('This attempt belongs to another user.');
-  }
+  const attempt = await requireOwnedAttempt(env,user,attemptId);
   return buildResultView(env, attempt, {
     includeReview: user.id === attempt.user_id || (user.role !== 'STUDENT' && user.role !== 'MENTOR'),
   });
@@ -2061,16 +2047,17 @@ async function buildQuestionReview(
             q.section_id,
             s.label AS section_label, s.order_index AS section_order,
             a.answer_json, a.is_correct, a.points,
-            k.answer_json AS key_json, k.evidence, k.explanation
+            k.answer_json AS key_json, k.evidence, k.explanation, f.body AS teacher_feedback
        FROM questions q
        JOIN question_groups g ON g.id = q.question_group_id
        JOIN sections s ON s.id = q.section_id
        LEFT JOIN attempt_answers a ON a.question_id = q.id AND a.attempt_id = ?
        LEFT JOIN answer_keys k ON k.question_id = q.id
+       LEFT JOIN attempt_question_feedback f ON f.question_id=q.id AND f.attempt_id=?
       WHERE q.test_version_id = (SELECT test_version_id FROM attempt_skill_sessions WHERE id = ?)
       ORDER BY q.number`,
   )
-    .bind(attemptId, sessionId)
+    .bind(attemptId,attemptId, sessionId)
     .all<{
       question_id: string;
       number: number;
@@ -2085,6 +2072,7 @@ async function buildQuestionReview(
       key_json: string | null;
       evidence: string | null;
       explanation: string | null;
+      teacher_feedback: string | null;
     }>();
 
   const sectionLabels = new Map<string, string>();
@@ -2124,6 +2112,7 @@ async function buildQuestionReview(
         questionType: row.question_type,
         evidence: row.evidence,
         explanation: row.explanation,
+        teacherFeedback: row.teacher_feedback,
         sectionId: row.section_id,
         sectionLabel: sectionLabels.get(row.section_id) ?? null,
         sectionOrder: row.section_order,

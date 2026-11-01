@@ -5,6 +5,10 @@ import {
   CALENDAR_PERSONAL_SQL,
   CALENDAR_SESSIONS_SQL,
   CALENDAR_TEACHER_DEADLINES_SQL,
+  CALENDAR_MARKING_DEADLINES_SQL,
+  CALENDAR_SUPPORT_SQL,
+  CALENDAR_TEACHING_SQL,
+  CALENDAR_WORKSHEET_DEADLINES_SQL,
   CALENDAR_STAFF_SCHOOL_EVENTS_SQL,
 } from '@worker/routes/calendar-queries';
 import schemaSql from '@worker/lib/runtime-schema.sql';
@@ -56,6 +60,10 @@ describe('calendar queries against the real runtime schema', () => {
     // throws here even before any row is bound. Running all four SELECTs with
     // plausible bind counts proves every referenced column exists.
     for (const [sql, binds] of [
+      [CALENDAR_WORKSHEET_DEADLINES_SQL, ['2026-01-01', '2026-12-31', 'u1', 'u1']],
+      [CALENDAR_TEACHING_SQL, ['2026-01-01', '2026-12-31', 'u1', 'u1']],
+      [CALENDAR_SUPPORT_SQL, ['2026-01-01', '2026-12-31', 'u1', 'u1']],
+      [CALENDAR_MARKING_DEADLINES_SQL, ['2026-01-01', '2026-12-31', 'u1', 'u1']],
       [CALENDAR_TEACHER_DEADLINES_SQL, ['2026-01-01', '2026-12-31', 'u1', 'u1']],
       [CALENDAR_STAFF_SCHOOL_EVENTS_SQL, ['u1', '2026-01-01', '2026-12-31']],
       [CALENDAR_PERSONAL_SQL, ['u1', '2026-01-01', '2026-12-31']],

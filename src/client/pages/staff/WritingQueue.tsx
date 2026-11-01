@@ -1,3 +1,4 @@
+import {SpeakingQueue} from './SpeakingQueue';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
@@ -23,6 +24,7 @@ interface WritingQueueItem {
   scoreBand: number | null;
   feedback: string;
   scoringSource: string | null;
+  needsRevisionReview:boolean;
   criteria: Record<string, number>;
 }
 
@@ -45,14 +47,14 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
           </p>
         </div>
         <Button onClick={() => setUnmarkedOnly((value) => !value)}>
-          {unmarkedOnly ? 'Show teacher-marked as well' : 'No teacher band only'}
+          {unmarkedOnly ? 'Hiện tất cả bài nộp' : 'Cần giáo viên xem only'}
         </Button>
       </div>
 
       <div className="grid grid--3">
         <Stat label="In this list" value={data?.submissions.length ?? 0} />
-        <Stat label="No teacher band" value={data?.unmarkedCount ?? 0} hint="Marked by the AI judges only so far" />
-        <Stat label="Filter" value={unmarkedOnly ? 'No teacher band' : 'All submitted'} />
+        <Stat label="Cần giáo viên xem" value={data?.unmarkedCount ?? 0} hint="Marked by the AI judges only so far" />
+        <Stat label="Filter" value={unmarkedOnly ? 'Cần giáo viên xem' : 'All submitted'} />
       </div>
 
       {loading ? <Loading label="Loading writing submissions…" /> : null}
@@ -87,7 +89,7 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
                     {row.testTitle}
                     <div className="tiny muted">{TEST_TYPE_LABELS[row.testType] ?? row.testType}</div>
                   </td>
-                  <td>{row.taskLabel}</td>
+                  <td>{row.taskLabel}{row.needsRevisionReview&&<div><Badge tone="warning">Bản sửa chờ nhận xét</Badge></div>}</td>
                   <td className="num">{row.wordCount}</td>
                   <td className="num">
                     {row.scoreBand != null ? (
@@ -158,10 +160,6 @@ export function WritingQueuePage({ apiBase }: { apiBase: '/api/admin' | '/api/te
   );
 }
 
-export function TeacherWritingQueuePage() {
-  return <WritingQueuePage apiBase="/api/teacher" />;
-}
-
-export function AdminWritingQueuePage() {
-  return <WritingQueuePage apiBase="/api/admin" />;
-}
+function MarkingWorkspace({apiBase}:{apiBase:'/api/teacher'|'/api/admin'}){const [skill,setSkill]=useState<'WRITING'|'SPEAKING'>('WRITING');return <div className="stack"><div className="row"><Button variant={skill==='WRITING'?'primary':'secondary'} onClick={()=>setSkill('WRITING')}>Writing</Button><Button variant={skill==='SPEAKING'?'primary':'secondary'} onClick={()=>setSkill('SPEAKING')}>Speaking</Button></div>{skill==='WRITING'?<WritingQueuePage apiBase={apiBase}/>:<SpeakingQueue/>}</div>;}
+export function TeacherWritingQueuePage() { return <MarkingWorkspace apiBase="/api/teacher" />; }
+export function AdminWritingQueuePage() { return <MarkingWorkspace apiBase="/api/admin" />; }

@@ -14,6 +14,7 @@ import { buildWordTimings, findEvidenceStart } from '@shared/transcript-timing';
 import { WritingPrompt, writingTasksOf, type WritingTaskRef } from '../../components/exam/WritingEditor';
 import { AiMarkPanel } from '../../components/AiMarkPanel';
 import { useAiMarking } from '../../hooks/useAiMarking';
+import {StudentWritingReview} from '../../components/WritingReview';
 import type { AttemptResultPayload } from '../../components/ResultView';
 import type { CandidateSection } from '@shared/question-types';
 import type { CandidateTestPayload } from '@shared/candidate';
@@ -357,6 +358,7 @@ export function AttemptReviewPage() {
                                 candidateAnswer: item.candidateAnswer,
                               }}
                             />
+                            {item.teacherFeedback&&<p className="small">Giáo viên: {item.teacherFeedback}</p>}
                             <AnswerExplanation
                               number={item.number}
                               evidence={item.evidence}
@@ -401,6 +403,7 @@ export function AttemptReviewPage() {
                           candidateAnswer: item.candidateAnswer,
                         }}
                       />
+                      {item.teacherFeedback&&<p className="small">Giáo viên: {item.teacherFeedback}</p>}
                       <AnswerExplanation
                         number={item.number}
                         evidence={item.evidence}
@@ -611,14 +614,14 @@ function WritingReview({
             {/* The marks — first thing on screen */}
             <div className="review-scorebar">
               <div className="review-scorebar__lead">
-                <span className="review-scorebar__band">{bandText(ai?.band ?? teacher?.band ?? null)}</span>
+                <span className="review-scorebar__band">{bandText(teacher?.band ?? ai?.band ?? null)}</span>
                 <span className="review-scorebar__caption">
-                  {ai
-                    ? (ai.unavailable?.length ?? 0) > 0
-                      ? `Partial estimate — ${ai.judges[0]?.judge ?? 'one judge'} marked this`
-                      : 'AI estimate · two independent judges'
-                    : teacher
-                      ? 'Teacher band'
+                  {teacher
+                    ? 'Teacher band'
+                    : ai
+                      ? (ai.unavailable?.length ?? 0) > 0
+                        ? `Partial estimate — ${ai.judges[0]?.judge ?? 'one judge'} marked this`
+                        : 'AI estimate · two independent judges'
                       : needsAi
                         ? 'Waiting for the AI judges…'
                         : 'Not marked yet'}
@@ -668,6 +671,8 @@ function WritingReview({
             </div>
           </div>
 
+          <StudentWritingReview attemptId={attemptId} submissionId={submission.submissionId}/>
+
           {/* Full AI judgement: criteria, feedback (EN + VI), strengths, next steps */}
           {ai ? <AiMarkPanel mark={ai} originalText={submission.responseText} heading="AI marking" /> : null}
           {teacher ? (
@@ -679,6 +684,7 @@ function WritingReview({
                 </span>
               </div>
               <div className="explain__body">
+                {Object.entries(teacher.criteria??{}).filter(([key])=>key.startsWith('Custom:')).map(([key,value])=><p className="explain__text" key={key}>{key.slice(7)}: {value}/9</p>)}
                 <p className="explain__text">{teacher.feedback || 'No written feedback was added.'}</p>
               </div>
             </div>
@@ -717,6 +723,7 @@ function SpeakingReview({ sessionId }: { sessionId: string }) {
     };
     topic: { title: string; part1: string[]; part2: { cue: string; bullets: string[] }; part3: string[] } | null;
     responses: Array<{ part: number; promptText: string; transcript: string; durationSeconds: number; words: number; hasAudio: boolean }>;
+    teacherRubric: Record<string,number>;
     score: {
       band: number | null;
       criteria: Array<{ key: string; label: string; band: number | null; comment: string }>;
@@ -780,7 +787,7 @@ function SpeakingReview({ sessionId }: { sessionId: string }) {
           <div className="question-block">
             <div className="row" style={{ gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
               <span className="mchip mchip--violet">
-                {score?.band !== null && score?.band !== undefined
+                {session.scoreSource==='TEACHER' && session.overallBand!==null ? `Giáo viên · Band ${session.overallBand}` : score?.band !== null && score?.band !== undefined
                   ? `AI band ${score.band}`
                   : session.overallBand !== null
                     ? `Band ${session.overallBand}`
@@ -788,6 +795,7 @@ function SpeakingReview({ sessionId }: { sessionId: string }) {
                       ? 'Not recorded yet'
                       : 'Marking…'}
               </span>
+              {Object.entries(detail.data.teacherRubric??{}).map(([key,value])=><span className="mchip" key={key}>{key.replace(/^Custom:/,'')} {value}</span>)}
               {score?.criteria?.map((criterion) => (
                 <span
                   key={criterion.key}
@@ -841,7 +849,7 @@ function SpeakingReview({ sessionId }: { sessionId: string }) {
                   </span>
                 </div>
                 <div className="explain__body">
-                  <p className="explain__text">{score?.feedback || session.feedback}</p>
+                  <p className="explain__text">{session.scoreSource==='TEACHER' ? session.feedback : (score?.feedback || session.feedback)}</p>
                   {score?.feedbackVi ? <p className="explain__text">{score.feedbackVi}</p> : null}
                   {score?.strengths?.length ? (
                     <p className="explain__text">
