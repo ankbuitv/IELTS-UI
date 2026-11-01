@@ -13,6 +13,7 @@ import {
   StudentAnalyticsPage,
   StudentClassroomsPage,
 } from './pages/student/StudentPages';
+import { StudentClassroomPage } from './pages/student/StudentClassroom';
 import { StudentDashboardPage } from './pages/student/Dashboard';
 import { VocabularyPage } from './pages/student/VocabularyPage';
 import { LearnPage } from './pages/student/LearnPage';
@@ -52,6 +53,7 @@ import { ClassDetailPage } from './pages/mentor/ClassDetailPage';
 import { CallRoomPage } from './pages/mentor/CallRoomPage';
 import { EarningsPage } from './pages/mentor/EarningsPage';
 import { NotificationsPage } from './components/NotificationBell';
+import { SchoolDesktop } from './pages/schools/SchoolDesktop';
 import { SchoolsPage, AdminSchoolsPage } from './pages/schools/SchoolsPage';
 import { CertificatePage } from './pages/student/CertificatePage';
 
@@ -127,6 +129,7 @@ export function App() {
         <Route path="reset-password" element={<ResetPasswordPage />} />
         <Route path="register" element={<RegisterPage />} />
         <Route path="join" element={<JoinPage />} />
+        <Route path="school-desktop" element={<RequireAuth><SchoolDesktop /></RequireAuth>} />
         <Route path="schools" element={<RequireAuth><SchoolsPage /></RequireAuth>} />
 
         {/* Retired UI routes redirect without deleting existing data. */}
@@ -195,6 +198,7 @@ export function App() {
             </RequireAuth>
           }
         />
+        <Route path="classrooms/:classroomId" element={<RequireAuth><StudentClassroomPage /></RequireAuth>} />
         <Route path="study-groups/*" element={<Navigate to="/learn" replace />} />
         <Route
           path="study-room"
@@ -264,7 +268,7 @@ export function App() {
         <Route
           path="learn/everyday"
           element={
-            <RequireAuth roles={['STUDENT', 'ADMIN']}>
+            <RequireAuth>
               <EverydayLessonsPage />
             </RequireAuth>
           }
@@ -272,7 +276,7 @@ export function App() {
         <Route
           path="learn/friends"
           element={
-            <RequireAuth roles={['STUDENT', 'ADMIN']}>
+            <RequireAuth>
               <FriendPage />
             </RequireAuth>
           }

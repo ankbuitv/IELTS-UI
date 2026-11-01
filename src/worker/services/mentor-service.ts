@@ -349,6 +349,8 @@ export async function assertSessionAccess(env: Env, session: MentorSession, view
   if (session.mentorId === viewer.id || session.studentId === viewer.id) return;
   if (viewer.role === 'ADMIN') return;
   if (session.kind === 'CLASS' && session.classId) {
+    const schoolOwner = await env.DB.prepare(`SELECT 1 AS ok FROM school_call_brand b JOIN schools s ON s.id=b.school_id JOIN school_members sm ON sm.school_id=s.id AND sm.user_id=b.selected_by AND sm.status='ACTIVE' WHERE b.session_id=? AND s.owner_user_id=? AND s.status='APPROVED'`).bind(session.id,viewer.id).first();
+    if (schoolOwner && ['TEACHER','MENTOR'].includes(viewer.role)) return;
     const member = await env.DB.prepare(
       'SELECT 1 AS ok FROM mentor_class_members WHERE class_id = ? AND user_id = ?',
     )
@@ -1143,6 +1145,24 @@ export async function classRoomSessionId(env: Env, viewer: AuthUser, classId: st
   return { sessionId };
 }
 
+/** Set the branding of the mentor's shared class room, never a private student session. */
+export async function setMentorClassBrand(env: Env, viewer: AuthUser, classId: string, schoolId: string | null) {
+  const klass=await env.DB.prepare('SELECT mentor_id FROM mentor_classes WHERE id=?').bind(classId).first<{mentor_id:string}>();
+  if (!klass) throw ApiError.notFound('Không tìm thấy lớp.');
+  if (klass.mentor_id!==viewer.id) throw ApiError.forbidden('Chỉ mentor chủ lớp được chọn nhận diện.');
+  if (schoolId) {
+    const member=await env.DB.prepare(`SELECT 1 AS ok FROM school_members m JOIN schools s ON s.id=m.school_id WHERE m.school_id=? AND m.user_id=? AND m.status='ACTIVE' AND s.status='APPROVED'`).bind(schoolId,viewer.id).first();
+    if(!member) throw ApiError.forbidden('Bạn không thuộc trường đã chọn hoặc trường chưa được duyệt.');
+  }
+  const {sessionId}=await classRoomSessionId(env,viewer,classId);
+  const brand=await env.DB.prepare('SELECT school_id FROM school_call_brand WHERE session_id=?').bind(sessionId).first<{school_id:string}>();
+  const active=await env.DB.prepare('SELECT 1 AS ok FROM mentor_room_presence WHERE session_id=? AND last_seen_at>=? LIMIT 1').bind(sessionId,new Date(Date.now()-30000).toISOString()).first();
+  if(active && (brand?.school_id ?? null)!==schoolId) throw ApiError.conflict('Không thể đổi nhận diện khi phòng đang có người.');
+  if(schoolId) await env.DB.prepare(`INSERT INTO school_call_brand(session_id,school_id,selected_by,updated_at) VALUES(?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET school_id=excluded.school_id,selected_by=excluded.selected_by,updated_at=excluded.updated_at`).bind(sessionId,schoolId,viewer.id,nowIso()).run();
+  else await env.DB.prepare('DELETE FROM school_call_brand WHERE session_id=?').bind(sessionId).run();
+  return {sessionId};
+}
+
 export async function joinClass(env: Env, viewer: AuthUser, classId: string): Promise<MentorClass> {
   const row = await env.DB.prepare(`${CLASS_SELECT} WHERE c.id = ?`).bind(viewer.id, classId).first<ClassRow>();
   if (!row) throw ApiError.notFound('That class does not exist.');
@@ -1237,6 +1257,7 @@ export async function deleteClass(
     // Children first and explicitly: the batch must not depend on the
     // connection's foreign-key pragma to leave no orphans behind.
     for (const sql of [
+      `DELETE FROM school_call_brand WHERE session_id IN (${placeholders})`,
       `DELETE FROM call_screen_shares WHERE session_id IN (${placeholders})`,
       `DELETE FROM call_feedback WHERE session_id IN (${placeholders})`,
       `DELETE FROM call_attendance WHERE session_id IN (${placeholders})`,

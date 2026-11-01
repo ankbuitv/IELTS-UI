@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import schemaSql from '@worker/lib/runtime-schema.sql';
-import { getSchoolLogo, saveSchoolLogo, inviteTeacher, listMySchools, listSchoolApplications, listSchoolMembers, registerSchool, removeSchoolMember, respondSchoolInvitation, reviewSchool } from '@worker/services/school-service';
+import { grantSchoolManager, revokeSchoolManager, getSchoolLogo, saveSchoolLogo, inviteTeacher, listMySchools, listSchoolApplications, listSchoolMembers, registerSchool, removeSchoolMember, respondSchoolInvitation, reviewSchool } from '@worker/services/school-service';
 import type { AuthUser } from '@worker/lib/auth-types';
 import type { Env } from '@worker/env';
 interface Statement { get(...params: unknown[]): unknown; all(...params: unknown[]): unknown[]; run(...params: unknown[]): { changes: number | bigint } }
@@ -35,11 +35,17 @@ describe('school registration and invitation permissions', () => {
       const env = { DB: adapter(db) } as unknown as Env;
       const owner=user('owner','TEACHER'), teacher=user('teacher','TEACHER'), student=user('student','STUDENT'), admin=user('admin','ADMIN');
       await expect(registerSchool(env,student,{name:'Không hợp lệ',address:'Biên Hòa',contactEmail:'x@example.test'})).rejects.toMatchObject({status:403});
+      await expect(registerSchool(env,owner,{name:'Không hợp lệ',address:'Biên Hòa',contactEmail:'x@example.test'})).rejects.toMatchObject({status:403});
+      await expect(grantSchoolManager(env,student,owner.email)).rejects.toMatchObject({status:403});
+      await expect(grantSchoolManager(env,admin,student.email)).rejects.toMatchObject({status:404});
+      await grantSchoolManager(env,admin,owner.email);
       const school = await registerSchool(env,owner,{name:'Trường thử',address:'Biên Hòa',contactEmail:'CONTACT@example.test'});
       await expect(inviteTeacher(env,owner,school.id,teacher.email)).rejects.toMatchObject({status:409});
       await expect(listSchoolApplications(env,student)).rejects.toMatchObject({status:403});
       await expect(reviewSchool(env,student,school.id,'APPROVED','')).rejects.toMatchObject({status:403});
       await reviewSchool(env,admin,school.id,'APPROVED','Đã xác minh');
+      await revokeSchoolManager(env,admin,owner.id);
+      await expect(registerSchool(env,owner,{name:'Không hợp lệ',address:'Biên Hòa',contactEmail:'x@example.test'})).rejects.toMatchObject({status:403});
       await expect(saveSchoolLogo(env,teacher,school.id,'image/png','aGVsbG8=')).rejects.toMatchObject({status:403});
       await expect(saveSchoolLogo(env,owner,school.id,'image/png','aGVsbG8=')).rejects.toMatchObject({status:400});
       const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZ0AAAAASUVORK5CYII=';

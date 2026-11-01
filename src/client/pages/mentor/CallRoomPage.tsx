@@ -1236,7 +1236,7 @@ export function CallRoomPage() {
         <aside className="jr-prejoin__panel">
           <div className="jr-brand jr-brand--panel">
             <BrandLogo theme="dark" height={30} />
-            {state?.classBrand ? <ClassLogo type={state.classBrand.type} id={state.classBrand.id} name={state.classBrand.name} /> : null}
+            {!state?.schoolBrand && state?.classBrand ? <ClassLogo type={state.classBrand.type} id={state.classBrand.id} name={state.classBrand.name} /> : null}
           <em>LIVE</em>
           </div>
           <span className="jr-eyebrow">{isClass ? 'Live class' : 'Coaching session'}</span>
@@ -1344,6 +1344,7 @@ export function CallRoomPage() {
         <div className="jr-brand">
           <BrandLogo theme="dark" height={25} />
           {state?.schoolBrand ? <><span className="jr-brand__cross" aria-hidden="true">×</span>{schoolLogo ? <img className="jr-brand__school-logo" src={schoolLogo} alt={state.schoolBrand.name} /> : <span className="jr-brand__school-name">{state.schoolBrand.name}</span>}</> : null}
+          {!state?.schoolBrand && state?.classBrand ? <ClassLogo type={state.classBrand.type} id={state.classBrand.id} name={state.classBrand.name} /> : null}
           <em>LIVE</em>
         </div>
 

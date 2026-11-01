@@ -18,6 +18,7 @@ import {
   classDirectMessages,
   postClassDirectMessage,
   classRoomSessionId,
+  setMentorClassBrand,
   cancelSession,
   completeSession,
   createClass,
@@ -479,6 +480,12 @@ router.post('/mentor/classes/:classId/direct/:peerId', async (c) => {
 });
 
 /** The class's shared call room (created on demand). */
+router.post('/mentor/classes/:classId/room/brand', async c => {
+  assertCsrf(c,c.get('session')?.csrfToken ?? null);
+  const body=await parseBody(c,z.object({schoolId:z.string().min(1).max(100).nullable()}));
+  return c.json(await setMentorClassBrand(c.env,currentUser(c),c.req.param('classId'),body.schoolId));
+});
+
 router.get('/mentor/classes/:classId/room', async (c) => {
   const user = currentUser(c);
   return c.json(await classRoomSessionId(c.env, user, c.req.param('classId')));

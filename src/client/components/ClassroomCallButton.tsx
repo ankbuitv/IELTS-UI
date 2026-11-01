@@ -31,8 +31,8 @@ export function ClassroomCallButton({ classroomId, label = 'Vào phòng học', 
     } catch (error) { toast.push(describeError(error), 'error'); } finally { setBusy(false); }
   };
   return <><Button variant="primary" loading={busy} onClick={() => void start()}><Icon name="video" size={15} /> {label}</Button>
-    <Modal open={open} title="Chọn trường cho buổi học" onClose={()=>setOpen(false)} actions={<><Button onClick={()=>setOpen(false)}>Hủy</Button><Button variant="primary" loading={busy} onClick={()=>void enter(selection==='unchanged'?undefined:selection==='none'?null:selection)}>Vào phòng</Button></>}>
-      <p>Chọn trường đã duyệt để hiện thương hiệu trong phòng. Không thể đổi trường khi phòng đang có người.</p>
-      <Field label="Trường của buổi học">{id=><Select id={id} value={selection} onChange={e=>setSelection(e.target.value)}><option value="unchanged">Giữ lựa chọn hiện tại (nếu có)</option><option value="none">Không dùng thương hiệu trường</option>{schools.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</Select>}</Field>
+    <Modal open={open} title="Chọn nhận diện buổi học" onClose={()=>setOpen(false)} actions={<><Button onClick={()=>setOpen(false)}>Hủy</Button><Button variant="primary" loading={busy} onClick={()=>void enter(selection==='unchanged'?undefined:selection==='none'?null:selection)}>Vào phòng</Button></>}>
+      <p>Chọn logo lớp hoặc logo trường đã duyệt. Đây vẫn là phòng của lớp; không thể đổi nhận diện khi phòng đang có người.</p>
+      <Field label="Nhận diện phòng học">{id=><Select id={id} value={selection} onChange={e=>setSelection(e.target.value)}><option value="unchanged">Giữ lựa chọn hiện tại (nếu có)</option><option value="none">Theo lớp · dùng logo lớp</option>{schools.map(s=><option key={s.id} value={s.id}>Theo trường · {s.name}</option>)}</Select>}</Field>
     </Modal></>;
 }

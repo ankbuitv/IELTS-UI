@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../context/AuthContext';
@@ -77,7 +77,7 @@ export function TeacherHomePage() {
   return (
     <div className="stack">
       <header className="class-directory__header"><div><h1>Lớp học của giáo viên</h1><p>Quản lý lớp, bài tập và buổi học ở một nơi.</p></div><div className="row"><Button onClick={() => navigate('/teacher/marking')}>Chấm bài</Button><Button variant="primary" onClick={() => setCreating(true)}><Icon name="plus" size={15} /> Tạo lớp học</Button></div></header>
-      <section className="teacher-school-banner" aria-labelledby="teacher-school-title"><div className="teacher-school-banner__icon"><Icon name="graduation" size={22} /></div><div><h2 id="teacher-school-title">Trường học & trung tâm</h2><p>Đăng ký trường hoặc xem lời mời tham gia dành cho giáo viên.</p></div><Link className="teacher-school-banner__link" to="/schools#register">Đăng ký trường <span aria-hidden="true">→</span></Link><Link className="teacher-school-banner__secondary" to="/schools">Xem lời mời</Link></section>
+      <section className="teacher-school-banner" aria-labelledby="teacher-school-title"><div className="teacher-school-banner__icon"><Icon name="graduation" size={22} /></div><div><h2 id="teacher-school-title">Trường học & trung tâm</h2><p>Xem lời mời tham gia và thông tin trường của bạn.</p></div><Link className="teacher-school-banner__link" to="/schools">Trường của tôi <span aria-hidden="true">→</span></Link><Link className="teacher-school-banner__secondary" to="/schools">Xem lời mời</Link></section>
       <div className="class-directory__toolbar"><label htmlFor="teacher-class-search"><Icon name="search" size={17} /><input id="teacher-class-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm lớp học" /></label><span>{data?.classrooms.length ?? 0} lớp</span></div>
       {data?.classrooms.length === 0 ? <EmptyState title="Chưa có lớp học">Tạo lớp học và chia sẻ mã mời với học viên.</EmptyState> :
         <div className="teacher-class-grid">{data?.classrooms.filter((classroom) => classroom.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())).map((classroom) => <article className="teacher-class-tile" key={classroom.id}>
@@ -195,7 +195,10 @@ interface ClassroomDetailResponse {
 export function ClassroomPage() {
   const { classroomId = '' } = useParams();
   const toast = useToast();
-  const [tab, setTab] = useState<'conversation' | 'files' | 'overview' | 'students' | 'assignments' | 'invites' | 'ratings'>('conversation');
+  const [searchParams] = useSearchParams();
+  const allowedTabs = ['conversation','files','overview','students','assignments','invites','ratings'] as const;
+  const initialTab = allowedTabs.find(value => value === searchParams.get('tab')) ?? 'conversation';
+  const [tab, setTab] = useState<typeof allowedTabs[number]>(initialTab);
   const { user } = useAuth();
   const { data, loading, error, reload } = useAsync<ClassroomDetailResponse>(
     () => api.get(`/api/teacher/classrooms/${classroomId}`),

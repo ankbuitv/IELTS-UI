@@ -23,6 +23,8 @@ import './styles/tutor.css';
 import './styles/blog.css';
 import './styles/speaking-partner.css';
 import './styles/certificate.css';
+import './styles/school-desktop.css';
+import './styles/student-classroom.css';
 import { applyPrefs, loadPrefs } from './lib/display';
 
 // Apply the reader's display preferences before the first paint, so the page

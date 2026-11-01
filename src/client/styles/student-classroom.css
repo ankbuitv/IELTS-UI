@@ -1,0 +1,14 @@
+.student-classroom { max-width:1200px; margin:0 auto; color:#223046; }
+.student-classroom__back { display:inline-block; font-size:.85rem; color:#55677b; margin-bottom:18px; text-decoration:none; }
+.student-classroom__header { display:flex; gap:16px; align-items:center; padding:22px 24px; background:#fff; border:1px solid #dde4ea; border-radius:10px 10px 0 0; }
+.student-classroom__header .class-logo { margin:0; }
+.student-classroom__header > div:nth-child(2){flex:1;min-width:0;}
+.student-classroom__header span:not(.class-logo__fallback){color:#69788a; font-size:.68rem; letter-spacing:.08em; font-weight:700;}
+.student-classroom__header h1{font-size:1.4rem; margin:3px 0; line-height:1.2;}
+.student-classroom__header p{margin:0;color:#69788a;font-size:.85rem;}
+.student-classroom__tabs{display:flex;overflow:auto;gap:24px;padding:0 24px;background:#fff;border:1px solid #dde4ea;border-top:0;}
+.student-classroom__tabs button{border:0;border-bottom:3px solid transparent;background:none;color:#617082;padding:15px 0 12px;white-space:nowrap;font-weight:600;cursor:pointer;}
+.student-classroom__tabs button[aria-current]{color:#245986;border-bottom-color:#28639a;}
+.student-classroom__chat,.student-classroom__assignments{background:#fff;border:1px solid #dde4ea;border-top:0;min-height:350px;padding:24px;border-radius:0 0 10px 10px;}
+.student-classroom__chat > header h2,.student-classroom__assignments h2{font-size:1rem;margin:0 0 5px;}.student-classroom__chat > header p{font-size:.8rem;color:#738092;margin:0 0 18px;}
+@media(max-width:600px){.student-classroom__header{padding:16px;flex-wrap:wrap}.student-classroom__header .button{width:100%}.student-classroom__tabs{padding:0 16px;gap:18px}.student-classroom__chat,.student-classroom__assignments{padding:16px}}

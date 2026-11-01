@@ -5,7 +5,7 @@ import { useAsync } from '../../hooks/useAsync';
 import { mentorApi } from '../../lib/mentor-api';
 import { useAuth } from '../../context/AuthContext';
 import { formatDateTime } from '../../lib/format';
-import { Button, EmptyState, Field, Loading, Modal, Notice, TextArea, TextInput, useToast } from '../../components/ui';
+import { Button, EmptyState, Field, Loading, Modal, Notice, Select, TextArea, TextInput, useToast } from '../../components/ui';
 import { ClassLogo } from '../../components/ClassLogo';
 import { Icon } from '../../components/Icon';
 import { MentorAvatar } from '../../components/mentor/MentorBits';
@@ -33,6 +33,7 @@ export function ClassDetailPage() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [callBusy, setCallBusy] = useState(false);
+  const [callBrandOpen,setCallBrandOpen]=useState(false); const [callBrand,setCallBrand]=useState('unchanged'); const [callSchools,setCallSchools]=useState<Array<{id:string;name:string}>>([]);
   const [joinBusy, setJoinBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [editOpen,setEditOpen]=useState(false); const [editTitle,setEditTitle]=useState(''); const [editDescription,setEditDescription]=useState(''); const [editBusy,setEditBusy]=useState(false);
@@ -72,10 +73,21 @@ export function ClassDetailPage() {
     } catch (cause) { toast.push(describeError(cause), 'error'); }
     finally { setSending(false); }
   }
-  async function joinCall() {
+  async function enterCall(schoolId?: string | null) {
     setCallBusy(true);
-    try { const result = await mentorApi.classRoom(classId); navigate(`/sessions/${result.sessionId}/room`); }
-    catch (cause) { toast.push(describeError(cause), 'error'); setCallBusy(false); }
+    try { const result = schoolId === undefined ? await mentorApi.classRoom(classId) : await api.post<{sessionId:string}>(`/api/mentor/classes/${encodeURIComponent(classId)}/room/brand`,{schoolId}); setCallBrandOpen(false); navigate(`/sessions/${result.sessionId}/room`); }
+    catch (cause) { toast.push(describeError(cause), 'error'); }
+    finally { setCallBusy(false); }
+  }
+  async function joinCall() {
+    if (klass?.mentorId !== user?.id) { await enterCall(); return; }
+    setCallBusy(true);
+    try {
+      const data=await api.get<{schools:Array<{id:string;name:string;status:string;member_status:string}>}>('/api/schools');
+      const schools=data.schools.filter(s=>s.status==='APPROVED' && s.member_status==='ACTIVE');
+      if(!schools.length) { await enterCall(); return; }
+      setCallSchools(schools);setCallBrand('unchanged');setCallBrandOpen(true);
+    } catch(cause) { toast.push(describeError(cause),'error'); } finally { setCallBusy(false); }
   }
   async function joinClass() {
     setJoinBusy(true);
@@ -103,6 +115,7 @@ export function ClassDetailPage() {
         <div><Link to="/classes" className="class-workspace__back">← Tất cả lớp học</Link><h1>{klass.title}</h1><p>{klass.level} · {klass.mentorName}</p><ClassLogo type="mentor" id={classId} name={klass.title} editable={canDelete} />{canDelete && <Button size="sm" onClick={()=>{setEditTitle(klass.title);setEditDescription(klass.description);setEditOpen(true);}}>Chỉnh sửa lớp</Button>}</div>
         {canSeeClassChat ? <Button variant="primary" loading={callBusy} disabled={klass.status !== 'OPEN'} onClick={() => void joinCall()}><Icon name="video" size={16} /> Vào phòng học</Button> : <Button variant="primary" loading={joinBusy} disabled={klass.status !== 'OPEN'} onClick={() => void joinClass()}><Icon name="plus" size={16} /> Tham gia lớp</Button>}
       </div>
+      <Modal open={callBrandOpen} title="Chọn nhận diện buổi học" onClose={()=>setCallBrandOpen(false)} actions={<><Button onClick={()=>setCallBrandOpen(false)}>Hủy</Button><Button variant="primary" loading={callBusy} onClick={()=>void enterCall(callBrand==='unchanged'?undefined:callBrand==='class'?null:callBrand)}>Vào phòng</Button></>}><p>Chọn logo lớp hoặc logo trường đã duyệt. Không thể đổi khi phòng đang có người.</p><Field label="Nhận diện phòng học">{id=><Select id={id} value={callBrand} onChange={e=>setCallBrand(e.target.value)}><option value="unchanged">Giữ lựa chọn hiện tại</option><option value="class">Theo lớp · dùng logo lớp</option>{callSchools.map(s=><option key={s.id} value={s.id}>Theo trường · {s.name}</option>)}</Select>}</Field></Modal>
       <Modal open={editOpen} title="Chỉnh sửa lớp học" onClose={()=>setEditOpen(false)} actions={<><Button onClick={()=>setEditOpen(false)}>Hủy</Button><Button variant="primary" loading={editBusy} onClick={()=>{setEditBusy(true);void api.patch(`/api/mentor/classes/${encodeURIComponent(classId)}`,{title:editTitle.trim(),description:editDescription.trim()}).then(async()=>{await reload();setEditOpen(false);toast.push('Đã cập nhật lớp học.','success');}).catch(e=>toast.push(describeError(e),'error')).finally(()=>setEditBusy(false));}}>Lưu thay đổi</Button></>}><div className="stack"><Field label="Tên lớp" required>{id=><TextInput id={id} value={editTitle} maxLength={140} onChange={e=>setEditTitle(e.target.value)}/>}</Field><Field label="Mô tả">{id=><TextArea id={id} value={editDescription} maxLength={2000} onChange={e=>setEditDescription(e.target.value)}/>}</Field></div></Modal>
       <div className="class-workspace__layout">
         <aside className={`class-workspace__nav${navOpen ? ' is-open' : ''}`} aria-label="Hội thoại lớp học">

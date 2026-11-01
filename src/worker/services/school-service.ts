@@ -14,8 +14,34 @@ export async function listMySchools(env: Env, user: AuthUser) {
   return result.results;
 }
 
+/** This is a separately granted capability; an ordinary teacher or learner cannot self-promote. */
+export async function isSchoolManager(env: Env, user: AuthUser): Promise<boolean> {
+  if (!['TEACHER','MENTOR','ADMIN'].includes(user.role)) return false;
+  return !!(await env.DB.prepare('SELECT 1 AS ok FROM school_managers WHERE user_id=?').bind(user.id).first());
+}
+
+export async function grantSchoolManager(env: Env, actor: AuthUser, email: string) {
+  if (actor.role !== 'ADMIN') throw ApiError.forbidden('Chỉ admin hệ thống được cấp quyền quản lý trường.');
+  const target = await env.DB.prepare("SELECT id FROM users WHERE lower(email)=? AND status='ACTIVE' AND role IN ('TEACHER','MENTOR','ADMIN')").bind(email.toLowerCase()).first<{id:string}>();
+  if (!target) throw ApiError.notFound('Cần tài khoản giáo viên, mentor hoặc admin đang hoạt động.');
+  await env.DB.prepare('INSERT OR IGNORE INTO school_managers(user_id,granted_by,granted_at) VALUES(?,?,?)').bind(target.id,actor.id,nowIso()).run();
+  await recordAudit(env,{actorUserId:actor.id,action:'SCHOOL_MANAGER_GRANT',entityType:'user',entityId:target.id});
+}
+
+export async function listSchoolManagers(env: Env, actor: AuthUser) {
+  if (actor.role !== 'ADMIN') throw ApiError.forbidden();
+  return (await env.DB.prepare('SELECT u.id,u.email,u.role,p.display_name,m.granted_at FROM school_managers m JOIN users u ON u.id=m.user_id LEFT JOIN user_profiles p ON p.user_id=u.id ORDER BY m.granted_at DESC').all()).results;
+}
+
+export async function revokeSchoolManager(env: Env, actor: AuthUser, userId: string) {
+  if (actor.role !== 'ADMIN') throw ApiError.forbidden();
+  // Existing owners keep access to their own schools, but cannot create more.
+  await env.DB.prepare('DELETE FROM school_managers WHERE user_id=?').bind(userId).run();
+  await recordAudit(env,{actorUserId:actor.id,action:'SCHOOL_MANAGER_REVOKE',entityType:'user',entityId:userId});
+}
+
 export async function registerSchool(env: Env, user: AuthUser, input: { name: string; address: string; contactEmail: string }) {
-  if (!['TEACHER', 'MENTOR', 'ADMIN'].includes(user.role)) throw ApiError.forbidden('Chỉ giáo viên, mentor hoặc quản trị viên có thể đăng ký trường.');
+  if (!await isSchoolManager(env,user)) throw ApiError.forbidden('Chỉ tài khoản được cấp quyền quản lý trường mới có thể đăng ký trường.');
   const id = newId('sch'); const now = nowIso();
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO schools (id,name,address,contact_email,owner_user_id,status,created_at,updated_at)
@@ -71,6 +97,17 @@ export async function inviteTeacher(env: Env, user: AuthUser, id: string, email:
     WHERE school_members.role='TEACHER' AND school_members.status IN ('DECLINED','REMOVED')`).bind(newId('sm'),id,teacher.id,now,now).run();
   if (!result.meta.changes) throw ApiError.conflict('Lời mời đã tồn tại hoặc thành viên đã được kích hoạt.');
   await recordAudit(env, { actorUserId: user.id, action: 'SCHOOL_TEACHER_INVITE', entityType: 'school', entityId: id, metadata: { userId: teacher.id } });
+}
+
+/** Create a teacher login and issue a school invitation; membership still requires acceptance. */
+export async function createSchoolTeacher(env: Env, actor: AuthUser, schoolId: string, input: {email:string;displayName:string;password:string}) {
+  await requireSchoolOwner(env,actor,schoolId);
+  const {createUser} = await import('./auth-service');
+  const teacher=await createUser(env,{...input,role:'TEACHER',createdBy:actor.id});
+  try { await inviteTeacher(env,actor,schoolId,teacher.email); }
+  catch { throw ApiError.conflict('Tài khoản đã được tạo nhưng chưa gửi được lời mời. Hãy mời lại bằng email.'); }
+  await recordAudit(env,{actorUserId:actor.id,action:'SCHOOL_TEACHER_CREATE',entityType:'school',entityId:schoolId,metadata:{userId:teacher.id}});
+  return {id:teacher.id,email:teacher.email};
 }
 
 export async function respondSchoolInvitation(env: Env, user: AuthUser, id: string, accept: boolean) {

@@ -121,6 +121,7 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
           label: 'Quản lý',
           items: [
             { to: '/admin', label: 'Bảng quản trị', icon: 'shield' },
+            { to: '/school-desktop', label: 'School Desktop', icon: 'monitor' },
             { to: '/teacher', label: 'Giảng dạy', icon: 'presentation' },
             { to: '/teacher/marking', label: 'Hàng chấm bài', icon: 'pen' },
           ],
@@ -132,7 +133,7 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
       ],
       tabs: [
         { to: '/admin', label: 'Quản trị', icon: 'shield' },
-        { to: '/teacher', label: 'Giảng dạy', icon: 'presentation' },
+        { to: '/school-desktop', label: 'Desktop', icon: 'monitor' },
         { to: '/learn', label: 'Học tập', icon: 'target' },
         { to: '/practice', label: 'Luyện thi', icon: 'book' },
       ],
@@ -145,6 +146,7 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
         {
           label: 'Giảng dạy',
           items: [
+            { to: '/school-desktop', label: 'School Desktop', icon: 'monitor' },
             { to: '/teacher', label: 'Bảng giảng dạy', icon: 'presentation' },
             { to: '/teacher/marking', label: 'Hàng chấm bài', icon: 'pen' },
             { to: '/practice', label: 'Luyện thi', icon: 'book' },
@@ -157,7 +159,7 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
       ],
       tabs: [
         { to: '/teacher', label: 'Giảng dạy', icon: 'presentation' },
-        { to: '/teacher/marking', label: 'Chấm bài', icon: 'pen' },
+        { to: '/school-desktop', label: 'Desktop', icon: 'monitor' },
         { to: '/learn', label: 'Học tập', icon: 'target' },
         { to: '/practice', label: 'Luyện thi', icon: 'book' },
       ],
@@ -167,13 +169,14 @@ function navFor(role: string | undefined): { groups: NavGroup[]; tabs: NavItem[]
   if (role === 'MENTOR') {
     return {
       groups: [
+        { label: 'Không gian làm việc', items: [{to:'/school-desktop',label:'School Desktop',icon:'monitor'}] },
         MENTOR_GROUP,
         LEARN_GROUP,
         GROW_GROUP,
       ],
       tabs: [
         { to: '/mentor', label: 'Bảng điều khiển', icon: 'presentation' },
-        { to: '/my-sessions', label: 'Buổi học', icon: 'video' },
+        { to: '/school-desktop', label: 'Desktop', icon: 'monitor' },
         { to: '/classes', label: 'Lớp học', icon: 'users' },
         { to: '/practice', label: 'Luyện thi', icon: 'book' },
       ],
@@ -296,6 +299,7 @@ export function AppShell() {
     { to: '/learn', label: 'Học tập', icon: 'target' },
     { to: '/history', label: 'Kết quả', icon: 'award' },
     { to: '/classes', label: 'Lớp học', icon: 'users' },
+    ...(user && ['TEACHER','MENTOR','ADMIN'].includes(user.role) ? [{ to: '/school-desktop', label: 'School Desktop', icon: 'monitor' as const }] : []),
   ];
   const railSet = new Set(railItems.map((item) => item.to));
   // What "More" holds back: the rail on desktop, the four tabs on phones.

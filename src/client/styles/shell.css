@@ -317,3 +317,9 @@ button.site-avatar:hover { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--b
 .mode-card--exam .mode-card__icon { background: var(--brand-50); color: var(--brand-600); }
 .mode-card strong { font-size: 1.02rem; color: var(--ink-900); }
 .mode-card__desc { font-size: 0.85rem; color: var(--ink-500); line-height: 1.55; }
+/* Keep the app header usable on narrow screens even when public.css is loaded later. */
+@media (max-width: 719px) {
+  .site--app .site-header__inner { gap: 8px; }
+  .site--app .site-search, .site--app .site-cta, .site--app .display-menu { display: none; }
+  .site--app .site-actions { gap: 7px; min-width: 0; }
+}

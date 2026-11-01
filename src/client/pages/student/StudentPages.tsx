@@ -23,7 +23,6 @@ import {
 } from '../../components/ui';
 import { Icon, type IconName } from '../../components/Icon';
 import { ResultSummary, type AttemptResultPayload } from '../../components/ResultView';
-import { ClassroomChatButton } from '../../components/ClassroomChat';
 import { ClassroomCallButton } from '../../components/ClassroomCallButton';
 import { AccuracyList } from '../../components/charts';
 import { SkillPerformanceTable, TrendBars } from './Dashboard';
@@ -901,13 +900,13 @@ export function StudentClassroomsPage() {
           {data?.classrooms.map((classroom) => (
             <div className="card" key={classroom.id}>
               <ClassLogo type="teacher" id={classroom.id} name={classroom.name} />
-              <h3>{classroom.name}</h3>
+              <h3><Link to={`/classrooms/${classroom.id}`}>{classroom.name}</Link></h3>
               <p className="small muted">{classroom.description || 'No description.'}</p>
               <div className="row gap-8" style={{ alignItems: 'center' }}>
                 <Badge tone="neutral">
                   {classroom.activeAssignments} active assignment{classroom.activeAssignments === 1 ? '' : 's'}
                 </Badge>
-                <ClassroomChatButton classroomId={classroom.id} classroomName={classroom.name} />
+                <Link to={`/classrooms/${classroom.id}`}>Mở lớp học →</Link>
                 <ClassroomCallButton classroomId={classroom.id} />
               </div>
             </div>

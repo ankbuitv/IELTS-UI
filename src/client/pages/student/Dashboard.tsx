@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, queryString } from '../../lib/api';
+import { api, describeError, queryString } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Chips, EmptyState, Loading, Notice, ProgressBar, SkillGlyph } from '../../components/ui';
@@ -407,6 +407,7 @@ function truncateTitle(title: string, max = 28): string {
 export function AssignmentRow({ assignment, compact }: { assignment: AssignmentSummary; compact?: boolean }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState('');
   const overdue = assignment.status === 'OVERDUE';
 
   const start = async () => {
@@ -414,6 +415,8 @@ export function AssignmentRow({ assignment, compact }: { assignment: AssignmentS
     try {
       const result = await api.post<{ attemptId: string }>('/api/attempts', { assignmentId: assignment.assignmentId });
       navigate(`/exam/${result.attemptId}`);
+    } catch (error) {
+      setFailure(describeError(error));
     } finally {
       setBusy(false);
     }
@@ -431,7 +434,7 @@ export function AssignmentRow({ assignment, compact }: { assignment: AssignmentS
           </Badge>
         </div>
         <div className="assign-row__meta">
-          {assignment.testTitle} · {assignment.classroomName}
+          {failure ? <span role="alert">{failure} · </span> : null}{assignment.testTitle} · {assignment.classroomName}
           {assignment.deadlineAt ? ` · ${relativeTime(assignment.deadlineAt)}` : ''}
           {!compact ? ` · ${used}` : ''}
           {!compact && assignment.bestRawScore !== null

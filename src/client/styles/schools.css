@@ -33,3 +33,6 @@
 .class-logo__upload input { position:absolute; width:1px; height:1px; opacity:0; }
 .class-logo__upload:focus-within { outline:2px solid #7749ae; outline-offset:3px; }
 .class-logo__controls [role="alert"] { color:#b32638; }
+.school-create-teacher { border-top:1px solid #e2e8ee; padding-top:12px; }
+.school-create-teacher summary { cursor:pointer; color:#315d7d; font-weight:700; font-size:.85rem; }
+.school-create-teacher form { margin-top:14px; }

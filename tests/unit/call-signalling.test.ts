@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import schemaSql from '@worker/lib/runtime-schema.sql';
-import { joinRoom, leaveRoom, postSignal, roomState, setHandRaised, setScreenShare } from '@worker/services/mentor-service';
+import { joinRoom, leaveRoom, postSignal, roomState, setHandRaised, setScreenShare, setMentorClassBrand } from '@worker/services/mentor-service';
 import type { Env } from '@worker/env';
 import type { AuthUser } from '@worker/lib/auth-types';
 
@@ -75,4 +75,26 @@ describe('call signalling and presence', () => {
       expect((await roomState(env, host, 'room', null)).participants.some((p) => p.userId === 'student')).toBe(false);
     } finally { db.close(); }
   });
+  it('allows only the mentor to choose an approved school and prevents switching during a live call', async () => {
+    const specifier='node:sqlite';
+    const sqlite=await import(/* @vite-ignore */ specifier).catch(()=>null) as {DatabaseSync:new(path:string)=>SqliteDb}|null;
+    if(!sqlite)return;
+    const db=new sqlite.DatabaseSync(':memory:');
+    try {
+      db.exec(schemaSql); db.exec('PRAGMA foreign_keys=OFF');
+      db.exec(`INSERT INTO users(id,email,role,status,created_at,updated_at) VALUES('mentor','m@test','MENTOR','ACTIVE','now','now'),('student','s@test','STUDENT','ACTIVE','now','now');
+        INSERT INTO mentor_classes(id,mentor_id,title,status,starts_at,ends_at,created_at,updated_at) VALUES('class','mentor','Class','OPEN','2027-01-01','2027-01-02','now','now');
+        INSERT INTO mentor_sessions(id,mentor_id,student_id,class_id,kind,status,topic,starts_at,ends_at,created_at,updated_at) VALUES('room','mentor','mentor','class','CLASS','ACTIVE','Class','now','later','now','now');
+        INSERT INTO schools(id,name,address,contact_email,owner_user_id,status,created_at,updated_at) VALUES('school','School','Address','s@test','mentor','APPROVED','now','now');
+        INSERT INTO school_members(id,school_id,user_id,role,status,created_at,updated_at) VALUES('sm','school','mentor','OWNER','ACTIVE','now','now');`);
+      const env={DB:adapter(db)} as unknown as Env, mentor=user('mentor','MENTOR'), student=user('student','STUDENT');
+      await expect(setMentorClassBrand(env,student,'class','school')).rejects.toMatchObject({status:403});
+      await expect(setMentorClassBrand(env,mentor,'class','school')).resolves.toEqual({sessionId:'room'});
+      db.exec(`INSERT INTO mentor_room_presence(session_id,user_id,joined_at,last_seen_at,hand_raised,room_key,cam_on,mic_on,screen_on) VALUES('room','mentor','now','${new Date().toISOString()}',0,'main',1,1,0)`);
+      await expect(setMentorClassBrand(env,mentor,'class',null)).rejects.toMatchObject({status:409});
+      db.exec('DELETE FROM mentor_room_presence');
+      await expect(setMentorClassBrand(env,mentor,'class',null)).resolves.toEqual({sessionId:'room'});
+    } finally {db.close();}
+  });
+
 });
