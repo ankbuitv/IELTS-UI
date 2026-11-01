@@ -334,3 +334,36 @@ describe('stale CHECK constraints', () => {
     db.close();
   });
 });
+
+describe('legacy call signalling schema', () => {
+  const legacy = `CREATE TABLE mentor_signals (
+    id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES mentor_sessions(id),
+    sender_id TEXT NOT NULL REFERENCES users(id), target_id TEXT,
+    room_key TEXT NOT NULL DEFAULT 'main', kind TEXT NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL
+  )`;
+  it('detects and rebuilds the old table without losing signalling rows', async () => {
+    const runtime = new Map(runtimeTableStatements()).get('mentor_signals')!;
+    expect(staleConstraintTables(new Map([['mentor_signals', legacy]]))).toEqual(['mentor_signals']);
+    expect(staleConstraintTables(new Map([['mentor_signals', runtime]]))).toEqual([]);
+    const specifier = 'node:sqlite';
+    const sqlite = await import(/* @vite-ignore */ specifier).catch(() => null) as { DatabaseSync: new (path: string) => SqliteDb } | null;
+    if (!sqlite) return;
+    const db = new sqlite.DatabaseSync(':memory:');
+    try {
+      db.exec('PRAGMA foreign_keys = ON; CREATE TABLE users (id TEXT PRIMARY KEY); CREATE TABLE mentor_sessions (id TEXT PRIMARY KEY);');
+      db.exec(legacy);
+      db.exec("INSERT INTO users VALUES ('sender'); INSERT INTO mentor_sessions VALUES ('session');");
+      db.exec("INSERT INTO mentor_signals VALUES ('sig_z','session','sender','target','main','OFFER','first','2026-01-01'), ('sig_a','session','sender','target','main','CANDIDATE','second','2026-01-01');");
+      const statements: string[] = [];
+      const env = { DB: { prepare: (statement: string) => (statements.push(statement), { statement }) } } as never;
+      rebuildStatements(env, 'mentor_signals', runtime, legacy);
+      db.exec('BEGIN');
+      for (const statement of statements) db.exec(statement);
+      db.exec('COMMIT');
+      expect(db.prepare("SELECT id, payload FROM mentor_signals WHERE id = 'sig_z'").get()).toMatchObject({ id: 'sig_z', payload: 'first' });
+      expect(db.prepare("SELECT COUNT(*) AS n FROM mentor_signals WHERE seq IS NOT NULL").get()).toEqual({ n: 2 });
+      db.exec("INSERT INTO mentor_signals (id,session_id,sender_id,kind,payload,created_at) VALUES ('sig_new','session','sender','HAND','up','2026-01-02')");
+      expect(db.prepare("SELECT seq FROM mentor_signals WHERE id = 'sig_new'").get()).toEqual({ seq: 3 });
+    } finally { db.close(); }
+  });
+});

@@ -69,6 +69,15 @@ export const CORE_TABLES = [
  */
 export const CHECK_REBUILDS: ReadonlyArray<{ table: string; requires: RegExp; why: string }> = [
   {
+    // Migration 0046 replaces random-id cursors with a monotonically increasing
+    // primary key. SQLite cannot ADD a primary key: rebuild this unreferenced
+    // signalling table transactionally so deployments that self-bootstrap (or
+    // have not applied 0046 yet) do not break every call with "no such column: seq".
+    table: 'mentor_signals',
+    requires: /seq\s+INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT/i,
+    why: 'signalling requires a monotonic sequence (migration 0046)',
+  },
+  {
     table: 'writing_scores',
     requires: /scoring_source[^,]*CHECK\s*\([^)]*'AI'/i,
     why: "scoring_source must allow 'AI' (migration 0007)",

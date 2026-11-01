@@ -162,3 +162,15 @@ to real candidates:
 ```jsonc
 "vars": { "APP_ENV": "production" }
 ```
+
+### Calls: `Cannot open this room` / `no such column: seq`
+
+An older database may still have the pre-0046 `mentor_signals` table. SQLite
+cannot append an auto-increment primary key with `ALTER TABLE`, so the Worker
+now detects and transactionally rebuilds that **unreferenced signalling table**,
+copying existing envelopes before swapping it and recreating its indexes.
+Deploy the Worker containing this repair (and its matching client), then inspect
+`/api/health`; no database reset is needed. The repair and the migration must
+not be run concurrently. If schema repair fails, use the D1 migration procedure
+appropriate to that database's migration history and inspect Worker logs; do
+not recreate or delete the database.
