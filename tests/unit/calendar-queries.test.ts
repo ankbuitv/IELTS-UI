@@ -4,6 +4,8 @@ import {
   CALENDAR_DEADLINES_SQL,
   CALENDAR_PERSONAL_SQL,
   CALENDAR_SESSIONS_SQL,
+  CALENDAR_TEACHER_DEADLINES_SQL,
+  CALENDAR_STAFF_SCHOOL_EVENTS_SQL,
 } from '@worker/routes/calendar-queries';
 import schemaSql from '@worker/lib/runtime-schema.sql';
 
@@ -54,6 +56,8 @@ describe('calendar queries against the real runtime schema', () => {
     // throws here even before any row is bound. Running all four SELECTs with
     // plausible bind counts proves every referenced column exists.
     for (const [sql, binds] of [
+      [CALENDAR_TEACHER_DEADLINES_SQL, ['2026-01-01', '2026-12-31', 'u1', 'u1']],
+      [CALENDAR_STAFF_SCHOOL_EVENTS_SQL, ['u1', '2026-01-01', '2026-12-31']],
       [CALENDAR_PERSONAL_SQL, ['u1', '2026-01-01', '2026-12-31']],
       [CALENDAR_SESSIONS_SQL, ['u1', 'u1', '2026-01-01', '2026-12-31']],
       [CALENDAR_CLASSES_SQL, ['u1', 'u1', '2026-01-01', '2026-12-31']],
@@ -94,5 +98,25 @@ describe('calendar queries against the real runtime schema', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ id: 'as1', title: 'Essay 1', deadline_at: '2026-10-15T23:59:00.000Z' });
     db.close();
+  });
+});
+
+describe('staff calendar scope', () => {
+  it('only returns deadlines for owned/co-taught classes and events of active approved schools', async () => {
+    const specifier='node:sqlite';
+    const sqlite=await import(/* @vite-ignore */ specifier) as {DatabaseSync:new(path:string)=>{exec(sql:string):void;prepare(sql:string):{all(...p:unknown[]):Array<{id:string}>};close():void}};
+    const db=new sqlite.DatabaseSync(':memory:');
+    try {db.exec(schemaSql);db.exec('PRAGMA foreign_keys=OFF');db.exec(`
+      INSERT INTO classrooms(id,name,teacher_id,join_code,status,created_at,updated_at) VALUES
+      ('mine','Mine','teacher','A','ACTIVE','n','n'),('co','Co','other','B','ACTIVE','n','n'),('private','Private','other','C','ACTIVE','n','n');
+      INSERT INTO classroom_members(id,classroom_id,user_id,role,status,joined_at,updated_at) VALUES ('co-member','co','teacher','CO_TEACHER','ACTIVE','n','n');
+      INSERT INTO assignments(id,classroom_id,teacher_id,test_id,test_version_id,title,status,deadline_at,created_at,updated_at) VALUES
+      ('mine-a','mine','teacher','test','v','Mine','ACTIVE','2026-06-01','n','n'),('co-a','co','other','test','v','Co','ACTIVE','2026-06-02','n','n'),('other-a','private','other','test','v','Other','ACTIVE','2026-06-03','n','n');
+      INSERT INTO schools(id,name,address,contact_email,owner_user_id,status,created_at,updated_at) VALUES ('s1','One','','','owner','APPROVED','n','n'),('s2','Two','','','owner','APPROVED','n','n'),('s3','Pending','','','owner','PENDING','n','n');
+      INSERT INTO school_members(id,school_id,user_id,role,status,created_at,updated_at) VALUES ('sm1','s1','teacher','TEACHER','ACTIVE','n','n'),('sm2','s2','teacher','TEACHER','REMOVED','n','n'),('sm3','s3','teacher','TEACHER','ACTIVE','n','n');
+      INSERT INTO school_events(id,school_id,title,description,starts_at,ends_at,created_by,created_at,updated_at) VALUES ('e1','s1','Meeting','','2026-06-01','2026-06-02','owner','n','n'),('e2','s2','Other','','2026-06-01','2026-06-02','owner','n','n'),('e3','s3','Pending','','2026-06-01','2026-06-02','owner','n','n');`);
+      expect(db.prepare(CALENDAR_TEACHER_DEADLINES_SQL).all('2026-01-01','2026-12-31','teacher','teacher').map(x=>x.id)).toEqual(['mine-a','co-a']);
+      expect(db.prepare(CALENDAR_STAFF_SCHOOL_EVENTS_SQL).all('teacher','2026-01-01','2026-12-31').map(x=>x.id)).toEqual(['e1']);
+    } finally {db.close();}
   });
 });

@@ -6,6 +6,7 @@ import { JoinPage } from '../auth/PublicPages';
 import { DesktopTeacherClasses } from './DesktopTeacherClasses';
 import { TeacherProgressWindow } from './SchoolInsights';
 import { SchoolsPage, AdminSchoolsPage } from './SchoolsPage';
+import { QuestionBank } from '../teacher/QuestionBank';
 import { ClassroomPage, AssignmentPage, StudentDetailPage } from '../teacher/TeacherPages';
 import { AdminWritingQueuePage, TeacherWritingQueuePage } from '../staff/WritingQueue';
 import { AdminLayout } from '../admin/AdminLayout';
@@ -81,6 +82,7 @@ function DesktopRoutes({onClose,onCallActive}:{onClose:()=>void;onCallActive:(ac
     <Route path="/join" element={<JoinPage/>}/><Route path="/schools" element={<SchoolsPage/>}/><Route path="/school-reviews" element={<RolePage roles={['TEACHER','MENTOR','ADMIN']}><AdminSchoolsPage/></RolePage>}/>
     <Route path="/teacher/progress" element={<RolePage roles={['TEACHER','ADMIN']}><TeacherProgressWindow/></RolePage>}/><Route path="/teacher" element={<RolePage roles={['TEACHER','ADMIN']}><DesktopTeacherClasses/></RolePage>}/>
     <Route path="/teacher/classrooms/:classroomId" element={<RolePage roles={['TEACHER','ADMIN']}><ClassroomPage/></RolePage>}/>
+    <Route path="/teacher/questions" element={<RolePage roles={['TEACHER','ADMIN']}><QuestionBank/></RolePage>}/>
     <Route path="/teacher/marking" element={<RolePage roles={['TEACHER','ADMIN']}><WritingQueueForRole/></RolePage>}/>
     <Route path="/teacher/assignments/:assignmentId" element={<RolePage roles={['TEACHER','ADMIN']}><AssignmentPage/></RolePage>}/>
     <Route path="/teacher/students/:userId" element={<RolePage roles={['TEACHER','ADMIN']}><StudentDetailPage/></RolePage>}/>

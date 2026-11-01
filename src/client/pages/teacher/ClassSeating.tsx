@@ -1,0 +1,15 @@
+import { useState } from 'react';
+import { api, describeError } from '../../lib/api';
+import { useAsync } from '../../hooks/useAsync';
+
+type Student={user_id:string;email:string;display_name:string|null;position:number|null};
+type Data={classroomStatus:string;students:Student[]};
+export function ClassSeating({classroomId,onDirtyChange}:{classroomId:string;onDirtyChange:(dirty:boolean)=>void}) {
+ const path=`/api/teacher/classrooms/${encodeURIComponent(classroomId)}/seating`;
+ const data=useAsync(()=>api.get<Data>(path),[path]);
+ const [order,setOrder]=useState<string[]|null>(null);const [busy,setBusy]=useState(false);const [message,setMessage]=useState('');const [dragged,setDragged]=useState<string|null>(null);
+ const students=data.data?.students??[];const ids=order??students.map(s=>s.user_id);const byId=new Map(students.map(s=>[s.user_id,s]));const canEdit=data.data?.classroomStatus==='ACTIVE'&&students.length<=200&&!busy;
+ const move=(id:string,to:number)=>{const next=ids.slice(),from=next.indexOf(id);if(from<0||to<0||to>=next.length||from===to)return;next.splice(from,1);next.splice(to,0,id);setOrder(next);onDirtyChange(true);setMessage('');};
+ const save=async()=>{if(!canEdit||!order)return;setBusy(true);setMessage('');try{await api.put(path,{studentIds:ids});const fresh=await api.get<Data>(path);data.setData(fresh);setOrder(null);onDirtyChange(false);setMessage('Đã lưu sơ đồ.');}catch(e){setMessage(describeError(e));}finally{setBusy(false);}};
+ return <section className="class-seating"><h2>Sơ đồ chỗ ngồi</h2><p>Kéo học viên để đổi vị trí, hoặc dùng nút di chuyển. Sơ đồ dùng chung cho giáo viên có quyền trong lớp; lần lưu sau sẽ thay thế lần trước.</p>{data.error&&<p role="alert">{data.error}</p>}{data.loading&&!data.data&&<p>Đang tải sơ đồ…</p>}{data.data&&<>{data.data.classroomStatus!=='ACTIVE'&&<p>Lớp đã lưu trữ; sơ đồ chỉ đọc.</p>}{students.length>200&&<p>Chỉ hỗ trợ tối đa 200 học viên. Không thể lưu sơ đồ của lớp này.</p>}<div className="class-seating__front">BẢNG / GIÁO VIÊN</div><div className="class-seating__grid">{ids.map((id,index)=>{const s=byId.get(id);if(!s)return null;return <div className="class-seating__seat" key={id} draggable={canEdit} onDragStart={e=>{e.dataTransfer.effectAllowed='move';setDragged(id);}} onDragEnd={()=>setDragged(null)} onDragOver={e=>{if(canEdit)e.preventDefault();}} onDrop={e=>{e.preventDefault();if(dragged&&canEdit)move(dragged,index);setDragged(null);}}><small>Chỗ {index+1}</small><strong>{s.display_name||s.email}</strong><div><button type="button" disabled={!canEdit||index===0} aria-label={`Chuyển ${s.display_name||s.email} lên`} onClick={()=>move(id,index-1)}>←</button><button type="button" disabled={!canEdit||index===ids.length-1} aria-label={`Chuyển ${s.display_name||s.email} xuống`} onClick={()=>move(id,index+1)}>→</button></div></div>;})}</div>{!students.length&&<p>Chưa có học viên trong lớp.</p>}<button type="button" className="class-seating__save" disabled={!canEdit||!order} onClick={()=>void save()}>Lưu sơ đồ</button></>}{message&&<p role="status">{message}</p>}</section>;
+}

@@ -40,9 +40,10 @@ export async function deleteLessonPlan(env: Env, user: AuthUser, schoolId: strin
   if (await env.DB.prepare('SELECT 1 AS ok FROM school_lesson_submissions WHERE plan_id=? AND school_id=? AND author_id=? LIMIT 1').bind(id,schoolId,user.id).first()) throw ApiError.conflict('Giáo án đã gửi duyệt được lưu để bảo toàn lịch sử, không thể xóa.');
   const results = await env.DB.batch([
     env.DB.prepare('DELETE FROM school_lesson_plan_versions WHERE plan_id=? AND school_id=? AND author_id=?').bind(id,schoolId,user.id),
+    env.DB.prepare('DELETE FROM school_lesson_attachments WHERE plan_id=? AND school_id=? AND author_id=?').bind(id,schoolId,user.id),
     env.DB.prepare('DELETE FROM school_lesson_plans WHERE id=? AND school_id=? AND author_id=?').bind(id,schoolId,user.id),
   ]);
-  const result = results[1]!;
+  const result = results[2]!;
   if (!result.meta.changes) throw ApiError.notFound('Không tìm thấy giáo án của bạn.');
 }
 
@@ -67,14 +68,17 @@ export async function reviewAccess(env:Env,user:AuthUser,schoolId:string) {
 }
 export async function submitLessonPlan(env:Env,user:AuthUser,schoolId:string,planId:string,groupId:string) {
   await requireActiveSchoolStaff(env,user,schoolId);
-  const result=await env.DB.prepare(`INSERT INTO school_lesson_submissions(id,school_id,plan_id,group_id,author_id,title,subject,week,content,status,created_at)
+  const submissionId=newId('lps');
+  const results=await env.DB.batch([env.DB.prepare(`INSERT INTO school_lesson_submissions(id,school_id,plan_id,group_id,author_id,title,subject,week,content,status,created_at)
     SELECT ?,p.school_id,p.id,g.id,p.author_id,p.title,p.subject,p.week,p.content,'PENDING',? FROM school_lesson_plans p
     JOIN school_subject_groups g ON g.id=? AND g.school_id=p.school_id
     JOIN school_subject_group_members gm ON gm.group_id=g.id AND gm.user_id=p.author_id
     JOIN school_members leader ON leader.school_id=g.school_id AND leader.user_id=g.leader_id AND leader.status='ACTIVE'
     WHERE p.id=? AND p.school_id=? AND p.author_id=? AND NOT EXISTS(SELECT 1 FROM school_lesson_submissions old WHERE old.plan_id=p.id AND old.status='PENDING')`)
-    .bind(newId('lps'),nowIso(),groupId,planId,schoolId,user.id).run();
-  if (!result.meta.changes) throw ApiError.conflict('Không thể gửi: kiểm tra tổ, tổ trưởng, quyền thành viên và giáo án đang chờ duyệt.');
+    .bind(submissionId,nowIso(),groupId,planId,schoolId,user.id),
+    env.DB.prepare(`INSERT INTO school_lesson_submission_attachments(submission_id,attachment_id)
+      SELECT ?,a.id FROM school_lesson_attachments a JOIN school_lesson_submissions s ON s.id=? AND s.plan_id=a.plan_id WHERE a.plan_id=? AND a.school_id=? AND a.author_id=? AND a.active=1`).bind(submissionId,submissionId,planId,schoolId,user.id)]);
+  if (!results[0]?.meta.changes) throw ApiError.conflict('Không thể gửi: kiểm tra tổ, tổ trưởng, quyền thành viên và giáo án đang chờ duyệt.');
 }
 export async function mySubmissions(env:Env,user:AuthUser,schoolId:string,planId:string) {
   await requireActiveSchoolStaff(env,user,schoolId);

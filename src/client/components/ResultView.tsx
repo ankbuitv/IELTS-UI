@@ -12,6 +12,7 @@ import { AccuracyList } from './charts';
 import { AiMarkPanel } from './AiMarkPanel';
 import { Icon } from './Icon';
 import { useAiMarking } from '../hooks/useAiMarking';
+import { useAsync } from '../hooks/useAsync';
 import { BAND_BASIS_LABELS, meanBand, roundHalfBand } from '@shared/bands';
 import type { AiMarkView } from '@shared/judges';
 
@@ -571,6 +572,11 @@ export function WritingMarkForm({
   const [draft, setDraft] = useState<AiMarkView | null>(null);
   const [draftBusy, setDraftBusy] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const templates = useAsync(()=>api.get<{templates:Array<{id:string;title:string;body:string}>}>('/api/teacher/feedback-templates'),[]);
+  const [templateName,setTemplateName]=useState('');
+  const [templateBusy,setTemplateBusy]=useState(false);
+  const [templateError,setTemplateError]=useState('');
+  const saveTemplate=async()=>{if(templateBusy||!templateName.trim()||!feedback.trim())return;setTemplateBusy(true);setTemplateError('');try{await api.post('/api/teacher/feedback-templates',{title:templateName,body:feedback});setTemplateName('');await templates.reload();}catch(e){setTemplateError(describeError(e));}finally{setTemplateBusy(false);}};
 
   const loadAiDraft = async () => {
     setDraftBusy(true);
@@ -700,6 +706,7 @@ export function WritingMarkForm({
       <Field label="Feedback to the student">
         {(id) => <TextArea id={id} rows={5} value={feedback} onChange={(event) => setFeedback(event.target.value)} />}
       </Field>
+      <details className="feedback-templates"><summary>Mẫu nhận xét cá nhân</summary><p className="tiny muted">Mẫu chỉ thuộc tài khoản của bạn. Chọn để thêm vào nhận xét; hãy kiểm tra trước khi lưu điểm.</p>{templates.error&&<p role="alert">{templates.error}</p>}{templateError&&<p role="alert">{templateError}</p>}<div className="quick-notes">{templates.data?.templates.map(item=><span key={item.id}><button type="button" onClick={()=>addQuickNote(item.body)} title={item.body}>+ {item.title}</button><button type="button" aria-label={`Xóa mẫu ${item.title}`} disabled={templateBusy} onClick={()=>{if(!window.confirm(`Xóa mẫu “${item.title}”?`))return;setTemplateBusy(true);setTemplateError('');void api.delete(`/api/teacher/feedback-templates/${encodeURIComponent(item.id)}`).then(()=>templates.reload()).catch(e=>setTemplateError(describeError(e))).finally(()=>setTemplateBusy(false));}}>×</button></span>)}</div><div className="row"><label>Tên mẫu <input maxLength={100} value={templateName} onChange={e=>setTemplateName(e.target.value)}/></label><Button size="sm" disabled={!feedback.trim()||!templateName.trim()||templateBusy||feedback.length>3000} onClick={()=>void saveTemplate()}>Lưu nhận xét hiện tại làm mẫu</Button></div><small>Tối đa 50 mẫu; mỗi mẫu không quá 3000 ký tự.</small></details>
       <div className="quick-notes" aria-label="Quick comments">
         <span className="quick-notes__label">Thêm nhanh</span>
         {QUICK_NOTES.map((note) => (

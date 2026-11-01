@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import schemaSql from '@worker/lib/runtime-schema.sql';
 import { createLessonPlan, listPlanVersions, mySubmissions, reviewAccess, reviewLessonSubmission, reviewSubmissions, submitLessonPlan, updateLessonPlan } from '@worker/services/lesson-plan-service';
+import { addLessonAttachment, removeLessonAttachment, listLessonAttachments, readDraftAttachment, listSubmissionAttachments, readSubmissionAttachment } from '@worker/services/lesson-attachment-service';
 import { deleteSubjectGroup, saveSubjectGroup } from '@worker/services/school-operations-service';
 import { listSchoolPermissions, schoolPermissions, setSchoolPermissions } from '@worker/services/school-permissions';
 import type { AuthUser } from '@worker/lib/auth-types';
@@ -24,14 +25,28 @@ describe('school lesson submission workflow',()=>{
    await expect(saveSubjectGroup(env,other,'school',null,{name:'Escalation',leaderId:'other',memberIds:['other']})).rejects.toMatchObject({status:403});
    await expect(reviewSubmissions(env,other,'school')).rejects.toMatchObject({status:403});
    expect(await reviewAccess(env,leader,'school')).toBe(true);expect(await reviewAccess(env,other,'school')).toBe(false);await expect(reviewSubmissions(env,other,'school')).rejects.toMatchObject({status:403});
-   await submitLessonPlan(env,author,'school',plan.id,group.id);await expect(submitLessonPlan(env,author,'school',plan.id,group.id)).rejects.toMatchObject({status:409});const review=await reviewSubmissions(env,leader,'school') as Array<{id:string;content:string;status:string}>;expect(review).toHaveLength(1);await updateLessonPlan(env,author,'school',plan.id,{...data,content:'Changed later'});expect((await reviewSubmissions(env,leader,'school') as Array<{content:string}>)[0]?.content).toBe('Submitted content');
+   const attached=await addLessonAttachment(env,author,'school',plan.id,'lesson.txt','aGVsbG8=');
+   await expect(readDraftAttachment(env,leader,'school',plan.id,attached.id)).rejects.toMatchObject({status:404});
+   await expect(addLessonAttachment(env,other,'school',plan.id,'bad.txt','aGVsbG8=')).rejects.toMatchObject({status:404});
+   await expect(addLessonAttachment(env,author,'school',plan.id,'bad.txt','invalid!')).rejects.toMatchObject({status:400});
+   await submitLessonPlan(env,author,'school',plan.id,group.id);await expect(submitLessonPlan(env,author,'school',plan.id,group.id)).rejects.toMatchObject({status:409});const review=await reviewSubmissions(env,leader,'school') as Array<{id:string;content:string;status:string}>;expect(review).toHaveLength(1);
+   expect(await listSubmissionAttachments(env,leader,'school',review[0]!.id)).toMatchObject([{id:attached.id,filename:'lesson.txt'}]);
+   await expect(listSubmissionAttachments(env,other,'school',review[0]!.id)).rejects.toMatchObject({status:404});
+   await removeLessonAttachment(env,author,'school',plan.id,attached.id);
+   expect(await listLessonAttachments(env,author,'school',plan.id)).toEqual([]);
+   await expect(readDraftAttachment(env,author,'school',plan.id,attached.id)).rejects.toMatchObject({status:404});
+   expect(await readSubmissionAttachment(env,leader,'school',review[0]!.id,attached.id)).toMatchObject({data_b64:'aGVsbG8='});
+   const later=await addLessonAttachment(env,author,'school',plan.id,'later.txt','dGVzdA==');
+   await expect(readSubmissionAttachment(env,leader,'school',review[0]!.id,later.id)).rejects.toMatchObject({status:404});
+   await updateLessonPlan(env,author,'school',plan.id,{...data,content:'Changed later'});expect((await reviewSubmissions(env,leader,'school') as Array<{content:string}>)[0]?.content).toBe('Submitted content');
    await expect(reviewLessonSubmission(env,other,'school',review[0]!.id,'APPROVED','')).rejects.toMatchObject({status:403});
    await setSchoolPermissions(env,owner,'school','other',['REVIEW_ALL']);
    expect(await reviewAccess(env,other,'school')).toBe(true);
    expect(await reviewSubmissions(env,other,'school')).toHaveLength(1);
    await setSchoolPermissions(env,owner,'school','other',[]);
    expect(await reviewAccess(env,other,'school')).toBe(false);await expect(reviewLessonSubmission(env,leader,'school',review[0]!.id,'RETURNED','')).rejects.toMatchObject({status:400});await reviewLessonSubmission(env,leader,'school',review[0]!.id,'RETURNED','Cần sửa mục tiêu');expect(await mySubmissions(env,author,'school',plan.id)).toMatchObject([{status:'RETURNED',comment:'Cần sửa mục tiêu'}]);await expect(reviewLessonSubmission(env,owner,'school',review[0]!.id,'APPROVED','')).rejects.toMatchObject({status:409});
-   await submitLessonPlan(env,author,'school',plan.id,group.id);const pending=(await reviewSubmissions(env,owner,'school') as Array<{id:string;status:string}>).find(x=>x.status==='PENDING')!;await reviewLessonSubmission(env,owner,'school',pending.id,'APPROVED','Tốt');await expect(deleteSubjectGroup(env,owner,'school',group.id)).rejects.toMatchObject({status:409});
+   await submitLessonPlan(env,author,'school',plan.id,group.id);const pending=(await reviewSubmissions(env,owner,'school') as Array<{id:string;status:string}>).find(x=>x.status==='PENDING')!;expect(await listSubmissionAttachments(env,owner,'school',pending.id)).toMatchObject([{id:later.id}]);
+   await reviewLessonSubmission(env,owner,'school',pending.id,'APPROVED','Tốt');await expect(deleteSubjectGroup(env,owner,'school',group.id)).rejects.toMatchObject({status:409});
    const self=await createLessonPlan(env,leader,'school',data);await submitLessonPlan(env,leader,'school',self.id,group.id);const selfSubmission=(await reviewSubmissions(env,leader,'school') as Array<{id:string;author_id:string}>).find(x=>x.author_id==='leader')!;await expect(reviewLessonSubmission(env,leader,'school',selfSubmission.id,'APPROVED','')).rejects.toMatchObject({status:409});
    db.exec("UPDATE school_members SET status='REMOVED' WHERE user_id='leader'");await expect(reviewSubmissions(env,leader,'school')).rejects.toMatchObject({status:403});
   }finally{db.close();}

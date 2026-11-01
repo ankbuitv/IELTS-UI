@@ -40,3 +40,17 @@ export const CALENDAR_DEADLINES_SQL = `SELECT a.id, a.title, a.deadline_at
    JOIN classroom_members m ON m.classroom_id = a.classroom_id AND m.user_id = ? AND m.status = 'ACTIVE'
   WHERE a.status = 'ACTIVE' AND a.deadline_at IS NOT NULL AND a.deadline_at >= ? AND a.deadline_at <= ?
   ORDER BY a.deadline_at`;
+
+/** Teaching deadlines for classes owned or actively co-taught by the current user. */
+export const CALENDAR_TEACHER_DEADLINES_SQL = `SELECT a.id,a.title,a.deadline_at,c.name AS classroom_name
+ FROM assignments a JOIN classrooms c ON c.id=a.classroom_id
+ WHERE c.status='ACTIVE' AND a.status IN ('ACTIVE','CLOSED') AND a.deadline_at IS NOT NULL
+ AND a.deadline_at>=? AND a.deadline_at<=?
+ AND (c.teacher_id=? OR EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=? AND m.role='CO_TEACHER' AND m.status='ACTIVE'))
+ ORDER BY a.deadline_at LIMIT 500`;
+/** School-wide events from approved schools where this staff member is active. */
+export const CALENDAR_STAFF_SCHOOL_EVENTS_SQL = `SELECT e.id,e.title,e.description,e.starts_at,e.ends_at,s.name AS school_name
+ FROM school_events e JOIN schools s ON s.id=e.school_id
+ JOIN school_members m ON m.school_id=s.id AND m.user_id=? AND m.status='ACTIVE'
+ WHERE s.status='APPROVED' AND e.ends_at>=? AND e.starts_at<=?
+ ORDER BY e.starts_at LIMIT 500`;

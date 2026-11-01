@@ -10,6 +10,7 @@ import { currentUser } from '../middleware/auth';
 import { acceptClassroomInvite, joinClassroomByCode } from '../services/teacher-service';
 import { newId } from '../lib/ids';
 import { nowIso } from '../lib/ids';
+import { listClassroomBoard,createAnnouncement,pinAnnouncement,deleteAnnouncement,readAnnouncement,createPoll,closePoll,votePoll } from '../services/classroom-board-service';
 import { classroomCallFeedback } from '../services/call-feedback-service';
 
 const router = new Hono<AppBindings>();
@@ -102,6 +103,15 @@ interface ChatMessage {
   attachmentUrl?: string | null;
   attachmentName?: string | null;
 }
+
+router.get('/classrooms/:classroomId/board', async c=>c.json(await listClassroomBoard(c.env,currentUser(c),c.req.param('classroomId'))));
+router.post('/classrooms/:classroomId/announcements', async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(150),body:z.string().trim().min(1).max(5000)}));return c.json({id:await createAnnouncement(c.env,currentUser(c),c.req.param('classroomId'),body.title,body.body)},201);});
+router.patch('/classrooms/:classroomId/announcements/:id', async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({pinned:z.boolean()}));await pinAnnouncement(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'),body.pinned);return c.json({ok:true});});
+router.delete('/classrooms/:classroomId/announcements/:id', async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteAnnouncement(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'));return c.json({ok:true});});
+router.post('/classrooms/:classroomId/announcements/:id/read', async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await readAnnouncement(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'));return c.json({ok:true});});
+router.post('/classrooms/:classroomId/polls', async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({question:z.string().trim().min(1).max(300),choices:z.array(z.string().trim().min(1).max(150)).min(2).max(6)}));return c.json({id:await createPoll(c.env,currentUser(c),c.req.param('classroomId'),body.question,body.choices)},201);});
+router.post('/classrooms/:classroomId/polls/:id/close', async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await closePoll(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'));return c.json({ok:true});});
+router.put('/classrooms/:classroomId/polls/:id/vote', async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({choice:z.number().int().min(0).max(5)}));await votePoll(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'),body.choice);return c.json({ok:true});});
 
 /** Teachers open a reusable room; students may only enter an existing room. */
 router.post('/classrooms/:classroomId/room', async (c) => {

@@ -24,6 +24,11 @@ import {
 import { AccuracyList, BarChart, type ChartTone } from '../../components/charts';
 import { ClassroomChat, ClassroomChatButton } from '../../components/ClassroomChat';
 import { ClassLogo } from '../../components/ClassLogo';
+import { ClassAttendance } from './ClassAttendance';
+import { ClassGradebook } from './ClassGradebook';
+import { ClassPrivateNotes } from './ClassPrivateNotes';
+import { ClassSeating } from './ClassSeating';
+import { ClassroomBoard } from '../../components/ClassroomBoard';
 import { ClassroomCallButton } from '../../components/ClassroomCallButton';
 import { Icon } from '../../components/Icon';
 import { ResultSummary, WritingMarkForm, type AttemptResultPayload } from '../../components/ResultView';
@@ -196,9 +201,12 @@ export function ClassroomPage() {
   const { classroomId = '' } = useParams();
   const toast = useToast();
   const [searchParams] = useSearchParams();
-  const allowedTabs = ['conversation','files','overview','students','assignments','invites','ratings'] as const;
+  const allowedTabs = ['conversation','files','overview','students','assignments','invites','ratings','attendance','gradebook','private-notes','seating','board'] as const;
   const initialTab = allowedTabs.find(value => value === searchParams.get('tab')) ?? 'conversation';
   const [tab, setTab] = useState<typeof allowedTabs[number]>(initialTab);
+  const [attendanceDirty,setAttendanceDirty] = useState(false);
+  const [notesDirty,setNotesDirty] = useState(false);
+  const [seatingDirty,setSeatingDirty] = useState(false);
   const { user } = useAuth();
   const { data, loading, error, reload } = useAsync<ClassroomDetailResponse>(
     () => api.get(`/api/teacher/classrooms/${classroomId}`),
@@ -249,13 +257,18 @@ export function ClassroomPage() {
           { id: 'conversation', label: 'Hội thoại' },
           { id: 'files', label: 'Tệp' },
           { id: 'overview', label: 'Tổng quan' },
+          { id: 'board', label: 'Bảng lớp' },
+          { id: 'attendance', label: 'Điểm danh' },
+          { id: 'private-notes', label: 'Ghi chú riêng' },
+          { id: 'seating', label: 'Sơ đồ chỗ ngồi' },
+          { id: 'gradebook', label: 'Bảng điểm' },
           ...(data.classroom.isOwner || user?.role === 'ADMIN' ? [{ id: 'ratings' as const, label: 'Đánh giá buổi học' }] : []),
           { id: 'students', label: `Students (${data.members.filter((member) => member.role === 'STUDENT').length})` },
           { id: 'assignments', label: `Assignments (${data.assignments.length})` },
           { id: 'invites', label: `Invitations (${data.invites.length})` },
         ]}
         value={tab}
-        onChange={setTab}
+        onChange={next=>{if(tab==='attendance'&&next!=='attendance'&&attendanceDirty&&!window.confirm('Điểm danh có thay đổi chưa lưu. Rời tab sẽ bỏ thay đổi, tiếp tục?'))return;if(tab==='private-notes'&&next!=='private-notes'&&notesDirty&&!window.confirm('Ghi chú chưa lưu. Rời tab sẽ bỏ thay đổi, tiếp tục?'))return;if(tab==='seating'&&next!=='seating'&&seatingDirty&&!window.confirm('Sơ đồ chưa lưu. Rời tab sẽ bỏ thay đổi, tiếp tục?'))return;setAttendanceDirty(false);setNotesDirty(false);setSeatingDirty(false);setTab(next);}}
       />
 
       {tab === 'conversation' || tab === 'files' ? <div className="teacher-conversations">
@@ -265,6 +278,11 @@ export function ClassroomPage() {
         <section className="teacher-conversations__main"><header className="teacher-conversations__head"><span className="teacher-conversations__avatar">{data.classroom.name.trim().slice(0, 1).toLocaleUpperCase()}</span><div><h2>{data.classroom.name}</h2><p>{tab === 'files' ? 'Tệp đã chia sẻ trong lớp' : 'Hội thoại chung của lớp'}</p></div></header><ClassroomChat key={classroomId} classroomId={classroomId} view={tab === 'files' ? 'files' : 'messages'} /></section>
       </div> : null}
 
+      {tab === 'board' && <ClassroomBoard key={classroomId} classroomId={classroomId}/> }
+      {tab === 'seating' && <ClassSeating key={classroomId} classroomId={classroomId} onDirtyChange={setSeatingDirty}/> }
+      {tab === 'private-notes' && <ClassPrivateNotes key={classroomId} classroomId={classroomId} onDirtyChange={setNotesDirty}/> }
+      {tab === 'gradebook' && <ClassGradebook key={classroomId} classroomId={classroomId}/> }
+      {tab === 'attendance' && <ClassAttendance key={classroomId} classroomId={classroomId} onDirtyChange={setAttendanceDirty}/> }
       {tab === 'ratings' && (data.classroom.isOwner || user?.role === 'ADMIN') ? <ClassroomRatings classroomId={classroomId} /> : null}
       {tab === 'overview' ? (
         <>

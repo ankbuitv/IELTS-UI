@@ -32,6 +32,12 @@ import { listWritingQueue, markQuestionManually, setWritingScore } from '../serv
 import { loadWritingMarks, scoreWritingSubmissionWithAi } from '../services/ai-marking-service';
 import { recordAudit } from '../lib/audit';
 import { teacherProgress } from '../services/teacher-progress-service';
+import { readAttendance, saveAttendance } from '../services/teacher-attendance-service';
+import { classroomGradebook } from '../services/teacher-gradebook-service';
+import { listQuestions,createQuestion,updateQuestion,deleteQuestion } from '../services/teacher-question-bank-service';
+import { listFeedbackTemplates,createFeedbackTemplate,deleteFeedbackTemplate } from '../services/teacher-feedback-templates-service';
+import { readSeating, saveSeating } from '../services/teacher-seating-service';
+import { listPrivateNotes, savePrivateNote } from '../services/teacher-private-notes-service';
 import { EXAM_MODES, RESULT_VISIBILITIES, TIMING_POLICIES } from '../../shared/types';
 
 const router = new Hono<AppBindings>();
@@ -45,7 +51,27 @@ router.use('*', async (c, next) => {
 // ---------------------------------------------------------------------------
 // Classrooms
 // ---------------------------------------------------------------------------
+const questionSchema=z.object({skill:z.enum(['LISTENING','READING','WRITING','SPEAKING']),topic:z.string().trim().max(120),question:z.string().trim().min(1).max(5000),referenceAnswer:z.string().trim().max(5000)});
+router.get('/questions',async c=>c.json({questions:await listQuestions(c.env,currentUser(c))}));
+router.post('/questions',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,questionSchema);return c.json({id:await createQuestion(c.env,currentUser(c),body)},201);});
+router.put('/questions/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,questionSchema);await updateQuestion(c.env,currentUser(c),c.req.param('id'),body);return c.json({ok:true});});
+router.delete('/questions/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteQuestion(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
+
+router.get('/feedback-templates',async c=>c.json({templates:await listFeedbackTemplates(c.env,currentUser(c))}));
+router.post('/feedback-templates',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(100),body:z.string().trim().min(1).max(3000)}));return c.json({id:await createFeedbackTemplate(c.env,currentUser(c),body.title,body.body)},201);});
+router.delete('/feedback-templates/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteFeedbackTemplate(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
+
 router.get('/progress', async c => c.json({assignments:await teacherProgress(c.env,currentUser(c))}));
+
+router.get('/classrooms/:id/seating', async c=>c.json(await readSeating(c.env,currentUser(c),c.req.param('id'))));
+router.put('/classrooms/:id/seating', async c=>{assertCsrf(c,c.get('session')?.csrfToken ?? null);const body=await parseBody(c,z.object({studentIds:z.array(z.string().min(1).max(100)).max(200)}));await saveSeating(c.env,currentUser(c),c.req.param('id'),body.studentIds);return c.json({ok:true});});
+
+router.get('/classrooms/:id/private-notes', async c=>c.json(await listPrivateNotes(c.env,currentUser(c),c.req.param('id'))));
+router.put('/classrooms/:id/private-notes/:studentId', async c=>{assertCsrf(c,c.get('session')?.csrfToken ?? null);const body=await parseBody(c,z.object({body:z.string().max(4000)}));await savePrivateNote(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'),body.body);return c.json({ok:true});});
+
+router.get('/classrooms/:id/gradebook', async c=>c.json(await classroomGradebook(c.env,currentUser(c),c.req.param('id'))));
+router.get('/classrooms/:id/attendance', async c=>c.json(await readAttendance(c.env,currentUser(c),c.req.param('id'),c.req.query('date')??'')));
+router.put('/classrooms/:id/attendance', async c=>{assertCsrf(c,c.get('session')?.csrfToken ?? null);const body=await parseBody(c,z.object({date:z.string().length(10),rows:z.array(z.object({studentId:z.string().min(1).max(100),status:z.enum(['PRESENT','ABSENT','LATE','UNMARKED'])})).max(500)}));await saveAttendance(c.env,currentUser(c),c.req.param('id'),body.date,body.rows);return c.json({ok:true});});
 
 router.get('/classrooms', async (c) => {
   const user = currentUser(c);

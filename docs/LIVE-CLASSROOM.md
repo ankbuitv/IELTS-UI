@@ -107,3 +107,25 @@ Sau migration `0058_school_reporting_banner.sql`, đại diện trường đã d
 Admin và cán bộ duyệt do admin chỉ định xem được tổng hợp mọi trường, không có bài làm hoặc hồ sơ cá nhân học viên. Số liệu lớp và học viên chỉ bao gồm lớp đã liên kết; thống kê bài tập tính bài đang hoạt động hoặc đã đóng. Tỷ lệ hoàn thành tính số học viên hiện tại đã nộp/hết giờ trên số học viên hiện tại của từng bài; band trung bình lấy kết quả đã chấm gần nhất của mỗi học viên cho mỗi bài. Giáo viên và đồng giáo viên xem báo cáo theo lớp đang hoạt động mình phụ trách, không theo toàn trường. Trường hợp chưa có mẫu số hiển thị dấu gạch thay vì phần trăm.
 
 Một lớp vẫn chỉ thuộc một trường. Nếu cùng một đại diện quản lý cả hai trường đã duyệt và giáo viên chủ lớp vẫn hoạt động tại trường đích, đại diện có thể chuyển trực tiếp lớp sang trường đích trong cửa sổ Banner học viên. Sau khi xác nhận, lớp không còn tính vào thống kê hoặc nhận banner qua trường cũ; server kiểm tra quyền cả hai trường và kiểm tra liên kết cũ chưa thay đổi. Nếu hai trường có đại diện khác nhau, đại diện trường cũ cần gỡ liên kết trước. Banner có thể tạo, cập nhật, tắt hoặc xóa; xóa sẽ ngừng hiển thị cho học viên.
+
+### Tệp giáo án và điểm danh thủ công
+
+Tạo và lưu giáo án trước, chọn giáo án rồi chọn **Tệp đính kèm** để tải lên, tải xuống hoặc gỡ file (tối đa 5 file đang dùng, mỗi file 500 KiB). Bản nháp và file chỉ tác giả còn là nhân sự trường được duyệt mới xem được. Khi gửi duyệt, danh sách file được chụp lại cùng bản gửi; gỡ file khỏi bản nháp không xóa file của bản đã gửi. Tác giả, đại diện trường, tổ trưởng phụ trách hoặc người có quyền duyệt toàn trường được tải các file của bản gửi. File tải về dưới dạng attachment, không nhúng trực tiếp. Migration 0059 lưu file trong D1, không dùng object storage; không coi đây là kho tài liệu dung lượng lớn.
+
+Trong lớp của giáo viên có tab **Điểm danh** theo ngày: có mặt, vắng, đi muộn hoặc chưa đánh dấu. Chủ lớp, đồng giáo viên đang hoạt động và admin có quyền truy cập lớp theo chính sách hiện có; lớp lưu trữ chỉ xem lịch sử. Ghi nhận này độc lập với số liệu tham gia cuộc gọi và lưu dấu mốc theo ngày, không tự xác nhận học viên có mặt dựa trên cuộc gọi. Học viên đã rời lớp không thể sửa điểm danh, nhưng trạng thái đã ghi vẫn còn trong lịch sử. Mỗi lần lưu tối đa 500 học viên; danh sách ngày gần nhất hiển thị tối đa 180 ngày. Migration 0060 bổ sung bảng dữ liệu.
+
+Tab **Bảng điểm** hiển thị trạng thái/điểm của lần nộp hoặc hết giờ gần nhất cho từng học viên đang hoạt động trên mỗi bài đang mở/đã đóng; tối đa 200 học viên và 100 bài gần nhất. Gợi ý cần hỗ trợ chỉ là tín hiệu khi vắng ít nhất hai ngày trong 30 ngày qua hoặc có ít nhất hai bài đã quá hạn mà chưa nộp, tính trên những bài được hiển thị và học viên hiện tại. Giáo viên cần xác minh trước khi đưa ra kết luận; đây không phải đánh giá tự động về năng lực.
+
+### Teacher-private notes and seating
+
+Private student notes are keyed to the author and class, and require class access. Other teachers and administrators do not see another author's notes through the application. Only current students are listed; removing a student or revoking class access hides existing notes until access is restored. Notes remain stored unless the author clears them, or the class, author or student is deleted. Archived classes are read-only. Do not store unnecessary sensitive information.
+
+Seating is a shared ordered grid for active students (maximum 200). Teachers with class access can rearrange it; saved changes are last-write-wins. Archived classes are read-only. Students removed from the class are hidden, and stale positions are discarded on the next save.
+
+### Class board
+
+The class board allows an authorized teacher to post, pin and delete announcements, and open or close single-choice polls. Students in the class explicitly acknowledge announcements; the teacher sees only an aggregate count of currently active students, not a list of readers. Poll results are aggregate, but the service stores a student's choice by account so they can change it while the poll is open; this is not anonymous voting. Departed students are excluded from current counts and cannot use the board. Archived classes are read-only. Each list shows the most recent 100 entries.
+
+Personal reusable Writing feedback templates are stored per teacher/admin account (maximum 50); they are inserted into draft feedback only when selected and do not themselves publish marks.
+
+The personal question bank stores text questions, topic, skill and optional reference answer, visible only to the author through the teacher API. It is limited to 500 items and is not yet a test builder or directly assignable to students.

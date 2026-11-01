@@ -1,0 +1,14 @@
+import { useState } from 'react';
+import { api, describeError } from '../../lib/api';
+import { useAsync } from '../../hooks/useAsync';
+
+type Attachment={id:string;filename:string;bytes:number;created_at:string};
+/** The file is fetched with the session token; never expose storage URLs or inline HTML. */
+export function LessonAttachments({base,editable=false}:{base:string;editable?:boolean}) {
+  const list=useAsync(()=>api.get<{files:Attachment[]}>(base),[base]);
+  const [busy,setBusy]=useState(false);const [error,setError]=useState('');
+  const download=async(file:Attachment)=>{setBusy(true);setError('');try{const result=await api.get<{file:{filename:string;data_b64:string}}>(`${base}/${encodeURIComponent(file.id)}`);const raw=atob(result.file.data_b64);const bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));const url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));const a=document.createElement('a');a.href=url;a.download=result.file.filename;a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){setError(describeError(e));}finally{setBusy(false);}};
+  const upload=async(file:File)=>{setError('');if(file.size>512_000||file.size===0){setError('File phải có nội dung và nhỏ hơn 500 KB.');return;}setBusy(true);try{const data=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>typeof reader.result==='string'?resolve(reader.result.split(',')[1]??''):reject(new Error('Không thể đọc file.'));reader.onerror=()=>reject(new Error('Không thể đọc file.'));reader.readAsDataURL(file);});await api.post(base,{filename:file.name,base64:data});await list.reload();}catch(e){setError(describeError(e));}finally{setBusy(false);}};
+  const remove=async(file:Attachment)=>{if(!window.confirm(`Gỡ “${file.filename}” khỏi bản nháp? File đã gửi duyệt vẫn được giữ trong lịch sử.`))return;setBusy(true);setError('');try{await api.delete(`${base}/${encodeURIComponent(file.id)}`);await list.reload();}catch(e){setError(describeError(e));}finally{setBusy(false);}};
+  return <div className="sd-plan-attachments"><b>Tệp đính kèm</b>{editable&&<><p>Tối đa 5 file, mỗi file dưới 500 KB. File trong bản gửi duyệt được lưu riêng.</p><label className="sd-plan-attachments__upload">{busy?'Đang xử lý…':'Chọn file'}<input type="file" disabled={busy||!list.data||list.data.files.length>=5} onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value='';if(file)void upload(file);}}/></label></>}{list.loading&&!list.data&&<p>Đang tải…</p>}{list.error&&<p role="alert">{list.error}</p>}{error&&<p role="alert">{error}</p>}{list.data?.files.length===0&&<p>Chưa có tệp đính kèm.</p>}<ul>{list.data?.files.map(file=><li key={file.id}><button type="button" disabled={busy} onClick={()=>void download(file)}>{file.filename}</button><small>{Math.ceil(file.bytes/1024)} KB</small>{editable&&<button type="button" disabled={busy} onClick={()=>void remove(file)}>Gỡ</button>}</li>)}</ul></div>;
+}

@@ -34,6 +34,8 @@ import {
   CALENDAR_DEADLINES_SQL,
   CALENDAR_PERSONAL_SQL,
   CALENDAR_SESSIONS_SQL,
+  CALENDAR_TEACHER_DEADLINES_SQL,
+  CALENDAR_STAFF_SCHOOL_EVENTS_SQL,
 } from './calendar-queries';
 import { getStudentInsights } from '../services/insights-service';
 import { listDrillTypes, startDrill, submitDrill } from '../services/drill-service';
@@ -153,7 +155,14 @@ router.get('/calendar', async (c) => {
     .bind(user.id, from, to)
     .all<{ id: string; title: string; deadline_at: string }>();
 
+  const staff = user.role === 'TEACHER' || user.role === 'MENTOR' || user.role === 'ADMIN';
+  const teacherDeadlines = user.role === 'TEACHER' || user.role === 'ADMIN'
+    ? (await c.env.DB.prepare(CALENDAR_TEACHER_DEADLINES_SQL).bind(from,to,user.id,user.id).all<{id:string;title:string;deadline_at:string;classroom_name:string}>()).results : [];
+  const schoolEvents = staff
+    ? (await c.env.DB.prepare(CALENDAR_STAFF_SCHOOL_EVENTS_SQL).bind(user.id,from,to).all<{id:string;title:string;description:string;starts_at:string;ends_at:string;school_name:string}>()).results : [];
   const events = [
+    ...teacherDeadlines.map(row=>({kind:'DEADLINE' as const,id:`teaching:${row.id}`,title:`Hạn nộp · ${row.title}`,note:`Lớp ${row.classroom_name}`,startsAt:row.deadline_at,endsAt:row.deadline_at})),
+    ...schoolEvents.map(row=>({kind:'CLASS' as const,id:`school:${row.id}`,title:row.title,note:`${row.school_name}${row.description ? ` · ${row.description}` : ''}`,startsAt:row.starts_at,endsAt:row.ends_at})),
     ...personal.results.map((row) => ({
       kind: 'NOTE' as const,
       id: row.id,

@@ -9,6 +9,7 @@ import { listLessonPlans, createLessonPlan, updateLessonPlan, deleteLessonPlan, 
 import { listSubjectGroups, saveSubjectGroup, deleteSubjectGroup, listSchoolEvents, saveSchoolEvent, deleteSchoolEvent, groupStaffDirectory } from '../services/school-operations-service';
 import { schoolPermissions, listSchoolPermissions, setSchoolPermissions } from '../services/school-permissions';
 import { enforceRateLimit } from '../lib/rate-limit';
+import { listLessonAttachments, addLessonAttachment, removeLessonAttachment, readDraftAttachment, listSubmissionAttachments, readSubmissionAttachment } from '../services/lesson-attachment-service';
 import { schoolOverview, eligibleSchoolClasses, setSchoolClassLink, getSchoolBanner, saveSchoolBanner, deleteSchoolBanner, transferSchoolClass, studentSchoolBanners } from '../services/school-insights-service';
 import { createSchoolTeacher, isSchoolManager, canReviewSchoolApplications, listSchoolReviewers, grantSchoolReviewer, revokeSchoolReviewer, grantSchoolManager, listSchoolManagers, revokeSchoolManager, getSchoolLogo, inviteTeacher, listMySchools, listSchoolApplications, listSchoolMembers, registerSchool, removeSchoolMember, respondSchoolInvitation, reviewSchool, saveSchoolLogo } from '../services/school-service';
 
@@ -63,6 +64,12 @@ const lessonPlanSchema = z.object({
 });
 router.get('/:id/my-subject-groups',async c=>c.json({groups:await mySubjectGroups(c.env,currentUser(c),c.req.param('id'))}));
 router.get('/:id/lesson-review-access',async c=>c.json({canReview:await reviewAccess(c.env,currentUser(c),c.req.param('id'))}));
+router.get('/:id/lesson-reviews/:submissionId/attachments',async c=>c.json({files:await listSubmissionAttachments(c.env,currentUser(c),c.req.param('id'),c.req.param('submissionId'))}));
+router.get('/:id/lesson-reviews/:submissionId/attachments/:fileId',async c=>c.json({file:await readSubmissionAttachment(c.env,currentUser(c),c.req.param('id'),c.req.param('submissionId'),c.req.param('fileId'))}));
+router.get('/:id/lesson-plans/:planId/attachments',async c=>c.json({files:await listLessonAttachments(c.env,currentUser(c),c.req.param('id'),c.req.param('planId'))}));
+router.post('/:id/lesson-plans/:planId/attachments',async c=>{const body=await parseBody(c,z.object({filename:z.string().min(1).max(160),base64:z.string().min(4).max(683000)}));return c.json(await addLessonAttachment(c.env,currentUser(c),c.req.param('id'),c.req.param('planId'),body.filename,body.base64),201);});
+router.delete('/:id/lesson-plans/:planId/attachments/:fileId',async c=>{await removeLessonAttachment(c.env,currentUser(c),c.req.param('id'),c.req.param('planId'),c.req.param('fileId'));return c.json({ok:true});});
+router.get('/:id/lesson-plans/:planId/attachments/:fileId',async c=>c.json({file:await readDraftAttachment(c.env,currentUser(c),c.req.param('id'),c.req.param('planId'),c.req.param('fileId'))}));
 router.get('/:id/lesson-reviews',async c=>c.json({submissions:await reviewSubmissions(c.env,currentUser(c),c.req.param('id'))}));
 router.post('/:id/lesson-reviews/:submissionId',async c=>{const body=await parseBody(c,z.object({status:z.enum(['APPROVED','RETURNED']),comment:z.string().trim().max(5000).default('')}));await reviewLessonSubmission(c.env,currentUser(c),c.req.param('id'),c.req.param('submissionId'),body.status,body.comment);return c.json({ok:true});});
 router.get('/:id/lesson-plans/:planId/versions',async c=>c.json({versions:await listPlanVersions(c.env,currentUser(c),c.req.param('id'),c.req.param('planId'))}));

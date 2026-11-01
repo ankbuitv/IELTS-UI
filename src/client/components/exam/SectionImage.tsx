@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Keyb
 import { createPortal } from 'react-dom';
 import type { CandidateImage } from '@shared/question-types';
 import { Icon } from '../Icon';
+import { useExamContainer } from './ExamEmbeddedContext';
 
 /**
  * Content image of a section (a Task 1 chart, a map for a Listening part, a
@@ -86,6 +87,7 @@ const IMAGE_STYLE: CSSProperties = {
 /** Full-screen overlay; rendered into <body> so pane overflow/stacking cannot clip it. */
 export function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const container = useExamContainer();
 
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {
@@ -109,7 +111,7 @@ export function ImageLightbox({ src, alt, onClose }: { src: string; alt: string;
       aria-label={alt}
       onClick={onClose}
       style={{
-        position: 'fixed',
+        position: container ? 'absolute' : 'fixed',
         inset: 0,
         zIndex: 120,
         background: 'rgba(2, 6, 23, 0.82)',
@@ -125,8 +127,8 @@ export function ImageLightbox({ src, alt, onClose }: { src: string; alt: string;
         alt={alt}
         draggable={false}
         style={{
-          maxWidth: 'calc(100vw - 48px)',
-          maxHeight: 'calc(100dvh - 48px)',
+          maxWidth: container ? '100%' : 'calc(100vw - 48px)',
+          maxHeight: container ? '100%' : 'calc(100dvh - 48px)',
           width: 'auto',
           height: 'auto',
           objectFit: 'contain',
@@ -152,6 +154,6 @@ export function ImageLightbox({ src, alt, onClose }: { src: string; alt: string;
         Click anywhere or press Esc to close
       </span>
     </div>,
-    document.body,
+    container?.current ?? document.body,
   );
 }
