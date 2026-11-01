@@ -21,10 +21,12 @@ export async function schoolOverview(env:Env,user:AuthUser) {
 }
 export async function eligibleSchoolClasses(env:Env,user:AuthUser,schoolId:string) {
   await requireSchoolOwner(env,user,schoolId);
-  return (await env.DB.prepare(`SELECT c.id,c.name,c.status,p.display_name AS teacher_name,u.email AS teacher_email,l.school_id AS linked_school_id
+  return (await env.DB.prepare(`SELECT c.id,c.name,c.status,p.display_name AS teacher_name,u.email AS teacher_email,l.school_id AS linked_school_id,
+    CASE WHEN source.owner_user_id=? AND source.status='APPROVED' THEN 1 ELSE 0 END AS can_transfer,
+    CASE WHEN source.owner_user_id=? AND source.status='APPROVED' THEN source.name ELSE NULL END AS linked_school_name
     FROM classrooms c JOIN school_members sm ON sm.school_id=? AND sm.user_id=c.teacher_id AND sm.status='ACTIVE'
-    JOIN users u ON u.id=c.teacher_id LEFT JOIN user_profiles p ON p.user_id=u.id LEFT JOIN school_classroom_links l ON l.classroom_id=c.id
-    WHERE c.status='ACTIVE' ORDER BY c.name`).bind(schoolId).all()).results;
+    JOIN users u ON u.id=c.teacher_id LEFT JOIN user_profiles p ON p.user_id=u.id LEFT JOIN school_classroom_links l ON l.classroom_id=c.id LEFT JOIN schools source ON source.id=l.school_id
+    WHERE c.status='ACTIVE' ORDER BY c.name`).bind(user.id,user.id,schoolId).all()).results;
 }
 export async function setSchoolClassLink(env:Env,user:AuthUser,schoolId:string,classroomId:string,linked:boolean) {
   await requireSchoolOwner(env,user,schoolId);
@@ -38,6 +40,20 @@ export async function setSchoolClassLink(env:Env,user:AuthUser,schoolId:string,c
   } else await env.DB.prepare('DELETE FROM school_classroom_links WHERE classroom_id=? AND school_id=?').bind(classroomId,schoolId).run();
   await recordAudit(env,{actorUserId:user.id,action:linked?'SCHOOL_CLASS_LINK':'SCHOOL_CLASS_UNLINK',entityType:'school',entityId:schoolId,metadata:{classroomId}});
 }
+/** Move only when the actor represents both schools and the link still has the expected source. */
+export async function transferSchoolClass(env:Env,user:AuthUser,targetSchoolId:string,classroomId:string,sourceSchoolId:string) {
+  await requireSchoolOwner(env,user,targetSchoolId);
+  if(sourceSchoolId===targetSchoolId) throw ApiError.validation('Lớp đã thuộc trường này.');
+  await requireSchoolOwner(env,user,sourceSchoolId);
+  const result=await env.DB.prepare(`UPDATE school_classroom_links SET school_id=?,linked_by=?,linked_at=?
+    WHERE classroom_id=? AND school_id=?
+      AND EXISTS (SELECT 1 FROM schools source WHERE source.id=? AND source.owner_user_id=? AND source.status='APPROVED')
+      AND EXISTS (SELECT 1 FROM schools target WHERE target.id=? AND target.owner_user_id=? AND target.status='APPROVED')
+      AND EXISTS (SELECT 1 FROM classrooms c JOIN school_members sm ON sm.school_id=? AND sm.user_id=c.teacher_id AND sm.status='ACTIVE' WHERE c.id=? AND c.status='ACTIVE')`)
+    .bind(targetSchoolId,user.id,nowIso(),classroomId,sourceSchoolId,sourceSchoolId,user.id,targetSchoolId,user.id,targetSchoolId,classroomId).run();
+  if(!result.meta.changes) throw ApiError.conflict('Liên kết lớp đã thay đổi hoặc giáo viên không còn thuộc trường đích. Hãy làm mới và thử lại.');
+  await recordAudit(env,{actorUserId:user.id,action:'SCHOOL_CLASS_TRANSFER',entityType:'school',entityId:targetSchoolId,metadata:{classroomId,sourceSchoolId,targetSchoolId}});
+}
 export async function getSchoolBanner(env:Env,user:AuthUser,schoolId:string) {
   await requireSchoolOwner(env,user,schoolId);
   return env.DB.prepare('SELECT title,message,theme,image_mime,image_b64,active,updated_at FROM school_banners WHERE school_id=?').bind(schoolId).first();
@@ -49,6 +65,11 @@ export async function saveSchoolBanner(env:Env,user:AuthUser,schoolId:string,inp
     ON CONFLICT(school_id) DO UPDATE SET title=excluded.title,message=excluded.message,theme=excluded.theme,image_mime=excluded.image_mime,image_b64=excluded.image_b64,active=excluded.active,updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
     .bind(schoolId,input.title,input.message,input.theme,input.image?.mime??null,input.image?.base64??null,input.active?1:0,user.id,nowIso()).run();
   await recordAudit(env,{actorUserId:user.id,action:'SCHOOL_BANNER_SAVE',entityType:'school',entityId:schoolId});
+}
+export async function deleteSchoolBanner(env:Env,user:AuthUser,schoolId:string) {
+  await requireSchoolOwner(env,user,schoolId);
+  const result=await env.DB.prepare('DELETE FROM school_banners WHERE school_id=?').bind(schoolId).run();
+  if(result.meta.changes) await recordAudit(env,{actorUserId:user.id,action:'SCHOOL_BANNER_DELETE',entityType:'school',entityId:schoolId});
 }
 export async function studentSchoolBanners(env:Env,user:AuthUser) {
   if(user.role!=='STUDENT')throw ApiError.forbidden();

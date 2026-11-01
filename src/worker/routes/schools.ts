@@ -9,7 +9,7 @@ import { listLessonPlans, createLessonPlan, updateLessonPlan, deleteLessonPlan, 
 import { listSubjectGroups, saveSubjectGroup, deleteSubjectGroup, listSchoolEvents, saveSchoolEvent, deleteSchoolEvent, groupStaffDirectory } from '../services/school-operations-service';
 import { schoolPermissions, listSchoolPermissions, setSchoolPermissions } from '../services/school-permissions';
 import { enforceRateLimit } from '../lib/rate-limit';
-import { schoolOverview, eligibleSchoolClasses, setSchoolClassLink, getSchoolBanner, saveSchoolBanner, studentSchoolBanners } from '../services/school-insights-service';
+import { schoolOverview, eligibleSchoolClasses, setSchoolClassLink, getSchoolBanner, saveSchoolBanner, deleteSchoolBanner, transferSchoolClass, studentSchoolBanners } from '../services/school-insights-service';
 import { createSchoolTeacher, isSchoolManager, canReviewSchoolApplications, listSchoolReviewers, grantSchoolReviewer, revokeSchoolReviewer, grantSchoolManager, listSchoolManagers, revokeSchoolManager, getSchoolLogo, inviteTeacher, listMySchools, listSchoolApplications, listSchoolMembers, registerSchool, removeSchoolMember, respondSchoolInvitation, reviewSchool, saveSchoolLogo } from '../services/school-service';
 
 const router = new Hono<AppBindings>();
@@ -18,8 +18,10 @@ router.get('/overview', async c => c.json({schools:await schoolOverview(c.env,cu
 router.get('/my-banners', async c => c.json({banners:await studentSchoolBanners(c.env,currentUser(c))}));
 router.get('/:id/classroom-links', async c => c.json({classes:await eligibleSchoolClasses(c.env,currentUser(c),c.req.param('id'))}));
 router.put('/:id/classroom-links/:classId', async c => {await setSchoolClassLink(c.env,currentUser(c),c.req.param('id'),c.req.param('classId'),true);return c.json({ok:true});});
+router.post('/:id/classroom-links/:classId/transfer', async c => {const body=await parseBody(c,z.object({sourceSchoolId:z.string().min(1).max(100)}));await transferSchoolClass(c.env,currentUser(c),c.req.param('id'),c.req.param('classId'),body.sourceSchoolId);return c.json({ok:true});});
 router.delete('/:id/classroom-links/:classId', async c => {await setSchoolClassLink(c.env,currentUser(c),c.req.param('id'),c.req.param('classId'),false);return c.json({ok:true});});
 router.get('/:id/banner', async c => c.json({banner:await getSchoolBanner(c.env,currentUser(c),c.req.param('id'))}));
+router.delete('/:id/banner', async c => {await deleteSchoolBanner(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
 router.put('/:id/banner', async c => {const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(120),message:z.string().trim().max(500),theme:z.enum(['blue','green','amber']),active:z.boolean(),image:z.object({mime:z.enum(['image/png','image/jpeg','image/webp']),base64:z.string().max(140000)}).nullable()}));await saveSchoolBanner(c.env,currentUser(c),c.req.param('id'),body);return c.json({ok:true});});
 router.get('/access', async c => c.json({isManager:await isSchoolManager(c.env,currentUser(c)),canReviewSchools:await canReviewSchoolApplications(c.env,currentUser(c))}));
 router.get('/reviewers', async c => c.json({reviewers:await listSchoolReviewers(c.env,currentUser(c))}));

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import schemaSql from '@worker/lib/runtime-schema.sql';
 import { grantSchoolManager, revokeSchoolManager, isSchoolManager, canReviewSchoolApplications, listSchoolReviewers, grantSchoolReviewer, revokeSchoolReviewer, getSchoolLogo, saveSchoolLogo, inviteTeacher, listMySchools, listSchoolApplications, listSchoolMembers, registerSchool, removeSchoolMember, respondSchoolInvitation, reviewSchool } from '@worker/services/school-service';
 import { setSchoolPermissions, schoolPermissions } from '@worker/services/school-permissions';
-import { schoolOverview, eligibleSchoolClasses, setSchoolClassLink, saveSchoolBanner, studentSchoolBanners } from '@worker/services/school-insights-service';
+import { schoolOverview, eligibleSchoolClasses, setSchoolClassLink, transferSchoolClass, getSchoolBanner, saveSchoolBanner, deleteSchoolBanner, studentSchoolBanners } from '@worker/services/school-insights-service';
 import { teacherProgress } from '@worker/services/teacher-progress-service';
 import type { AuthUser } from '@worker/lib/auth-types';
 import type { Env } from '@worker/env';
@@ -134,6 +134,31 @@ describe('school insights privacy and reporting', () => {
       expect(await teacherProgress(env,cot)).toMatchObject([{assignment_id:'a1',assigned_count:2,submitted_count:1,average_band:7}]);
       expect(await teacherProgress(env,other)).toMatchObject([{assignment_id:'a2',assigned_count:2,submitted_count:0,average_band:null}]);
       await expect(teacherProgress(env,s1)).rejects.toMatchObject({status:403});
+      // A class may be moved only by the representative of both schools; the old
+      // school must stop counting it and its pupils must see the destination banner.
+      db.exec(`INSERT INTO schools(id,name,address,contact_email,owner_user_id,status,created_at,updated_at) VALUES ('lumi','Lumi','City','l@x.test','owner','APPROVED','now','now');
+        INSERT INTO school_members(id,school_id,user_id,role,status,created_at,updated_at) VALUES ('m4','lumi','owner','OWNER','ACTIVE','now','now');`);
+      await saveSchoolBanner(env,owner,'lumi',{title:'Lumi',message:'Welcome',theme:'blue',active:true,image:null});
+      expect(await eligibleSchoolClasses(env,owner,'lumi')).toMatchObject([{id:'c1',linked_school_id:'sch',linked_school_name:'A',can_transfer:1}]);
+      expect(await eligibleSchoolClasses(env,other,'sch2')).toEqual(expect.arrayContaining([expect.objectContaining({id:'c1',linked_school_id:'sch',linked_school_name:null,can_transfer:0})]));
+      await expect(transferSchoolClass(env,other,'sch2','c1','sch')).rejects.toMatchObject({status:403});
+      await expect(transferSchoolClass(env,owner,'lumi','c1','sch2')).rejects.toMatchObject({status:403});
+      db.exec("UPDATE school_members SET status='REMOVED' WHERE id='m4'");
+      await expect(transferSchoolClass(env,owner,'lumi','c1','sch')).rejects.toMatchObject({status:409});
+      db.exec("UPDATE school_members SET status='ACTIVE' WHERE id='m4'");
+      await transferSchoolClass(env,owner,'lumi','c1','sch');
+      expect(await studentSchoolBanners(env,s1)).toEqual(expect.arrayContaining([expect.objectContaining({school_id:'lumi',title:'Lumi'})]));
+      expect((await studentSchoolBanners(env,s1)).some((b:unknown)=>(b as {school_id:string}).school_id==='sch')).toBe(false);
+      expect(await schoolOverview(env,reviewer)).toEqual(expect.arrayContaining([expect.objectContaining({id:'sch',class_count:0}),expect.objectContaining({id:'lumi',class_count:1})]));
+      await expect(transferSchoolClass(env,owner,'lumi','c1','sch')).rejects.toMatchObject({status:409});
+      await expect(deleteSchoolBanner(env,other,'lumi')).rejects.toMatchObject({status:403});
+      await saveSchoolBanner(env,owner,'lumi',{title:'Updated',message:'Changed',theme:'green',active:true,image:null});
+      expect(await getSchoolBanner(env,owner,'lumi')).toMatchObject({title:'Updated',message:'Changed',theme:'green',active:1});
+      expect(await studentSchoolBanners(env,s1)).toEqual(expect.arrayContaining([expect.objectContaining({school_id:'lumi',title:'Updated'})]));
+      await deleteSchoolBanner(env,owner,'lumi');expect(await getSchoolBanner(env,owner,'lumi')).toBeNull();
+      expect((await studentSchoolBanners(env,s1)).some((b:unknown)=>(b as {school_id:string}).school_id==='lumi')).toBe(false);
+      await deleteSchoolBanner(env,owner,'lumi'); // idempotent
+      await transferSchoolClass(env,owner,'sch','c1','lumi');
       db.exec("UPDATE school_members SET status='REMOVED' WHERE id='m1'");expect(await studentSchoolBanners(env,s1)).toMatchObject([{school_id:'sch2'}]);expect(await schoolOverview(env,reviewer)).toEqual(expect.arrayContaining([expect.objectContaining({id:'sch',class_count:0,student_count:0})]));
       await revokeSchoolReviewer(env,admin,reviewer.id);await expect(schoolOverview(env,reviewer)).rejects.toMatchObject({status:403});
     } finally {db.close();}
