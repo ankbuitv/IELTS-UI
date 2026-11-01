@@ -1,0 +1,9 @@
+import {useState} from 'react';
+import {api,describeError} from '../lib/api';
+import {useAsync} from '../hooks/useAsync';
+export type ResourceFile={id:string;filename:string;subject:string;topic:string;bytes:number;author_name?:string;shared_classroom_id?:string|null;classroom_name?:string|null};
+export async function downloadResource(path:string) {const {file}=await api.get<{file:{filename:string;data_b64:string}}>(path);const bytes=Uint8Array.from(atob(file.data_b64),c=>c.charCodeAt(0));const url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));const a=document.createElement('a');a.href=url;a.download=file.filename;a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);}
+export function ClassResources({classroomId}:{classroomId:string}) {
+ const base=`/api/classrooms/${encodeURIComponent(classroomId)}/resources`;const data=useAsync(()=>api.get<{files:ResourceFile[]}>(base),[base]);const [message,setMessage]=useState('');const [busy,setBusy]=useState(false);
+ return <section className="class-resources"><header><div><h2>Tài liệu giáo viên chia sẻ</h2><p>Tệp chỉ dành cho thành viên lớp đang hoạt động.</p></div><button onClick={()=>void data.reload()}>Làm mới</button></header>{data.error&&<p role="alert">{data.error}</p>}{message&&<p role="alert">{message}</p>}{data.loading&&!data.data&&<p>Đang tải…</p>}{data.data?.files.map(file=><article key={file.id}><div><strong>{file.filename}</strong><small>{[file.subject,file.topic,file.author_name,`${Math.ceil(file.bytes/1024)} KB`].filter(Boolean).join(' · ')}</small></div><button disabled={busy} onClick={()=>{setBusy(true);setMessage('');void downloadResource(`${base}/${encodeURIComponent(file.id)}`).catch(e=>setMessage(describeError(e))).finally(()=>setBusy(false));}}>Tải xuống</button></article>)}{data.data&&!data.data.files.length&&<p>Chưa có tài liệu được chia sẻ.</p>}</section>;
+}

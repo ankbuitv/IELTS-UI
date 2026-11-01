@@ -1,5 +1,10 @@
 import { describe,expect,it } from 'vitest';
 import schema from '@worker/lib/runtime-schema.sql';
+import {listAttempts,getSkillPerformance,getTrends,getTaskTypePerformance} from '@worker/services/analytics-service';
+import {readTermReport,saveTermReport,releaseTermReport,studentTermReports} from '@worker/services/class-term-report-service';
+import {sendAssignmentReminders} from '@worker/services/assignment-reminder-service';
+import {classStudentProgress} from '@worker/services/teacher-student-progress-service';
+import {listResources,createResource,updateResource,deleteResource,readOwnResource,listSharedResources,readSharedResource} from '@worker/services/teacher-resources-service';
 import {listQuestions,createQuestion,updateQuestion,deleteQuestion} from '@worker/services/teacher-question-bank-service';
 import { listFeedbackTemplates,createFeedbackTemplate,deleteFeedbackTemplate } from '@worker/services/teacher-feedback-templates-service';
 import { readSeating,saveSeating } from '@worker/services/teacher-seating-service';
@@ -10,7 +15,7 @@ import type {Env} from '@worker/env';import type {AuthUser} from '@worker/lib/au
 interface Stmt{get(...p:unknown[]):unknown;all(...p:unknown[]):unknown[];run(...p:unknown[]):{changes:number|bigint}}
 interface DB{exec(sql:string):void;prepare(sql:string):Stmt;close():void}
 function adapter(db:DB){return{prepare(sql:string){let values:unknown[]=[];const stmt=db.prepare(sql);return{bind(...v:unknown[]){values=v;return this;},async first(){return stmt.get(...values)??null;},async all(){return{results:stmt.all(...values)};},async run(){return{meta:{changes:Number(stmt.run(...values).changes)}};}};},async batch(stmts:Array<{run:()=>Promise<unknown>}>){db.exec('BEGIN');try{const out=[];for(const stmt of stmts)out.push(await stmt.run());db.exec('COMMIT');return out;}catch(e){db.exec('ROLLBACK');throw e;}}};}
-function user(id:string):AuthUser{return{id,email:`${id}@example.test`,username:null,role:'TEACHER',status:'ACTIVE',displayName:id,avatarUrl:null,createdAt:'',lastLoginAt:null};}
+function user(id:string,role:'TEACHER'|'STUDENT'='TEACHER'):AuthUser{return{id,email:`${id}@example.test`,username:null,role,status:'ACTIVE',displayName:id,avatarUrl:null,createdAt:'',lastLoginAt:null};}
 describe('manual attendance',()=>{it('scopes reads and writes to accessible classes and retains history',async()=>{
  const specifier='node:sqlite';const sqlite=await import(/* @vite-ignore */ specifier) as {DatabaseSync:new(path:string)=>DB};const db=new sqlite.DatabaseSync(':memory:');try{db.exec(schema);db.exec('PRAGMA foreign_keys=OFF');db.exec(`INSERT INTO users(id,email,role,status,created_at,updated_at) VALUES ('t','t@x','TEACHER','ACTIVE','n','n'),('co','co@x','TEACHER','ACTIVE','n','n'),('other','other@x','TEACHER','ACTIVE','n','n'),('s','s@x','STUDENT','ACTIVE','n','n'),('out','out@x','STUDENT','ACTIVE','n','n');
  INSERT INTO classrooms(id,name,teacher_id,join_code,status,created_at,updated_at) VALUES('c','Class','t','T','ACTIVE','n','n');
@@ -21,10 +26,34 @@ describe('manual attendance',()=>{it('scopes reads and writes to accessible clas
  await expect(saveAttendance(env,other,'c','2026-11-01',[{studentId:'s',status:'ABSENT'}])).rejects.toMatchObject({status:403});
  await expect(saveAttendance(env,teacher,'c','2026-11-01',[{studentId:'out',status:'PRESENT'}])).rejects.toMatchObject({status:400});
  await expect(saveAttendance(env,teacher,'c','2026-11-01',[{studentId:'s',status:'PRESENT'},{studentId:'s',status:'LATE'}])).rejects.toMatchObject({status:400});
+ db.exec("INSERT INTO tests(id,slug,title,type,created_at,updated_at) VALUES('test','test','Test','READING','n','n');INSERT INTO test_versions(id,test_id,version_number,created_at,updated_at) VALUES('v','test',1,'n','n')");
  db.exec(`INSERT INTO assignments(id,classroom_id,teacher_id,test_id,test_version_id,title,status,created_at,updated_at) VALUES('a','c','t','test','v','Test','ACTIVE','n','n'),('draft','c','t','test','v','Draft','DRAFT','n','n');
  INSERT INTO attempts(id,user_id,assignment_id,test_id,test_version_id,test_type,status,started_at,submitted_at,estimated_band,created_at,updated_at) VALUES('att1','s','a','test','v','READING','SUBMITTED','1','1',5,'1','1'),('att2','s','a','test','v','READING','SUBMITTED','2','2',7,'2','2');`);
+ db.exec(`INSERT INTO attempt_skill_sessions(id,attempt_id,component_index,skill,test_version_id,status,estimated_band,created_at,updated_at) VALUES('sess','att2',0,'READING','v','SUBMITTED',7,'n','n');
+ INSERT INTO classrooms(id,name,teacher_id,join_code,status,created_at,updated_at) VALUES('private','Other','other','Z','ACTIVE','n','n');
+ INSERT INTO assignments(id,classroom_id,teacher_id,test_id,test_version_id,title,status,created_at,updated_at) VALUES('private-as','private','other','test','v','Private','ACTIVE','n','n');
+ INSERT INTO attempts(id,user_id,assignment_id,test_id,test_version_id,test_type,status,started_at,submitted_at,estimated_band,created_at,updated_at) VALUES('private-att','s','private-as','test','v','READING','SUBMITTED','3','3',9,'3','3');
+ INSERT INTO attempt_skill_sessions(id,attempt_id,component_index,skill,test_version_id,status,estimated_band,created_at,updated_at) VALUES('private-sess','private-att',0,'READING','v','SUBMITTED',9,'n','n');`);
+ const scoped=await listAttempts(env,'s',{limit:100},{teacherId:'t'});expect(scoped.map(x=>x.attemptId)).toEqual(['att2','att1']);
+ const coScoped=await listAttempts(env,'s',{limit:100},{teacherId:'co'});expect(coScoped.map(x=>x.attemptId)).toEqual(['att2','att1']);
+ expect((await listAttempts(env,'s',{limit:100})).map(x=>x.attemptId)).toEqual(expect.arrayContaining(['att1','att2','private-att']));
+ expect((await getTrends(env,{},'s',40,'t')).map(x=>x.attemptId)).toEqual(['att2','att1']);
+ expect((await getSkillPerformance(env,{},'s',{teacherId:'t'})).find(x=>x.skill==='READING')?.latestBand).toBe(7);
+ expect(await getTaskTypePerformance(env,{},'s',{teacherId:'t'})).toEqual([]);
+ const progress=await classStudentProgress(env,co,'c','s');expect(progress.points).toMatchObject([{skill:'READING',band:7}]);expect(progress.points).toHaveLength(1);
+ await expect(classStudentProgress(env,other,'c','s')).rejects.toMatchObject({status:403});await expect(classStudentProgress(env,teacher,'c','out')).rejects.toMatchObject({status:404});
  await expect(classroomGradebook(env,other,'c')).rejects.toMatchObject({status:403});
  const book=await classroomGradebook(env,co,'c');expect(book.assignments).toMatchObject([{id:'a'}]);expect(book.students).toMatchObject([{user_id:'s'}]);expect(book.cells).toMatchObject([{assignment_id:'a',user_id:'s',estimated_band:7}]);
+ const learner=user('s','STUDENT'),outsider=user('out','STUDENT');
+ const input={filename:'test.txt',subject:'English',topic:'Reading',classroomId:'c',base64:'SGVsbG8='};
+ await expect(createResource(env,other,input)).rejects.toMatchObject({status:403});
+ await expect(createResource(env,teacher,{...input,base64:'bad!'})).rejects.toMatchObject({status:400});
+ const resource=await createResource(env,co,input);expect(await listResources(env,co)).toMatchObject([{id:resource}]);
+ expect(await listResources(env,teacher)).toHaveLength(0);await expect(readOwnResource(env,teacher,resource)).rejects.toMatchObject({status:404});
+ expect(await listSharedResources(env,learner,'c')).toMatchObject([{id:resource}]);expect(await readSharedResource(env,learner,'c',resource)).toMatchObject({filename:'test.txt',data_b64:'SGVsbG8='});
+ await expect(listSharedResources(env,outsider,'c')).rejects.toMatchObject({status:403});await expect(updateResource(env,teacher,resource,{subject:'',topic:'',classroomId:null})).rejects.toMatchObject({status:404});
+ db.exec("UPDATE classroom_members SET status='REMOVED' WHERE id='m2'");expect(await listSharedResources(env,learner,'c')).toHaveLength(0);await expect(readSharedResource(env,learner,'c',resource)).rejects.toMatchObject({status:404});db.exec("UPDATE classroom_members SET status='ACTIVE' WHERE id='m2'");
+ await updateResource(env,co,resource,{subject:'English',topic:'X',classroomId:null});expect(await listSharedResources(env,learner,'c')).toHaveLength(0);await deleteResource(env,co,resource);
  const question={skill:'READING' as const,topic:'Travel',question:'Where?',referenceAnswer:'London'};
  const qid=await createQuestion(env,teacher,question);expect(await listQuestions(env,teacher)).toMatchObject([{id:qid,reference_answer:'London'}]);expect(await listQuestions(env,co)).toHaveLength(0);
  await expect(updateQuestion(env,co,qid,question)).rejects.toMatchObject({status:404});await expect(deleteQuestion(env,co,qid)).rejects.toMatchObject({status:404});
@@ -48,8 +77,21 @@ describe('manual attendance',()=>{it('scopes reads and writes to accessible clas
  await savePrivateNote(env,teacher,'c','s','');
  expect((await listPrivateNotes(env,teacher,'c')).students).toMatchObject([{user_id:'s',body:null}]);
  expect((await listPrivateNotes(env,co,'c')).students).toMatchObject([{user_id:'s',body:'co only'}]);
+ db.exec("INSERT INTO assignments(id,classroom_id,teacher_id,test_id,test_version_id,title,status,deadline_at,created_at,updated_at) VALUES('remind','c','t','test','v','Deadline','ACTIVE','2026-11-02T10:00:00.000Z','n','n')");
+ const current=new Date('2026-11-01T12:00:00.000Z');expect(await sendAssignmentReminders(env,current)).toBe(1);expect(await sendAssignmentReminders(env,current)).toBe(0);
+ expect(db.prepare("SELECT user_id FROM notifications WHERE kind='ASSIGNMENT'").all()).toMatchObject([{user_id:'s'}]);
+ db.exec("UPDATE assignments SET deadline_at='2026-11-02T11:00:00.000Z' WHERE id='remind'");expect(await sendAssignmentReminders(env,current)).toBe(1);
+ db.exec("INSERT INTO attempts(id,user_id,assignment_id,test_id,test_version_id,test_type,status,started_at,submitted_at,created_at,updated_at) VALUES('done','s','remind','test','v','READING','SUBMITTED','1','1','1','1');UPDATE assignments SET deadline_at='2026-11-02T11:30:00.000Z' WHERE id='remind'");expect(await sendAssignmentReminders(env,current)).toBe(0);
+ await expect(saveTermReport(env,other,'c','s',{title:'x',fromDate:'2026-11-01',toDate:'2026-11-30',feedback:'x'})).rejects.toMatchObject({status:403});
+ await expect(saveTermReport(env,teacher,'c','s',{title:'x',fromDate:'2026-02-30',toDate:'2026-11-30',feedback:'x'})).rejects.toMatchObject({status:400});
+ const draft={title:'Term one',fromDate:'2026-11-01',toDate:'2026-11-30',feedback:'Good progress'};
+ await saveTermReport(env,teacher,'c','s',draft);expect(await studentTermReports(env,learner,'c')).toHaveLength(0);
+ await expect(studentTermReports(env,outsider,'c')).rejects.toMatchObject({status:403});await releaseTermReport(env,co,'c','s');
+ expect(await studentTermReports(env,learner,'c')).toMatchObject([{title:'Term one',feedback:'Good progress'}]);
+ await saveTermReport(env,teacher,'c','s',{...draft,feedback:'Unreleased change'});expect(await studentTermReports(env,learner,'c')).toMatchObject([{feedback:'Good progress'}]);
+ expect((await readTermReport(env,teacher,'c','s')).draft).toMatchObject({feedback:'Unreleased change'});
  await saveAttendance(env,co,'c','2026-11-01',[{studentId:'s',status:'LATE'}]);expect((await readAttendance(env,teacher,'c','2026-11-01')).students).toMatchObject([{user_id:'s',status:'LATE'}]);
  await saveAttendance(env,teacher,'c','2026-11-01',[{studentId:'s',status:'ABSENT'}]);expect((await readAttendance(env,co,'c','2026-11-01')).dates).toMatchObject([{attendance_date:'2026-11-01',total:1}]);
  db.exec("UPDATE classroom_members SET status='REMOVED' WHERE id='m1'");expect((await readAttendance(env,teacher,'c','2026-11-01')).students).toMatchObject([{user_id:'s',status:'ABSENT',member_status:'REMOVED'}]);await expect(saveAttendance(env,teacher,'c','2026-11-01',[{studentId:'s',status:'UNMARKED'}])).rejects.toMatchObject({status:400});
- db.exec("UPDATE classroom_members SET status='ACTIVE' WHERE id='m1';UPDATE classrooms SET status='ARCHIVED' WHERE id='c'");await expect(savePrivateNote(env,co,'c','s','edit')).rejects.toMatchObject({status:409});await expect(saveSeating(env,co,'c',['s'])).rejects.toMatchObject({status:409});await expect(saveAttendance(env,teacher,'c','2026-11-01',[{studentId:'s',status:'UNMARKED'}])).rejects.toMatchObject({status:409});expect((await readAttendance(env,co,'c','2026-11-01')).students).toHaveLength(1);
+ db.exec("UPDATE classroom_members SET status='ACTIVE' WHERE id='m1';UPDATE classrooms SET status='ARCHIVED' WHERE id='c'");await expect(savePrivateNote(env,co,'c','s','edit')).rejects.toMatchObject({status:409});await expect(releaseTermReport(env,co,'c','s')).rejects.toMatchObject({status:409});await expect(saveSeating(env,co,'c',['s'])).rejects.toMatchObject({status:409});await expect(saveAttendance(env,teacher,'c','2026-11-01',[{studentId:'s',status:'UNMARKED'}])).rejects.toMatchObject({status:409});expect((await readAttendance(env,co,'c','2026-11-01')).students).toHaveLength(1);
  }finally{db.close();}});});

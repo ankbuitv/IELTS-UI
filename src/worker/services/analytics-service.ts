@@ -1,3 +1,4 @@
+import {teacherAttemptScope} from './teacher-attempt-scope';
 import type { Env } from '../env';
 import type { Skill, TestType } from '../../shared/types';
 import { QUESTION_TYPE_META, isQuestionType } from '../../shared/question-types';
@@ -201,12 +202,13 @@ export async function listAttempts(
   env: Env,
   userId: string | null,
   filters: AnalyticsFilters,
-  options: { assignmentId?: string | null; attemptIds?: string[] | null } = {},
+  options: { assignmentId?: string | null; attemptIds?: string[] | null; teacherId?:string } = {},
 ): Promise<AttemptSummary[]> {
   const filter = buildAttemptFilter('a', filters, userId);
   const conditions = [filter.sql.replace(/^WHERE /, '')];
   const bindings = [...filter.bindings];
 
+  if (options.teacherId) { conditions.push(teacherAttemptScope('a')); bindings.push(options.teacherId,options.teacherId); }
   if (options.assignmentId) {
     conditions.push('a.assignment_id = ?');
     bindings.push(options.assignmentId);
@@ -276,7 +278,7 @@ export async function getSkillPerformance(
   env: Env,
   filters: AnalyticsFilters,
   userId: string | null,
-  options: { classroomId?: string; userIds?: string[] } = {},
+  options: { classroomId?: string; userIds?: string[]; teacherId?:string } = {},
 ): Promise<SkillPerformance[]> {
   const conditions: string[] = ["a.status IN ('SUBMITTED','EXPIRED')", "s.status IN ('SUBMITTED','EXPIRED')"];
   const bindings: unknown[] = [];
@@ -289,6 +291,7 @@ export async function getSkillPerformance(
     conditions.push(`a.user_id IN (${options.userIds.map(() => '?').join(',')})`);
     bindings.push(...options.userIds);
   }
+  if (options.teacherId) { conditions.push(teacherAttemptScope('a')); bindings.push(options.teacherId,options.teacherId); }
   if (options.classroomId) {
     conditions.push('a.assignment_id IN (SELECT id FROM assignments WHERE classroom_id = ?)');
     bindings.push(options.classroomId);
@@ -358,6 +361,7 @@ export async function getSkillPerformance(
     writingConditions.push(`a.user_id IN (${options.userIds.map(() => '?').join(',')})`);
     writingBindings.push(...options.userIds);
   }
+  if (options.teacherId) { writingConditions.push(teacherAttemptScope('a')); writingBindings.push(options.teacherId,options.teacherId); }
   if (options.classroomId) {
     writingConditions.push('a.assignment_id IN (SELECT id FROM assignments WHERE classroom_id = ?)');
     writingBindings.push(options.classroomId);
@@ -415,7 +419,7 @@ export async function getTaskTypePerformance(
   env: Env,
   filters: AnalyticsFilters,
   userId: string | null,
-  options: { userIds?: string[]; classroomId?: string } = {},
+  options: { userIds?: string[]; classroomId?: string; teacherId?:string } = {},
 ): Promise<TaskTypePerformance[]> {
   const conditions: string[] = ['aa.marked_at IS NOT NULL'];
   const bindings: unknown[] = [];
@@ -427,6 +431,7 @@ export async function getTaskTypePerformance(
     conditions.push(`a.user_id IN (${options.userIds.map(() => '?').join(',')})`);
     bindings.push(...options.userIds);
   }
+  if (options.teacherId) { conditions.push(teacherAttemptScope('a')); bindings.push(options.teacherId,options.teacherId); }
   if (options.classroomId) {
     conditions.push('a.assignment_id IN (SELECT id FROM assignments WHERE classroom_id = ?)');
     bindings.push(options.classroomId);
@@ -473,9 +478,11 @@ export async function getTrends(
   filters: AnalyticsFilters,
   userId: string,
   limit = 40,
+  teacherId?:string,
 ): Promise<TrendPoint[]> {
   const conditions: string[] = ["a.user_id = ?", "a.status IN ('SUBMITTED','EXPIRED')", 'a.submitted_at IS NOT NULL'];
   const bindings: unknown[] = [userId];
+  if (teacherId) { conditions.push(teacherAttemptScope('a')); bindings.push(teacherId,teacherId); }
   if (filters.from) {
     conditions.push('a.started_at >= ?');
     bindings.push(filters.from);

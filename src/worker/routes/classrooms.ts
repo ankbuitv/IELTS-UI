@@ -10,6 +10,8 @@ import { currentUser } from '../middleware/auth';
 import { acceptClassroomInvite, joinClassroomByCode } from '../services/teacher-service';
 import { newId } from '../lib/ids';
 import { nowIso } from '../lib/ids';
+import {studentTermReports} from '../services/class-term-report-service';
+import {listSharedResources,readSharedResource} from '../services/teacher-resources-service';
 import { listClassroomBoard,createAnnouncement,pinAnnouncement,deleteAnnouncement,readAnnouncement,createPoll,closePoll,votePoll } from '../services/classroom-board-service';
 import { classroomCallFeedback } from '../services/call-feedback-service';
 
@@ -103,6 +105,11 @@ interface ChatMessage {
   attachmentUrl?: string | null;
   attachmentName?: string | null;
 }
+
+router.get('/classrooms/:classroomId/term-reports',async c=>c.json({reports:await studentTermReports(c.env,currentUser(c),c.req.param('classroomId'))}));
+
+router.get('/classrooms/:classroomId/resources',async c=>c.json({files:await listSharedResources(c.env,currentUser(c),c.req.param('classroomId'))}));
+router.get('/classrooms/:classroomId/resources/:id',async c=>c.json({file:await readSharedResource(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'))}));
 
 router.get('/classrooms/:classroomId/board', async c=>c.json(await listClassroomBoard(c.env,currentUser(c),c.req.param('classroomId'))));
 router.post('/classrooms/:classroomId/announcements', async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(150),body:z.string().trim().min(1).max(5000)}));return c.json({id:await createAnnouncement(c.env,currentUser(c),c.req.param('classroomId'),body.title,body.body)},201);});

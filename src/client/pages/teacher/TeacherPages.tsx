@@ -28,6 +28,9 @@ import { ClassAttendance } from './ClassAttendance';
 import { ClassGradebook } from './ClassGradebook';
 import { ClassPrivateNotes } from './ClassPrivateNotes';
 import { ClassSeating } from './ClassSeating';
+import { ClassTermReports } from './ClassTermReports';
+import { ClassSkillProgress } from './ClassSkillProgress';
+import { ClassResources } from '../../components/ClassResources';
 import { ClassroomBoard } from '../../components/ClassroomBoard';
 import { ClassroomCallButton } from '../../components/ClassroomCallButton';
 import { Icon } from '../../components/Icon';
@@ -201,7 +204,7 @@ export function ClassroomPage() {
   const { classroomId = '' } = useParams();
   const toast = useToast();
   const [searchParams] = useSearchParams();
-  const allowedTabs = ['conversation','files','overview','students','assignments','invites','ratings','attendance','gradebook','private-notes','seating','board'] as const;
+  const allowedTabs = ['conversation','files','overview','students','assignments','invites','ratings','attendance','gradebook','private-notes','seating','board','resources','skill-progress','term-reports'] as const;
   const initialTab = allowedTabs.find(value => value === searchParams.get('tab')) ?? 'conversation';
   const [tab, setTab] = useState<typeof allowedTabs[number]>(initialTab);
   const [attendanceDirty,setAttendanceDirty] = useState(false);
@@ -258,10 +261,13 @@ export function ClassroomPage() {
           { id: 'files', label: 'Tệp' },
           { id: 'overview', label: 'Tổng quan' },
           { id: 'board', label: 'Bảng lớp' },
+          { id: 'resources', label: 'Tài liệu giáo viên' },
           { id: 'attendance', label: 'Điểm danh' },
           { id: 'private-notes', label: 'Ghi chú riêng' },
           { id: 'seating', label: 'Sơ đồ chỗ ngồi' },
           { id: 'gradebook', label: 'Bảng điểm' },
+          { id: 'skill-progress', label: 'Tiến độ kỹ năng' },
+          { id: 'term-reports', label: 'Báo cáo học tập' },
           ...(data.classroom.isOwner || user?.role === 'ADMIN' ? [{ id: 'ratings' as const, label: 'Đánh giá buổi học' }] : []),
           { id: 'students', label: `Students (${data.members.filter((member) => member.role === 'STUDENT').length})` },
           { id: 'assignments', label: `Assignments (${data.assignments.length})` },
@@ -278,6 +284,9 @@ export function ClassroomPage() {
         <section className="teacher-conversations__main"><header className="teacher-conversations__head"><span className="teacher-conversations__avatar">{data.classroom.name.trim().slice(0, 1).toLocaleUpperCase()}</span><div><h2>{data.classroom.name}</h2><p>{tab === 'files' ? 'Tệp đã chia sẻ trong lớp' : 'Hội thoại chung của lớp'}</p></div></header><ClassroomChat key={classroomId} classroomId={classroomId} view={tab === 'files' ? 'files' : 'messages'} /></section>
       </div> : null}
 
+      {tab === 'term-reports' && <ClassTermReports key={classroomId} classroomId={classroomId}/> }
+      {tab === 'skill-progress' && <ClassSkillProgress key={classroomId} classroomId={classroomId}/> }
+      {tab === 'resources' && <ClassResources key={classroomId} classroomId={classroomId}/> }
       {tab === 'board' && <ClassroomBoard key={classroomId} classroomId={classroomId}/> }
       {tab === 'seating' && <ClassSeating key={classroomId} classroomId={classroomId} onDirtyChange={setSeatingDirty}/> }
       {tab === 'private-notes' && <ClassPrivateNotes key={classroomId} classroomId={classroomId} onDirtyChange={setNotesDirty}/> }

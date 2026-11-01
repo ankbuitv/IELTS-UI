@@ -1,0 +1,22 @@
+import {useState} from 'react';
+import {api,describeError} from '../../lib/api';
+import {useAsync} from '../../hooks/useAsync';
+import {TermReportView,type Release} from '../../components/TermReportView';
+type Student={user_id:string;display_name:string|null;email:string};
+type Draft={title:string;from_date:string;to_date:string;feedback:string;updated_at:string};
+export function ClassTermReports({classroomId}:{classroomId:string}) {
+ const roster=useAsync(()=>api.get<{students:Student[]}>(`/api/teacher/classrooms/${encodeURIComponent(classroomId)}/gradebook`),[classroomId]);const [student,setStudent]=useState('');const [dirty,setDirty]=useState(false);
+ return <section className="term-report"><h2>Báo cáo học tập</h2><p>Lưu bản nháp, kiểm tra rồi chủ động duyệt và chia sẻ cho học viên. Bản đã chia sẻ không thay đổi khi sửa bản nháp.</p>{roster.error&&<p role="alert">{roster.error}</p>}<label>Chọn học viên<select value={student} onChange={e=>{if(dirty&&!window.confirm('Bản nháp chưa lưu. Bỏ thay đổi?'))return;setStudent(e.target.value);setDirty(false);}}><option value="">Chọn học viên</option>{roster.data?.students.map(s=><option key={s.user_id} value={s.user_id}>{s.display_name||s.email}</option>)}</select></label>{student&&<ReportEditor key={student} classId={classroomId} studentId={student} onDirty={setDirty}/>}</section>;
+}
+function ReportEditor({classId,studentId,onDirty}:{classId:string;studentId:string;onDirty:(v:boolean)=>void}) {
+ const path=`/api/teacher/classrooms/${encodeURIComponent(classId)}/term-reports/${encodeURIComponent(studentId)}`;
+ const data=useAsync(()=>api.get<{classroomStatus:string;draft:Draft|null;releases:Release[]}>(path),[path]);
+ return <>{data.error&&<p role="alert">{data.error}</p>}{data.loading&&!data.data&&<p>Đang tải báo cáo…</p>}{data.data&&<ReportForm key={`${classId}:${studentId}`} path={path} data={data.data} onReload={data.reload} onDirty={onDirty}/>}</>;
+}
+function ReportForm({path,data,onReload,onDirty}:{path:string;data:{classroomStatus:string;draft:Draft|null;releases:Release[]};onReload:()=>Promise<void>;onDirty:(v:boolean)=>void}) {
+ const today=()=>new Date().toISOString().slice(0,10);const [title,setTitle]=useState(data.draft?.title??'Báo cáo học tập');const [from,setFrom]=useState(data.draft?.from_date??`${today().slice(0,7)}-01`);const [to,setTo]=useState(data.draft?.to_date??today());const [feedback,setFeedback]=useState(data.draft?.feedback??'');const [dirty,setDirty]=useState(false);const [saved,setSaved]=useState(!!data.draft);const [busy,setBusy]=useState(false);const [message,setMessage]=useState('');
+ const changed=()=>{setDirty(true);onDirty(true);setMessage('');};
+ const save=async()=>{setBusy(true);setMessage('');try{await api.put(path,{title,fromDate:from,toDate:to,feedback});setDirty(false);setSaved(true);onDirty(false);await onReload();setMessage('Đã lưu bản nháp.');}catch(e){setMessage(describeError(e));}finally{setBusy(false);}};
+ const release=async()=>{if(!window.confirm('Duyệt và chia sẻ báo cáo đã lưu cho học viên? Bản chia sẻ sẽ giữ nguyên như một ảnh chụp.'))return;setBusy(true);setMessage('');try{await api.post(`${path}/release`,{});await onReload();setMessage('Đã duyệt và chia sẻ báo cáo.');}catch(e){setMessage(describeError(e));}finally{setBusy(false);}};
+ return <>{data.classroomStatus!=='ACTIVE'&&<p>Lớp đã lưu trữ; báo cáo chỉ đọc.</p>}<fieldset className="term-report__form" disabled={busy||data.classroomStatus!=='ACTIVE'}><label>Tên báo cáo<input maxLength={150} value={title} onChange={e=>{setTitle(e.target.value);changed();}}/></label><div className="term-report__dates"><label>Từ ngày<input type="date" value={from} onChange={e=>{setFrom(e.target.value);changed();}}/></label><label>Đến ngày<input type="date" value={to} onChange={e=>{setTo(e.target.value);changed();}}/></label></div><label>Nhận xét của giáo viên<textarea maxLength={4000} rows={5} value={feedback} onChange={e=>{setFeedback(e.target.value);changed();}}/></label><div><button disabled={busy||!title.trim()||!from||!to||from>to} onClick={()=>void save()}>Lưu bản nháp</button><button disabled={busy||!saved||dirty} onClick={()=>void release()}>Duyệt và chia sẻ</button></div>{dirty&&<small>Lưu thay đổi trước khi chia sẻ.</small>}</fieldset>{message&&<p role="status">{message}</p>}<h3>Lịch sử đã chia sẻ</h3>{data.releases.map(report=><TermReportView key={report.id} report={report}/>)}{!data.releases.length&&<p>Chưa chia sẻ báo cáo nào.</p>}</>;
+}

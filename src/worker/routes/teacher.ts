@@ -26,6 +26,7 @@ import {
   updateAssignment,
   updateClassroom,
 } from '../services/teacher-service';
+import {teacherAttemptScope} from '../services/teacher-attempt-scope';
 import { getClassroomAnalytics, getSkillPerformance, getTaskTypePerformance, getTrends, listAttempts } from '../services/analytics-service';
 import { buildResultView } from '../services/attempt-service';
 import { listWritingQueue, markQuestionManually, setWritingScore } from '../services/marking-service';
@@ -34,6 +35,9 @@ import { recordAudit } from '../lib/audit';
 import { teacherProgress } from '../services/teacher-progress-service';
 import { readAttendance, saveAttendance } from '../services/teacher-attendance-service';
 import { classroomGradebook } from '../services/teacher-gradebook-service';
+import {readTermReport,saveTermReport,releaseTermReport} from '../services/class-term-report-service';
+import {classStudentProgress} from '../services/teacher-student-progress-service';
+import {listResources,createResource,updateResource,deleteResource,readOwnResource} from '../services/teacher-resources-service';
 import { listQuestions,createQuestion,updateQuestion,deleteQuestion } from '../services/teacher-question-bank-service';
 import { listFeedbackTemplates,createFeedbackTemplate,deleteFeedbackTemplate } from '../services/teacher-feedback-templates-service';
 import { readSeating, saveSeating } from '../services/teacher-seating-service';
@@ -51,6 +55,13 @@ router.use('*', async (c, next) => {
 // ---------------------------------------------------------------------------
 // Classrooms
 // ---------------------------------------------------------------------------
+const resourceMetadata=z.object({subject:z.string().trim().max(120),topic:z.string().trim().max(120),classroomId:z.string().min(1).max(100).nullable()});
+router.get('/resources',async c=>c.json({files:await listResources(c.env,currentUser(c))}));
+router.post('/resources',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,resourceMetadata.extend({filename:z.string().min(1).max(160),base64:z.string().min(4).max(683000)}));return c.json({id:await createResource(c.env,currentUser(c),body)},201);});
+router.put('/resources/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,resourceMetadata);await updateResource(c.env,currentUser(c),c.req.param('id'),body);return c.json({ok:true});});
+router.delete('/resources/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteResource(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
+router.get('/resources/:id',async c=>c.json({file:await readOwnResource(c.env,currentUser(c),c.req.param('id'))}));
+
 const questionSchema=z.object({skill:z.enum(['LISTENING','READING','WRITING','SPEAKING']),topic:z.string().trim().max(120),question:z.string().trim().min(1).max(5000),referenceAnswer:z.string().trim().max(5000)});
 router.get('/questions',async c=>c.json({questions:await listQuestions(c.env,currentUser(c))}));
 router.post('/questions',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,questionSchema);return c.json({id:await createQuestion(c.env,currentUser(c),body)},201);});
@@ -68,6 +79,12 @@ router.put('/classrooms/:id/seating', async c=>{assertCsrf(c,c.get('session')?.c
 
 router.get('/classrooms/:id/private-notes', async c=>c.json(await listPrivateNotes(c.env,currentUser(c),c.req.param('id'))));
 router.put('/classrooms/:id/private-notes/:studentId', async c=>{assertCsrf(c,c.get('session')?.csrfToken ?? null);const body=await parseBody(c,z.object({body:z.string().max(4000)}));await savePrivateNote(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'),body.body);return c.json({ok:true});});
+
+router.get('/classrooms/:id/term-reports/:studentId',async c=>c.json(await readTermReport(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'))));
+router.put('/classrooms/:id/term-reports/:studentId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(150),fromDate:z.string().length(10),toDate:z.string().length(10),feedback:z.string().trim().max(4000)}));await saveTermReport(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'),body);return c.json({ok:true});});
+router.post('/classrooms/:id/term-reports/:studentId/release',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);return c.json(await releaseTermReport(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId')),201);});
+
+router.get('/classrooms/:id/student-progress/:studentId',async c=>c.json(await classStudentProgress(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'))));
 
 router.get('/classrooms/:id/gradebook', async c=>c.json(await classroomGradebook(c.env,currentUser(c),c.req.param('id'))));
 router.get('/classrooms/:id/attendance', async c=>c.json(await readAttendance(c.env,currentUser(c),c.req.param('id'),c.req.query('date')??'')));
@@ -304,11 +321,13 @@ router.get('/students/:userId', async (c) => {
     }>();
   if (!profile) throw ApiError.notFound('Student not found.');
 
+  const teacherId=user.role==='TEACHER'?user.id:undefined;
+  const scopedBindings=teacherId?[teacherId,teacherId]:[];
   const [attempts, skillPerformance, trends, taskTypes, writing, classrooms] = await Promise.all([
-    listAttempts(c.env, studentId, { limit: 100 }),
-    getSkillPerformance(c.env, {}, studentId),
-    getTrends(c.env, { skill: null, testType: null }, studentId),
-    getTaskTypePerformance(c.env, {}, studentId),
+    listAttempts(c.env, studentId, { limit: 100 },{teacherId}),
+    getSkillPerformance(c.env, {}, studentId,{teacherId}),
+    getTrends(c.env, { skill: null, testType: null }, studentId,40,teacherId),
+    getTaskTypePerformance(c.env, {}, studentId,{teacherId}),
     c.env.DB.prepare(
       `SELECT w.id, w.attempt_id, t.title AS test_title, w.task_label, w.word_count, w.submitted_at,
               w.response_text, w.prompt_snapshot, ws.band, ws.feedback, ws.scoring_source, ws.criteria_json
@@ -316,10 +335,10 @@ router.get('/students/:userId', async (c) => {
          JOIN attempts a ON a.id = w.attempt_id
          JOIN tests t ON t.id = a.test_id
          LEFT JOIN writing_scores ws ON ws.writing_submission_id = w.id
-        WHERE a.user_id = ? AND TRIM(w.response_text) != ''
+        WHERE a.user_id = ? AND TRIM(w.response_text) != '' ${teacherId?`AND ${teacherAttemptScope('a')}`:''}
         ORDER BY w.created_at DESC LIMIT 50`,
     )
-      .bind(studentId)
+      .bind(studentId,...scopedBindings)
       .all<{
         id: string;
         attempt_id: string;
@@ -348,10 +367,10 @@ router.get('/students/:userId', async (c) => {
             SUM(CASE WHEN e.type IN ('TAB_HIDDEN','FULLSCREEN_EXIT') THEN 1 ELSE 0 END) AS counted,
             COUNT(e.id) AS total
        FROM attempts x LEFT JOIN integrity_events e ON e.attempt_id = x.id
-      WHERE x.user_id = ?
+      WHERE x.user_id = ? ${teacherId?`AND ${teacherAttemptScope('x')}`:''}
       GROUP BY x.id`,
   )
-    .bind(studentId)
+    .bind(studentId,...scopedBindings)
     .all<{ attempt_id: string; counted: number | null; total: number }>();
   const integrityByAttempt = new Map(integrityRows.results.map((row) => [row.attempt_id, row]));
 

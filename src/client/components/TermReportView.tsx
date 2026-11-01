@@ -1,0 +1,6 @@
+type Summary={attendance:{recorded:number;present:number|null;absent:number|null;late:number|null}|null;assignments:{assigned:number;submitted:number;average_band:number|null}|null};
+export type Release={id:string;title:string;from_date:string;to_date:string;feedback:string;summary_json:string;approved_at:string};
+export function TermReportView({report}:{report:Release}) {
+ let summary:Summary|null=null;try{summary=JSON.parse(report.summary_json) as Summary;}catch{/* Old or invalid snapshots are shown without aggregates. */}
+ return <article className="term-report__release"><h3>{report.title}</h3><small>{report.from_date} → {report.to_date} · Duyệt {new Date(report.approved_at).toLocaleString('vi-VN')}</small><p className="term-report__feedback">{report.feedback||'Không có nhận xét.'}</p>{summary&&<div className="term-report__stats"><span>Điểm danh: {summary.attendance?.present??0} có mặt · {summary.attendance?.absent??0} vắng · {summary.attendance?.late??0} muộn</span><span>Bài tập: {summary.assignments?.submitted??0}/{summary.assignments?.assigned??0} đã nộp hoặc hết giờ</span><span>Band TB: {summary.assignments?.average_band==null?'Chưa có':summary.assignments.average_band.toFixed(1)}</span></div>}<small>Thống kê là ảnh chụp tại lúc duyệt; bài tập tính theo hạn nộp trong khoảng ngày UTC và band chỉ là ước lượng luyện tập.</small></article>;
+}

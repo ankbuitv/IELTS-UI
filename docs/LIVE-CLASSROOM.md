@@ -129,3 +129,13 @@ The class board allows an authorized teacher to post, pin and delete announcemen
 Personal reusable Writing feedback templates are stored per teacher/admin account (maximum 50); they are inserted into draft feedback only when selected and do not themselves publish marks.
 
 The personal question bank stores text questions, topic, skill and optional reference answer, visible only to the author through the teacher API. It is limited to 500 items and is not yet a test builder or directly assignable to students.
+
+### Teacher resource library
+
+A teacher or administrator can keep up to 25 private files (500 KB each), tag them by subject and topic, and optionally share each to one active class the author can manage. Active members of that class can download them from the class resources tab. Removing or changing the share immediately revokes access; if a co-teacher loses class access, their shared resources stop being visible to the class. This is separate from conversational chat files and lesson attachments.
+
+Class skill progress uses only submitted or expired attempts from assignments belonging to that class; linked marked Speaking sessions are included. Up to 200 points are loaded, eight per skill chart displayed, and the learner’s own target is shown only as a goal. No private practice or other class work is included in this view.
+
+Scheduled assignment reminders use the Worker cron: every 30 minutes, up to 500 active students with no completed/expired submission receive an in-app notification when a deadline is within 24 hours. Idempotency is per learner, assignment and deadline; changing the deadline can generate a new reminder. This requires a deployed cron and is not an email or guaranteed exact-time delivery.
+
+End-of-term reports are class-scoped: teachers save a draft, then explicitly approve and share an immutable snapshot with the selected current student. Later edits do not change past releases; publication notifies the learner in-app. Snapshots include manual attendance plus completed/expired attempts on active/closed assignments with a deadline in the chosen UTC date range. Assignments without a deadline are excluded; counts and estimated average bands are informational, not an official result.

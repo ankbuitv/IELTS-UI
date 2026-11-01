@@ -790,7 +790,7 @@ export async function requireStudentAccess(env: Env, user: AuthUser, studentUser
     `SELECT 1 AS ok
        FROM classroom_members student
        JOIN classrooms c ON c.id = student.classroom_id
-      WHERE student.user_id = ? AND student.status = 'ACTIVE'
+      WHERE student.user_id = ? AND student.role = 'STUDENT' AND student.status = 'ACTIVE'
         AND (c.teacher_id = ?
              OR EXISTS (SELECT 1 FROM classroom_members ct
                          WHERE ct.classroom_id = c.id AND ct.user_id = ? AND ct.role = 'CO_TEACHER' AND ct.status = 'ACTIVE'))

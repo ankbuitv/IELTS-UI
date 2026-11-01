@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql, 0038_speaking_partner.sql, 0039_question_drills.sql, 0040_social_billing.sql, 0041_test_covers.sql, 0042_blog.sql, 0043_class_direct_messages.sql, 0044_classroom_call_rooms.sql, 0045_call_attendance_feedback.sql, 0046_call_signals_order.sql, 0047_schools.sql, 0048_school_call_brand.sql, 0049_screen_share_lock.sql, 0050_class_logos.sql, 0051_school_managers.sql, 0052_school_lesson_plans.sql, 0053_school_operations.sql, 0054_desktop_preferences.sql, 0055_lesson_workflow.sql, 0056_school_delegated_permissions.sql, 0057_school_application_reviewers.sql, 0058_school_reporting_banner.sql, 0059_lesson_plan_attachments.sql, 0060_teacher_attendance.sql, 0061_teacher_private_notes.sql, 0062_classroom_seating.sql, 0063_classroom_announcements_polls.sql, 0064_teacher_feedback_templates.sql, 0065_teacher_question_bank.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql, 0038_speaking_partner.sql, 0039_question_drills.sql, 0040_social_billing.sql, 0041_test_covers.sql, 0042_blog.sql, 0043_class_direct_messages.sql, 0044_classroom_call_rooms.sql, 0045_call_attendance_feedback.sql, 0046_call_signals_order.sql, 0047_schools.sql, 0048_school_call_brand.sql, 0049_screen_share_lock.sql, 0050_class_logos.sql, 0051_school_managers.sql, 0052_school_lesson_plans.sql, 0053_school_operations.sql, 0054_desktop_preferences.sql, 0055_lesson_workflow.sql, 0056_school_delegated_permissions.sql, 0057_school_application_reviewers.sql, 0058_school_reporting_banner.sql, 0059_lesson_plan_attachments.sql, 0060_teacher_attendance.sql, 0061_teacher_private_notes.sql, 0062_classroom_seating.sql, 0063_classroom_announcements_polls.sql, 0064_teacher_feedback_templates.sql, 0065_teacher_question_bank.sql, 0066_teacher_resources.sql, 0067_assignment_reminders.sql, 0068_class_term_reports.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 130   Indexes: 130
+-- Tables: 134   Indexes: 133
 -- =============================================================================
 
 -- table: user_profiles
@@ -1661,6 +1661,57 @@ CREATE TABLE IF NOT EXISTS teacher_question_bank (
  created_at TEXT NOT NULL
 );
 
+-- table: teacher_resources
+CREATE TABLE IF NOT EXISTS teacher_resources (
+ id TEXT PRIMARY KEY,
+ author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ filename TEXT NOT NULL,
+ subject TEXT NOT NULL DEFAULT '',
+ topic TEXT NOT NULL DEFAULT '',
+ shared_classroom_id TEXT REFERENCES classrooms(id) ON DELETE SET NULL,
+ data_b64 TEXT NOT NULL,
+ bytes INTEGER NOT NULL,
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL
+);
+
+-- table: assignment_reminders
+CREATE TABLE IF NOT EXISTS assignment_reminders (
+ assignment_id TEXT NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
+ student_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ deadline_at TEXT NOT NULL,
+ notification_id TEXT NOT NULL,
+ created_at TEXT NOT NULL,
+ PRIMARY KEY(assignment_id,student_id,deadline_at)
+);
+
+-- table: class_term_report_drafts
+CREATE TABLE IF NOT EXISTS class_term_report_drafts (
+ classroom_id TEXT NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+ student_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ title TEXT NOT NULL,
+ from_date TEXT NOT NULL,
+ to_date TEXT NOT NULL,
+ feedback TEXT NOT NULL,
+ updated_by TEXT NOT NULL REFERENCES users(id),
+ updated_at TEXT NOT NULL,
+ PRIMARY KEY(classroom_id,student_id)
+);
+
+-- table: class_term_report_releases
+CREATE TABLE IF NOT EXISTS class_term_report_releases (
+ id TEXT PRIMARY KEY,
+ classroom_id TEXT NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+ student_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ title TEXT NOT NULL,
+ from_date TEXT NOT NULL,
+ to_date TEXT NOT NULL,
+ feedback TEXT NOT NULL,
+ summary_json TEXT NOT NULL,
+ approved_by TEXT NOT NULL REFERENCES users(id),
+ approved_at TEXT NOT NULL
+);
+
 -- index: idx_sessions_user
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
 
@@ -2059,3 +2110,12 @@ CREATE INDEX IF NOT EXISTS idx_teacher_feedback_author ON teacher_feedback_templ
 
 -- index: idx_teacher_question_bank
 CREATE INDEX IF NOT EXISTS idx_teacher_question_bank ON teacher_question_bank(author_id,updated_at DESC);
+
+-- index: idx_teacher_resources_author
+CREATE INDEX IF NOT EXISTS idx_teacher_resources_author ON teacher_resources(author_id,updated_at DESC);
+
+-- index: idx_teacher_resources_class
+CREATE INDEX IF NOT EXISTS idx_teacher_resources_class ON teacher_resources(shared_classroom_id,updated_at DESC);
+
+-- index: idx_class_term_report_release
+CREATE INDEX IF NOT EXISTS idx_class_term_report_release ON class_term_report_releases(classroom_id,student_id,approved_at DESC);
