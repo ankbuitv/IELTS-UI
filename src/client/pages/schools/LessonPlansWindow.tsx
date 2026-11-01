@@ -11,7 +11,7 @@ type Draft = { title: string; subject: string; week: string; content: string };
 const emptyDraft = (): Draft => ({ title: '', subject: '', week: '', content: '' });
 
 /** Personal lesson plans: no approval or signature workflow is implied. */
-export function LessonPlansWindow({ school, schools, setSchoolId }: { school?: SchoolOption; schools: SchoolOption[]; setSchoolId: (id: string) => void }) {
+export function LessonPlansWindow({ school, schools, setSchoolId }: { school?: SchoolOption; schools: SchoolOption[]; setSchoolId: (id: string) => boolean }) {
   const [result, setResult] = useState<{ schoolId: string; plans: Plan[]; error?: string } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState<'new' | string | null>(null);
@@ -74,7 +74,7 @@ export function LessonPlansWindow({ school, schools, setSchoolId }: { school?: S
     catch(e){setError(describeError(e));}finally{setBusy(false);}
   };
   const setVersionCount = () => setRevision(r=>r+1);
-  const changeSchool = (id: string) => { setSelected(null); setEditing(null); setError(''); setSchoolId(id); };
+  const changeSchool = (id: string) => { if (!setSchoolId(id)) return; setSelected(null); setEditing(null); setError(''); };
 
   return <div className="sd-window__body sd-plan-window">
     <div className="sd-appbar"><button disabled={!school} onClick={() => openEditor()}><Icon name="plus" size={15} /> Thêm giáo án</button><button disabled={!current} onClick={() => current && openEditor(current)}><Icon name="edit" size={15} /> Sửa</button><button disabled={!current || busy} onClick={() => void remove()}><Icon name="trash" size={15} /> Xóa</button><button disabled={!current || busy} onClick={() => { setError(''); setGroupId(groups[0]?.id ?? ''); setAux('submit'); }}><Icon name="send" size={15} /> Gửi duyệt</button><button disabled={!current || busy} onClick={() => void showHistory()}><Icon name="clock" size={15} /> Lịch sử</button><button disabled={!school} onClick={() => setRevision(r => r + 1)}><Icon name="rotate" size={15} /> Làm mới</button></div>
