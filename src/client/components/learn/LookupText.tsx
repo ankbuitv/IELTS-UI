@@ -61,7 +61,7 @@ export function LookupProvider({ children, enabled = true }: { children: ReactNo
                 <Icon name="close" size={16} />
               </button>
             </header>
-            <DictionaryPanel key={term} compact initialTerm={term} autoFocus />
+            <DictionaryPanel key={term} compact initialTerm={term} source="Lesson" autoFocus />
           </div>
         </div>
       ) : null}

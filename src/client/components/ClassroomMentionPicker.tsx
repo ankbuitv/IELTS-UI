@@ -1,0 +1,6 @@
+import {useState} from 'react';import {api} from '../lib/api';import {useAsync} from '../hooks/useAsync';
+type Member={id:string;name:string;role:string};
+export function ClassroomMentionPicker({classroomId,selected,onChange,disabled}:{classroomId:string;selected:string[];onChange:(value:string[])=>void;disabled:boolean}){
+ const [open,setOpen]=useState(false);const members=useAsync(()=>api.get<{members:Member[]}>(`/api/classrooms/${encodeURIComponent(classroomId)}/mentionable`),[open,classroomId],{immediate:open});
+ return <details className="course-mentions" onToggle={e=>setOpen(e.currentTarget.open)}><summary>Đề cập thành viên ({selected.length}/10)</summary>{members.error&&<p role="alert">{members.error}</p>}{open&&members.loading&&!members.data?<p>Đang tải thành viên…</p>:null}<div className="course-mentions__list">{members.data?.members.map(member=><label key={member.id}><input type="checkbox" checked={selected.includes(member.id)} disabled={disabled||(!selected.includes(member.id)&&selected.length>=10)} onChange={e=>onChange(e.target.checked?[...selected,member.id]:selected.filter(id=>id!==member.id))}/> {member.name} <small>{member.role}</small></label>)}</div>{members.data&&!members.data.members.length&&<p>Không có thành viên khác.</p>}<small>Người được chọn nhận thông báo trong ứng dụng. Tối đa 500 thành viên hiển thị.</small></details>;
+}

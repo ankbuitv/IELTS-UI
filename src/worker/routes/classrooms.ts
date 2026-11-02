@@ -1,9 +1,15 @@
+import {getClassChatMute,setClassChatMute} from '../services/classroom-chat-mutes';
+import {listUnreadMarks,markUnread,unmarkUnread} from '../services/classroom-unread';
+import {mentionable,resolveMentionTargets,mentionStatements} from '../services/classroom-mentions';
+import {assertThreadRoot,listThread} from '../services/classroom-threads';
+import {listMessagePins,pinMessage,unpinMessage} from '../services/classroom-message-pins';
+import {assertClassroomChatAccess,searchClassroomMessages} from '../services/classroom-message-search';
 import {listStudentWorksheets,studentWorksheetDetail,submitWorksheet} from '../services/class-worksheet-service';
 import {listStudentSupport,bookSupport,cancelStudentBooking} from '../services/teacher-support-service';
 import {assignmentEligible} from '../services/assignment-audience';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { AppBindings, Env } from '../env';
+import type { AppBindings } from '../env';
 import { assertCsrf, assertSameOrigin } from '../lib/http';
 import { ApiError } from '../lib/errors';
 import { putBlob } from '../services/blob-store';
@@ -14,7 +20,7 @@ import { acceptClassroomInvite, joinClassroomByCode } from '../services/teacher-
 import { newId } from '../lib/ids';
 import { nowIso } from '../lib/ids';
 import {studentTermReports} from '../services/class-term-report-service';
-import {listSharedResources,readSharedResource} from '../services/teacher-resources-service';
+import {listSharedResources,readSharedResource,setClassResourcePin} from '../services/teacher-resources-service';
 import { listClassroomBoard,createAnnouncement,pinAnnouncement,deleteAnnouncement,readAnnouncement,createPoll,closePoll,votePoll } from '../services/classroom-board-service';
 import { classroomCallFeedback } from '../services/call-feedback-service';
 
@@ -83,22 +89,6 @@ router.get('/classrooms/mine', requireAuth, async (c) => {
   });
 });
 
-/** Membership check shared by the course chat routes. */
-async function assertClassroomAccess(env: Env, classroomId: string, userId: string, role: string) {
-  if (role === 'ADMIN') {
-    const row = await env.DB.prepare('SELECT id FROM classrooms WHERE id = ?').bind(classroomId).first<{ id: string }>();
-    if (!row) throw ApiError.notFound('That classroom does not exist.');
-    return;
-  }
-  const member = await env.DB.prepare(
-    `SELECT 1 AS ok FROM classroom_members WHERE classroom_id = ? AND user_id = ? AND status = 'ACTIVE'
-     UNION SELECT 1 AS ok FROM classrooms WHERE id = ? AND teacher_id = ? LIMIT 1`,
-  )
-    .bind(classroomId, userId, classroomId, userId)
-    .first<{ ok: number }>();
-  if (!member) throw ApiError.forbidden('Join this classroom to see its chat.');
-}
-
 interface ChatMessage {
   id: string;
   senderId: string;
@@ -120,6 +110,7 @@ router.post('/classrooms/:classroomId/support/:slotId/cancel',async c=>{assertCs
 router.get('/classrooms/:classroomId/term-reports',async c=>c.json({reports:await studentTermReports(c.env,currentUser(c),c.req.param('classroomId'))}));
 
 router.get('/classrooms/:classroomId/resources',async c=>c.json({files:await listSharedResources(c.env,currentUser(c),c.req.param('classroomId'))}));
+router.put('/classrooms/:classroomId/resources/:id/pin',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({pinned:z.boolean()}));await setClassResourcePin(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'),body.pinned);return c.json({ok:true});});
 router.get('/classrooms/:classroomId/resources/:id',async c=>c.json({file:await readSharedResource(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'))}));
 
 router.get('/classrooms/:classroomId/board', async c=>c.json(await listClassroomBoard(c.env,currentUser(c),c.req.param('classroomId'))));
@@ -137,7 +128,7 @@ router.post('/classrooms/:classroomId/room', async (c) => {
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const classroomId = c.req.param('classroomId');
   const body = await parseBody(c, z.object({ schoolId: z.string().min(1).max(100).nullable().optional() }));
-  await assertClassroomAccess(c.env, classroomId, user.id, user.role);
+  await assertClassroomChatAccess(c.env, classroomId, user);
   const klass = await c.env.DB.prepare('SELECT id, name, teacher_id, status FROM classrooms WHERE id = ?')
     .bind(classroomId).first<{ id: string; name: string; teacher_id: string; status: string }>();
   if (!klass || klass.status !== 'ACTIVE') throw ApiError.conflict('This classroom is archived.');
@@ -191,18 +182,37 @@ router.get('/classrooms/:classroomId/call-feedback', async (c) => {
   return c.json(await classroomCallFeedback(c.env, currentUser(c), c.req.param('classroomId')));
 });
 
+router.get('/classrooms/:classroomId/chat-mute',async c=>{c.header('Cache-Control','no-store');return c.json(await getClassChatMute(c.env,currentUser(c),c.req.param('classroomId')));});
+router.put('/classrooms/:classroomId/chat-mute',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({minutes:z.number().int().min(1).max(10080).nullable()}));await setClassChatMute(c.env,currentUser(c),c.req.param('classroomId'),body.minutes);return c.json({ok:true});});
+router.get('/classrooms/:classroomId/unread-marks',async c=>{c.header('Cache-Control','no-store');return c.json({messages:await listUnreadMarks(c.env,currentUser(c),c.req.param('classroomId'))});});
+router.put('/classrooms/:classroomId/unread-marks/:messageId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await markUnread(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('messageId'));return c.json({ok:true});});
+router.delete('/classrooms/:classroomId/unread-marks/:messageId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await unmarkUnread(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('messageId'));return c.json({ok:true});});
+router.get('/classrooms/:classroomId/mentionable',async c=>{c.header('Cache-Control','no-store');return c.json({members:await mentionable(c.env,currentUser(c),c.req.param('classroomId'))});});
+router.get('/classrooms/:classroomId/messages/:rootId/replies',async c=>{c.header('Cache-Control','no-store');return c.json(await listThread(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('rootId')));});
+router.get('/classrooms/:classroomId/message-pins',async c=>{c.header('Cache-Control','no-store');return c.json(await listMessagePins(c.env,currentUser(c),c.req.param('classroomId')));});
+router.put('/classrooms/:classroomId/message-pins/:messageId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await pinMessage(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('messageId'));return c.json({ok:true});});
+router.delete('/classrooms/:classroomId/message-pins/:messageId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await unpinMessage(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('messageId'));return c.json({ok:true});});
+
+/** Search all classroom history with a stable cursor; only authorized members can read it. */
+router.get('/classrooms/:classroomId/messages/search',async c=>{
+ const query=c.req.query('q')??'',time=c.req.query('beforeTime'),id=c.req.query('beforeId');
+ if((time&&!id)||(id&&!time))throw ApiError.validation('Vị trí tìm kiếm không hợp lệ.');
+ c.header('Cache-Control','no-store');
+ return c.json(await searchClassroomMessages(c.env,currentUser(c),c.req.param('classroomId'),query,time&&id?{time,id}:undefined));
+});
+
 /** The course chat stream, newest 100, oldest first. */
 router.get('/classrooms/:classroomId/messages', requireAuth, async (c) => {
   const user = currentUser(c);
   const classroomId = c.req.param('classroomId');
-  await assertClassroomAccess(c.env, classroomId, user.id, user.role);
+  await assertClassroomChatAccess(c.env, classroomId, user);
   const rows = await c.env.DB.prepare(
     `SELECT m.id, m.sender_id, m.body, m.created_at, m.attachment_url, m.attachment_name,
             COALESCE(NULLIF(TRIM(p.display_name), ''), NULLIF(TRIM(u.username), ''), NULLIF(substr(u.email, 1, instr(u.email, '@') - 1), ''), 'Học viên') AS display_name
        FROM classroom_messages m
        JOIN users u ON u.id = m.sender_id
        LEFT JOIN user_profiles p ON p.user_id = m.sender_id
-      WHERE m.classroom_id = ?
+      WHERE m.classroom_id = ? AND NOT EXISTS(SELECT 1 FROM classroom_message_replies reply WHERE reply.message_id=m.id)
       ORDER BY m.created_at DESC
       LIMIT 100`,
   )
@@ -235,20 +245,26 @@ router.post('/classrooms/:classroomId/messages', requireAuth, async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const classroomId = c.req.param('classroomId');
-  await assertClassroomAccess(c.env, classroomId, user.id, user.role);
+  await assertClassroomChatAccess(c.env, classroomId, user);
   const body = await parseBody(
     c,
     z.object({
       body: z.string().max(4000).optional().default(''),
+      replyTo: z.string().min(1).max(100).optional(),
+      mentions: z.array(z.string().min(1).max(100)).max(10).optional().default([]),
       /** Optional file: `data:<mime>;base64,…` up to 10 MB, kept in D1. */
       attachmentName: z.string().min(1).max(160).optional(),
       attachmentMime: z.string().min(3).max(120).optional(),
       attachmentBase64: z.string().min(8).max(15_000_000).optional(),
     }),
   );
-  const text = body.body.trim();
+  const targets=await resolveMentionTargets(c.env,user,classroomId,body.mentions);
+  const prefix=targets.map(person=>`@${person.name}`).join(' ');
+  const text = [prefix,body.body.trim()].filter(Boolean).join(' ');
+  if(text.length>4000)throw ApiError.validation('Nội dung và tên được nhắc đến không được quá 4000 ký tự.');
   if (Boolean(body.attachmentBase64) !== Boolean(body.attachmentName)) throw ApiError.validation('Provide both a file and its name.');
   if (!text && !body.attachmentBase64) throw ApiError.validation('Write something or attach a file.');
+  if(body.replyTo)await assertThreadRoot(c.env,classroomId,body.replyTo);
 
   let attachmentUrl: string | null = null;
   let attachmentName: string | null = null;
@@ -273,11 +289,10 @@ router.post('/classrooms/:classroomId/messages', requireAuth, async (c) => {
 
   const id = newId('ccm');
   const timestamp = nowIso();
-  await c.env.DB.prepare(
-    'INSERT INTO classroom_messages (id, classroom_id, sender_id, body, attachment_url, attachment_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-  )
-    .bind(id, classroomId, user.id, text, attachmentUrl, attachmentName, timestamp)
-    .run();
+  const insert=c.env.DB.prepare('INSERT INTO classroom_messages (id, classroom_id, sender_id, body, attachment_url, attachment_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, classroomId, user.id, text, attachmentUrl, attachmentName, timestamp);
+  const operations=[insert,...(body.replyTo?[c.env.DB.prepare('INSERT INTO classroom_message_replies(message_id,classroom_id,root_id,created_at) VALUES(?,?,?,?)').bind(id,classroomId,body.replyTo,timestamp)]:[]),...mentionStatements(c.env,classroomId,id,targets,timestamp)];
+  try{if(operations.length>1)await c.env.DB.batch(operations);else await insert.run();}catch(error){if((error as Error).message.includes('CHECK constraint failed'))throw ApiError.conflict('Thành viên được đề cập không còn thuộc lớp; hãy chọn lại.');throw error;}
   const message: ChatMessage = {
     id,
     senderId: user.id,

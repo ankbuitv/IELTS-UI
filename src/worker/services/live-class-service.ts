@@ -123,20 +123,24 @@ export async function createPoll(
   const session = await sessionFor(env, viewer, sessionId, roomKey);
   if (!isHost(session, viewer)) throw ApiError.forbidden('Only the mentor can launch a poll.');
   const question = input.question.trim();
-  const options = input.options.map((option) => option.trim()).filter(Boolean).slice(0, 6);
+  const options = input.options.map((option) => option.trim());
   if (question.length < 3) throw ApiError.validation('Write the poll question first.');
-  if (options.length < 2) throw ApiError.validation('A poll needs at least two options.');
-  const correct = input.correctIndex ?? null;
+  if (options.length < 2 || options.length > 6 || options.some(option => !option || option.length > 160)) throw ApiError.validation('A poll needs two to six non-empty options.');
+  const correct = input.kind === 'POLL' ? null : input.correctIndex ?? null;
+  if (input.kind !== 'POLL' && correct === null) throw ApiError.validation('Choose the correct answer for the quiz.');
   if (correct !== null && (correct < 0 || correct >= options.length)) {
     throw ApiError.validation('The correct answer is not one of the options.');
   }
   const id = newId('poll');
-  await env.DB.prepare(
+  const result = await env.DB.prepare(
     `INSERT INTO class_polls (id, session_id, room_key, created_by, kind, question, options_json, correct_index, status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)`,
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?
+     WHERE EXISTS (SELECT 1 FROM mentor_room_presence WHERE session_id = ? AND room_key = ? AND user_id = ?)
+       AND NOT EXISTS (SELECT 1 FROM class_polls WHERE session_id = ? AND room_key = ? AND status = 'OPEN')`,
   )
-    .bind(id, sessionId, roomKey, viewer.id, input.kind === 'POLL' ? 'POLL' : 'QUIZ', question, JSON.stringify(options), correct, nowIso())
+    .bind(id, sessionId, roomKey, viewer.id, input.kind === 'POLL' ? 'POLL' : 'QUIZ', question, JSON.stringify(options), correct, nowIso(), sessionId, roomKey, viewer.id, sessionId, roomKey)
     .run();
+  if (!result.meta.changes) throw ApiError.conflict('Join this room and close the current question before launching another.');
   const row = await env.DB.prepare('SELECT * FROM class_polls WHERE id = ?')
     .bind(id)
     .first<PollRow>();
@@ -161,13 +165,17 @@ export async function answerPoll(
   await assertRoomKey(env, session, viewer, row.room_key);
   const count = parseJson<string[]>(row.options_json, []).length;
   if (choiceIndex < 0 || choiceIndex >= count) throw ApiError.validation('Pick one of the options.');
-  await env.DB.prepare(
+  if (isHost(session, viewer)) throw ApiError.forbidden('The host cannot answer their own poll.');
+  const result = await env.DB.prepare(
     `INSERT INTO class_poll_answers (poll_id, user_id, choice_index, created_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT (poll_id, user_id) DO UPDATE SET choice_index = excluded.choice_index, created_at = excluded.created_at`,
+     SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM class_polls p JOIN mentor_room_presence pr
+       ON pr.session_id=p.session_id AND pr.room_key=p.room_key
+       WHERE p.id=? AND p.session_id=? AND p.status='OPEN' AND pr.user_id=?)
+     ON CONFLICT (poll_id, user_id) DO NOTHING`,
   )
-    .bind(pollId, viewer.id, choiceIndex, nowIso())
+    .bind(pollId, viewer.id, choiceIndex, nowIso(), pollId, sessionId, viewer.id)
     .run();
+  if (!result.meta.changes) throw ApiError.conflict('Poll closed, already answered, or you are not in the room.');
   const votes = await env.DB.prepare(
     'SELECT choice_index, COUNT(*) AS n FROM class_poll_answers WHERE poll_id = ? GROUP BY choice_index',
   )
@@ -194,9 +202,12 @@ export async function closePoll(
     .bind(pollId, sessionId)
     .first<PollRow>();
   if (!row) throw ApiError.notFound('Poll not found.');
-  await env.DB.prepare("UPDATE class_polls SET status = 'CLOSED', closed_at = ? WHERE id = ?")
-    .bind(nowIso(), pollId)
+  const closedAt = nowIso();
+  const result = await env.DB.prepare(`UPDATE class_polls SET status = 'CLOSED', closed_at = ? WHERE id = ? AND session_id = ? AND status = 'OPEN'
+    AND EXISTS (SELECT 1 FROM mentor_room_presence WHERE session_id = ? AND room_key = ? AND user_id = ?)`)
+    .bind(closedAt, pollId, sessionId, sessionId, row.room_key, viewer.id)
     .run();
+  if (!result.meta.changes) throw ApiError.conflict('Poll already closed or you are not in the room.');
   const votes = await env.DB.prepare(
     'SELECT choice_index, COUNT(*) AS n FROM class_poll_answers WHERE poll_id = ? GROUP BY choice_index',
   )
@@ -206,7 +217,7 @@ export async function closePoll(
     .bind(pollId, viewer.id)
     .first<{ choice_index: number }>();
   return toPoll(
-    { ...row, status: 'CLOSED', closed_at: nowIso() },
+    { ...row, status: 'CLOSED', closed_at: closedAt },
     mine?.choice_index ?? null,
     new Map(votes.results.map((vote) => [vote.choice_index, vote.n])),
     true,
@@ -226,9 +237,9 @@ interface BreakoutRow {
 
 async function breakoutRooms(env: Env, sessionId: string): Promise<BreakoutRoom[]> {
   const rows = await env.DB.prepare(
-    'SELECT id, session_id, name, room_key, ends_at, created_at FROM class_breakouts WHERE session_id = ? ORDER BY name',
+    'SELECT id, session_id, name, room_key, ends_at, created_at FROM class_breakouts WHERE session_id = ? AND (ends_at IS NULL OR ends_at > ?) ORDER BY name',
   )
-    .bind(sessionId)
+    .bind(sessionId, nowIso())
     .all<BreakoutRow>();
   if (rows.results.length === 0) return [];
   const placeholders = rows.results.map(() => '?').join(', ');
@@ -294,41 +305,38 @@ export async function createBreakouts(
   const presence = await env.DB.prepare(
     `SELECT pr.user_id
        FROM mentor_room_presence pr
-      WHERE pr.session_id = ? AND pr.room_key = 'main' AND pr.user_id <> ?
-      ORDER BY pr.joined_at`,
+      WHERE pr.session_id = ? AND pr.room_key = 'main' AND pr.user_id <> ? AND pr.last_seen_at >= ?
+      ORDER BY pr.joined_at, pr.user_id LIMIT 200`,
   )
-    .bind(sessionId, session.mentorId)
+    .bind(sessionId, session.mentorId, new Date(Date.now()-30_000).toISOString())
     .all<{ user_id: string }>();
   const students = presence.results.map((row) => row.user_id);
   if (students.length < 2) throw ApiError.conflict('At least two participants must be in the room to split them up.');
 
-  // Recreating replaces the previous set of rooms (and their assignments).
-  await env.DB.prepare('DELETE FROM class_breakouts WHERE session_id = ?').bind(sessionId).run();
+  // Atomic batch: a racing request cannot replace an active set or leave a
+  // partially assigned set. Expired sets are removed only when opening anew.
   const endsAt = new Date(Date.now() + minutes * 60_000).toISOString();
   const createdAt = nowIso();
-  const rooms: Array<{ id: string; name: string; key: string }> = [];
-  for (let index = 0; index < count; index += 1) {
-    const id = newId('brk');
-    const key = `breakout-${index + 1}`;
-    await env.DB.prepare(
-      'INSERT INTO class_breakouts (id, session_id, name, room_key, ends_at, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    )
-      .bind(id, sessionId, `Room ${index + 1}`, key, endsAt, createdAt)
-      .run();
-    rooms.push({ id, name: `Room ${index + 1}`, key });
-  }
-  for (let index = 0; index < students.length; index += 1) {
-    await env.DB.prepare(
-      'INSERT INTO class_breakout_members (breakout_id, user_id, assigned_at) VALUES (?, ?, ?)',
-    )
-      .bind(rooms[index % rooms.length]!.id, students[index]!, createdAt)
-      .run();
-  }
-  await env.DB.prepare(
-    `INSERT INTO mentor_messages (id, session_id, sender_id, kind, body, created_at, room_key) VALUES (?, ?, ?, 'SYSTEM', ?, ?, 'main')`,
-  )
-    .bind(newId('msg'), sessionId, viewer.id, `Breakout rooms opened for ${minutes} minutes.`, createdAt)
-    .run();
+  const rooms = Array.from({length:count}, (_, index) => { const id = newId('brk'); return {id, name:`Room ${index+1}`, key:`breakout-${id}`}; });
+  const first = rooms[0]!;
+  const statements = [
+    env.DB.prepare('DELETE FROM class_breakouts WHERE session_id=? AND ends_at IS NOT NULL AND ends_at <= ?').bind(sessionId,createdAt),
+    env.DB.prepare(`INSERT INTO class_breakouts (id,session_id,name,room_key,ends_at,created_at)
+      SELECT ?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM class_breakouts WHERE session_id=?)
+      AND EXISTS (SELECT 1 FROM mentor_room_presence WHERE session_id=? AND room_key='main' AND user_id=? AND last_seen_at>=?)`)
+      .bind(first.id,sessionId,first.name,first.key,endsAt,createdAt,sessionId,sessionId,viewer.id,new Date(Date.now()-30_000).toISOString()),
+    ...rooms.slice(1).map(room => env.DB.prepare(`INSERT INTO class_breakouts (id,session_id,name,room_key,ends_at,created_at)
+      SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM class_breakouts WHERE id=?)`)
+      .bind(room.id,sessionId,room.name,room.key,endsAt,createdAt,first.id)),
+    ...students.map((student,index) => env.DB.prepare(`INSERT INTO class_breakout_members (breakout_id,user_id,assigned_at)
+      SELECT ?,?,? WHERE EXISTS (SELECT 1 FROM class_breakouts WHERE id=?)`)
+      .bind(rooms[index%rooms.length]!.id,student,createdAt,first.id)),
+    env.DB.prepare(`INSERT INTO mentor_messages (id,session_id,sender_id,kind,body,created_at,room_key)
+      SELECT ?,?,?,'SYSTEM',?,?,'main' WHERE EXISTS (SELECT 1 FROM class_breakouts WHERE id=?)`)
+      .bind(newId('msg'),sessionId,viewer.id,`Breakout rooms opened for ${minutes} minutes.`,createdAt,first.id),
+  ];
+  const results = await env.DB.batch(statements);
+  if (!results[1]?.meta.changes) throw ApiError.conflict('Join the main room and close the current breakout rooms first.');
   return listBreakouts(env, viewer, sessionId);
 }
 
@@ -342,6 +350,24 @@ export async function closeBreakouts(
   if (!isHost(session, viewer)) throw ApiError.forbidden('Only the mentor can close breakout rooms.');
   await env.DB.prepare('DELETE FROM class_breakouts WHERE session_id = ?').bind(sessionId).run();
   return { rooms: [], myRoom: null, endsAt: null, open: false };
+}
+
+/** Host announcement copied into the main room and each currently open room. */
+export async function broadcastBreakouts(env:Env, viewer:AuthUser, sessionId:string, roomKey:string, body:string):Promise<{sent:number}> {
+  const session=await sessionFor(env,viewer,sessionId,roomKey);
+  if (!isHost(session,viewer)) throw ApiError.forbidden('Only the host can broadcast to breakout rooms.');
+  const text=body.trim(); if (!text || text.length>500) throw ApiError.validation('Write a message of at most 500 characters.');
+  const rooms=await breakoutRooms(env,sessionId);
+  if (!rooms.length) throw ApiError.conflict('No breakout rooms are open.');
+  const timestamp=nowIso(), targets=['main',...rooms.map(r=>r.roomKey)];
+  const statements=targets.map(target=>env.DB.prepare(`INSERT INTO mentor_messages(id,session_id,sender_id,kind,body,created_at,room_key)
+    SELECT ?,?,?,'SYSTEM',?,?,? WHERE EXISTS(SELECT 1 FROM mentor_room_presence WHERE session_id=? AND room_key=? AND user_id=? AND last_seen_at>=?)
+      AND EXISTS (SELECT 1 FROM class_breakouts WHERE session_id=? AND (ends_at IS NULL OR ends_at > ?))
+      AND (?='main' OR EXISTS (SELECT 1 FROM class_breakouts WHERE session_id=? AND room_key=? AND (ends_at IS NULL OR ends_at > ?)))`)
+    .bind(newId('msg'),sessionId,viewer.id,`Thông báo tới các nhóm: ${text}`,timestamp,target,sessionId,roomKey,viewer.id,new Date(Date.now()-30_000).toISOString(),sessionId,timestamp,target,sessionId,target,timestamp));
+  const results=await env.DB.batch(statements); const sent=results.reduce((n,result)=>n+result.meta.changes,0);
+  if (!sent) throw ApiError.conflict('Join the call and open breakout rooms before broadcasting.');
+  return {sent};
 }
 
 // --------------------------------------------------------------------- whiteboard
@@ -409,28 +435,37 @@ export async function saveWhiteboard(
   const session = await sessionFor(env, viewer, sessionId, roomKey);
   const strokes = sanitizeStrokes(input);
   const current = await readBoard(env, sessionId, roomKey);
-  if (strokes.length === 0 && current.strokes.length > 0 && !isHost(session, viewer)) {
-    throw ApiError.forbidden('Only the mentor can clear the whiteboard.');
-  }
   if (baseRevision !== current.revision) return { ...current, saved: false };
+  if (!isHost(session, viewer)) {
+    // Learners may append one stroke or undo the last, but cannot clear or
+    // replace earlier work. Compare canonical JSON from validated strokes.
+    const append = strokes.length === current.strokes.length + 1 && JSON.stringify(strokes.slice(0,-1)) === JSON.stringify(current.strokes);
+    const undo = strokes.length > 0 && strokes.length === current.strokes.length - 1 && JSON.stringify(strokes) === JSON.stringify(current.strokes.slice(0,-1));
+    if (!append && !undo) throw ApiError.forbidden('Only the host can clear or replace earlier strokes.');
+  }
   const revision = current.revision + 1;
   const updatedAt = nowIso();
+  let changed: number;
   if (current.updatedAt === null) {
-    await env.DB.prepare(
+    const result = await env.DB.prepare(
       `INSERT INTO class_whiteboards (session_id, room_key, revision, strokes_json, updated_by, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)
+       SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS
+         (SELECT 1 FROM mentor_room_presence WHERE session_id=? AND room_key=? AND user_id=?)
        ON CONFLICT (session_id, room_key) DO NOTHING`,
-    )
-      .bind(sessionId, roomKey, revision, JSON.stringify(strokes), viewer.id, updatedAt)
-      .run();
+    ).bind(sessionId, roomKey, revision, JSON.stringify(strokes), viewer.id, updatedAt, sessionId, roomKey, viewer.id).run();
+    changed = result.meta.changes;
   } else {
-    await env.DB.prepare(
-      `UPDATE class_whiteboards
-          SET revision = ?, strokes_json = ?, updated_by = ?, updated_at = ?
-        WHERE session_id = ? AND room_key = ? AND revision = ?`,
-    )
-      .bind(revision, JSON.stringify(strokes), viewer.id, updatedAt, sessionId, roomKey, baseRevision)
-      .run();
+    const result = await env.DB.prepare(
+      `UPDATE class_whiteboards SET revision = ?, strokes_json = ?, updated_by = ?, updated_at = ?
+       WHERE session_id = ? AND room_key = ? AND revision = ? AND EXISTS
+         (SELECT 1 FROM mentor_room_presence WHERE session_id=? AND room_key=? AND user_id=?)`,
+    ).bind(revision, JSON.stringify(strokes), viewer.id, updatedAt, sessionId, roomKey, baseRevision, sessionId, roomKey, viewer.id).run();
+    changed = result.meta.changes;
+  }
+  if (!changed) {
+    const present = await env.DB.prepare('SELECT 1 AS ok FROM mentor_room_presence WHERE session_id=? AND room_key=? AND user_id=?').bind(sessionId,roomKey,viewer.id).first();
+    if (!present) throw ApiError.conflict('Join the room before writing on the board.');
+    return { ...(await readBoard(env,sessionId,roomKey)), saved:false };
   }
   return readBoard(env, sessionId, roomKey);
 }

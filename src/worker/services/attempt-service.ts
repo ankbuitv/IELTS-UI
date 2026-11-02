@@ -170,8 +170,11 @@ export async function createAttempt(
     assignment = await requireAssignmentAccess(env, user, input.assignmentId);
   }
 
-  let versionId = input.testVersionId ?? assignment?.test_version_id ?? null;
-  let testId = input.testId ?? assignment?.test_id ?? null;
+  if (assignment && ((input.testId && input.testId !== assignment.test_id) || (input.testVersionId && input.testVersionId !== assignment.test_version_id))) {
+    throw ApiError.validation('The selected test must match the assignment.');
+  }
+  let versionId = assignment?.test_version_id ?? input.testVersionId ?? null;
+  let testId = assignment?.test_id ?? input.testId ?? null;
 
   const version = versionId
     ? await env.DB.prepare('SELECT * FROM test_versions WHERE id = ?').bind(versionId).first<{
@@ -209,15 +212,6 @@ export async function createAttempt(
 
   if (assignment) {
     assertAttemptWindow(assignment);
-    const attemptCount = await env.DB.prepare(
-      `SELECT COUNT(*) AS count FROM attempts WHERE user_id = ? AND assignment_id = ? AND status != 'ABANDONED'`,
-    )
-      .bind(user.id, assignment.id)
-      .first<{ count: number }>();
-    const used = attemptCount?.count ?? 0;
-    if (used >= Math.max(1, assignment.max_attempts)) {
-      throw ApiError.conflict('You have used all the attempts allowed for this assignment.');
-    }
     // Reuse an in-progress attempt rather than silently creating a parallel one.
     const existing = await env.DB.prepare(
       `SELECT id, mode, integrity_policy_json FROM attempts
@@ -232,6 +226,15 @@ export async function createAttempt(
         mode: existing.mode,
         integrityPolicy: resolvePolicy(existing.mode, parseJson<Partial<IntegrityPolicy>>(existing.integrity_policy_json, {})),
       };
+    }
+    const attemptCount = await env.DB.prepare(
+      `SELECT COUNT(*) AS count FROM attempts WHERE user_id = ? AND assignment_id = ? AND status != 'ABANDONED'`,
+    )
+      .bind(user.id, assignment.id)
+      .first<{ count: number }>();
+    const used = attemptCount?.count ?? 0;
+    if (used >= Math.max(1, assignment.max_attempts)) {
+      throw ApiError.conflict('You have used all the attempts allowed for this assignment.');
     }
   } else {
     const inProgress = await env.DB.prepare(
@@ -298,30 +301,31 @@ export async function createAttempt(
     : await buildComponentPlan(env, test.type, versionId, version.duration_seconds, versionConfig, assignment);
 
   const attemptId = newId('att');
-  const statements: D1PreparedStatement[] = [
-    env.DB.prepare(
-      `INSERT INTO attempts (id, user_id, assignment_id, test_id, test_version_id, test_type, mode, status, started_at,
-                             deadline_at, current_component_index, integrity_policy_json, result_visibility,
-                             scoring_profile_id, client_meta_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
-    ).bind(
-      attemptId,
-      user.id,
-      assignment?.id ?? null,
-      testId,
-      versionId,
-      test.type,
-      mode,
-      startedAt,
-      null,
-      JSON.stringify(policy),
-      resultVisibility,
-      version.scoring_profile_id,
-      JSON.stringify(input.clientMeta ?? {}),
-      startedAt,
-      startedAt,
-    ),
-  ];
+  // The D1 batch is transactional. For assignments, enforce the current limit,
+  // membership and absence of an in-progress attempt in the INSERT itself so
+  // two concurrent starts cannot both consume the same remaining attempt.
+  const insertAttempt = env.DB.prepare(
+    `INSERT INTO attempts (id, user_id, assignment_id, test_id, test_version_id, test_type, mode, status, started_at,
+                           deadline_at, current_component_index, integrity_policy_json, result_visibility,
+                           scoring_profile_id, client_meta_json, created_at, updated_at)
+     SELECT ?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?, ?, 0, ?, ?, ?, ?, ?, ?
+     WHERE ? IS NULL OR EXISTS (
+       SELECT 1 FROM assignments a JOIN test_versions v ON v.id=a.test_version_id
+       WHERE a.id=? AND a.status='ACTIVE' AND v.status!='DRAFT'
+         AND (a.start_at IS NULL OR a.start_at<=?) AND (a.deadline_at IS NULL OR a.deadline_at>=?)
+         AND (?='ADMIN' OR (?='TEACHER' AND a.teacher_id=?) OR EXISTS (
+           SELECT 1 FROM classroom_members m WHERE m.classroom_id=a.classroom_id AND m.user_id=? AND m.status='ACTIVE'
+             AND (m.role='CO_TEACHER' OR (m.role='STUDENT' AND ${assignmentEligible('a','m.user_id')}))
+         ))
+         AND (SELECT COUNT(*) FROM attempts used WHERE used.user_id=? AND used.assignment_id=a.id AND used.status!='ABANDONED') < MAX(1,a.max_attempts)
+         AND NOT EXISTS(SELECT 1 FROM attempts running WHERE running.user_id=? AND running.assignment_id=a.id AND running.status='IN_PROGRESS')
+     )`,
+  ).bind(
+    attemptId, user.id, assignment?.id ?? null, testId, versionId, test.type, mode, startedAt, null,
+    JSON.stringify(policy), resultVisibility, version.scoring_profile_id, JSON.stringify(input.clientMeta ?? {}), startedAt, startedAt,
+    assignment?.id ?? null, assignment?.id ?? null, startedAt, startedAt, user.role, user.role, user.id, user.id, user.id, user.id,
+  );
+  const statements: D1PreparedStatement[] = [insertAttempt];
 
   plan.components.forEach((component, index) => {
     const isFirst = index === 0;
@@ -329,7 +333,7 @@ export async function createAttempt(
       env.DB.prepare(
         `INSERT INTO attempt_skill_sessions (id, attempt_id, component_index, skill, test_version_id, label, status,
                                              started_at, deadline_at, duration_seconds, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM attempts WHERE id=?)`,
       ).bind(
         newId('ses'),
         attemptId,
@@ -343,6 +347,7 @@ export async function createAttempt(
         component.durationSeconds,
         startedAt,
         startedAt,
+        attemptId,
       ),
     );
   });
@@ -356,7 +361,18 @@ export async function createAttempt(
     env.DB.prepare('UPDATE attempts SET deadline_at = ? WHERE id = ?').bind(overallDeadline, attemptId),
   );
 
-  await env.DB.batch(statements);
+  const results = await env.DB.batch(statements);
+  if (assignment && Number(results[0]?.meta.changes) !== 1) {
+    // A concurrent request may have started the attempt after our first read.
+    // Re-check access and its window before handing out that attempt.
+    const current = await requireAssignmentAccess(env,user,assignment.id);
+    assertAttemptWindow(current);
+    const existing = await env.DB.prepare(`SELECT id,mode,integrity_policy_json FROM attempts
+      WHERE user_id=? AND assignment_id=? AND status='IN_PROGRESS' ORDER BY started_at DESC LIMIT 1`)
+      .bind(user.id,assignment.id).first<{id:string;mode:ExamMode;integrity_policy_json:string}>();
+    if (existing) return {attemptId:existing.id,mode:existing.mode,integrityPolicy:resolvePolicy(existing.mode,parseJson<Partial<IntegrityPolicy>>(existing.integrity_policy_json,{}))};
+    throw ApiError.conflict('You have used all the attempts allowed for this assignment, or its settings changed.');
+  }
 
   // 38/39/40: snapshot the section structure for this attempt (also creates
   // server-side per-section timers when the version's policy enables them).

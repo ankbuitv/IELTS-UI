@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import {confirmTeachingConflicts} from '../../lib/teaching-conflicts';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../context/AuthContext';
@@ -37,13 +38,14 @@ export function ClassSchedule({classroomId,isOwner}:{classroomId:string;isOwner:
     e.preventDefault();setBusy(true);setMessage('');
     try {
       const events=buildOccurrences(start,duration,edit?'once':repeat,count),first=events[0]!;
+      if(!await confirmTeachingConflicts(events,edit?.id))return;
       const payload={title:title.trim(),...first,kind,note:note.trim()};
       if(edit) await api.put(`${path}/${encodeURIComponent(edit.id)}`,payload);
       else await api.post(path,{...payload,occurrences:events.slice(1)});
       const n=events.length;reset();await data.reload();setMessage(edit?'Đã cập nhật buổi dạy.':`Đã thêm ${n} buổi dạy.`);
     } catch(err){setMessage(describeError(err));} finally{setBusy(false);}
   }
-  return <section className="class-support"><h2>Lịch dạy lớp</h2><p>Lịch xuất hiện trong thời khóa biểu của giáo viên phụ trách và học viên. Giờ được nhập theo múi giờ thiết bị; sửa hoặc xóa chỉ ảnh hưởng một buổi. Ghi chú và lý do hiển thị cho học viên; lịch thay đổi và dạy bù có thông báo trong ứng dụng.</p>
+  return <section className="class-support"><h2>Lịch dạy lớp</h2><p>Lịch xuất hiện trong thời khóa biểu của giáo viên phụ trách và học viên. Hệ thống kiểm tra trùng với lịch của tài khoản đang thao tác. Giờ được nhập theo múi giờ thiết bị; sửa hoặc xóa chỉ ảnh hưởng một buổi. Ghi chú và lý do hiển thị cho học viên; lịch thay đổi và dạy bù có thông báo trong ứng dụng.</p>
     <form className="class-support__form" onSubmit={e=>void add(e)}>
       <label>Tên buổi<input required maxLength={150} value={title} onChange={e=>setTitle(e.target.value)}/></label>
       <label>Bắt đầu<input required type="datetime-local" value={start} onChange={e=>setStart(e.target.value)}/></label>

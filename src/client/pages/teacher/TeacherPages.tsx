@@ -709,6 +709,9 @@ function CreateAssignmentModal({
     { immediate: open },
   );
 
+  type TemplateConfig={versionId:string;title:string;maxAttempts:number;mode:string;resultVisibility:string;timingPolicy:string;requireFullscreen:boolean;monitorVisibility:boolean;autoSubmitAtEvents:string;maxTabAwayEvents:string};
+  const templates=useAsync(()=>api.get<{templates:Array<{id:string;name:string;config:TemplateConfig|null}>}>('/api/teacher/assignment-templates'),[open],{immediate:open});
+  const [templateId,setTemplateId]=useState('');const [templateName,setTemplateName]=useState('');const [templateBusy,setTemplateBusy]=useState(false);
   const [form, setForm] = useState({
     versionId: '',
     title: '',
@@ -724,6 +727,10 @@ function CreateAssignmentModal({
     maxTabAwayEvents: '',
   });
 
+  const chosenTemplate=templates.data?.templates.find(t=>t.id===templateId);
+  const versionAvailable=!!data?.tests.some(test=>test.versionId===form.versionId);
+  async function saveTemplate(update:boolean){setTemplateBusy(true);try{const {start: _start,deadline: _deadline,...config}=form;void _start;void _deadline;const body={name:templateName.trim(),config};if(update)await api.put(`/api/teacher/assignment-templates/${encodeURIComponent(templateId)}`,body);else await api.post('/api/teacher/assignment-templates',body);await templates.reload();if(!update){setTemplateId('');setTemplateName('');}toast.push('Đã lưu mẫu bài giao.','success');}catch(e){toast.push(describeError(e),'error');}finally{setTemplateBusy(false);}}
+
   return (
     <Modal
       open={open}
@@ -735,7 +742,7 @@ function CreateAssignmentModal({
           <Button onClick={onClose}>Cancel</Button>
           <Button
             variant="primary"
-            disabled={!form.versionId||(audience==='SELECTED'&&(!studentIds.length||studentIds.length>200))}
+            disabled={!form.versionId||!versionAvailable||(audience==='SELECTED'&&(!studentIds.length||studentIds.length>200))}
             onClick={async () => {
               try {
                 await api.post('/api/teacher/assignments', {
@@ -769,6 +776,8 @@ function CreateAssignmentModal({
         </>
       }
     >
+      <details className="feedback-templates"><summary>Mẫu bài giao cá nhân</summary><p className="tiny muted">Mẫu lưu cấu hình và đề, không lưu thời gian hoặc học viên. Khi dùng mẫu, hãy chọn lại thời hạn và người nhận.</p>{templates.error&&<p role="alert">{templates.error}</p>}<div className="row"><label>Mẫu đã lưu <select value={templateId} onChange={e=>{const id=e.target.value;setTemplateId(id);setTemplateName(templates.data?.templates.find(t=>t.id===id)?.name??'');}}><option value="">Chọn mẫu…</option>{templates.data?.templates.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><button type="button" disabled={!chosenTemplate?.config} onClick={()=>{if(!chosenTemplate?.config)return;setForm({...chosenTemplate.config,start:'',deadline:''});setAudience('ALL');setStudentIds([]);}}>Dùng mẫu</button><button type="button" disabled={!templateId||templateBusy} onClick={()=>{if(!window.confirm('Xóa mẫu bài giao này?'))return;setTemplateBusy(true);void api.delete(`/api/teacher/assignment-templates/${encodeURIComponent(templateId)}`).then(()=>templates.reload()).then(()=>{setTemplateId('');setTemplateName('');}).catch(e=>toast.push(describeError(e),'error')).finally(()=>setTemplateBusy(false));}}>Xóa mẫu</button></div><div className="row"><label>Tên mẫu <input maxLength={100} value={templateName} onChange={e=>setTemplateName(e.target.value)}/></label><button type="button" disabled={templateBusy||!templateName.trim()||!form.versionId} onClick={()=>void saveTemplate(false)}>Lưu thành mẫu mới</button>{templateId&&<button type="button" disabled={templateBusy||!templateName.trim()||!form.versionId} onClick={()=>void saveTemplate(true)}>Cập nhật mẫu đã chọn</button>}</div></details>
+      {form.versionId&&data&&!versionAvailable&&<p role="alert">Đề trong mẫu không còn được phát hành. Hãy chọn đề khác trước khi giao.</p>}
       <Field label="Published test" required hint="Only published, versioned tests can be assigned.">
         {(id) => (
           <Select id={id} value={form.versionId} onChange={(event) => setForm({ ...form, versionId: event.target.value })}>
@@ -886,6 +895,7 @@ interface AssignmentDetail {
   id: string;
   classroomId: string;
   classroomName: string;
+  canPublish:boolean;
   title: string;
   instructions: string;
   testId: string;
@@ -929,6 +939,8 @@ export function AssignmentPage() {
   const [markingDeadline,setMarkingDeadline]=useState('');
   const [deadline, setDeadline] = useState('');
   const [maxAttempts, setMaxAttempts] = useState(1);
+  const classes=useAsync(()=>api.get<{classrooms:Array<{id:string;name:string;status:string}>}>('/api/teacher/classrooms'),[]);
+  const [cloneOpen,setCloneOpen]=useState(false);const [cloneIds,setCloneIds]=useState<string[]>([]);const [cloneBusy,setCloneBusy]=useState(false);const [copies,setCopies]=useState<Array<{id:string;classId:string}>>([]);
   const toast = useToast();
 
   if (loading) return <Loading label="Loading assignment report…" />;
@@ -951,6 +963,8 @@ export function AssignmentPage() {
           </p>
         </div>
         <div className="row">
+          <Button onClick={()=>{setCloneIds([]);setCopies([]);setCloneOpen(true);}}>Nhân bản sang lớp</Button>
+          {data.status==='DRAFT'&&data.canPublish&&<Button variant="primary" onClick={async()=>{if(!window.confirm('Phát hành bản nháp cho học viên thuộc đối tượng của bài? Bản sao mặc định dành cho toàn bộ lớp. Hãy kiểm tra hạn và chính sách công bố kết quả trước.'))return;try{await api.patch(`/api/teacher/assignments/${assignmentId}`,{publish:true});await reload();toast.push('Đã phát hành bài giao.','success');}catch(e){toast.push(describeError(e),'error');}}}>Phát hành bản nháp</Button>}
           <Button onClick={()=>{setMarkingDeadline(data.markingDeadlineAt?toLocalInput(data.markingDeadlineAt):'');setMarkingOpen(true);}}>Hạn chấm bài</Button>
           <Button
             onClick={() => {
@@ -982,6 +996,8 @@ export function AssignmentPage() {
         <Stat label="Deadline" value={data.deadlineAt ? formatDateTime(data.deadlineAt) : 'None'} />
         <Stat label="Hạn chấm bài" value={data.markingDeadlineAt ? formatDateTime(data.markingDeadlineAt) : 'Chưa đặt'} />
       </div>
+
+      {data.status==='DRAFT'&&<Notice tone="info">Bản nháp chưa hiển thị cho học viên. Chính sách kết quả: <b>{data.resultVisibility}</b>; hạn nộp: {data.deadlineAt?formatDateTime(data.deadlineAt):'không có'}. Bản sao dành cho toàn bộ lớp khi phát hành.</Notice>}
 
       <Card title="Students" hint="Ordered by name. Integrity counts are observable events, not verdicts." flush>
         <div className="table-wrap">
@@ -1035,6 +1051,9 @@ export function AssignmentPage() {
         {data.report.length === 0 ? <EmptyState title="No students enrolled" /> : null}
       </Card>
 
+      <Modal open={cloneOpen} title="Nhân bản bài sang lớp" onClose={()=>setCloneOpen(false)} actions={<><Button onClick={()=>setCloneOpen(false)}>Đóng</Button><Button variant="primary" disabled={cloneBusy||!cloneIds.length||cloneIds.length>20||!!copies.length} onClick={async()=>{setCloneBusy(true);try{const result=await api.post<{copies:Array<{id:string;classId:string}>}>(`/api/teacher/assignments/${assignmentId}/clone`,{classroomIds:cloneIds});setCopies(result.copies);toast.push(`Đã tạo ${result.copies.length} bản nháp.`,'success');}catch(e){toast.push(describeError(e),'error');}finally{setCloneBusy(false);}}}>Tạo bản nháp</Button></>}>
+        <p className="small">Sao chép đề và cấu hình sang tối đa 20 lớp. Mỗi bản là <b>bản nháp cho cả lớp</b>: không chép nhóm học viên, thời hạn, bài nộp hay nhận xét. Chủ lớp cần kiểm tra hạn và công bố kết quả trước khi phát hành.</p>{classes.error&&<Notice tone="danger">{classes.error}</Notice>}<fieldset className="assignment-audience"><legend>Chọn lớp ({cloneIds.length}/20)</legend>{classes.data?.classrooms.filter(c=>c.status==='ACTIVE').map(c=><label key={c.id}><input type="checkbox" checked={cloneIds.includes(c.id)} disabled={!!copies.length||(cloneIds.length>=20&&!cloneIds.includes(c.id))} onChange={e=>setCloneIds(old=>e.target.checked?[...old,c.id]:old.filter(id=>id!==c.id))}/> {c.name}</label>)}</fieldset>{copies.length>0&&<div className="stack"><b>Bản nháp đã tạo</b>{copies.map(copy=><Link key={copy.id} to={`/teacher/assignments/${copy.id}`} onClick={()=>setCloneOpen(false)}>{classes.data?.classrooms.find(c=>c.id===copy.classId)?.name??copy.classId} → Xem bản nháp</Link>)}</div>}
+      </Modal>
       <Modal open={markingOpen} title="Hạn chấm bài" onClose={()=>setMarkingOpen(false)} actions={<><Button onClick={()=>setMarkingOpen(false)}>Hủy</Button><Button variant="primary" onClick={async()=>{try{await api.put(`/api/teacher/assignments/${assignmentId}/marking-deadline`,{deadlineAt:markingDeadline?new Date(markingDeadline).toISOString():null});await reload();setMarkingOpen(false);toast.push('Đã cập nhật hạn chấm bài.','success');}catch(error){toast.push(describeError(error),'error');}}}>Lưu</Button></>}>
         <Field label="Thời hạn chấm" hint="Hiện trên lịch của giáo viên lớp. Để trống để xóa.">{id=><TextInput id={id} type="datetime-local" value={markingDeadline} onChange={e=>setMarkingDeadline(e.target.value)}/>}</Field>
       </Modal>

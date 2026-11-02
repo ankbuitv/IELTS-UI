@@ -726,7 +726,7 @@ export function LoginPage() {
       formTitle={twoFactor ? 'Two-factor code' : 'Sign in'}
       formIntro={
         twoFactor
-          ? 'Open your authenticator app and enter the six-digit code for this account.'
+          ? 'Enter the six-digit authenticator code or one of your single-use backup codes.'
           : 'Use your username or the email your institution gave you.'
       }
       footer={
@@ -740,11 +740,11 @@ export function LoginPage() {
         <div style={{ height: 12 }} />
         {twoFactor ? (
           <>
-            <Field label="Authenticator code" required>
+            <Field label="Authenticator or backup code" required>
               {(id) => (
                 <TextInput
                   id={id}
-                  inputMode="numeric"
+                  inputMode="text"
                   autoComplete="one-time-code"
                   required
                   placeholder="123456"

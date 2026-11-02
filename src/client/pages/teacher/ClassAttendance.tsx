@@ -1,3 +1,4 @@
+import {AttendanceTrend} from './AttendanceTrend';
 import { useState } from 'react';
 import { api, describeError } from '../../lib/api';
 import { useAsync } from '../../hooks/useAsync';
@@ -9,7 +10,7 @@ const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMon
 export function ClassAttendance({classroomId,onDirtyChange}:{classroomId:string;onDirtyChange?:(dirty:boolean)=>void}) {
  const [date,setDate]=useState(today);const [dirty,setDirty]=useState(false);
  const choose=(value:string)=>{if(!value||value===date)return;if(dirty&&!window.confirm('Bạn có thay đổi chưa lưu. Chuyển ngày sẽ bỏ các thay đổi này, tiếp tục?'))return;setDirty(false);onDirtyChange?.(false);setDate(value);};
- return <div className="class-attendance"><header><div><h2>Điểm danh lớp</h2><p>Ghi nhận thủ công theo ngày, độc lập với thời gian tham gia cuộc gọi.</p></div><label>Ngày điểm danh<input type="date" value={date} onChange={e=>choose(e.target.value)}/></label></header><AttendanceDay key={`${classroomId}:${date}`} classroomId={classroomId} date={date} onChangeDate={choose} onDirty={value=>{setDirty(value);onDirtyChange?.(value);}}/></div>;
+ return <div className="class-attendance"><header><div><h2>Điểm danh lớp</h2><p>Ghi nhận thủ công theo ngày, độc lập với thời gian tham gia cuộc gọi.</p></div><label>Ngày điểm danh<input type="date" value={date} onChange={e=>choose(e.target.value)}/></label></header><AttendanceTrend classroomId={classroomId}/><AttendanceDay key={`${classroomId}:${date}`} classroomId={classroomId} date={date} onChangeDate={choose} onDirty={value=>{setDirty(value);onDirtyChange?.(value);}}/></div>;
 }
 function AttendanceDay({classroomId,date,onChangeDate,onDirty}:{classroomId:string;date:string;onChangeDate:(date:string)=>void;onDirty:(dirty:boolean)=>void}) {
  const path=`/api/teacher/classrooms/${encodeURIComponent(classroomId)}/attendance`;

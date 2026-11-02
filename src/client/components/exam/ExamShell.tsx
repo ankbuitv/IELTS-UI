@@ -372,9 +372,11 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
       : '';
 
   const saveTone =
-    session.saveStatus === 'error' ? 'bad' : session.saveStatus === 'offline' ? 'warn' : session.saveStatus === 'saving' ? 'busy' : 'ok';
+    session.saveStatus === 'error' ? 'bad' : session.connection === 'offline' || session.saveStatus === 'offline' ? 'warn' : session.saveStatus === 'saving' ? 'busy' : 'ok';
   const saveLabel =
-    session.saveStatus === 'saving'
+    session.connection === 'offline'
+      ? 'Offline — will retry'
+      : session.saveStatus === 'saving'
       ? 'Saving…'
       : session.saveStatus === 'saved'
         ? 'Saved'
@@ -541,13 +543,17 @@ export function ExamShell({ session, onFinished }: { session: ExamSessionApi; on
         </div>
       ) : null}
 
-      {session.saveStatus === 'offline' ? (
+      {session.connection === 'offline' || session.saveStatus === 'offline' ? (
         <div className="exam-banner exam-banner--info" role="status">
           <Icon name="info" size={15} />
-          <span>You are offline. Your answers are kept on this device and are sent as soon as the connection returns.</span>
+          <span>You are offline. Unsaved answers will retry when the connection returns. Keep this page open; the exam timer continues.</span>
         </div>
       ) : null}
 
+      {!session.draftAvailable && session.saveStatus !== 'saved' && session.saveStatus !== 'idle' ? (
+        <div className="exam-banner exam-banner--warning" role="alert"><Icon name="alert" size={15}/><span>Device storage is unavailable. Unsaved answers remain only in this open page until they reach the server. Do not close or reload; reconnect and retry.</span></div>
+      ) : null}
+      {session.saveStatus === 'error' ? <div className="exam-banner exam-banner--warning" role="alert"><Icon name="alert" size={15}/><span>Some work has not been saved to the server. Check your connection and try again before leaving.</span><Button size="sm" variant="ghost" onClick={() => void session.flushAll()}>Retry save</Button></div> : null}
       <div className="exam-toolbar">
         <div className="exam-seg" role="group" aria-label="Layout">
           {viewOptions.map((option) => (

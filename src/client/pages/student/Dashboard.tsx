@@ -1,3 +1,7 @@
+import {LearningMistakes} from './LearningMistakes';
+import {StudyTime} from './StudyTime';
+import {LearningGoals} from './LearningGoals';
+import {LearningJournal} from './LearningJournal';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, describeError, queryString } from '../../lib/api';
@@ -79,7 +83,7 @@ export function StudentDashboardPage() {
 
   return (
     <div className="stack dash">
-      {user?.role === 'STUDENT' && <SchoolBanners />}
+      {user?.role === 'STUDENT' && <><SchoolBanners /><LearningGoals /><StudyTime /><LearningMistakes /><LearningJournal /></>}
       <section className="dash-hero">
         <span className="dash-hero__bars" aria-hidden="true">
           <i />

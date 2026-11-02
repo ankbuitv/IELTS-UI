@@ -1,3 +1,4 @@
+import {PrejoinAudioCheck} from './PrejoinAudioCheck';
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { mentorApi } from '../../lib/mentor-api';
@@ -111,6 +112,7 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
   const [notes, setNotes] = useState('');
   const [peers, setPeers] = useState<Peer[]>([]);
   const [elapsed, setElapsed] = useState(0);
+  const [breakoutRemaining, setBreakoutRemaining] = useState<number | null>(null);
   const [joinBusy, setJoinBusy] = useState(false);
   // Device picker + dialogs (Jitsi-style room chrome).
   const [deviceList, setDeviceList] = useState<MediaDeviceInfo[]>([]);
@@ -126,6 +128,7 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
   const [switching, setSwitching] = useState(false);
   // Live classroom tools.
   const [breakouts, setBreakouts] = useState<BreakoutState | null>(null);
+  const [dismissedBroadcast, setDismissedBroadcast] = useState<string | null>(null);
   const [breakoutOpen, setBreakoutOpen] = useState(false);
   const [quizOpen, setQuizOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
@@ -647,17 +650,9 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
           setReactions((prev) => [...prev.slice(-12), { key, emoji, name }]);
           window.setTimeout(() => setReactions((prev) => prev.filter((item) => item.key !== key)), 3200);
         } else if (signal.kind === 'HAND') {
-          // Presence carries the flag; a signal makes it visible within a beat.
-          setState((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  participants: prev.participants.map((p) =>
-                    p.userId === signal.senderId ? { ...p, handRaised: signal.payload === 'up' } : p,
-                  ),
-                }
-              : prev,
-          );
+          // The same poll already contains authoritative presence and queue time.
+          // Replaying an older hand signal here can undo a newer lower/raise.
+
         }
       } catch {
         // A malformed or stale envelope is dropped: the next poll re-syncs.
@@ -830,6 +825,15 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
     return () => window.clearTimeout(timer);
   }, [breakoutEndsAt, room, sessionId, changeRoom]);
 
+  useEffect(() => {
+    if (!breakoutEndsAt) return;
+    const end = Date.parse(breakoutEndsAt);
+    if (!Number.isFinite(end)) return;
+    const tick = () => setBreakoutRemaining(Math.max(0, Math.ceil((end-Date.now())/1000)));
+    tick(); const timer = window.setInterval(tick,1000);
+    return () => window.clearInterval(timer);
+  }, [breakoutEndsAt]);
+
   // Time in this call. The session's `started_at` can be hours (or days) old —
   // a mentor who opened the room early left every later visitor with a
   // nonsensical 1391:00 clock. Jitsi counts from the moment you joined, so we
@@ -922,6 +926,7 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
       const joined = await mentorApi.join(sessionId, room, { cam: camOn, mic: micOn });
       if (!mountedRef.current) { void mentorApi.leave(sessionId).catch(() => undefined); return; }
       lastSignalIdRef.current = joined.signalCursor;
+      setHandRaised(false); // Joining resets server presence, including any stale hand.
       inRoomRef.current = true;
       setPhase('room');
       // Tracks are attached by the effect/callback refs on mount; make sure the
@@ -1002,9 +1007,12 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
     setHandRaised(next);
     try {
       await mentorApi.raiseHand(sessionId, next);
-      await sendSignal({ kind: 'HAND', targetId: null, payload: next ? 'up' : 'down' });
+      // Presence is authoritative; a signalling hiccup must not roll back a
+      // hand already accepted by the server. Other clients learn it on poll.
+      void sendSignal({ kind: 'HAND', targetId: null, payload: next ? 'up' : 'down' }).catch(() => undefined);
     } catch {
       setHandRaised(!next);
+      setError('Không thể cập nhật hàng đợi phát biểu. Hãy kiểm tra kết nối và thử lại.');
     }
   };
 
@@ -1099,6 +1107,7 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
     }
   };
 
+  const latestBroadcast = [...(state?.messages ?? [])].reverse().find(m => m.kind === 'SYSTEM' && m.body.startsWith('Thông báo tới các nhóm: '));
   const session = state?.session;
   const isMentor = session?.mentorId === user?.id;
   const isClass = session?.kind === 'CLASS';
@@ -1143,6 +1152,12 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
     }
     return [...byId.values()];
   }, [state?.participants, peers, selfId, user?.displayName, handRaised, camOn, micOn, screenOn, user?.role]);
+
+  const handQueue = roster.filter(p => p.handRaised).sort((a,b) =>
+    (a.handRaisedAt ?? '9999').localeCompare(b.handRaisedAt ?? '9999') || a.userId.localeCompare(b.userId));
+  const handPositions = new Map(handQueue.map((p,index) => [p.userId,index+1]));
+  const sortedRoster = [...roster].sort((a,b) => Number(b.handRaised) - Number(a.handRaised) ||
+    (a.handRaised && b.handRaised ? (handPositions.get(a.userId) ?? 0) - (handPositions.get(b.userId) ?? 0) : 0));
 
   if (phase === 'left') {
     const canReview = !isMentor && user?.role !== 'ADMIN';
@@ -1324,6 +1339,7 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
             </button>
           </div>
 
+          <PrejoinAudioCheck stream={cameraPreview} micOn={micOn}/>
           {cameraIssue || micIssue ? (
             <button type="button" className="jr-retry" onClick={() => void retryMedia()}>
               <Icon name="rotate" size={14} />
@@ -1489,9 +1505,8 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
 
             {panel === 'people' ? (
               <div className="jr-roster">
-                {[...roster]
-                  .sort((a, b) => Number(b.handRaised) - Number(a.handRaised))
-                  .map((participant) => {
+                <p className="jr-queue-note">Hàng đợi phát biểu theo thứ tự giơ tay; hạ tay để rời hàng đợi.</p>
+                {sortedRoster.map((participant) => {
                     const isSelf = participant.userId === user?.id;
                     const isHost = participant.userId === session?.mentorId;
                     const peerMicLive = peers
@@ -1520,7 +1535,7 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
                             {isSelf ? (micOn ? 'mic on' : 'muted') : peerMicLive === false ? 'muted' : 'mic on'}
                           </span>
                         </div>
-                        {participant.handRaised ? <span className="jr-person__hand" title="Hand raised">✋</span> : null}
+                        {participant.handRaised ? <span className="jr-person__hand" title="Đang chờ phát biểu">✋ {handPositions.get(participant.userId)}</span> : null}
                         {isMentor && !isSelf && !isHost ? (
                           <div className="jr-person__actions">
                             <button
@@ -1673,6 +1688,7 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
         </div>
       ) : null}
 
+      {latestBroadcast && latestBroadcast.id !== dismissedBroadcast ? <div className="jr-banner jr-banner--breakout" role="status"><span>{latestBroadcast.body}</span><button type="button" onClick={()=>setDismissedBroadcast(latestBroadcast.id)} aria-label="Đóng thông báo nhóm">×</button></div> : null}
       {breakouts?.open ? (
         <div className="jr-banner jr-banner--breakout">
           <Icon name="grid" size={16} />
@@ -1692,6 +1708,7 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
                 : ''}
             </span>
           )}
+          {breakoutRemaining !== null && <output aria-label="Thời gian nhóm còn lại">Còn {Math.floor(breakoutRemaining/60)}:{String(breakoutRemaining%60).padStart(2,'0')}</output>}
           {room === 'main' && breakouts.myRoom ? (
             <button
               type="button"
@@ -1981,6 +1998,7 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
       {breakoutOpen ? (
         <BreakoutPanel
           sessionId={sessionId}
+          room={room}
           host={isMentor}
           state={breakouts}
           onChanged={setBreakouts}
@@ -2113,9 +2131,9 @@ function QuizPanel({
   }, [sessionId, room]);
 
   const launch = async () => {
-    const cleaned = options.map((option) => option.trim()).filter(Boolean);
-    if (question.trim().length < 3 || cleaned.length < 2) {
-      setError('Write a question and at least two options.');
+    const cleaned = options.map((option) => option.trim());
+    if (question.trim().length < 3 || cleaned.length < 2 || cleaned.some(option => !option) || (kind === 'QUIZ' && correct === null)) {
+      setError('Write a question and fill every option; choose the correct answer for a quiz.');
       return;
     }
     setBusy(true);
@@ -2329,19 +2347,15 @@ function QuizPanel({
           <section className="jr-quiz__history">
             <h4>Earlier questions</h4>
             {previous.map((poll) => (
-              <div key={poll.id} className="jr-quiz__past">
-                <span>{poll.question}</span>
-                <span className="jr-quiz__muted">{poll.totalVotes} answers</span>
-              </div>
+              <details key={poll.id} className="jr-quiz__past">
+                <summary>{poll.question} · {poll.totalVotes} answers</summary>
+                <ul>{poll.options.map(option => <li key={option.index}>{option.text}: {option.votes}{poll.kind === 'QUIZ' && poll.correctIndex === option.index ? ' · Correct' : ''}</li>)}</ul>
+              </details>
             ))}
           </section>
         ) : null}
 
-        {host && !composing && open ? (
-          <button type="button" className="jr-tool__link" onClick={() => setComposing(true)}>
-            Ask another question
-          </button>
-        ) : null}
+        {host && open ? <p className="jr-quiz__muted">Close this question before starting another.</p> : null}
       </div>
     </div>
   );
@@ -2375,7 +2389,9 @@ function WhiteboardPanel({
   const [, setRevision] = useState(0);
   const [color, setColor] = useState('#f5f3ff');
   const [width, setWidth] = useState(4);
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const dirtyRef = useRef(false);
+  const savingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const redraw = useCallback(() => {
@@ -2435,7 +2451,7 @@ function WhiteboardPanel({
     const load = async () => {
       try {
         const board = await mentorApi.whiteboard(sessionId, room);
-        if (!alive || drawingRef.current) return;
+        if (!alive || drawingRef.current || dirtyRef.current || savingRef.current) return;
         if (board.revision > revisionRef.current) adopt(board.strokes, board.revision);
         else if (board.revision === revisionRef.current) setStatus('saved');
       } catch (cause) {
@@ -2451,23 +2467,27 @@ function WhiteboardPanel({
   }, [sessionId, room, adopt]);
 
   const save = async (next: WhiteboardStroke[]) => {
+    if (savingRef.current) return;
+    savingRef.current = true; dirtyRef.current = true;
     setStatus('saving');
     setError(null);
     try {
       const result = await mentorApi.saveWhiteboard(sessionId, room, revisionRef.current, next);
       if (result.saved) {
+        dirtyRef.current = false;
         revisionRef.current = result.revision;
         setRevision(result.revision);
         setStatus('saved');
       } else {
+        dirtyRef.current = false;
         adopt(result.strokes, result.revision);
         setStatus('idle');
         setError('Someone else was drawing — the board refreshed. Check your last stroke.');
       }
     } catch (cause) {
-      setStatus('idle');
-      setError(describeError(cause));
-    }
+      setStatus('error');
+      setError(`Not saved: ${describeError(cause)}. Keep the board open and retry.`);
+    } finally { savingRef.current = false; }
   };
 
   const pointFrom = (event: ReactPointerEvent<HTMLCanvasElement>): [number, number] => {
@@ -2476,6 +2496,8 @@ function WhiteboardPanel({
   };
 
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (savingRef.current || dirtyRef.current) return;
+    if (strokesRef.current.length >= 600) { setError('Board is full (600 strokes). Ask the host to clear it.'); return; }
     event.currentTarget.setPointerCapture(event.pointerId);
     drawingRef.current = { color, width, points: [pointFrom(event)] };
     redraw();
@@ -2484,7 +2506,7 @@ function WhiteboardPanel({
   const onPointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const current = drawingRef.current;
     if (!current) return;
-    current.points.push(pointFrom(event));
+    if (current.points.length < 800) current.points.push(pointFrom(event));
     redraw();
   };
 
@@ -2501,7 +2523,7 @@ function WhiteboardPanel({
   };
 
   const undo = () => {
-    if (drawingRef.current) return;
+    if (drawingRef.current || savingRef.current || dirtyRef.current) return;
     const next = strokesRef.current.slice(0, -1);
     strokesRef.current = next;
     setStrokes(next);
@@ -2510,7 +2532,7 @@ function WhiteboardPanel({
   };
 
   const clear = () => {
-    if (!host) return;
+    if (!host || savingRef.current || dirtyRef.current) return;
     if (!window.confirm('Clear the whiteboard for everyone?')) return;
     strokesRef.current = [];
     setStrokes([]);
@@ -2518,13 +2540,15 @@ function WhiteboardPanel({
     void save([]);
   };
 
+  const closeSafely = () => { if ((dirtyRef.current || savingRef.current) && !window.confirm('The board has unsaved changes. Close anyway?')) return; onClose(); };
+
   const palette = ['#f5f3ff', '#ffd166', '#8ce99a', '#ff8787', '#74c0fc'];
 
   return (
     <div
       className="jr-modal-scrim"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) closeSafely();
       }}
     >
       <div className="jr-modal jr-modal--tool jr-modal--board" role="dialog" aria-modal="true" aria-label="Whiteboard">
@@ -2532,15 +2556,16 @@ function WhiteboardPanel({
           <div>
             <h2>Whiteboard</h2>
             <p className="jr-modal__sub">
-              {strokes.length} stroke{strokes.length === 1 ? '' : 's'} · {status === 'saving' ? 'Saving…' : 'Shared with the room'}
+              {strokes.length} stroke{strokes.length === 1 ? '' : 's'} · {status === 'saving' ? 'Saving…' : status === 'error' ? 'Not saved' : 'Shared with the room'}
             </p>
           </div>
-          <button type="button" className="jr-iconbtn" onClick={onClose} aria-label="Close">
+          <button type="button" className="jr-iconbtn" onClick={closeSafely} aria-label="Close">
             <Icon name="close" size={18} />
           </button>
         </header>
 
-        {error ? <p className="jr-tool__error">{error}</p> : null}
+        {error ? <p className="jr-tool__error" role="alert">{error}</p> : null}
+        {status === 'error' ? <button type="button" className="jr-board__action" onClick={() => void save(strokesRef.current)}>Retry save</button> : null}
 
         <div className="jr-board__bar">
           <div className="jr-board__colors" role="group" aria-label="Pen colour">
@@ -2572,11 +2597,11 @@ function WhiteboardPanel({
             ))}
           </div>
           <span className="jr-board__spacer" />
-          <button type="button" className="jr-board__action" onClick={undo} disabled={strokes.length === 0}>
+          <button type="button" className="jr-board__action" onClick={undo} disabled={strokes.length === 0 || (!host && strokes.length === 1) || status === 'saving' || status === 'error'}>
             <Icon name="rotate" size={14} /> Undo
           </button>
           {host ? (
-            <button type="button" className="jr-board__action is-danger" onClick={clear} disabled={strokes.length === 0}>
+            <button type="button" className="jr-board__action is-danger" onClick={clear} disabled={strokes.length === 0 || status === 'saving' || status === 'error'}>
               <Icon name="trash" size={14} /> Clear
             </button>
           ) : null}
@@ -2604,6 +2629,7 @@ function WhiteboardPanel({
 /** Host: split the class into rooms and start a timer. Everyone: join / return. */
 function BreakoutPanel({
   sessionId,
+  room,
   host,
   state,
   onChanged,
@@ -2611,6 +2637,7 @@ function BreakoutPanel({
   onClose,
 }: {
   sessionId: string;
+  room: string;
   host: boolean;
   state: BreakoutState | null;
   onChanged: (next: BreakoutState) => void;
@@ -2619,6 +2646,8 @@ function BreakoutPanel({
 }) {
   const [count, setCount] = useState(2);
   const [minutes, setMinutes] = useState(10);
+  const [broadcast, setBroadcast] = useState('');
+  const [broadcastNotice, setBroadcastNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -2690,7 +2719,7 @@ function BreakoutPanel({
                 ))}
               </select>
             </label>
-            <Button variant="primary" loading={busy} onClick={() => void create()}>
+            <Button variant="primary" loading={busy} disabled={!!state?.open} onClick={() => void create()}>
               Open rooms
             </Button>
             {state?.open ? (
@@ -2701,6 +2730,7 @@ function BreakoutPanel({
           </section>
         ) : null}
 
+        {host && state?.open ? <form className="jr-breakout__broadcast" onSubmit={e=>{e.preventDefault();if(!broadcast.trim()||busy)return;setBusy(true);setError(null);setBroadcastNotice('');void mentorApi.broadcastBreakouts(sessionId,room,broadcast.trim()).then(()=>{setBroadcast('');setBroadcastNotice('Đã gửi tới các phòng đang mở.');}).catch(e=>setError(describeError(e))).finally(()=>setBusy(false));}}><label>Thông báo tới tất cả nhóm<input value={broadcast} maxLength={500} onChange={e=>setBroadcast(e.target.value)} /></label><button type="submit" disabled={busy||!broadcast.trim()}>Gửi thông báo</button>{broadcastNotice&&<small role="status">{broadcastNotice}</small>}</form> : null}
         {state?.open ? (
           <div className="jr-breakout__rooms">
             {state.rooms.map((item) => (
@@ -2713,9 +2743,9 @@ function BreakoutPanel({
                   {item.members.length > 0 ? item.members.map((member) => member.displayName).join(', ') : 'Empty'}
                 </p>
                 <div className="jr-breakout__foot">
-                  <button type="button" className="jr-tool__link" onClick={() => enter(item.roomKey)}>
+                  {host || state.myRoom?.id === item.id ? <button type="button" className="jr-tool__link" onClick={() => enter(item.roomKey)}>
                     {host ? 'Join room' : 'Join'}
-                  </button>
+                  </button> : null}
                   {state.myRoom?.id === item.id ? <span className="jr-breakout__mine">Your room</span> : null}
                 </div>
               </article>
@@ -2731,7 +2761,7 @@ function BreakoutPanel({
 
         <p className="jr-breakout__note">
           A breakout is a separate call inside this session — chat, reactions and the whiteboard stay in that room. When
-          the timer ends, everyone returns to the main room.
+          the timer ends, participants return to the main room's waiting screen and can rejoin. The countdown depends on the device clock.
         </p>
       </div>
     </div>

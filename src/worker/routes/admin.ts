@@ -29,7 +29,7 @@ import { listWritingQueue, markQuestionManually, setWritingScore } from '../serv
 import { loadWritingMarks } from '../services/ai-marking-service';
 import { ensureDefaultScoringProfiles } from '../services/scoring-profile-service';
 import { clearTestAccessCode, setTestAccessCode } from '../services/access-code-service';
-import { schemaReport } from '../lib/ensure-schema';
+import { schemaReport, schemaDrift } from '../lib/ensure-schema';
 import { buildResultView } from '../services/attempt-service';
 import type { AttemptRow } from '../services/attempt-service';
 import { getAdminAnalytics } from '../services/analytics-service';
@@ -51,6 +51,20 @@ router.use('*', requireAuth, requireRole('ADMIN'));
 router.use('*', async (c, next) => {
   assertSameOrigin(c);
   await next();
+});
+
+// A read-only snapshot, not a synthetic end-to-end service monitor.
+router.get('/service-status', async c => {
+  let database: 'reachable' | 'unreachable' = 'unreachable';
+  let schema: 'ready' | 'incomplete' | 'unknown' = 'unknown';
+  try {
+    const drift = await schemaDrift(c.env);
+    database = 'reachable';
+    schema = drift.missingTables.length || drift.missingColumns.length || drift.staleConstraints.length ? 'incomplete' : 'ready';
+  } catch { /* Do not expose database errors or credentials. */ }
+  let ai: 'configured' | 'not configured' | 'unknown' = 'unknown';
+  try { ai = (await aiStatus(c.env)).available ? 'configured' : 'not configured'; } catch { /* independent probe */ }
+  return c.json({ checkedAt: new Date().toISOString(), worker: 'responding', database, schema, ai, email: c.env.RESEND_API_KEY && c.env.EMAIL_FROM ? 'configured' : 'not configured', storage: 'database', imports: c.env.IMPORT_QUEUE ? 'queue configured' : 'inline fallback' });
 });
 
 // ---------------------------------------------------------------------------

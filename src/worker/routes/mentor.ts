@@ -51,6 +51,7 @@ import {
 import { notify } from '../services/notification-service';
 import {
   answerPoll,
+  broadcastBreakouts,
   closeBreakouts,
   closePoll,
   createBreakouts,
@@ -346,6 +347,13 @@ router.post('/mentor/sessions/:sessionId/breakouts', async (c) => {
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const body = await parseBody(c, z.object({ count: z.number().int().min(2).max(4), minutes: z.number().int().min(5).max(60) }));
   return c.json(await createBreakouts(c.env, user, c.req.param('sessionId'), body));
+});
+
+router.post('/mentor/sessions/:sessionId/breakouts/broadcast', async (c) => {
+  const user=currentUser(c); assertCsrf(c,c.get('session')?.csrfToken ?? null);
+  await enforceRateLimit(c.env,{bucket:`breakout-broadcast:${user.id}`,windowSeconds:60,limit:10},'Too many broadcasts. Try again shortly.');
+  const body=await parseBody(c,z.object({room:z.string().max(40).default('main'),text:z.string().min(1).max(500)}));
+  return c.json(await broadcastBreakouts(c.env,user,c.req.param('sessionId'),body.room,body.text));
 });
 
 router.post('/mentor/sessions/:sessionId/breakouts/close', async (c) => {

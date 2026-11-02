@@ -1281,6 +1281,7 @@ export { formatBand, formatScore, formatPercent, SKILL_LABELS };
 function TwoFactorCard() {
   const toast = useToast();
   const [status, setStatus] = useState<{ enabled: boolean; pending: boolean } | null>(null);
+  const [statusError,setStatusError]=useState(false);
   const [enrolment, setEnrolment] = useState<{ secret: string; authUrl: string } | null>(null);
   const [code, setCode] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
@@ -1289,8 +1290,9 @@ function TwoFactorCard() {
   const refreshStatus = useCallback(async () => {
     try {
       setStatus(await api.get<{ enabled: boolean; pending: boolean }>('/api/auth/2fa/status'));
+      setStatusError(false);
     } catch {
-      setStatus(null);
+      setStatus(null); setStatusError(true);
     }
   }, []);
 
@@ -1343,9 +1345,9 @@ function TwoFactorCard() {
   return (
     <Card
       title="Two-factor authentication"
-      hint={status?.enabled ? 'On · your authenticator code is required at sign in' : 'Off · sign in with password or a one-time code'}
+      hint={!status ? 'Checking status…' : status.enabled ? 'On · your authenticator code is required at sign in' : 'Off · sign in with password or a one-time code'}
     >
-      {backupCodes.length > 0 ? (
+      {!status ? (statusError ? <div role="alert">Could not load security status. <Button size="sm" onClick={()=>void refreshStatus()}>Retry</Button></div> : <Loading label="Checking security status…" />) : backupCodes.length > 0 ? (
         <>
           <Notice tone="success" title="Save these backup codes now">
             Each code signs you in once if you lose your authenticator. They are shown only this time.
@@ -1436,14 +1438,15 @@ function SessionsCard() {
     Array<{ sessionId: string; createdAt: string; lastSeenAt: string; ip: string | null; userAgent: string | null; current: boolean }>
   >([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const result = await api.get<{ sessions: typeof sessions }>('/api/auth/sessions');
-      setSessions(result.sessions);
+      setSessions(result.sessions); setLoadError(false);
     } catch (cause) {
-      toast.push(describeError(cause), 'error');
+      setLoadError(true); toast.push(describeError(cause), 'error');
     } finally {
       setLoaded(true);
     }
@@ -1455,6 +1458,7 @@ function SessionsCard() {
   }, []);
 
   const revoke = async (sessionId: string) => {
+    if (!window.confirm('Sign out this device?')) return;
     setBusy(true);
     try {
       await api.post(`/api/auth/sessions/${sessionId}/revoke`, {});
@@ -1468,6 +1472,7 @@ function SessionsCard() {
   };
 
   const revokeOthers = async () => {
+    if (!window.confirm('Sign out every other device?')) return;
     setBusy(true);
     try {
       const result = await api.post<{ revoked: number }>('/api/auth/sessions/revoke-others', {});
@@ -1481,10 +1486,10 @@ function SessionsCard() {
   };
 
   return (
-    <Card title="Active sessions" hint="Every browser or phone currently signed in to your account.">
+    <Card title="Active sessions" hint="Up to 30 most recently active sign-ins. Device and IP labels may be approximate.">
       {!loaded ? (
         <Loading label="Loading sessions…" />
-      ) : sessions.length === 0 ? (
+      ) : loadError ? <div role="alert">Could not load sessions. <Button size="sm" onClick={()=>void load()}>Retry</Button></div> : sessions.length === 0 ? (
         <EmptyState title="No active sessions" icon="monitor">
           <p>Sessions appear here as soon as you sign in from a device.</p>
         </EmptyState>

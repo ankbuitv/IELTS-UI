@@ -96,6 +96,7 @@ export interface ExamSessionApi {
   loading: boolean;
   error: string | null;
   saveStatus: SaveStatus;
+  draftAvailable: boolean;
   lastSavedAt: string | null;
   remainingSeconds: number | null;
   sessionRemainingSeconds: number | null;
@@ -155,6 +156,7 @@ export function useExamSession(attemptId: string): ExamSessionApi {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [draftAvailable, setDraftAvailable] = useState(true);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [tabLock, setTabLock] = useState<TabLockState | null>(null);
@@ -191,12 +193,12 @@ export function useExamSession(attemptId: string): ExamSessionApi {
   // Unsent work is mirrored to localStorage, so a browser that kills the tab
   // (a phone under memory pressure, a crash, a dead battery) cannot lose it.
   const persistDraft = useCallback(() => {
+    const draft = buildDraft(unacked.current, dirtyWriting.current);
     try {
-      const draft = buildDraft(unacked.current, dirtyWriting.current);
-      if (draft) window.localStorage.setItem(draftStorageKey(attemptId), JSON.stringify(draft));
+      if (draft) { window.localStorage.setItem(draftStorageKey(attemptId), JSON.stringify(draft)); setDraftAvailable(true); }
       else window.localStorage.removeItem(draftStorageKey(attemptId));
     } catch {
-      // Storage can be full or blocked; the in-memory queue still protects the work.
+      if (draft) setDraftAvailable(false);
     }
   }, [attemptId]);
 
@@ -603,7 +605,9 @@ export function useExamSession(attemptId: string): ExamSessionApi {
       flushAnswers({ force: true }),
       flushWriting({ force: true }),
     ]);
-    return answersSaved && writingSaved;
+    const saved = answersSaved && writingSaved && pending.current.size === 0 && unacked.current.size === 0 && dirtyWriting.current.size === 0;
+    if (saved && navigator.onLine) setSaveStatus('saved');
+    return saved;
   }, [flushAnswers, flushWriting]);
 
   /**
@@ -751,6 +755,7 @@ export function useExamSession(attemptId: string): ExamSessionApi {
     loading,
     error,
     saveStatus,
+    draftAvailable,
     lastSavedAt,
     remainingSeconds: useMemo(() => {
       if (!state) return null;

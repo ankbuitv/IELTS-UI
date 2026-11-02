@@ -193,6 +193,7 @@ export interface RoomParticipant {
   role: string;
   joinedAt: string;
   handRaised: boolean;
+  handRaisedAt?: string | null;
   avatarUpdatedAt: string | null;
   /** Presence heartbeat flags: false means the tile should show an avatar. */
   camOn: boolean;

@@ -1,3 +1,7 @@
+import {listMistakes,createMistake,updateMistake,deleteMistake} from '../services/learning-mistakes';
+import {listStudyTime,createStudyTime,updateStudyTime,deleteStudyTime} from '../services/learning-study-time';
+import {listGoals,createGoal,updateGoal,deleteGoal} from '../services/learning-goals';
+import {readLearningJournal,saveLearningJournal} from '../services/learning-journal';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
@@ -71,6 +75,26 @@ const filterSchema = z.object({
   testType: z.enum(TEST_TYPES).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
 });
+
+const mistakeSchema=z.object({title:z.string().max(200),skill:z.enum(['READING','LISTENING','WRITING','SPEAKING']),note:z.string().max(1000),occurrences:z.number().int().min(1).max(999)});
+router.get('/mistakes',async c=>c.json({mistakes:await listMistakes(c.env,currentUser(c))}));
+router.post('/mistakes',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,mistakeSchema);return c.json({id:await createMistake(c.env,currentUser(c),body)},201);});
+router.put('/mistakes/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,mistakeSchema);await updateMistake(c.env,currentUser(c),c.req.param('id'),body);return c.json({ok:true});});
+router.delete('/mistakes/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteMistake(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
+
+const studyTimeSchema=z.object({day:z.string().length(10),skill:z.enum(['READING','LISTENING','WRITING','SPEAKING']),minutes:z.number().int().min(1).max(600),note:z.string().max(500)});
+router.get('/study-time',async c=>c.json({entries:await listStudyTime(c.env,currentUser(c),c.req.query('from')??'',c.req.query('to')??'')}));
+router.post('/study-time',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,studyTimeSchema);return c.json({id:await createStudyTime(c.env,currentUser(c),body)},201);});
+router.put('/study-time/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,studyTimeSchema);await updateStudyTime(c.env,currentUser(c),c.req.param('id'),body);return c.json({ok:true});});
+router.delete('/study-time/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteStudyTime(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
+
+router.get('/goals',async c=>c.json({goals:await listGoals(c.env,currentUser(c),c.req.query('week')??'')}));
+router.post('/goals',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({week:z.string().length(10),title:z.string().max(200)}));return c.json({id:await createGoal(c.env,currentUser(c),body.week,body.title)},201);});
+router.patch('/goals/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().max(200).optional(),completed:z.boolean().optional()}));await updateGoal(c.env,currentUser(c),c.req.param('id'),body);return c.json({ok:true});});
+router.delete('/goals/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteGoal(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
+
+router.get('/journal/:day',async c=>c.json(await readLearningJournal(c.env,currentUser(c),c.req.param('day'))));
+router.put('/journal/:day',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({body:z.string().max(4000)}));await saveLearningJournal(c.env,currentUser(c),c.req.param('day'),body.body);return c.json({ok:true});});
 
 router.get('/dashboard', async (c) => {
   const user = currentUser(c);

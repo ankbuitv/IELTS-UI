@@ -3,11 +3,11 @@
 -- Regenerate with: npm run schema:generate
 --
 -- Idempotent copy of the final schema produced by replaying migrations/
--- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql, 0038_speaking_partner.sql, 0039_question_drills.sql, 0040_social_billing.sql, 0041_test_covers.sql, 0042_blog.sql, 0043_class_direct_messages.sql, 0044_classroom_call_rooms.sql, 0045_call_attendance_feedback.sql, 0046_call_signals_order.sql, 0047_schools.sql, 0048_school_call_brand.sql, 0049_screen_share_lock.sql, 0050_class_logos.sql, 0051_school_managers.sql, 0052_school_lesson_plans.sql, 0053_school_operations.sql, 0054_desktop_preferences.sql, 0055_lesson_workflow.sql, 0056_school_delegated_permissions.sql, 0057_school_application_reviewers.sql, 0058_school_reporting_banner.sql, 0059_lesson_plan_attachments.sql, 0060_teacher_attendance.sql, 0061_teacher_private_notes.sql, 0062_classroom_seating.sql, 0063_classroom_announcements_polls.sql, 0064_teacher_feedback_templates.sql, 0065_teacher_question_bank.sql, 0066_teacher_resources.sql, 0067_assignment_reminders.sql, 0068_class_term_reports.sql, 0069_assignment_audiences.sql, 0070_marking_deadlines.sql, 0071_teacher_support_slots.sql, 0072_co_teacher_duties.sql, 0073_teacher_rubrics.sql, 0074_class_worksheets.sql, 0075_writing_revision_feedback.sql, 0076_class_teaching_schedule.sql, 0077_worksheet_reminders.sql, 0078_question_feedback.sql, 0079_teaching_event_series.sql). The Worker runs this once per isolate against
+-- (0001_init.sql, 0002_imports_and_settings.sql, 0003_url_assets.sql, 0004_test_access_codes.sql, 0005_sections_and_parts.sql, 0006_vocabulary_notebook.sql, 0007_ai_speaking_and_media.sql, 0008_speaking_review.sql, 0009_learn_and_vocabulary.sql, 0010_sample_writing_copy.sql, 0011_learn_lessons.sql, 0012_learn_lesson_kinds.sql, 0013_learn_plans.sql, 0014_speech_cache.sql, 0015_lesson_video.sql, 0016_lesson_legendary.sql, 0017_learn_shop_and_quests.sql, 0018_social_profiles_and_daily_lessons.sql, 0019_ai_adjudications.sql, 0020_mentor.sql, 0021_avatars_and_class_chat.sql, 0022_speaking_custom_topic.sql, 0023_accounts_username_2fa_otp.sql, 0024_classroom_chat.sql, 0025_room_moderation_booking.sql, 0026_calendar_events.sql, 0027_profile_bio_links.sql, 0028_mock_speaking.sql, 0029_classroom_chat_files.sql, 0030_user_identities.sql, 0031_notifications_email_links.sql, 0032_mentor_booking_confirmation.sql, 0033_live_classroom.sql, 0034_message_rooms.sql, 0035_room_presence_media.sql, 0036_weekly_action_plans.sql, 0037_ai_tutor.sql, 0038_speaking_partner.sql, 0039_question_drills.sql, 0040_social_billing.sql, 0041_test_covers.sql, 0042_blog.sql, 0043_class_direct_messages.sql, 0044_classroom_call_rooms.sql, 0045_call_attendance_feedback.sql, 0046_call_signals_order.sql, 0047_schools.sql, 0048_school_call_brand.sql, 0049_screen_share_lock.sql, 0050_class_logos.sql, 0051_school_managers.sql, 0052_school_lesson_plans.sql, 0053_school_operations.sql, 0054_desktop_preferences.sql, 0055_lesson_workflow.sql, 0056_school_delegated_permissions.sql, 0057_school_application_reviewers.sql, 0058_school_reporting_banner.sql, 0059_lesson_plan_attachments.sql, 0060_teacher_attendance.sql, 0061_teacher_private_notes.sql, 0062_classroom_seating.sql, 0063_classroom_announcements_polls.sql, 0064_teacher_feedback_templates.sql, 0065_teacher_question_bank.sql, 0066_teacher_resources.sql, 0067_assignment_reminders.sql, 0068_class_term_reports.sql, 0069_assignment_audiences.sql, 0070_marking_deadlines.sql, 0071_teacher_support_slots.sql, 0072_co_teacher_duties.sql, 0073_teacher_rubrics.sql, 0074_class_worksheets.sql, 0075_writing_revision_feedback.sql, 0076_class_teaching_schedule.sql, 0077_worksheet_reminders.sql, 0078_question_feedback.sql, 0079_teaching_event_series.sql, 0080_teacher_assignment_templates.sql, 0081_teacher_tasks.sql, 0082_teacher_daily_notes.sql, 0083_teacher_availability.sql, 0084_classroom_message_pins.sql, 0085_classroom_threads.sql, 0086_classroom_mentions.sql, 0087_classroom_unread_marks.sql, 0088_classroom_chat_mutes.sql, 0089_class_resource_pins.sql, 0090_learning_journal.sql, 0091_learning_goals.sql, 0092_study_time.sql, 0093_learning_mistakes.sql, 0094_call_hand_queue.sql, 0095_school_event_kind.sql). The Worker runs this once per isolate against
 -- an un-initialised database so a deployment cannot end up in a state where
 -- every request fails with "no such table".
 --
--- Tables: 149   Indexes: 143
+-- Tables: 164   Indexes: 152
 -- =============================================================================
 
 -- table: user_profiles
@@ -1364,7 +1364,7 @@ CREATE TABLE IF NOT EXISTS "mentor_room_presence" (
   room_key TEXT NOT NULL DEFAULT 'main',
   cam_on INTEGER NOT NULL DEFAULT 1,
   mic_on INTEGER NOT NULL DEFAULT 1,
-  screen_on INTEGER NOT NULL DEFAULT 0,
+  screen_on INTEGER NOT NULL DEFAULT 0, hand_raised_at TEXT,
   PRIMARY KEY (session_id, user_id)
 );
 
@@ -1479,7 +1479,7 @@ CREATE TABLE IF NOT EXISTS school_events (
   created_by TEXT NOT NULL REFERENCES users(id),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
-);
+, kind TEXT NOT NULL DEFAULT 'EVENT' CHECK (kind IN ('EVENT','HOLIDAY','LEAVE')));
 
 -- table: school_desktop_preferences
 CREATE TABLE IF NOT EXISTS school_desktop_preferences (
@@ -1850,6 +1850,149 @@ CREATE TABLE IF NOT EXISTS attempt_question_feedback (
  updated_by TEXT NOT NULL REFERENCES users(id),
  updated_at TEXT NOT NULL,
  PRIMARY KEY(attempt_id,question_id)
+);
+
+-- table: teacher_assignment_templates
+CREATE TABLE IF NOT EXISTS teacher_assignment_templates (
+ id TEXT PRIMARY KEY,
+ author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ name TEXT NOT NULL,
+ config_json TEXT NOT NULL,
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL
+);
+
+-- table: teacher_tasks
+CREATE TABLE IF NOT EXISTS teacher_tasks (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 200),
+  due_date TEXT,
+  priority TEXT NOT NULL DEFAULT 'NORMAL' CHECK(priority IN ('HIGH','NORMAL','LOW')),
+  completed INTEGER NOT NULL DEFAULT 0 CHECK(completed IN (0,1)),
+  completed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- table: teacher_daily_notes
+CREATE TABLE IF NOT EXISTS teacher_daily_notes (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  day TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(user_id,day)
+);
+
+-- table: teacher_weekly_availability
+CREATE TABLE IF NOT EXISTS teacher_weekly_availability (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  timezone TEXT NOT NULL,
+  slots_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- table: classroom_message_pins
+CREATE TABLE IF NOT EXISTS classroom_message_pins (
+  classroom_id TEXT NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+  message_id TEXT NOT NULL REFERENCES classroom_messages(id) ON DELETE CASCADE,
+  pinned_by TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY(classroom_id,message_id)
+);
+
+-- table: classroom_message_replies
+CREATE TABLE IF NOT EXISTS classroom_message_replies (
+ message_id TEXT PRIMARY KEY REFERENCES classroom_messages(id) ON DELETE CASCADE,
+ classroom_id TEXT NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+ root_id TEXT NOT NULL REFERENCES classroom_messages(id) ON DELETE CASCADE,
+ created_at TEXT NOT NULL
+);
+
+-- table: classroom_mention_guards
+CREATE TABLE IF NOT EXISTS classroom_mention_guards (
+ message_id TEXT PRIMARY KEY REFERENCES classroom_messages(id) ON DELETE CASCADE,
+ expected_count INTEGER NOT NULL,
+ verified_count INTEGER NOT NULL CHECK(expected_count=verified_count)
+);
+
+-- table: classroom_message_mentions
+CREATE TABLE IF NOT EXISTS classroom_message_mentions (
+ message_id TEXT NOT NULL REFERENCES classroom_messages(id) ON DELETE CASCADE,
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ display_name TEXT NOT NULL,
+ PRIMARY KEY(message_id,user_id)
+);
+
+-- table: classroom_unread_marks
+CREATE TABLE IF NOT EXISTS classroom_unread_marks (
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ classroom_id TEXT NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+ message_id TEXT NOT NULL REFERENCES classroom_messages(id) ON DELETE CASCADE,
+ marked_at TEXT NOT NULL,
+ PRIMARY KEY(user_id,classroom_id,message_id)
+);
+
+-- table: classroom_chat_mutes
+CREATE TABLE IF NOT EXISTS classroom_chat_mutes (
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ classroom_id TEXT NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+ muted_until TEXT NOT NULL,
+ updated_at TEXT NOT NULL,
+ PRIMARY KEY(user_id,classroom_id)
+);
+
+-- table: classroom_resource_pins
+CREATE TABLE IF NOT EXISTS classroom_resource_pins (
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ classroom_id TEXT NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+ resource_id TEXT NOT NULL REFERENCES teacher_resources(id) ON DELETE CASCADE,
+ created_at TEXT NOT NULL,
+ PRIMARY KEY(user_id,classroom_id,resource_id)
+);
+
+-- table: learning_journal
+CREATE TABLE IF NOT EXISTS learning_journal (
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ day TEXT NOT NULL,
+ body TEXT NOT NULL,
+ updated_at TEXT NOT NULL,
+ PRIMARY KEY(user_id,day)
+);
+
+-- table: learning_goals
+CREATE TABLE IF NOT EXISTS learning_goals (
+ id TEXT PRIMARY KEY,
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ week_start TEXT NOT NULL,
+ title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 200),
+ completed INTEGER NOT NULL DEFAULT 0 CHECK(completed IN (0,1)),
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL
+);
+
+-- table: learning_study_time
+CREATE TABLE IF NOT EXISTS learning_study_time (
+ id TEXT PRIMARY KEY,
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ day TEXT NOT NULL,
+ skill TEXT NOT NULL CHECK(skill IN ('READING','LISTENING','WRITING','SPEAKING')),
+ minutes INTEGER NOT NULL CHECK(minutes BETWEEN 1 AND 600),
+ note TEXT NOT NULL DEFAULT '',
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL
+);
+
+-- table: learning_mistakes
+CREATE TABLE IF NOT EXISTS learning_mistakes (
+ id TEXT PRIMARY KEY,
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 200),
+ skill TEXT NOT NULL CHECK(skill IN ('READING','LISTENING','WRITING','SPEAKING')),
+ note TEXT NOT NULL DEFAULT '',
+ occurrences INTEGER NOT NULL DEFAULT 1 CHECK(occurrences BETWEEN 1 AND 999),
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL
 );
 
 -- index: idx_sessions_user
@@ -2289,3 +2432,30 @@ CREATE INDEX IF NOT EXISTS idx_teacher_teaching_events ON classroom_teaching_eve
 
 -- index: idx_class_teaching_series
 CREATE INDEX IF NOT EXISTS idx_class_teaching_series ON classroom_teaching_events(classroom_id,series_id);
+
+-- index: idx_teacher_assignment_templates
+CREATE INDEX IF NOT EXISTS idx_teacher_assignment_templates ON teacher_assignment_templates(author_id,updated_at DESC);
+
+-- index: idx_teacher_tasks_user
+CREATE INDEX IF NOT EXISTS idx_teacher_tasks_user ON teacher_tasks(user_id,completed,due_date,priority);
+
+-- index: idx_classroom_message_pins
+CREATE INDEX IF NOT EXISTS idx_classroom_message_pins ON classroom_message_pins(classroom_id,created_at DESC);
+
+-- index: idx_classroom_thread_replies
+CREATE INDEX IF NOT EXISTS idx_classroom_thread_replies ON classroom_message_replies(classroom_id,root_id,created_at,message_id);
+
+-- index: idx_classroom_mentions_user
+CREATE INDEX IF NOT EXISTS idx_classroom_mentions_user ON classroom_message_mentions(user_id,message_id);
+
+-- index: idx_classroom_unread_user
+CREATE INDEX IF NOT EXISTS idx_classroom_unread_user ON classroom_unread_marks(user_id,classroom_id,marked_at DESC);
+
+-- index: idx_learning_goals_user_week
+CREATE INDEX IF NOT EXISTS idx_learning_goals_user_week ON learning_goals(user_id,week_start,created_at);
+
+-- index: idx_learning_study_time_user_day
+CREATE INDEX IF NOT EXISTS idx_learning_study_time_user_day ON learning_study_time(user_id,day);
+
+-- index: idx_learning_mistakes_user
+CREATE INDEX IF NOT EXISTS idx_learning_mistakes_user ON learning_mistakes(user_id,occurrences,updated_at);

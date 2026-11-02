@@ -14,7 +14,7 @@ import { Icon, type IconName } from './Icon';
 import { Button, Card, Loading, Notice } from './ui';
 import { formatDateTime } from '../lib/format';
 
-type NotificationKind = 'SYSTEM' | 'MARKING' | 'BOOKING' | 'CLASS' | 'ASSIGNMENT' | 'ACHIEVEMENT' | 'BILLING';
+type NotificationKind = 'SYSTEM' | 'MARKING' | 'BOOKING' | 'CLASS' | 'ASSIGNMENT' | 'ACHIEVEMENT' | 'BILLING' | 'CLASS_MESSAGE';
 
 interface NotificationItem {
   id: string;
@@ -36,6 +36,7 @@ const KIND_ICON: Record<NotificationKind, IconName> = {
   MARKING: 'pen',
   BOOKING: 'calendar',
   CLASS: 'presentation',
+  CLASS_MESSAGE: 'bubble',
   ASSIGNMENT: 'file',
   ACHIEVEMENT: 'award',
   BILLING: 'crown',

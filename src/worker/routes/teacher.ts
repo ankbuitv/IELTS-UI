@@ -26,6 +26,11 @@ import {
   updateAssignment,
   updateClassroom,
 } from '../services/teacher-service';
+import {getTeacherAvailability,saveTeacherAvailability} from '../services/teacher-availability-service';
+import {listTeacherTasks,createTeacherTask,updateTeacherTask,deleteTeacherTask,readDailyNote,saveDailyNote} from '../services/teacher-tasks-service';
+import {cloneAssignmentToClasses} from '../services/assignment-clone-service';
+import {listAssignmentTemplates,saveAssignmentTemplate,deleteAssignmentTemplate} from '../services/teacher-assignment-templates';
+import {teacherScheduleConflicts} from '../services/teacher-schedule-conflicts';
 import {searchTeacherWorkspace} from '../services/teacher-workspace-search';
 import {setQuestionFeedback} from '../services/question-feedback-service';
 import {listTeachingSchedule,createTeachingEvent,updateTeachingEvent,moveTeachingEvent,deleteTeachingEvent} from '../services/class-teaching-schedule-service';
@@ -42,11 +47,11 @@ import { listWritingQueue, markQuestionManually, setWritingScore } from '../serv
 import { loadWritingMarks, scoreWritingSubmissionWithAi } from '../services/ai-marking-service';
 import { recordAudit } from '../lib/audit';
 import { teacherProgress } from '../services/teacher-progress-service';
-import { readAttendance, saveAttendance } from '../services/teacher-attendance-service';
+import { readAttendance, saveAttendance, attendanceTrend } from '../services/teacher-attendance-service';
 import { classroomGradebook } from '../services/teacher-gradebook-service';
 import {readTermReport,saveTermReport,releaseTermReport} from '../services/class-term-report-service';
 import {classStudentProgress} from '../services/teacher-student-progress-service';
-import {listResources,createResource,updateResource,deleteResource,readOwnResource} from '../services/teacher-resources-service';
+import {listResources,createResource,updateResource,deleteResource,readOwnResource,resourceAudience} from '../services/teacher-resources-service';
 import { listQuestions,createQuestion,updateQuestion,deleteQuestion } from '../services/teacher-question-bank-service';
 import { listFeedbackTemplates,createFeedbackTemplate,deleteFeedbackTemplate,updateFeedbackTemplate } from '../services/teacher-feedback-templates-service';
 import { readSeating, saveSeating } from '../services/teacher-seating-service';
@@ -67,6 +72,7 @@ router.get('/search',async c=>c.json(await searchTeacherWorkspace(c.env,currentU
 // Classrooms
 // ---------------------------------------------------------------------------
 const resourceMetadata=z.object({subject:z.string().trim().max(120),topic:z.string().trim().max(120),classroomId:z.string().min(1).max(100).nullable()});
+router.get('/resource-audience/:classId',async c=>c.json(await resourceAudience(c.env,currentUser(c),c.req.param('classId'))));
 router.get('/resources',async c=>c.json({files:await listResources(c.env,currentUser(c))}));
 router.post('/resources',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,resourceMetadata.extend({filename:z.string().min(1).max(160),base64:z.string().min(4).max(683000)}));return c.json({id:await createResource(c.env,currentUser(c),body)},201);});
 router.put('/resources/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,resourceMetadata);await updateResource(c.env,currentUser(c),c.req.param('id'),body);return c.json({ok:true});});
@@ -101,6 +107,7 @@ router.put('/classrooms/:id/private-notes/:studentId', async c=>{assertCsrf(c,c.
 router.get('/classrooms/:id/schedule',async c=>c.json({events:await listTeachingSchedule(c.env,currentUser(c),c.req.param('id'))}));
 const teachingOccurrence=z.object({startsAt:z.string().datetime(),endsAt:z.string().datetime()});
 const teachingInput=teachingOccurrence.extend({title:z.string().trim().min(1).max(150),kind:z.enum(['REGULAR','MAKEUP']).optional(),note:z.string().trim().max(500).optional()});
+router.post('/schedule-conflicts',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({intervals:z.array(teachingOccurrence).min(1).max(24),ignoreEventId:z.string().max(100).optional()}));return c.json({conflicts:await teacherScheduleConflicts(c.env,currentUser(c),body.intervals,body.ignoreEventId)});});
 router.post('/classrooms/:id/schedule',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,teachingInput.extend({occurrences:z.array(teachingOccurrence).max(23).optional()}));return c.json(await createTeachingEvent(c.env,currentUser(c),c.req.param('id'),body),201);});
 router.put('/classrooms/:id/schedule/:eventId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,teachingInput);await updateTeachingEvent(c.env,currentUser(c),c.req.param('id'),c.req.param('eventId'),body);return c.json({ok:true});});
 router.patch('/classrooms/:id/schedule/:eventId/time',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,teachingOccurrence);await moveTeachingEvent(c.env,currentUser(c),c.req.param('id'),c.req.param('eventId'),body);return c.json({ok:true});});
@@ -127,6 +134,7 @@ router.post('/classrooms/:id/term-reports/:studentId/release',async c=>{assertCs
 router.get('/classrooms/:id/student-progress/:studentId',async c=>c.json(await classStudentProgress(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'))));
 
 router.get('/classrooms/:id/gradebook', async c=>c.json(await classroomGradebook(c.env,currentUser(c),c.req.param('id'))));
+router.get('/classrooms/:id/attendance-trend',async c=>c.json({rows:await attendanceTrend(c.env,currentUser(c),c.req.param('id'),c.req.query('from')??'',c.req.query('to')??'')}));
 router.get('/classrooms/:id/attendance', async c=>c.json(await readAttendance(c.env,currentUser(c),c.req.param('id'),c.req.query('date')??'')));
 router.put('/classrooms/:id/attendance', async c=>{assertCsrf(c,c.get('session')?.csrfToken ?? null);const body=await parseBody(c,z.object({date:z.string().length(10),rows:z.array(z.object({studentId:z.string().min(1).max(100),status:z.enum(['PRESENT','ABSENT','LATE','UNMARKED'])})).max(500)}));await saveAttendance(c.env,currentUser(c),c.req.param('id'),body.date,body.rows);return c.json({ok:true});});
 
@@ -304,6 +312,22 @@ const assignmentSchema = z.object({
   studentIds: z.array(z.string().min(1)).min(1).max(200).optional(),
 });
 
+const assignmentTemplateSchema=z.object({name:z.string().trim().min(1).max(100),config:z.object({versionId:z.string().min(1).max(100),title:z.string().max(200),maxAttempts:z.number().int().min(1).max(20),mode:z.enum(EXAM_MODES),resultVisibility:z.enum(RESULT_VISIBILITIES),timingPolicy:z.enum(['EXAM_DURATION','UNTIMED']),requireFullscreen:z.boolean(),monitorVisibility:z.boolean(),autoSubmitAtEvents:z.string().regex(/^(?:[1-9]|[1-9]\d|100)?$/),maxTabAwayEvents:z.string().regex(/^(?:\d|[1-9]\d|100)?$/)})});
+router.get('/assignment-templates',async c=>c.json({templates:await listAssignmentTemplates(c.env,currentUser(c))}));
+router.post('/assignment-templates',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);return c.json({id:await saveAssignmentTemplate(c.env,currentUser(c),await parseBody(c,assignmentTemplateSchema))},201);});
+router.put('/assignment-templates/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await saveAssignmentTemplate(c.env,currentUser(c),await parseBody(c,assignmentTemplateSchema),c.req.param('id'));return c.json({ok:true});});
+router.delete('/assignment-templates/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteAssignmentTemplate(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
+
+const taskSchema=z.object({title:z.string().trim().min(1).max(200),dueDate:z.string().length(10).nullable(),priority:z.enum(['HIGH','NORMAL','LOW'])});
+router.get('/availability',async c=>c.json({availability:await getTeacherAvailability(c.env,currentUser(c))}));
+router.put('/availability',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({timezone:z.string().min(1).max(100),slots:z.array(z.object({day:z.number().int().min(0).max(6),start:z.string().length(5),end:z.string().length(5)})).max(7)}));await saveTeacherAvailability(c.env,currentUser(c),body.timezone,body.slots);return c.json({ok:true});});
+router.get('/daily-notes/:day',async c=>c.json(await readDailyNote(c.env,currentUser(c),c.req.param('day'))));
+router.put('/daily-notes/:day',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({body:z.string().max(4000)}));await saveDailyNote(c.env,currentUser(c),c.req.param('day'),body.body);return c.json({ok:true});});
+router.get('/tasks',async c=>c.json({tasks:await listTeacherTasks(c.env,currentUser(c))}));
+router.post('/tasks',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,taskSchema);return c.json({id:await createTeacherTask(c.env,currentUser(c),body)},201);});
+router.patch('/tasks/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,taskSchema.partial().extend({completed:z.boolean().optional()}));await updateTeacherTask(c.env,currentUser(c),c.req.param('id'),body);return c.json({ok:true});});
+router.delete('/tasks/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteTeacherTask(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
+
 router.post('/assignments', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
@@ -319,6 +343,8 @@ router.post('/assignments', async (c) => {
   });
   return c.json(result, 201);
 });
+
+router.post('/assignments/:id/clone',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({classroomIds:z.array(z.string().min(1).max(100)).min(1).max(20)}));const copies=await cloneAssignmentToClasses(c.env,currentUser(c),c.req.param('id'),body.classroomIds);await recordAudit(c.env,{actorUserId:currentUser(c).id,action:'ASSIGNMENT_CLONE',entityType:'assignment',entityId:c.req.param('id'),metadata:{classroomIds:body.classroomIds},ip:clientIp(c)});return c.json({copies},201);});
 
 router.get('/assignments/:id', async (c) => {
   const user = currentUser(c);

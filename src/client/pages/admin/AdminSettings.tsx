@@ -41,7 +41,7 @@ interface AssetRow {
 }
 
 export function AdminSettingsPage() {
-  const [tab, setTab] = useState<'settings' | 'ai' | 'assets' | 'notifications' | 'audit'>('settings');
+  const [tab, setTab] = useState<'settings' | 'ai' | 'assets' | 'notifications' | 'audit' | 'status'>('settings');
 
   return (
     <div className="stack">
@@ -57,6 +57,7 @@ export function AdminSettingsPage() {
       <Tabs
         tabs={[
           { id: 'settings', label: 'Platform settings' },
+          { id: 'status', label: 'Service status' },
           { id: 'ai', label: 'AI providers' },
           { id: 'assets', label: 'Media' },
           { id: 'notifications', label: 'Announcements' },
@@ -67,12 +68,28 @@ export function AdminSettingsPage() {
       />
 
       {tab === 'settings' ? <SettingsPanel /> : null}
+      {tab === 'status' ? <ServiceStatusPanel /> : null}
       {tab === 'ai' ? <AiProvidersPanel /> : null}
       {tab === 'assets' ? <AssetsPanel /> : null}
       {tab === 'notifications' ? <AnnouncementsPanel /> : null}
       {tab === 'audit' ? <AuditPanel /> : null}
     </div>
   );
+}
+
+type ServiceStatus = {checkedAt: string; worker: string; database: string; schema: string; ai: string; email: string; storage: string; imports: string};
+function ServiceStatusPanel() {
+  const {data, loading, error, reload} = useAsync<ServiceStatus>(() => api.get('/api/admin/service-status'), []);
+  return <Card title="Service status" hint="Read-only snapshot. Configured does not mean an external provider has been tested.">
+    <Button size="sm" disabled={loading} onClick={() => void reload()}>Refresh status</Button>
+    {loading && <Loading label="Checking status…"/>}
+    {error && <Notice tone="danger">Could not check services: {error}</Notice>}
+    {data && !loading && <><KeyValue items={[
+      ['Worker', data.worker], ['Database', data.database], ['Schema', data.schema],
+      ['AI provider', data.ai], ['Email provider', data.email], ['File storage', data.storage], ['Imports', data.imports],
+      ['Checked at', formatDateTime(data.checkedAt)],
+    ]}/><p>Database and schema are read probes. AI and email show configuration only; storage and queue show the selected backend, not an availability check. This is not an uptime or delivery monitor.</p></>}
+  </Card>;
 }
 
 function SettingsPanel() {

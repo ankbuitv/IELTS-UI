@@ -36,6 +36,7 @@ export function VocabularyPage() {
   const [term, setTerm] = useState('');
   const [meaning, setMeaning] = useState('');
   const [saving, setSaving] = useState(false);
+  const [reviewingId,setReviewingId]=useState<string|null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editMeaning, setEditMeaning] = useState('');
   const [fetching, setFetching] = useState(false);
@@ -53,7 +54,7 @@ export function VocabularyPage() {
       DUE: entries.filter(isDue).length,
       AI: entries.filter((entry) => entry.origin === 'AI').length,
       MINE: entries.filter((entry) => entry.origin === 'USER').length,
-      LESSON: entries.filter((entry) => entry.origin === 'WORDBANK').length,
+      LESSON: entries.filter((entry) => (entry.origin === 'WORDBANK' || entry.source === 'Lesson')).length,
     }),
     [entries],
   );
@@ -63,7 +64,7 @@ export function VocabularyPage() {
         if (filter === 'DUE') return isDue(entry);
         if (filter === 'AI') return entry.origin === 'AI';
         if (filter === 'MINE') return entry.origin === 'USER';
-        if (filter === 'LESSON') return entry.origin === 'WORDBANK';
+        if (filter === 'LESSON') return (entry.origin === 'WORDBANK' || entry.source === 'Lesson');
         return true;
       }),
     [entries, filter],
@@ -125,6 +126,12 @@ export function VocabularyPage() {
     }
   };
 
+  const review = async (entry:VocabularyEntry, correct:boolean) => {
+    if(reviewingId)return;setReviewingId(entry.id);
+    try { await api.patch(`/api/student/vocabulary/${encodeURIComponent(entry.id)}`,{reviewed:true,correct});await reload();toast.push(correct?'Đã lên lịch ôn lại.':'Từ vẫn cần ôn lại.','success'); }
+    catch(cause){toast.push(describeError(cause),'error');}finally{setReviewingId(null);}
+  };
+
   const remove = async (entry: VocabularyEntry) => {
     try {
       await api.delete(`/api/student/vocabulary/${entry.id}`);
@@ -143,7 +150,7 @@ export function VocabularyPage() {
           <h1>Vocabulary</h1>
           <p className="page-head__meta">
             Words you save, new words the AI picks for your level every day, and the words you missed in lessons. Review
-            the ones that are due and they come back less and less often.
+            the ones that are due and they come back less and less often. Tự đánh giá “Nhớ” hoặc “Chưa nhớ” ngay tại sổ; nhớ sẽ hẹn sau 1, 2, 4, 8 hoặc 16 ngày, chưa nhớ có thể ôn lại ngay.
           </p>
         </div>
         <div className="row">
@@ -276,7 +283,7 @@ export function VocabularyPage() {
                 ) : null}
                 <span className="vocab-item__tags">
                   {entry.origin === 'AI' ? <Badge tone="accent">AI pick</Badge> : null}
-                  {entry.origin === 'WORDBANK' ? <Badge tone="info">Lesson</Badge> : null}
+                  {(entry.origin === 'WORDBANK' || entry.source === 'Lesson') ? <Badge tone="info">Lesson</Badge> : null}
                   {entry.level ? <Badge tone="neutral">Band {entry.level}</Badge> : null}
                 </span>
               </div>
@@ -310,6 +317,7 @@ export function VocabularyPage() {
                   {entry.source ? <span className="muted"> · {entry.source}</span> : null}
                 </span>
                 <div className="row" style={{ gap: 2 }}>
+                  {isDue(entry)&&<><Button size="sm" disabled={!!reviewingId} aria-label={`Nhớ ${entry.term}`} onClick={()=>void review(entry,true)}>Nhớ</Button><Button size="sm" disabled={!!reviewingId} aria-label={`Chưa nhớ ${entry.term}`} onClick={()=>void review(entry,false)}>Chưa nhớ</Button></>}
                   <Link className="btn btn--ghost btn--sm" to={`/dictionary?term=${encodeURIComponent(entry.term)}`}>
                     Look up
                   </Link>

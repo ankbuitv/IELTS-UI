@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import schemaSql from '@worker/lib/runtime-schema.sql';
 import { joinRoom, leaveRoom, postSignal, roomState, setHandRaised, setScreenShare, setMentorClassBrand } from '@worker/services/mentor-service';
+import {createPoll,answerPoll,closePoll,listPolls,getWhiteboard,saveWhiteboard,createBreakouts,listBreakouts,closeBreakouts,broadcastBreakouts} from '@worker/services/live-class-service';
 import type { Env } from '@worker/env';
 import type { AuthUser } from '@worker/lib/auth-types';
 
@@ -12,7 +13,7 @@ function adapter(db: SqliteDb) {
       async first<T>() { return (statement.get(...params) as T | undefined) ?? null; },
       async all<T>() { return { results: statement.all(...params) as T[] }; },
       async run() { const result = statement.run(...params) as { changes: number }; return { meta: { changes: Number(result.changes) } }; } }; return bound;
-  } };
+  }, async batch(statements: Array<{run:()=>Promise<unknown>}>) { const results=[]; for (const statement of statements) results.push(await statement.run()); return results; } };
 }
 function user(id: string, role: AuthUser['role']): AuthUser {
   return { id, role, email: `${id}@example.test`, username: null, status: 'ACTIVE', displayName: id, avatarUrl: null, createdAt: '', lastLoginAt: null };
@@ -67,8 +68,65 @@ describe('call signalling and presence', () => {
       expect(received.signals.map((s) => s.id)).toEqual(['sig_z', 'sig_b', 'sig_c']);
       expect(received.participants.find((p) => p.userId === 'student')).toMatchObject({ displayName: 'Nguyễn Học Viên', camOn: false, screenOn: false });
       expect((await roomState(env, student, 'room', received.signalCursor)).signals).toHaveLength(0);
+      await expect(createBreakouts(env,student,'room',{count:2,minutes:5})).rejects.toMatchObject({status:403});
+      const breakout = await createBreakouts(env,host,'room',{count:2,minutes:5});
+      expect(breakout.rooms).toHaveLength(2);
+      expect(breakout.rooms.flatMap(r=>r.members).map(m=>m.userId)).toEqual(expect.arrayContaining(['student','other']));
+      await expect(createBreakouts(env,host,'room',{count:2,minutes:5})).rejects.toMatchObject({status:409});
+      const studentRoom=(await listBreakouts(env,student,'room')).myRoom!;
+      const anotherRoom=breakout.rooms.find(r=>r.id!==studentRoom.id)!;
+      await expect(roomState(env,student,'room',null,anotherRoom.roomKey)).rejects.toMatchObject({status:403});
+      await expect(roomState(env,host,'room',null,anotherRoom.roomKey)).resolves.toMatchObject({roomKey:anotherRoom.roomKey});
+      await expect(broadcastBreakouts(env,student,'room','main','Hello')).rejects.toMatchObject({status:403});
+      await joinRoom(env,student,'room',studentRoom.roomKey);
+      expect(await broadcastBreakouts(env,host,'room','main','Please return')).toEqual({sent:3});
+      expect((await roomState(env,student,'room',null,studentRoom.roomKey)).messages.some(m=>m.body==='Thông báo tới các nhóm: Please return')).toBe(true);
+      await joinRoom(env,student,'room','main');
+      db.exec("UPDATE class_breakouts SET ends_at='2000-01-01T00:00:00.000Z'");
+      expect((await listBreakouts(env,student,'room')).open).toBe(false);
+      await expect(roomState(env,student,'room',null,studentRoom.roomKey)).rejects.toMatchObject({status:400});
+      const replacement=await createBreakouts(env,host,'room',{count:2,minutes:5});
+      expect(replacement.rooms.some(r=>breakout.rooms.some(old=>old.roomKey===r.roomKey))).toBe(false);
+      await closeBreakouts(env,host,'room');
+      const stroke={color:'#ffffff',width:4,points:[[0,0],[0.5,0.5]]};
+      expect((await getWhiteboard(env,student,'room')).revision).toBe(0);
+      expect(await saveWhiteboard(env,student,'room','main',0,[stroke])).toMatchObject({saved:true,revision:1});
+      expect(await saveWhiteboard(env,host,'room','main',0,[])).toMatchObject({saved:false,revision:1});
+      await expect(saveWhiteboard(env,student,'room','main',1,[])).rejects.toMatchObject({status:403});
+      const stroke2={color:'#ff0000',width:4,points:[[0,1],[0.5,0.7]]};
+      expect(await saveWhiteboard(env,other,'room','main',1,[stroke,stroke2])).toMatchObject({saved:true,revision:2});
+      await expect(saveWhiteboard(env,student,'room','main',2,[stroke2,stroke])).rejects.toMatchObject({status:403});
+      expect(await saveWhiteboard(env,host,'room','main',2,[])).toMatchObject({saved:true,revision:3});
+      await expect(createPoll(env,student,'room','main',{kind:'POLL',question:'Question?',options:['One','Two']})).rejects.toMatchObject({status:403});
+      await expect(createPoll(env,host,'room','main',{kind:'QUIZ',question:'Question?',options:['One',''],correctIndex:0})).rejects.toMatchObject({status:400});
+      const poll=await createPoll(env,host,'room','main',{kind:'QUIZ',question:'Question?',options:['One','Two'],correctIndex:1});
+      await expect(createPoll(env,host,'room','main',{kind:'POLL',question:'Another?',options:['One','Two']})).rejects.toMatchObject({status:409});
+      expect((await listPolls(env,student,'room'))[0]?.correctIndex).toBeNull();
+      await expect(answerPoll(env,host,'room',poll.id,0)).rejects.toMatchObject({status:403});
+      const vote=await answerPoll(env,student,'room',poll.id,0); expect(vote).toMatchObject({myChoice:0,totalVotes:1,correctIndex:null});
+      await expect(answerPoll(env,student,'room',poll.id,1)).rejects.toMatchObject({status:409});
+      await expect(closePoll(env,student,'room',poll.id)).rejects.toMatchObject({status:403});
+      expect(await closePoll(env,host,'room',poll.id)).toMatchObject({status:'CLOSED',correctIndex:1,totalVotes:1});
+      await expect(answerPoll(env,other,'room',poll.id,1)).rejects.toMatchObject({status:409});
+      await leaveRoom(env,other,'room');
+      const nextPoll=await createPoll(env,host,'room','main',{kind:'POLL',question:'Again?',options:['One','Two']});
+      await expect(answerPoll(env,other,'room',nextPoll.id,1)).rejects.toMatchObject({status:409});
+      await closePoll(env,host,'room',nextPoll.id); await joinRoom(env,other,'room');
       await setHandRaised(env, student, 'room', true);
-      expect((await roomState(env, host, 'room', null)).participants.find((p) => p.userId === 'student')?.handRaised).toBe(true);
+      let hand = (await roomState(env, host, 'room', null)).participants.find((p) => p.userId === 'student');
+      expect(hand?.handRaised).toBe(true); expect(hand?.handRaisedAt).toMatch(/^\d{4}-/);
+      const firstHandTime = hand?.handRaisedAt;
+      await setHandRaised(env, student, 'room', true);
+      hand = (await roomState(env, host, 'room', null)).participants.find((p) => p.userId === 'student');
+      expect(hand?.handRaisedAt).toBe(firstHandTime);
+      await setHandRaised(env, student, 'room', false);
+      hand = (await roomState(env, host, 'room', null)).participants.find((p) => p.userId === 'student');
+      expect(hand).toMatchObject({handRaised:false,handRaisedAt:null});
+      await setHandRaised(env, other, 'room', true);
+      await setHandRaised(env, student, 'room', true);
+      expect((await roomState(env,host,'room',null)).participants.find(p=>p.userId==='other')?.handRaisedAt).toBeTruthy();
+      await joinRoom(env,student,'room');
+      expect((await roomState(env,host,'room',null)).participants.find(p=>p.userId==='student')).toMatchObject({handRaised:false,handRaisedAt:null});
       await expect(postSignal(env, student, 'room', { kind: 'KICK', targetId: host.id, payload: '' })).rejects.toMatchObject({ status: 403 });
       await leaveRoom(env, student, 'room');
       await roomState(env, student, 'room', received.signalCursor); // in-flight poll after leave

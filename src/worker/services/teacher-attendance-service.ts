@@ -39,3 +39,9 @@ export async function saveAttendance(env:Env,user:AuthUser,classId:string,date:s
       ON CONFLICT(classroom_id,student_id,attendance_date) DO UPDATE SET status=excluded.status,updated_by=excluded.updated_by,updated_at=excluded.updated_at`).bind(classId,row.studentId,date,row.status,user.id,time,classId,row.studentId));
   if(statements.length)await env.DB.batch(statements);
 }
+/** Aggregates saved historical marks, including learners who have since left. */
+export async function attendanceTrend(env:Env,user:AuthUser,classId:string,from:string,to:string) {
+ if(!validAttendanceDate(from)||!validAttendanceDate(to)||from>to||(Date.parse(`${to}T00:00:00Z`)-Date.parse(`${from}T00:00:00Z`))/86400000>365)throw ApiError.validation('Chọn khoảng ngày hợp lệ tối đa 366 ngày.');
+ await requireDuty(env,user,classId,'attendance');await requireClassroomAccess(env,user,classId);
+ return (await env.DB.prepare(`SELECT attendance_date,status,COUNT(*) AS count FROM classroom_attendance WHERE classroom_id=? AND attendance_date BETWEEN ? AND ? GROUP BY attendance_date,status ORDER BY attendance_date`).bind(classId,from,to).all()).results;
+}

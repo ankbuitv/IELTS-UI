@@ -16,11 +16,13 @@ export function DictionaryPanel({
   initialTerm = '',
   autoFocus = false,
   onSaved,
+  source = 'Dictionary',
 }: {
   compact?: boolean;
   initialTerm?: string;
   autoFocus?: boolean;
   onSaved?: (term: string) => void;
+  source?: string;
 }) {
   const [term, setTerm] = useState(initialTerm);
   const [entry, setEntry] = useState<DictionaryEntry | null>(null);
@@ -73,7 +75,7 @@ export function DictionaryPanel({
         pos: first?.pos ?? '',
         phonetic: entry.phonetic,
         example: definition?.example ?? '',
-        source: 'Dictionary',
+        source,
       });
       setEntry({ ...entry, saved: true });
       onSaved?.(entry.term);

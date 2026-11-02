@@ -377,8 +377,8 @@ export async function assertRoomKey(
   roomKey: string,
 ): Promise<void> {
   if (!roomKey || roomKey === 'main') return;
-  const room = await env.DB.prepare('SELECT id FROM class_breakouts WHERE session_id = ? AND room_key = ?')
-    .bind(session.id, roomKey)
+  const room = await env.DB.prepare('SELECT id FROM class_breakouts WHERE session_id = ? AND room_key = ? AND (ends_at IS NULL OR ends_at > ?)')
+    .bind(session.id, roomKey, nowIso())
     .first<{ id: string }>();
   if (!room) throw ApiError.validation('That breakout room is no longer open.');
   if (session.mentorId === viewer.id || viewer.role === 'ADMIN') return;
@@ -477,6 +477,7 @@ export interface RoomParticipant {
   role: string;
   joinedAt: string;
   handRaised: boolean;
+  handRaisedAt: string | null;
   avatarUpdatedAt: string | null;
   camOn: boolean;
   micOn: boolean;
@@ -517,6 +518,7 @@ export async function joinRoom(
      ON CONFLICT (session_id, user_id) DO UPDATE SET
        last_seen_at = excluded.last_seen_at,
        hand_raised = 0,
+       hand_raised_at = NULL,
        room_key = excluded.room_key,
        cam_on = excluded.cam_on,
        mic_on = excluded.mic_on,
@@ -557,9 +559,9 @@ export async function leaveRoom(env: Env, viewer: AuthUser, sessionId: string): 
 
 export async function setHandRaised(env: Env, viewer: AuthUser, sessionId: string, raised: boolean): Promise<{ ok: true }> {
   await env.DB.prepare(
-    `UPDATE mentor_room_presence SET hand_raised = ?, last_seen_at = ? WHERE session_id = ? AND user_id = ?`,
+    `UPDATE mentor_room_presence SET hand_raised_at = CASE WHEN ? = 0 THEN NULL WHEN hand_raised = 0 OR hand_raised_at IS NULL THEN ? ELSE hand_raised_at END, hand_raised = ?, last_seen_at = ? WHERE session_id = ? AND user_id = ?`,
   )
-    .bind(raised ? 1 : 0, nowIso(), sessionId, viewer.id)
+    .bind(raised ? 1 : 0, nowIso(), raised ? 1 : 0, nowIso(), sessionId, viewer.id)
     .run();
   return { ok: true };
 }
@@ -645,7 +647,7 @@ export async function roomState(
     .run();
 
   const presence = await env.DB.prepare(
-    `SELECT pr.user_id, pr.joined_at, pr.hand_raised, pr.cam_on, pr.mic_on, pr.screen_on,
+    `SELECT pr.user_id, pr.joined_at, pr.hand_raised, pr.hand_raised_at, pr.cam_on, pr.mic_on, pr.screen_on,
             COALESCE(NULLIF(TRIM(p.display_name), ''), NULLIF(TRIM(u.username), ''), NULLIF(substr(u.email, 1, instr(u.email, '@') - 1), ''), 'Học viên') AS display_name,
             p.avatar_updated_at,
             u.role
@@ -660,6 +662,7 @@ export async function roomState(
       user_id: string;
       joined_at: string;
       hand_raised: number;
+      hand_raised_at: string | null;
       cam_on: number;
       mic_on: number;
       screen_on: number;
@@ -726,6 +729,7 @@ export async function roomState(
       role: row.role,
       joinedAt: row.joined_at,
       handRaised: row.hand_raised === 1,
+      handRaisedAt: row.hand_raised_at,
       avatarUpdatedAt: row.avatar_updated_at,
       camOn: row.cam_on !== 0,
       micOn: row.mic_on !== 0,

@@ -564,6 +564,7 @@ export async function updateAssignment(
       teacher_id: string;
       start_at: string | null;
       deadline_at: string | null;
+      custom_duration_seconds: number | null;
       status: string;
     }>();
   if (!assignment) throw ApiError.notFound('Assignment not found.');
@@ -572,6 +573,8 @@ export async function updateAssignment(
   if (classroom.teacher_id !== user.id && user.role !== 'ADMIN') {
     throw ApiError.forbidden('Only the classroom owner can change an assignment.');
   }
+  if(classroom.status!=='ACTIVE'||assignment.status==='ARCHIVED')throw ApiError.conflict('Archived classrooms and assignments are read-only.');
+  if(input.publish===true){const published=await env.DB.prepare("SELECT 1 FROM assignments a JOIN test_versions v ON v.id=a.test_version_id JOIN tests t ON t.id=v.test_id WHERE a.id=? AND a.status='DRAFT' AND v.status='PUBLISHED' AND t.status!='ARCHIVED'").bind(assignmentId).first();if(!published)throw ApiError.conflict('Bản nháp hoặc đề phát hành không còn hợp lệ.');}
 
   const startAt = input.startAt === undefined ? assignment.start_at : input.startAt;
   const deadlineAt = input.deadlineAt === undefined ? assignment.deadline_at : input.deadlineAt;
@@ -580,7 +583,7 @@ export async function updateAssignment(
   }
 
   const timestamp = nowIso();
-  await env.DB.prepare(
+  const result = await env.DB.prepare(
     `UPDATE assignments
         SET title = COALESCE(?, title),
             instructions = COALESCE(?, instructions),
@@ -594,7 +597,11 @@ export async function updateAssignment(
             result_visibility = COALESCE(?, result_visibility),
             status = COALESCE(?, status),
             updated_at = ?
-      WHERE id = ?`,
+      WHERE id = ? AND status != 'ARCHIVED'
+        AND (?=0 OR (status='DRAFT' AND EXISTS (
+          SELECT 1 FROM test_versions v JOIN tests t ON t.id=v.test_id JOIN classrooms c ON c.id=assignments.classroom_id
+          WHERE v.id=assignments.test_version_id AND v.status='PUBLISHED' AND t.status!='ARCHIVED' AND c.status='ACTIVE'
+        )))`,
   )
     .bind(
       input.title?.trim() ?? null,
@@ -603,15 +610,17 @@ export async function updateAssignment(
       deadlineAt ?? null,
       input.maxAttempts !== undefined ? Math.min(Math.max(input.maxAttempts, 1), 20) : null,
       input.timingPolicy ?? null,
-      input.customDurationSeconds ?? null,
+      input.customDurationSeconds === undefined ? assignment.custom_duration_seconds : input.customDurationSeconds,
       input.mode ?? null,
       input.integrityOverrides !== undefined ? JSON.stringify(sanitiseIntegrityOverrides(input.integrityOverrides)) : null,
       input.resultVisibility ?? null,
       input.publish === undefined ? null : input.publish ? 'ACTIVE' : 'DRAFT',
       timestamp,
       assignmentId,
+      input.publish === true ? 1 : 0,
     )
     .run();
+  if (Number(result.meta.changes) !== 1) throw ApiError.conflict('Bài giao hoặc quyền phát hành đã thay đổi.');
 }
 
 export async function archiveAssignment(env: Env, user: AuthUser, assignmentId: string): Promise<void> {
@@ -629,6 +638,7 @@ export interface AssignmentDetail {
   id: string;
   classroomId: string;
   classroomName: string;
+  canPublish:boolean;
   title: string;
   instructions: string;
   testId: string;
@@ -703,7 +713,7 @@ export async function getAssignmentDetail(
     }>();
 
   if (!assignment) throw ApiError.notFound('Assignment not found.');
-  await requireClassroomAccess(env, user, assignment.classroom_id);
+  const classroom=await requireClassroomAccess(env, user, assignment.classroom_id);
 
   const students = await env.DB.prepare(
     `SELECT m.user_id, u.email, p.display_name,
@@ -760,6 +770,7 @@ export async function getAssignmentDetail(
     id: assignment.id,
     classroomId: assignment.classroom_id,
     classroomName: assignment.classroom_name,
+    canPublish:classroom.status==='ACTIVE'&&(classroom.teacher_id===user.id||user.role==='ADMIN'),
     title: assignment.title,
     instructions: assignment.instructions,
     testId: assignment.test_id,

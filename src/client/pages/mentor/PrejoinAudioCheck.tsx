@@ -1,0 +1,15 @@
+import {useEffect,useRef,useState} from 'react';
+/** Local-only level meter: never sends or records audio, and has no output connection. */
+export function PrejoinAudioCheck({stream,micOn}:{stream:MediaStream|null;micOn:boolean}){
+ const [checking,setChecking]=useState(false),[level,setLevel]=useState(0),[message,setMessage]=useState('');
+ const frame=useRef(0),tone=useRef<AudioContext|null>(null);
+ useEffect(()=>{
+  if(!checking||!micOn||!stream?.getAudioTracks().some(t=>t.readyState==='live'))return;
+  let context:AudioContext;
+  try{context=new AudioContext();const source=context.createMediaStreamSource(stream),analyser=context.createAnalyser();analyser.fftSize=256;source.connect(analyser);const samples=new Uint8Array(analyser.fftSize);let last=0;const tick=(now:number)=>{if(now-last>100){analyser.getByteTimeDomainData(samples);let sum=0;for(const value of samples)sum+=(value-128)**2;setLevel(Math.min(100,Math.round(Math.sqrt(sum/samples.length)*4)));last=now;}frame.current=requestAnimationFrame(tick);};void context.resume().catch(()=>setMessage('Không thể kích hoạt đo mic; kiểm tra quyền trình duyệt.'));frame.current=requestAnimationFrame(tick);return()=>{cancelAnimationFrame(frame.current);source.disconnect();analyser.disconnect();void context.close().catch(()=>{});};}catch{setMessage('Không thể đo mic trên trình duyệt này.');}
+ },[checking,micOn,stream]);
+ useEffect(()=>()=>{if(tone.current)void tone.current.close();},[]);
+ const speaker=()=>{try{if(tone.current)void tone.current.close();const context=new AudioContext();tone.current=context;const osc=context.createOscillator(),gain=context.createGain();osc.frequency.value=440;gain.gain.setValueAtTime(0.001,context.currentTime);gain.gain.exponentialRampToValueAtTime(0.12,context.currentTime+0.05);gain.gain.exponentialRampToValueAtTime(0.001,context.currentTime+0.6);osc.connect(gain);gain.connect(context.destination);osc.onended=()=>{osc.disconnect();gain.disconnect();if(tone.current===context)tone.current=null;void context.close().catch(()=>{});};osc.start();osc.stop(context.currentTime+0.62);void context.resume().catch(()=>setMessage('Không thể phát âm thử; kiểm tra quyền trình duyệt.'));setMessage('Bạn có nghe âm thử không? Hãy kiểm tra âm lượng và thiết bị đầu ra.');}catch{setMessage('Không thể phát âm thử trên trình duyệt này.');}};
+ const available=micOn&&!!stream?.getAudioTracks().some(t=>t.readyState==='live');
+ return <div className="jr-audio-check"><div><button type="button" disabled={!available} onClick={()=>{setChecking(v=>!v);setMessage('');}}>{checking&&available?'Dừng kiểm tra mic':'Kiểm tra mic'}</button><button type="button" onClick={speaker}>Phát âm thử loa</button></div>{checking&&available&&<label>Mức mic (nói để kiểm tra)<meter min="0" max="100" value={level}>{level}%</meter></label>}{!available&&<small>Bật mic và cho phép truy cập để kiểm tra.</small>}<small>Kiểm tra tại thiết bị; không ghi âm hay phát lại tiếng mic.</small>{message&&<p role="status">{message}</p>}</div>;
+}

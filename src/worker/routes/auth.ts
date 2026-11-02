@@ -241,6 +241,7 @@ router.post('/2fa/enable', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const body = await parseBody(c, z.object({ code: z.string().trim().min(6).max(8) }));
+  await enforceRateLimit(c.env,{bucket:`2fa-manage:${user.id}`,windowSeconds:900,limit:10},'Too many attempts. Try again later.');
   return c.json(await enableTotp(c.env, user, body.code));
 });
 
@@ -249,6 +250,7 @@ router.post('/2fa/disable', async (c) => {
   const user = currentUser(c);
   assertCsrf(c, c.get('session')?.csrfToken ?? null);
   const body = await parseBody(c, z.object({ code: z.string().trim().max(8).default('') }));
+  await enforceRateLimit(c.env,{bucket:`2fa-manage:${user.id}`,windowSeconds:900,limit:10},'Too many attempts. Try again later.');
   return c.json(await disableTotp(c.env, user, body.code));
 });
 
@@ -459,7 +461,8 @@ router.get('/sso/:provider/callback', async (c) => {
       console.warn('sso_identity_backfill_failed', linkError instanceof Error ? linkError.message : linkError);
     }
     return c.redirect('/');
-  } catch {
+  } catch (cause) {
+    if (cause instanceof ApiError && cause.code === 'FORBIDDEN') throw cause;
     throw ApiError.forbidden(
       'No platform account matches that provider email yet. Ask your teacher or administrator to invite you first.',
     );

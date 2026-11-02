@@ -261,7 +261,8 @@ export async function login(
   }
 
   // 2FA: the password alone is not enough when the account has an authenticator.
-  if (row.totp_enabled === 1 && row.totp_secret) {
+  if (row.totp_enabled === 1) {
+    if (!row.totp_secret) throw ApiError.forbidden('Authenticator configuration is unavailable. Contact an administrator.');
     const ticket = await issueOtpRow(env, row.id, 'LOGIN', randomToken(24), 5 * 60_000);
     await logAttempt(true, 'PASSWORD_OK_2FA_PENDING');
     return {
@@ -501,7 +502,7 @@ async function consumeOtpRow(env: Env, userId: string, purpose: 'LOGIN' | 'BACKU
   const rows = await env.DB.prepare(
     `SELECT id, code_hash, code_salt, code_iterations, expires_at FROM login_otp_codes
       WHERE user_id = ? AND purpose = ? AND used_at IS NULL AND expires_at > ?
-      ORDER BY created_at DESC LIMIT 5`,
+      ORDER BY created_at DESC LIMIT 20`,
   )
     .bind(userId, purpose, nowIso())
     .all<{ id: string; code_hash: string; code_salt: string; code_iterations: number; expires_at: string }>();
@@ -513,8 +514,8 @@ async function consumeOtpRow(env: Env, userId: string, purpose: 'LOGIN' | 'BACKU
       algo: 'PBKDF2-SHA256',
     });
     if (valid) {
-      await env.DB.prepare('UPDATE login_otp_codes SET used_at = ? WHERE id = ?').bind(nowIso(), row.id).run();
-      return true;
+      const result = await env.DB.prepare('UPDATE login_otp_codes SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at > ?').bind(nowIso(), row.id, nowIso()).run();
+      return result.meta.changes > 0;
     }
   }
   return false;
@@ -564,7 +565,8 @@ export async function verifyTwoFactor(
     if (!backup) throw ApiError.unauthenticated('That authenticator code is not correct.');
   }
 
-  await env.DB.prepare('UPDATE login_otp_codes SET used_at = ? WHERE id = ?').bind(nowIso(), matched.id).run();
+  const consumed = await env.DB.prepare('UPDATE login_otp_codes SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at > ?').bind(nowIso(), matched.id, nowIso()).run();
+  if (!consumed.meta.changes) throw ApiError.unauthenticated('That sign-in request expired. Start again.');
 
   const row = await env.DB.prepare(
     `SELECT u.id, u.email, u.username, u.role, u.status, u.password_hash, u.password_salt, u.password_iterations,
@@ -575,6 +577,7 @@ export async function verifyTwoFactor(
     .bind(matched.user_id)
     .first<UserRowAuth>();
   if (!row) throw ApiError.unauthenticated('That account no longer exists.');
+  if (row.status === 'SUSPENDED') throw ApiError.forbidden('This account is suspended. Contact an administrator.');
 
   await env.DB.prepare(
     'UPDATE users SET failed_login_count = 0, locked_until = NULL, last_login_at = ?, updated_at = ? WHERE id = ?',
@@ -619,7 +622,8 @@ export async function loginWithOtp(
   if (row.status === 'SUSPENDED') throw ApiError.forbidden('This account is suspended. Contact an administrator.');
 
   // A second factor still applies when the account has one.
-  if (row.totp_enabled === 1 && row.totp_secret) {
+  if (row.totp_enabled === 1) {
+    if (!row.totp_secret) throw ApiError.forbidden('Authenticator configuration is unavailable. Contact an administrator.');
     const ticket = await issueOtpRow(env, row.id, 'LOGIN', randomToken(24), 5 * 60_000);
     return { twoFactorRequired: true, ticket: ticket.code, expiresAt: ticket.expiresAt };
   }
@@ -639,9 +643,9 @@ export async function setupTotp(
   user: AuthUser,
 ): Promise<{ secret: string; authUrl: string }> {
   const secret = generateTotpSecret();
-  await env.DB.prepare('UPDATE user_profiles SET totp_secret = ?, totp_enabled = 0 WHERE user_id = ?')
-    .bind(secret, user.id)
-    .run();
+  const result = await env.DB.prepare('UPDATE user_profiles SET totp_secret = ? WHERE user_id = ? AND COALESCE(totp_enabled, 0) = 0')
+    .bind(secret, user.id).run();
+  if (!result.meta.changes) throw ApiError.conflict('Two-factor authentication is already enabled. Disable it with your current code first.');
   return { secret, authUrl: totpAuthUrl(user.email, 'Ai eo', secret) };
 }
 
@@ -651,13 +655,15 @@ export async function enableTotp(
   user: AuthUser,
   code: string,
 ): Promise<{ enabled: true; backupCodes: string[] }> {
-  const profile = await env.DB.prepare('SELECT totp_secret FROM user_profiles WHERE user_id = ?')
+  const profile = await env.DB.prepare('SELECT totp_secret, totp_enabled FROM user_profiles WHERE user_id = ?')
     .bind(user.id)
-    .first<{ totp_secret: string | null }>();
+    .first<{ totp_secret: string | null; totp_enabled: number }>();
+  if (profile?.totp_enabled === 1) throw ApiError.conflict('Two-factor authentication is already enabled.');
   if (!profile?.totp_secret) throw ApiError.validation('Start the setup step first.');
   const ok = await verifyTotp(profile.totp_secret, code);
   if (!ok) throw ApiError.validation('That authenticator code is not correct — check your app and try again.');
-  await env.DB.prepare('UPDATE user_profiles SET totp_enabled = 1 WHERE user_id = ?').bind(user.id).run();
+  const activated = await env.DB.prepare('UPDATE user_profiles SET totp_enabled = 1 WHERE user_id = ? AND totp_secret = ? AND COALESCE(totp_enabled, 0) = 0').bind(user.id, profile.totp_secret).run();
+  if (!activated.meta.changes) throw ApiError.conflict('Two-factor setup changed. Start again.');
 
   // Fresh backup codes every time 2FA is turned on. The plaintext only ever
   // leaves the server in this response; the database keeps PBKDF2 hashes.
@@ -678,7 +684,8 @@ export async function disableTotp(env: Env, user: AuthUser, code: string): Promi
   const profile = await env.DB.prepare('SELECT totp_secret, totp_enabled FROM user_profiles WHERE user_id = ?')
     .bind(user.id)
     .first<{ totp_secret: string | null; totp_enabled: number }>();
-  if (profile?.totp_enabled === 1 && profile.totp_secret) {
+  if (profile?.totp_enabled === 1) {
+    if (!profile.totp_secret) throw ApiError.forbidden('Authenticator configuration is unavailable. Contact an administrator.');
     const ok = await verifyTotp(profile.totp_secret, code);
     if (!ok) throw ApiError.validation('Enter a current authenticator code to turn 2FA off.');
   }
@@ -705,6 +712,7 @@ export async function loginFederated(
   const row = await findUserByIdentifier(env, normaliseEmail(email));
   if (!row) throw ApiError.unauthenticated('No account matches that provider email.');
   if (row.status === 'SUSPENDED') throw ApiError.forbidden('This account is suspended. Contact an administrator.');
+  if (row.totp_enabled === 1) throw ApiError.forbidden('Authenticator protection is enabled. Sign in with password or email code and your authenticator instead.');
   await env.DB.prepare(
     'UPDATE users SET failed_login_count = 0, locked_until = NULL, last_login_at = ?, updated_at = ? WHERE id = ?',
   )
@@ -802,7 +810,8 @@ export async function consumeMagicLink(
   if (!row) throw ApiError.unauthenticated('That account no longer exists.');
   if (row.status === 'SUSPENDED') throw ApiError.forbidden('This account is suspended. Contact an administrator.');
 
-  if (row.totp_enabled === 1 && row.totp_secret) {
+  if (row.totp_enabled === 1) {
+    if (!row.totp_secret) throw ApiError.forbidden('Authenticator configuration is unavailable. Contact an administrator.');
     const ticket = await issueOtpRow(env, row.id, 'LOGIN', randomToken(24), 5 * 60_000);
     return { twoFactorRequired: true, ticket: ticket.code, expiresAt: ticket.expiresAt };
   }

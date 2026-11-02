@@ -5,7 +5,7 @@ import { newId, nowIso } from '../lib/ids';
 import { requireSchoolPermission } from './school-permissions';
 
 type GroupInput = { name: string; leaderId: string | null; memberIds: string[] };
-type EventInput = { title: string; description: string; startsAt: string; endsAt: string };
+type EventInput = { title: string; description: string; startsAt: string; endsAt: string; kind?: 'EVENT'|'HOLIDAY'|'LEAVE' };
 
 export async function requireActiveSchoolStaff(env: Env, user: AuthUser, schoolId: string) {
   if (!['ADMIN', 'TEACHER', 'MENTOR'].includes(user.role)) throw ApiError.forbidden();
@@ -18,7 +18,7 @@ async function validateGroup(env: Env, schoolId: string, input: GroupInput) {
   const ids = [...new Set(input.memberIds)];
   if (input.leaderId && !ids.includes(input.leaderId)) throw ApiError.validation('Tổ trưởng phải nằm trong danh sách thành viên.');
   if (ids.length) {
-    const list = await env.DB.prepare(`SELECT user_id FROM school_members WHERE school_id=? AND status='ACTIVE' AND role IN ('OWNER','TEACHER') AND user_id IN (${ids.map(() => '?').join(',')})`).bind(schoolId,...ids).all<{user_id:string}>();
+    const list = await env.DB.prepare(`SELECT m.user_id FROM school_members m JOIN users u ON u.id=m.user_id AND u.status='ACTIVE' WHERE m.school_id=? AND m.status='ACTIVE' AND m.role IN ('OWNER','TEACHER') AND m.user_id IN (${ids.map(() => '?').join(',')})`).bind(schoolId,...ids).all<{user_id:string}>();
     if (list.results.length !== ids.length) throw ApiError.validation('Thành viên phải đang hoạt động trong trường.');
   }
   return ids;
@@ -29,6 +29,7 @@ export async function listSubjectGroups(env: Env, user: AuthUser, schoolId: stri
   const groups = (await env.DB.prepare(`SELECT id,name,leader_id,created_at,updated_at FROM school_subject_groups WHERE school_id=? ORDER BY name LIMIT 200`).bind(schoolId).all()).results;
   const members = (await env.DB.prepare(`SELECT gm.group_id,gm.user_id FROM school_subject_group_members gm
     JOIN school_subject_groups g ON g.id=gm.group_id JOIN school_members sm ON sm.school_id=g.school_id AND sm.user_id=gm.user_id AND sm.status='ACTIVE'
+    JOIN users u ON u.id=gm.user_id AND u.status='ACTIVE'
     WHERE g.school_id=?`).bind(schoolId).all<{group_id:string;user_id:string}>()).results;
   return groups.map(group => ({...group, memberIds: members.filter(m => m.group_id === group.id).map(m => m.user_id)}));
 }
@@ -57,16 +58,16 @@ export async function deleteSubjectGroup(env: Env, user: AuthUser, schoolId: str
 }
 export async function listSchoolEvents(env: Env,user:AuthUser,schoolId:string) {
   await requireActiveSchoolStaff(env,user,schoolId);
-  return (await env.DB.prepare('SELECT id,title,description,starts_at,ends_at,created_by FROM school_events WHERE school_id=? ORDER BY starts_at DESC LIMIT 200').bind(schoolId).all()).results;
+  return (await env.DB.prepare('SELECT id,title,description,starts_at,ends_at,created_by,kind FROM school_events WHERE school_id=? ORDER BY starts_at DESC LIMIT 200').bind(schoolId).all()).results;
 }
 export async function saveSchoolEvent(env:Env,user:AuthUser,schoolId:string,id:string|null,input:EventInput) {
   await requireSchoolPermission(env,user,schoolId,'MANAGE_CALENDAR');
   if (Date.parse(input.endsAt) <= Date.parse(input.startsAt)) throw ApiError.validation('Thời gian kết thúc phải sau thời gian bắt đầu.');
   const now=nowIso(); const eventId=id ?? newId('se');
   if (id) {
-    const result=await env.DB.prepare('UPDATE school_events SET title=?,description=?,starts_at=?,ends_at=?,updated_at=? WHERE id=? AND school_id=?').bind(input.title,input.description,input.startsAt,input.endsAt,now,id,schoolId).run();
+    const result=await env.DB.prepare('UPDATE school_events SET title=?,description=?,starts_at=?,ends_at=?,kind=?,updated_at=? WHERE id=? AND school_id=?').bind(input.title,input.description,input.startsAt,input.endsAt,input.kind ?? 'EVENT',now,id,schoolId).run();
     if (!result.meta.changes) throw ApiError.notFound('Không tìm thấy sự kiện.');
-  } else await env.DB.prepare('INSERT INTO school_events(id,school_id,title,description,starts_at,ends_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(eventId,schoolId,input.title,input.description,input.startsAt,input.endsAt,user.id,now,now).run();
+  } else await env.DB.prepare('INSERT INTO school_events(id,school_id,title,description,starts_at,ends_at,kind,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(eventId,schoolId,input.title,input.description,input.startsAt,input.endsAt,input.kind ?? 'EVENT',user.id,now,now).run();
   return {id:eventId};
 }
 export async function deleteSchoolEvent(env:Env,user:AuthUser,schoolId:string,id:string) {

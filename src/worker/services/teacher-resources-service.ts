@@ -11,6 +11,14 @@ async function validateShare(env:Env,user:AuthUser,classId:string|null) {
  const classroom=await requireClassroomAccess(env,user,classId);
  if(classroom.status!=='ACTIVE')throw ApiError.conflict('Chỉ có thể chia sẻ vào lớp đang hoạt động.');
 }
+/** Audience snapshot for a teacher who can share to this class. Membership can change later. */
+export async function resourceAudience(env:Env,user:AuthUser,classId:string) {
+ await validateShare(env,user,classId);
+ const classroom=await requireClassroomAccess(env,user,classId);
+ const students=await env.DB.prepare(`SELECT COALESCE(NULLIF(p.display_name,''),u.email) AS name FROM classroom_members m JOIN users u ON u.id=m.user_id LEFT JOIN user_profiles p ON p.user_id=u.id WHERE m.classroom_id=? AND m.role='STUDENT' AND m.status='ACTIVE' AND u.status='ACTIVE' ORDER BY name,u.id LIMIT 100`).bind(classId).all<{name:string}>();
+ const count=await env.DB.prepare(`SELECT COUNT(*) AS n FROM classroom_members m JOIN users u ON u.id=m.user_id WHERE m.classroom_id=? AND m.role='STUDENT' AND m.status='ACTIVE' AND u.status='ACTIVE'`).bind(classId).first<{n:number}>();
+ return {className:classroom.name,studentCount:count?.n??0,students:students.results.map(s=>s.name)};
+}
 export async function listResources(env:Env,user:AuthUser) {
  return (await env.DB.prepare(`SELECT r.id,r.filename,r.subject,r.topic,r.shared_classroom_id,r.bytes,r.created_at,r.updated_at,c.name AS classroom_name
  FROM teacher_resources r LEFT JOIN classrooms c ON c.id=r.shared_classroom_id WHERE r.author_id=? ORDER BY r.updated_at DESC,r.id DESC LIMIT 25`).bind(user.id).all()).results;
@@ -40,11 +48,23 @@ async function canViewClass(env:Env,user:AuthUser,classId:string) {
 const sharedCondition=`r.shared_classroom_id=c.id AND (r.author_id=c.teacher_id OR EXISTS(SELECT 1 FROM users au WHERE au.id=r.author_id AND au.role='ADMIN' AND au.status='ACTIVE') OR EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=r.author_id AND m.role='CO_TEACHER' AND m.status='ACTIVE' AND COALESCE((SELECT d.can_resource FROM classroom_co_teacher_duties d WHERE d.member_id=m.id),1)=1))`;
 export async function listSharedResources(env:Env,user:AuthUser,classId:string) {
  await canViewClass(env,user,classId);
- return (await env.DB.prepare(`SELECT r.id,r.filename,r.subject,r.topic,r.bytes,r.created_at,COALESCE(p.display_name,u.email) AS author_name FROM teacher_resources r
- JOIN classrooms c ON ${sharedCondition} JOIN users u ON u.id=r.author_id LEFT JOIN user_profiles p ON p.user_id=u.id WHERE c.id=? ORDER BY r.updated_at DESC LIMIT 200`).bind(classId).all()).results;
+ return (await env.DB.prepare(`SELECT r.id,r.filename,r.subject,r.topic,r.bytes,r.created_at,COALESCE(p.display_name,u.email) AS author_name,
+ EXISTS(SELECT 1 FROM classroom_resource_pins pin WHERE pin.classroom_id=c.id AND pin.resource_id=r.id AND pin.user_id=?) AS pinned FROM teacher_resources r
+ JOIN classrooms c ON ${sharedCondition} JOIN users u ON u.id=r.author_id LEFT JOIN user_profiles p ON p.user_id=u.id WHERE c.id=? ORDER BY pinned DESC,r.updated_at DESC,r.id DESC LIMIT 200`).bind(user.id,classId).all()).results;
 }
 export async function readSharedResource(env:Env,user:AuthUser,classId:string,id:string) {
  await canViewClass(env,user,classId);
  const file=await env.DB.prepare(`SELECT r.filename,r.data_b64 FROM teacher_resources r JOIN classrooms c ON ${sharedCondition} WHERE c.id=? AND r.id=?`).bind(classId,id).first();
  if(!file)throw ApiError.notFound();return file;
+}
+
+/** Only the owner of a bookmark may manage it; verify resource and membership atomically. */
+export async function setClassResourcePin(env:Env,user:AuthUser,classId:string,id:string,pinned:boolean){
+ await canViewClass(env,user,classId);
+ if(!pinned){await env.DB.prepare('DELETE FROM classroom_resource_pins WHERE classroom_id=? AND resource_id=? AND user_id=?').bind(classId,id,user.id).run();return;}
+ const result=await env.DB.prepare(`INSERT INTO classroom_resource_pins(user_id,classroom_id,resource_id,created_at)
+ SELECT ?,c.id,r.id,? FROM teacher_resources r JOIN classrooms c ON ${sharedCondition} WHERE c.id=? AND r.id=? AND
+ (?='ADMIN' OR (?='TEACHER' AND (c.teacher_id=? OR EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=? AND m.role='CO_TEACHER' AND m.status='ACTIVE'))) OR (?='STUDENT' AND EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=? AND m.role='STUDENT' AND m.status='ACTIVE')))
+ ON CONFLICT(user_id,classroom_id,resource_id) DO NOTHING`).bind(user.id,nowIso(),classId,id,user.role,user.role,user.id,user.id,user.role,user.id).run();
+ if(!result.meta.changes){const existing=await env.DB.prepare(`SELECT 1 FROM classroom_resource_pins p JOIN teacher_resources r ON r.id=p.resource_id JOIN classrooms c ON ${sharedCondition} WHERE p.user_id=? AND p.classroom_id=? AND p.resource_id=?`).bind(user.id,classId,id).first();if(!existing)throw ApiError.conflict('Tài liệu không còn được chia sẻ trong lớp.');}
 }
