@@ -1,3 +1,5 @@
+import {QuestionAnalysis} from './QuestionAnalysis';
+import {PracticeBalance} from './PracticeBalance';
 import {useState} from 'react';
 import {api} from '../../lib/api';
 import {useAsync} from '../../hooks/useAsync';
@@ -6,7 +8,7 @@ type Point={skill:string;band:number;date:string;assignment_title:string};
 type Progress={student:{id:string;email:string;display_name:string|null;target_band:number|null};points:Point[]};
 export function ClassSkillProgress({classroomId}:{classroomId:string}) {
  const roster=useAsync(()=>api.get<{students:Student[]}>(`/api/teacher/classrooms/${encodeURIComponent(classroomId)}/gradebook`),[classroomId]);const [studentId,setStudentId]=useState('');
- return <section className="class-skill-progress"><h2>Tiến độ kỹ năng</h2><p>Chỉ tính bài được giao trong lớp này, không gồm luyện tập cá nhân hay lớp khác.</p>{roster.error&&<p role="alert">{roster.error}</p>}<label>Chọn học viên<select value={studentId} onChange={e=>setStudentId(e.target.value)}><option value="">Chọn học viên</option>{roster.data?.students.map(s=><option key={s.user_id} value={s.user_id}>{s.display_name||s.email}</option>)}</select></label>{studentId&&<ProgressChart key={studentId} classroomId={classroomId} studentId={studentId}/>}</section>;
+ return <section className="class-skill-progress"><h2>Tiến độ kỹ năng</h2><PracticeBalance classroomId={classroomId}/><QuestionAnalysis classroomId={classroomId}/><p>Chỉ tính bài được giao trong lớp này, không gồm luyện tập cá nhân hay lớp khác.</p>{roster.error&&<p role="alert">{roster.error}</p>}<label>Chọn học viên<select value={studentId} onChange={e=>setStudentId(e.target.value)}><option value="">Chọn học viên</option>{roster.data?.students.map(s=><option key={s.user_id} value={s.user_id}>{s.display_name||s.email}</option>)}</select></label>{studentId&&<ProgressChart key={studentId} classroomId={classroomId} studentId={studentId}/>}</section>;
 }
 function ProgressChart({classroomId,studentId}:{classroomId:string;studentId:string}) {
  const data=useAsync(()=>api.get<Progress>(`/api/teacher/classrooms/${encodeURIComponent(classroomId)}/student-progress/${encodeURIComponent(studentId)}`),[classroomId,studentId]);

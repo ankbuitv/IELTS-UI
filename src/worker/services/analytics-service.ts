@@ -1,3 +1,4 @@
+import {individualDeadline} from './assignment-extensions';
 import {assignmentEligible} from './assignment-audience';
 import {teacherAttemptScope} from './teacher-attempt-scope';
 import type { Env } from '../env';
@@ -122,7 +123,7 @@ export async function listStudentAssignments(env: Env, userId: string): Promise<
   const rows = await env.DB.prepare(
     `SELECT a.id AS assignment_id, a.classroom_id, c.name AS classroom_name, a.title, a.instructions,
             a.test_id, t.title AS test_title, t.type AS test_type, v.version_number,
-            a.start_at, a.deadline_at, a.max_attempts, a.mode, a.timing_policy, a.result_visibility,
+            a.start_at, ${individualDeadline('a','m.user_id')} AS deadline_at, a.max_attempts, a.mode, a.timing_policy, a.result_visibility,
             (SELECT COUNT(*) FROM attempts x WHERE x.assignment_id = a.id AND x.user_id = ? AND x.status != 'ABANDONED') AS attempts_used,
             (SELECT x.id FROM attempts x WHERE x.assignment_id = a.id AND x.user_id = ? AND x.status = 'IN_PROGRESS' ORDER BY x.started_at DESC LIMIT 1) AS in_progress_attempt_id,
             (SELECT MAX(x.submitted_at) FROM attempts x WHERE x.assignment_id = a.id AND x.user_id = ?) AS last_submitted_at,
@@ -135,7 +136,7 @@ export async function listStudentAssignments(env: Env, userId: string): Promise<
        JOIN test_versions v ON v.id = a.test_version_id
        JOIN classroom_members m ON m.classroom_id = a.classroom_id AND m.user_id = ? AND m.status = 'ACTIVE'
       WHERE a.status IN ('ACTIVE') AND ${assignmentEligible('a','m.user_id')}
-      ORDER BY (a.deadline_at IS NULL), a.deadline_at, a.start_at`,
+      ORDER BY (deadline_at IS NULL), deadline_at, a.start_at`,
   )
     .bind(userId, userId, userId, userId, userId, userId, userId)
     .all<{

@@ -1,3 +1,4 @@
+import {pruneTeacherTasks,pruneTeacherNotes} from './services/teacher-data-controls';
 import type { Env, ImportQueueMessage } from './env';
 import { createApp } from './app';
 import { pruneRateLimits } from './lib/rate-limit';
@@ -35,6 +36,8 @@ export default {
     ctx.waitUntil(
       (async () => {
         await pruneRateLimits(env);
+        await pruneTeacherTasks(env,new Date(controller.scheduledTime)).catch(error=>console.error('teacher_retention_failed',(error as Error).message));
+        await pruneTeacherNotes(env,new Date(controller.scheduledTime)).catch(error=>console.error('teacher_note_retention_failed',(error as Error).message));
         await sendAssignmentReminders(env,new Date(controller.scheduledTime)).catch((error)=>console.error('assignment_reminders_failed',(error as Error).message));
         await sendWorksheetReminders(env,new Date(controller.scheduledTime)).catch((error)=>console.error('worksheet_reminders_failed',(error as Error).message));
         // Monday 08:00 Vietnam time (01:00 UTC): the weekly recap email.

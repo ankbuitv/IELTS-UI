@@ -1,10 +1,16 @@
+import {listLearningPath,addLearningStep,deleteLearningStep,checkLearningStep} from '../services/personal-learning-path';
+import {prerequisiteInfo,setPrerequisite} from '../services/assignment-prerequisites';
+import {listMilestones,saveMilestone,deleteMilestone,checkMilestone} from '../services/assignment-milestones';
+import {getWorksheetMedia} from '../services/question-media';
+import {listGuides,readGuide,addGuide,removeGuide} from '../services/assignment-guides';
+import {listQA,createQA,qaReplies,answerQA,setQAStatus,deleteQA} from '../services/class-assignment-qa';
 import {getClassChatMute,setClassChatMute} from '../services/classroom-chat-mutes';
 import {listUnreadMarks,markUnread,unmarkUnread} from '../services/classroom-unread';
 import {mentionable,resolveMentionTargets,mentionStatements} from '../services/classroom-mentions';
 import {assertThreadRoot,listThread} from '../services/classroom-threads';
 import {listMessagePins,pinMessage,unpinMessage} from '../services/classroom-message-pins';
 import {assertClassroomChatAccess,searchClassroomMessages} from '../services/classroom-message-search';
-import {listStudentWorksheets,studentWorksheetDetail,submitWorksheet} from '../services/class-worksheet-service';
+import {listStudentWorksheets,studentWorksheetDetail,submitWorksheet,readWorksheetSubmissionFile} from '../services/class-worksheet-service';
 import {listStudentSupport,bookSupport,cancelStudentBooking} from '../services/teacher-support-service';
 import {assignmentEligible} from '../services/assignment-audience';
 import { Hono } from 'hono';
@@ -13,7 +19,7 @@ import type { AppBindings } from '../env';
 import { assertCsrf, assertSameOrigin } from '../lib/http';
 import { ApiError } from '../lib/errors';
 import { putBlob } from '../services/blob-store';
-import { parseBody } from '../lib/validate';
+import { parseBody, parseWith } from '../lib/validate';
 import { requireAuth } from '../middleware/auth';
 import { currentUser } from '../middleware/auth';
 import { acceptClassroomInvite, joinClassroomByCode } from '../services/teacher-service';
@@ -100,8 +106,10 @@ interface ChatMessage {
 }
 
 router.get('/classrooms/:classroomId/worksheets',async c=>c.json({worksheets:await listStudentWorksheets(c.env,currentUser(c),c.req.param('classroomId'))}));
+router.get('/classrooms/:classroomId/worksheets/:worksheetId/questions/:questionId/media/:kind',async c=>c.json({media:await getWorksheetMedia(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('worksheetId'),c.req.param('questionId'),parseWith(z.enum(['IMAGE','AUDIO']),c.req.param('kind')))}));
 router.get('/classrooms/:classroomId/worksheets/:worksheetId',async c=>c.json(await studentWorksheetDetail(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('worksheetId'))));
-router.post('/classrooms/:classroomId/worksheets/:worksheetId/submit',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({answers:z.array(z.object({questionId:z.string().min(1),answer:z.string().max(8000)})).min(1).max(20)}));return c.json(await submitWorksheet(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('worksheetId'),body.answers),201);});
+router.get('/classrooms/:classroomId/worksheets/:worksheetId/versions/:versionId/file',async c=>c.json({file:await readWorksheetSubmissionFile(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('worksheetId'),c.req.param('versionId'))}));
+router.post('/classrooms/:classroomId/worksheets/:worksheetId/submit',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({answers:z.array(z.object({questionId:z.string().min(1),answer:z.string().max(8000)})).min(1).max(20),file:z.object({filename:z.string().min(1).max(200),base64:z.string().min(4).max(682668)}).nullable().optional()}));return c.json(await submitWorksheet(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('worksheetId'),body.answers,body.file),201);});
 
 router.get('/classrooms/:classroomId/support',async c=>c.json({slots:await listStudentSupport(c.env,currentUser(c),c.req.param('classroomId'))}));
 router.post('/classrooms/:classroomId/support/:slotId/book',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({note:z.string().trim().max(500).default('')}));await bookSupport(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('slotId'),body.note);return c.json({ok:true});});
@@ -111,10 +119,32 @@ router.get('/classrooms/:classroomId/term-reports',async c=>c.json({reports:awai
 
 router.get('/classrooms/:classroomId/resources',async c=>c.json({files:await listSharedResources(c.env,currentUser(c),c.req.param('classroomId'))}));
 router.put('/classrooms/:classroomId/resources/:id/pin',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({pinned:z.boolean()}));await setClassResourcePin(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'),body.pinned);return c.json({ok:true});});
+router.get('/classrooms/assignment-prerequisite/:assignmentId',async c=>c.json(await prerequisiteInfo(c.env,currentUser(c),c.req.param('assignmentId'))));
+router.put('/classrooms/assignment-prerequisite/:assignmentId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({prerequisiteId:z.string().min(1).max(100).nullable()}));await setPrerequisite(c.env,currentUser(c),c.req.param('assignmentId'),b.prerequisiteId);return c.json({ok:true});});
+router.get('/classrooms/:id/learning-path/:studentId',async c=>c.json(await listLearningPath(c.env,currentUser(c),c.req.param('id'),(c.req.param('studentId')==='me'?currentUser(c).id:c.req.param('studentId')))));
+router.post('/classrooms/:id/learning-path/:studentId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({title:z.string().trim().min(1).max(200),dueDate:z.string().nullable()}));return c.json(await addLearningStep(c.env,currentUser(c),c.req.param('id'),(c.req.param('studentId')==='me'?currentUser(c).id:c.req.param('studentId')),b.title,b.dueDate),201);});
+router.delete('/classrooms/:id/learning-path/:studentId/:stepId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteLearningStep(c.env,currentUser(c),c.req.param('id'),(c.req.param('studentId')==='me'?currentUser(c).id:c.req.param('studentId')),c.req.param('stepId'));return c.json({ok:true});});
+router.put('/classrooms/:id/learning-path/:studentId/:stepId/check',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({checked:z.boolean()}));await checkLearningStep(c.env,currentUser(c),c.req.param('id'),(c.req.param('studentId')==='me'?currentUser(c).id:c.req.param('studentId')),c.req.param('stepId'),b.checked);return c.json({ok:true});});
+const milestoneSchema=z.object({title:z.string().trim().min(1).max(150),dueAt:z.string().datetime()});
+router.get('/classrooms/assignment-milestones/:assignmentId',async c=>c.json(await listMilestones(c.env,currentUser(c),c.req.param('assignmentId'))));
+router.post('/classrooms/assignment-milestones/:assignmentId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,milestoneSchema);return c.json({id:await saveMilestone(c.env,currentUser(c),c.req.param('assignmentId'),null,b.title,b.dueAt)},201);});
+router.put('/classrooms/assignment-milestones/:assignmentId/:milestoneId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,milestoneSchema);await saveMilestone(c.env,currentUser(c),c.req.param('assignmentId'),c.req.param('milestoneId'),b.title,b.dueAt);return c.json({ok:true});});
+router.delete('/classrooms/assignment-milestones/:assignmentId/:milestoneId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteMilestone(c.env,currentUser(c),c.req.param('assignmentId'),c.req.param('milestoneId'));return c.json({ok:true});});
+router.put('/classrooms/assignment-milestones/:assignmentId/:milestoneId/check',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({checked:z.boolean()}));await checkMilestone(c.env,currentUser(c),c.req.param('assignmentId'),c.req.param('milestoneId'),b.checked);return c.json({ok:true});});
+router.get('/classrooms/assignment-guides/:assignmentId',async c=>c.json({files:await listGuides(c.env,currentUser(c),c.req.param('assignmentId'))}));
+router.get('/classrooms/assignment-guides/:assignmentId/:fileId',async c=>c.json({file:await readGuide(c.env,currentUser(c),c.req.param('assignmentId'),c.req.param('fileId'))}));
+router.post('/classrooms/assignment-guides/:assignmentId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({filename:z.string().min(1).max(200),base64:z.string().min(4).max(682668)}));return c.json({id:await addGuide(c.env,currentUser(c),c.req.param('assignmentId'),b.filename,b.base64)},201);});
+router.delete('/classrooms/assignment-guides/:assignmentId/:fileId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await removeGuide(c.env,currentUser(c),c.req.param('assignmentId'),c.req.param('fileId'));return c.json({ok:true});});
 router.get('/classrooms/:classroomId/resources/:id',async c=>c.json({file:await readSharedResource(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'))}));
 
+router.get('/classrooms/:classroomId/questions',async c=>c.json(await listQA(c.env,currentUser(c),c.req.param('classroomId'))));
+router.post('/classrooms/:classroomId/questions',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({assignmentId:z.string().min(1).max(100),body:z.string().trim().min(1).max(2000)}));return c.json(await createQA(c.env,currentUser(c),c.req.param('classroomId'),body.assignmentId,body.body),201);});
+router.get('/classrooms/:classroomId/questions/:id/replies',async c=>c.json({replies:await qaReplies(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'))}));
+router.post('/classrooms/:classroomId/questions/:id/replies',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({body:z.string().trim().min(1).max(2000)}));await answerQA(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'),body.body);return c.json({ok:true},201);});
+router.delete('/classrooms/:classroomId/questions/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteQA(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'));return c.json({ok:true});});
+router.patch('/classrooms/:classroomId/questions/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({resolved:z.boolean()}));await setQAStatus(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'),body.resolved);return c.json({ok:true});});
 router.get('/classrooms/:classroomId/board', async c=>c.json(await listClassroomBoard(c.env,currentUser(c),c.req.param('classroomId'))));
-router.post('/classrooms/:classroomId/announcements', async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(150),body:z.string().trim().min(1).max(5000)}));return c.json({id:await createAnnouncement(c.env,currentUser(c),c.req.param('classroomId'),body.title,body.body)},201);});
+router.post('/classrooms/:classroomId/announcements', async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(150),body:z.string().trim().min(1).max(5000),publishAt:z.string().datetime().nullable().optional(),acknowledgeBy:z.string().datetime().nullable().optional()}));return c.json({id:await createAnnouncement(c.env,currentUser(c),c.req.param('classroomId'),body.title,body.body,body.publishAt??null,body.acknowledgeBy??null)},201);});
 router.patch('/classrooms/:classroomId/announcements/:id', async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({pinned:z.boolean()}));await pinAnnouncement(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'),body.pinned);return c.json({ok:true});});
 router.delete('/classrooms/:classroomId/announcements/:id', async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteAnnouncement(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'));return c.json({ok:true});});
 router.post('/classrooms/:classroomId/announcements/:id/read', async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await readAnnouncement(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('id'));return c.json({ok:true});});
@@ -148,22 +178,29 @@ router.post('/classrooms/:classroomId/room', async (c) => {
     await c.env.DB.batch([
       c.env.DB.prepare(`INSERT OR IGNORE INTO mentor_sessions
         (id, mentor_id, student_id, class_id, kind, status, topic, starts_at, ends_at, created_at, updated_at)
-        VALUES (?, ?, ?, NULL, 'CLASS', 'SCHEDULED', ?, ?, ?, ?, ?)`)
-        .bind(sessionId, klass.teacher_id, klass.teacher_id, klass.name, timestamp, timestamp, timestamp, timestamp),
-      c.env.DB.prepare('INSERT OR IGNORE INTO classroom_call_rooms (classroom_id, session_id, created_at) VALUES (?, ?, ?)')
-        .bind(classroomId, sessionId, timestamp),
+        SELECT ?,c.teacher_id,c.teacher_id,NULL,'CLASS','SCHEDULED',c.name,?,?,?,? FROM classrooms c
+        WHERE c.id=? AND c.status='ACTIVE' AND (c.teacher_id=? OR ?='ADMIN')`)
+        .bind(sessionId,timestamp,timestamp,timestamp,timestamp,classroomId,user.id,user.role),
+      c.env.DB.prepare(`INSERT OR IGNORE INTO classroom_call_rooms (classroom_id, session_id, created_at)
+        SELECT c.id,s.id,? FROM classrooms c JOIN mentor_sessions s ON s.id=? AND s.mentor_id=c.teacher_id
+        WHERE c.id=? AND c.status='ACTIVE' AND (c.teacher_id=? OR ?='ADMIN')`)
+        .bind(timestamp,sessionId,classroomId,user.id,user.role),
     ]);
   }
   const roomId = existing?.session_id ?? sessionId;
+  if (!await c.env.DB.prepare('SELECT 1 FROM classroom_call_rooms WHERE classroom_id=? AND session_id=?').bind(classroomId,roomId).first()) throw ApiError.conflict('Quyền mở phòng đã thay đổi.');
   if (body.schoolId !== undefined) {
     const brand = await c.env.DB.prepare('SELECT school_id FROM school_call_brand WHERE session_id=?').bind(roomId).first<{school_id:string}>();
     const active = await c.env.DB.prepare('SELECT 1 AS ok FROM mentor_room_presence WHERE session_id=? AND last_seen_at>=? LIMIT 1')
       .bind(roomId,new Date(Date.now()-30000).toISOString()).first();
     if (active && (brand?.school_id ?? null) !== body.schoolId) throw ApiError.conflict('Không thể đổi tư cách khi phòng đang có người.');
-    if (body.schoolId) await c.env.DB.prepare(`INSERT INTO school_call_brand (session_id,school_id,selected_by,updated_at) VALUES (?,?,?,?)
-      ON CONFLICT(session_id) DO UPDATE SET school_id=excluded.school_id,selected_by=excluded.selected_by,updated_at=excluded.updated_at`)
-      .bind(roomId,body.schoolId,user.id,nowIso()).run();
-    else await c.env.DB.prepare('DELETE FROM school_call_brand WHERE session_id=?').bind(roomId).run();
+    if (body.schoolId) {
+      const updated=await c.env.DB.prepare(`INSERT INTO school_call_brand (session_id,school_id,selected_by,updated_at)
+        SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM classrooms c JOIN school_members m ON m.school_id=? AND m.user_id=c.teacher_id AND m.status='ACTIVE' JOIN schools s ON s.id=m.school_id AND s.status='APPROVED' WHERE c.id=? AND c.teacher_id=? AND c.status='ACTIVE')
+        ON CONFLICT(session_id) DO UPDATE SET school_id=excluded.school_id,selected_by=excluded.selected_by,updated_at=excluded.updated_at`)
+        .bind(roomId,body.schoolId,user.id,nowIso(),body.schoolId,classroomId,user.id).run();
+      if(!updated.meta.changes)throw ApiError.conflict('Quyền mở phòng hoặc trường đã thay đổi.');
+    } else await c.env.DB.prepare(`DELETE FROM school_call_brand WHERE session_id=? AND EXISTS(SELECT 1 FROM classrooms c WHERE c.id=? AND c.teacher_id=? AND c.status='ACTIVE')`).bind(roomId,classroomId,user.id).run();
   }
   // An ended class room can be opened again by the host, not by students.
   const room = await c.env.DB.prepare('SELECT status FROM mentor_sessions WHERE id = ?').bind(roomId).first<{ status: string }>();

@@ -1,10 +1,25 @@
+import {resourceBackupSchema,exportResourceBackup,restoreResourceBackup} from '../services/resource-backup';
+import {questionBackupSchema,exportQuestionBackup,restoreQuestionBackup} from '../services/question-bank-backup';
+import {assignmentBackupConfigSchema,teacherBackupSchema,exportTeacherBackup,restoreTeacherBackup,retentionSettings,setRetention,pruneTeacherTasks,noteRetentionSettings,setNoteRetention,pruneTeacherNotes} from '../services/teacher-data-controls';
+import {listExtensions,setExtension} from '../services/assignment-extensions';
+import {listTaskDelegations,delegateTask,revokeTaskDelegation,changeDelegatedTask,declineTask} from '../services/teacher-task-delegation';
+import {readWorksheetSubmissionFile} from '../services/class-worksheet-service';
+import {setQuestionMedia,deleteQuestionMedia,getQuestionMedia,getWorksheetMedia} from '../services/question-media';
+import {listReportTemplates,saveReportTemplate,deleteReportTemplate} from '../services/report-templates';
+import {listAssignmentHistory} from '../services/assignment-history';
+import {calendarSubscriptionStatus,rotateCalendarSubscription,revokeCalendarSubscription} from '../services/teacher-calendar-subscription';
+import {listInterventions,createIntervention,updateIntervention,deleteIntervention} from '../services/teacher-interventions';
+import {classQuestionAnalysis} from '../services/class-question-analysis';
+import {classPeriodComparison} from '../services/class-period-comparison';
+import {classPracticeBalance} from '../services/class-practice-balance';
+import {listClassGoals,saveClassGoal,deleteClassGoal} from '../services/classroom-goals';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
 import { describeAiFailure } from '../ai/failure';
 import { ApiError } from '../lib/errors';
 import { assertCsrf, assertSameOrigin, clientIp } from '../lib/http';
-import { parseBody } from '../lib/validate';
+import { parseBody, parseWith } from '../lib/validate';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { currentUser } from '../middleware/auth';
 import {
@@ -34,7 +49,7 @@ import {teacherScheduleConflicts} from '../services/teacher-schedule-conflicts';
 import {searchTeacherWorkspace} from '../services/teacher-workspace-search';
 import {setQuestionFeedback} from '../services/question-feedback-service';
 import {listTeachingSchedule,createTeachingEvent,updateTeachingEvent,moveTeachingEvent,deleteTeachingEvent} from '../services/class-teaching-schedule-service';
-import {teacherWritingReview,saveWritingReview} from '../services/writing-revision-service';
+import {teacherWritingReview,saveWritingReview,writingFeedbackDiscussion,addWritingFeedbackMessage} from '../services/writing-revision-service';
 import {createWorksheet,listTeacherWorksheets,teacherWorksheetDetail,teacherWorksheetVersions,closeWorksheet,saveWorksheetFeedback} from '../services/class-worksheet-service';
 import {listRubrics,createRubric,updateRubric,deleteRubric} from '../services/teacher-rubrics-service';
 import {classDuties,listDuties,setDuties,requireTeacherAttempt} from '../services/co-teacher-duties-service';
@@ -65,13 +80,28 @@ router.use('*', async (c, next) => {
   assertSameOrigin(c);
   await next();
 });
+const classGoalSchema=z.object({title:z.string().trim().min(1).max(200),targetPercent:z.number().int().min(1).max(100),dueDate:z.string().length(10).nullable()});
+router.get('/classrooms/:classroomId/question-analysis',async c=>c.json(await classQuestionAnalysis(c.env,currentUser(c),c.req.param('classroomId'))));
+router.get('/classrooms/:classroomId/period-comparison',async c=>c.json(await classPeriodComparison(c.env,currentUser(c),c.req.param('classroomId'),c.req.query('aFrom')??'',c.req.query('aTo')??'',c.req.query('bFrom')??'',c.req.query('bTo')??'')));
+router.get('/classrooms/:classroomId/practice-balance',async c=>c.json(await classPracticeBalance(c.env,currentUser(c),c.req.param('classroomId'),c.req.query('from')??'',c.req.query('to')??'')));
+router.get('/classrooms/:classroomId/goals',async c=>c.json(await listClassGoals(c.env,currentUser(c),c.req.param('classroomId'))));
+router.post('/classrooms/:classroomId/goals',async c=>c.json({goal:await saveClassGoal(c.env,currentUser(c),c.req.param('classroomId'),null,await parseBody(c,classGoalSchema))},201));
+router.put('/classrooms/:classroomId/goals/:goalId',async c=>c.json({goal:await saveClassGoal(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('goalId'),await parseBody(c,classGoalSchema))}));
+router.delete('/classrooms/:classroomId/goals/:goalId',async c=>{await deleteClassGoal(c.env,currentUser(c),c.req.param('classroomId'),c.req.param('goalId'));return c.json({ok:true});});
+
 
 router.get('/search',async c=>c.json(await searchTeacherWorkspace(c.env,currentUser(c),c.req.query('q')??'')));
 
 // ---------------------------------------------------------------------------
 // Classrooms
 // ---------------------------------------------------------------------------
-const resourceMetadata=z.object({subject:z.string().trim().max(120),topic:z.string().trim().max(120),classroomId:z.string().min(1).max(100).nullable()});
+const reportTemplateSchema=z.object({name:z.string().trim().min(1).max(100),title:z.string().trim().min(1).max(150),feedback:z.string().trim().max(4000)});
+router.get('/report-templates',async c=>c.json({templates:await listReportTemplates(c.env,currentUser(c))}));
+router.post('/report-templates',async c=>c.json({id:await saveReportTemplate(c.env,currentUser(c),null,await parseBody(c,reportTemplateSchema))},201));
+router.put('/report-templates/:id',async c=>c.json({id:await saveReportTemplate(c.env,currentUser(c),c.req.param('id'),await parseBody(c,reportTemplateSchema))}));
+router.delete('/report-templates/:id',async c=>{await deleteReportTemplate(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
+
+const resourceMetadata=z.object({sensitivity:z.enum(['NORMAL','SENSITIVE']).optional(),subject:z.string().trim().max(120),topic:z.string().trim().max(120),classroomId:z.string().min(1).max(100).nullable()});
 router.get('/resource-audience/:classId',async c=>c.json(await resourceAudience(c.env,currentUser(c),c.req.param('classId'))));
 router.get('/resources',async c=>c.json({files:await listResources(c.env,currentUser(c))}));
 router.post('/resources',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,resourceMetadata.extend({filename:z.string().min(1).max(160),base64:z.string().min(4).max(683000)}));return c.json({id:await createResource(c.env,currentUser(c),body)},201);});
@@ -79,7 +109,13 @@ router.put('/resources/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??
 router.delete('/resources/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteResource(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
 router.get('/resources/:id',async c=>c.json({file:await readOwnResource(c.env,currentUser(c),c.req.param('id'))}));
 
-const questionSchema=z.object({skill:z.enum(['LISTENING','READING','WRITING','SPEAKING']),topic:z.string().trim().max(120),question:z.string().trim().min(1).max(5000),referenceAnswer:z.string().trim().max(5000)});
+const questionSchema=z.object({skill:z.enum(['LISTENING','READING','WRITING','SPEAKING']),topic:z.string().trim().max(120),question:z.string().trim().min(1).max(5000),referenceAnswer:z.string().trim().max(5000),difficulty:z.enum(['UNSPECIFIED','EASY','MEDIUM','HARD']).optional(),questionType:z.enum(['TEXT','MULTIPLE_CHOICE']).default('TEXT'),options:z.array(z.string().trim().min(1).max(500)).max(6).default([]),correctIndex:z.number().int().min(0).max(5).nullable().default(null),contextText:z.string().trim().max(8000).default('')}).superRefine((q,ctx)=>{if(q.questionType==='MULTIPLE_CHOICE'&&(q.options.length<2||q.correctIndex===null||q.correctIndex>=q.options.length))ctx.addIssue({code:'custom',message:'Cần 2–6 lựa chọn và một đáp án đúng.'});if(q.questionType==='TEXT'&&(q.options.length||q.correctIndex!==null))ctx.addIssue({code:'custom',message:'Câu tự luận không có lựa chọn.'});});
+const mediaKind=z.enum(['IMAGE','AUDIO']);
+const mediaBody=z.object({mime:z.enum(['image/png','image/jpeg','image/webp','audio/mpeg','audio/ogg','audio/wav']),base64:z.string().min(4).max(682668),startSeconds:z.number().int().min(0).max(86400).default(0)});
+router.get('/questions/:id/media/:kind',async c=>c.json({media:await getQuestionMedia(c.env,currentUser(c),c.req.param('id'),parseWith(mediaKind,c.req.param('kind')))}));
+router.put('/questions/:id/media/:kind',async c=>{const b=await parseBody(c,mediaBody);await setQuestionMedia(c.env,currentUser(c),c.req.param('id'),parseWith(mediaKind,c.req.param('kind')),b.mime,b.base64,b.startSeconds);return c.json({ok:true});});
+router.delete('/questions/:id/media/:kind',async c=>{await deleteQuestionMedia(c.env,currentUser(c),c.req.param('id'),parseWith(mediaKind,c.req.param('kind')));return c.json({ok:true});});
+router.get('/classrooms/:id/worksheets/:worksheetId/questions/:questionId/media/:kind',async c=>c.json({media:await getWorksheetMedia(c.env,currentUser(c),c.req.param('id'),c.req.param('worksheetId'),c.req.param('questionId'),parseWith(mediaKind,c.req.param('kind')))}));
 router.get('/questions',async c=>c.json({questions:await listQuestions(c.env,currentUser(c))}));
 router.post('/questions',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,questionSchema);return c.json({id:await createQuestion(c.env,currentUser(c),body)},201);});
 router.put('/questions/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,questionSchema);await updateQuestion(c.env,currentUser(c),c.req.param('id'),body);return c.json({ok:true});});
@@ -101,6 +137,11 @@ router.get('/progress', async c => c.json({assignments:await teacherProgress(c.e
 router.get('/classrooms/:id/seating', async c=>c.json(await readSeating(c.env,currentUser(c),c.req.param('id'))));
 router.put('/classrooms/:id/seating', async c=>{assertCsrf(c,c.get('session')?.csrfToken ?? null);const body=await parseBody(c,z.object({studentIds:z.array(z.string().min(1).max(100)).max(200)}));await saveSeating(c.env,currentUser(c),c.req.param('id'),body.studentIds);return c.json({ok:true});});
 
+const interventionBody=z.object({occurredOn:z.string().length(10),action:z.string().trim().min(1).max(1000),outcome:z.string().max(1000)});
+router.get('/classrooms/:id/interventions/:studentId',async c=>c.json({items:await listInterventions(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'))}));
+router.post('/classrooms/:id/interventions/:studentId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);return c.json(await createIntervention(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'),await parseBody(c,interventionBody)),201);});
+router.put('/classrooms/:id/interventions/:studentId/:entryId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await updateIntervention(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'),c.req.param('entryId'),await parseBody(c,interventionBody));return c.json({ok:true});});
+router.delete('/classrooms/:id/interventions/:studentId/:entryId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteIntervention(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'),c.req.param('entryId'));return c.json({ok:true});});
 router.get('/classrooms/:id/private-notes', async c=>c.json(await listPrivateNotes(c.env,currentUser(c),c.req.param('id'))));
 router.put('/classrooms/:id/private-notes/:studentId', async c=>{assertCsrf(c,c.get('session')?.csrfToken ?? null);const body=await parseBody(c,z.object({body:z.string().max(4000)}));await savePrivateNote(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'),body.body);return c.json({ok:true});});
 
@@ -114,8 +155,9 @@ router.patch('/classrooms/:id/schedule/:eventId/time',async c=>{assertCsrf(c,c.g
 router.delete('/classrooms/:id/schedule/:eventId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteTeachingEvent(c.env,currentUser(c),c.req.param('id'),c.req.param('eventId'));return c.json({ok:true});});
 
 router.get('/classrooms/:id/worksheets',async c=>c.json({worksheets:await listTeacherWorksheets(c.env,currentUser(c),c.req.param('id'))}));
-router.post('/classrooms/:id/worksheets',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(150),deadlineAt:z.string().datetime().nullable(),questionIds:z.array(z.string().min(1)).min(1).max(20)}));return c.json(await createWorksheet(c.env,currentUser(c),c.req.param('id'),body),201);});
+router.post('/classrooms/:id/worksheets',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({title:z.string().trim().min(1).max(150),deadlineAt:z.string().datetime().nullable(),questionIds:z.array(z.string().min(1)).min(1).max(20),shuffleQuestions:z.boolean().default(false),shuffleOptions:z.boolean().default(false)}));return c.json(await createWorksheet(c.env,currentUser(c),c.req.param('id'),body),201);});
 router.get('/classrooms/:id/worksheets/:worksheetId',async c=>c.json(await teacherWorksheetDetail(c.env,currentUser(c),c.req.param('id'),c.req.param('worksheetId'))));
+router.get('/classrooms/:id/worksheets/:worksheetId/versions/:versionId/file',async c=>c.json({file:await readWorksheetSubmissionFile(c.env,currentUser(c),c.req.param('id'),c.req.param('worksheetId'),c.req.param('versionId'))}));
 router.get('/classrooms/:id/worksheets/:worksheetId/students/:studentId',async c=>c.json({versions:await teacherWorksheetVersions(c.env,currentUser(c),c.req.param('id'),c.req.param('worksheetId'),c.req.param('studentId'))}));
 router.post('/classrooms/:id/worksheets/:worksheetId/close',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await closeWorksheet(c.env,currentUser(c),c.req.param('id'),c.req.param('worksheetId'));return c.json({ok:true});});
 router.put('/classrooms/:id/worksheets/:worksheetId/versions/:versionId/feedback',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({comments:z.array(z.object({questionId:z.string().min(1),start:z.number().int().min(0),end:z.number().int().min(0),text:z.string().trim().min(1).max(2000)})).max(100),publish:z.boolean()}));await saveWorksheetFeedback(c.env,currentUser(c),c.req.param('id'),c.req.param('worksheetId'),c.req.param('versionId'),body.comments,body.publish);return c.json({ok:true});});
@@ -312,7 +354,7 @@ const assignmentSchema = z.object({
   studentIds: z.array(z.string().min(1)).min(1).max(200).optional(),
 });
 
-const assignmentTemplateSchema=z.object({name:z.string().trim().min(1).max(100),config:z.object({versionId:z.string().min(1).max(100),title:z.string().max(200),maxAttempts:z.number().int().min(1).max(20),mode:z.enum(EXAM_MODES),resultVisibility:z.enum(RESULT_VISIBILITIES),timingPolicy:z.enum(['EXAM_DURATION','UNTIMED']),requireFullscreen:z.boolean(),monitorVisibility:z.boolean(),autoSubmitAtEvents:z.string().regex(/^(?:[1-9]|[1-9]\d|100)?$/),maxTabAwayEvents:z.string().regex(/^(?:\d|[1-9]\d|100)?$/)})});
+const assignmentTemplateSchema=z.object({name:z.string().trim().min(1).max(100),config:assignmentBackupConfigSchema});
 router.get('/assignment-templates',async c=>c.json({templates:await listAssignmentTemplates(c.env,currentUser(c))}));
 router.post('/assignment-templates',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);return c.json({id:await saveAssignmentTemplate(c.env,currentUser(c),await parseBody(c,assignmentTemplateSchema))},201);});
 router.put('/assignment-templates/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await saveAssignmentTemplate(c.env,currentUser(c),await parseBody(c,assignmentTemplateSchema),c.req.param('id'));return c.json({ok:true});});
@@ -323,6 +365,28 @@ router.get('/availability',async c=>c.json({availability:await getTeacherAvailab
 router.put('/availability',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({timezone:z.string().min(1).max(100),slots:z.array(z.object({day:z.number().int().min(0).max(6),start:z.string().length(5),end:z.string().length(5)})).max(7)}));await saveTeacherAvailability(c.env,currentUser(c),body.timezone,body.slots);return c.json({ok:true});});
 router.get('/daily-notes/:day',async c=>c.json(await readDailyNote(c.env,currentUser(c),c.req.param('day'))));
 router.put('/daily-notes/:day',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({body:z.string().max(4000)}));await saveDailyNote(c.env,currentUser(c),c.req.param('day'),body.body);return c.json({ok:true});});
+router.get('/calendar-subscription',async c=>c.json({active:await calendarSubscriptionStatus(c.env,currentUser(c))}));
+router.post('/calendar-subscription',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);return c.json({token:await rotateCalendarSubscription(c.env,currentUser(c))});});
+router.delete('/calendar-subscription',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await revokeCalendarSubscription(c.env,currentUser(c));return c.json({ok:true});});
+router.get('/resource-backup',async c=>{const offset=parseWith(z.coerce.number().int().min(0).max(25),c.req.query('offset')??0);c.header('Cache-Control','private, no-store');return c.json(await exportResourceBackup(c.env,currentUser(c),offset));});
+router.post('/resource-backup/restore',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);if(Number(c.req.header('content-length')??0)>4_000_000)throw ApiError.validation('Tệp vượt 4 MB.');const text=await c.req.text();if(new TextEncoder().encode(text).byteLength>4_000_000)throw ApiError.validation('Tệp vượt 4 MB.');let raw:unknown;try{raw=JSON.parse(text);}catch{throw ApiError.validation('Tệp JSON không hợp lệ.');}return c.json(await restoreResourceBackup(c.env,currentUser(c),parseWith(resourceBackupSchema,raw)));});
+router.get('/question-bank-backup',async c=>{const offset=parseWith(z.coerce.number().int().min(0).max(500),c.req.query('offset')??0);c.header('Cache-Control','private, no-store');return c.json(await exportQuestionBackup(c.env,currentUser(c),offset));});
+router.post('/question-bank-backup/restore',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);if(Number(c.req.header('content-length')??0)>8_000_000)throw ApiError.validation('Tệp vượt 8 MB.');const text=await c.req.text();if(new TextEncoder().encode(text).byteLength>8_000_000)throw ApiError.validation('Tệp vượt 8 MB.');let raw:unknown;try{raw=JSON.parse(text);}catch{throw ApiError.validation('Tệp JSON không hợp lệ.');}return c.json(await restoreQuestionBackup(c.env,currentUser(c),parseWith(questionBackupSchema,raw)));});
+router.get('/personal-backup',async c=>{c.header('Cache-Control','private, no-store');return c.json(await exportTeacherBackup(c.env,currentUser(c)));});
+router.post('/personal-backup/restore',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);if(Number(c.req.header('content-length')??0)>8_000_000)throw ApiError.validation('Tệp vượt 8 MB.');const text=await c.req.text();if(new TextEncoder().encode(text).byteLength>8_000_000)throw ApiError.validation('Tệp vượt 8 MB.');let raw:unknown;try{raw=JSON.parse(text);}catch{throw ApiError.validation('Tệp JSON không hợp lệ.');}return c.json(await restoreTeacherBackup(c.env,currentUser(c),parseWith(teacherBackupSchema,raw)));});
+router.get('/task-retention',async c=>c.json(await retentionSettings(c.env,currentUser(c))));
+router.put('/task-retention',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({days:z.union([z.literal(90),z.literal(180),z.literal(365),z.null()])}));await setRetention(c.env,currentUser(c),b.days);return c.json({ok:true});});
+router.get('/note-retention',async c=>c.json(await noteRetentionSettings(c.env,currentUser(c))));
+router.put('/note-retention',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({days:z.union([z.literal(90),z.literal(180),z.literal(365),z.null()])}));await setNoteRetention(c.env,currentUser(c),b.days);return c.json({ok:true});});
+router.post('/note-retention/cleanup',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);return c.json({deleted:await pruneTeacherNotes(c.env,new Date(),currentUser(c).id)});});
+router.post('/task-retention/cleanup',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);return c.json({deleted:await pruneTeacherTasks(c.env,new Date(),currentUser(c).id)});});
+router.get('/assignments/:id/extensions',async c=>c.json(await listExtensions(c.env,currentUser(c),c.req.param('id'))));
+router.put('/assignments/:id/extensions/:studentId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({deadlineAt:z.string().datetime().nullable()}));await setExtension(c.env,currentUser(c),c.req.param('id'),c.req.param('studentId'),b.deadlineAt);return c.json({ok:true});});
+router.get('/task-delegations',async c=>c.json(await listTaskDelegations(c.env,currentUser(c))));
+router.put('/tasks/:id/delegation',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({schoolId:z.string().min(1).max(100),email:z.string().trim().email().max(254),expiresAt:z.string().datetime()}));await delegateTask(c.env,currentUser(c),c.req.param('id'),b.schoolId,b.email,b.expiresAt);return c.json({ok:true});});
+router.delete('/tasks/:id/delegation',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await revokeTaskDelegation(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
+router.patch('/task-delegations/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({completed:z.boolean()}));await changeDelegatedTask(c.env,currentUser(c),c.req.param('id'),b.completed);return c.json({ok:true});});
+router.delete('/task-delegations/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await declineTask(c.env,currentUser(c),c.req.param('id'));return c.json({ok:true});});
 router.get('/tasks',async c=>c.json({tasks:await listTeacherTasks(c.env,currentUser(c))}));
 router.post('/tasks',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,taskSchema);return c.json({id:await createTeacherTask(c.env,currentUser(c),body)},201);});
 router.patch('/tasks/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,taskSchema.partial().extend({completed:z.boolean().optional()}));await updateTeacherTask(c.env,currentUser(c),c.req.param('id'),body);return c.json({ok:true});});
@@ -346,6 +410,7 @@ router.post('/assignments', async (c) => {
 
 router.post('/assignments/:id/clone',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({classroomIds:z.array(z.string().min(1).max(100)).min(1).max(20)}));const copies=await cloneAssignmentToClasses(c.env,currentUser(c),c.req.param('id'),body.classroomIds);await recordAudit(c.env,{actorUserId:currentUser(c).id,action:'ASSIGNMENT_CLONE',entityType:'assignment',entityId:c.req.param('id'),metadata:{classroomIds:body.classroomIds},ip:clientIp(c)});return c.json({copies},201);});
 
+router.get('/assignments/:id/history',async c=>c.json({history:await listAssignmentHistory(c.env,currentUser(c),c.req.param('id'))}));
 router.get('/assignments/:id', async (c) => {
   const user = currentUser(c);
   return c.json(await getAssignmentDetail(c.env, user, c.req.param('id')));
@@ -559,6 +624,8 @@ router.get('/classrooms/:id/students', async (c) => {
 });
 
 
+router.get('/writing-submissions/:submissionId/review/:versionId/discussion',async c=>c.json(await writingFeedbackDiscussion(c.env,currentUser(c),c.req.param('submissionId'),c.req.param('versionId'),'teacher')));
+router.post('/writing-submissions/:submissionId/review/:versionId/messages',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({index:z.number().int().min(0).max(99),body:z.string().trim().min(1).max(2000)}));await addWritingFeedbackMessage(c.env,currentUser(c),c.req.param('submissionId'),c.req.param('versionId'),b.index,'teacher',b.body);return c.json({ok:true});});
 router.get('/writing-submissions/:submissionId/review',async c=>c.json(await teacherWritingReview(c.env,currentUser(c),c.req.param('submissionId'))));
 router.put('/writing-submissions/:submissionId/review',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({version:z.number().int().min(1).max(10),comments:z.array(z.object({start:z.number().int().min(0),end:z.number().int().min(0),text:z.string().trim().min(1).max(2000)})).max(100),publish:z.boolean()}));await saveWritingReview(c.env,currentUser(c),c.req.param('submissionId'),body.version,body.comments,body.publish);return c.json({ok:true});});
 

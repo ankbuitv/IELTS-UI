@@ -1,3 +1,4 @@
+import calendarFeedRoutes from './routes/calendar-feed';
 import { Hono } from 'hono';
 import type { AppBindings } from './env';
 import { ApiError } from './lib/errors';
@@ -75,6 +76,7 @@ export function createApp() {
   app.route('/api/profile', profileRoutes);
   app.route('/api', classroomRoutes);
   app.route('/api/teacher', teacherRoutes);
+  app.route('/api/calendar-feed', calendarFeedRoutes);
   app.route('/api/schools', schoolRoutes);
   app.route('/api/class-logos', classLogoRoutes);
   app.route('/api/admin', adminRoutes);
@@ -96,6 +98,10 @@ export function createApp() {
         error.status as never,
       );
     }
+
+    const guardMessage=(error as Error)?.message??'';
+    if(guardMessage.includes('ASSIGNED_VERSION_IMMUTABLE')) return c.json({error:{code:'CONFLICT',message:'This content is used by an assignment and cannot be changed. Create a new version instead.'}},409);
+    if(guardMessage.includes('ASSIGNED_ASSET_NOT_READY')) return c.json({error:{code:'CONFLICT',message:'An exam file is still uploading or missing. Finish the upload before assigning this version.'}},409);
 
     const requestId = c.get('requestId');
     const reason = (error as Error)?.message ?? String(error);

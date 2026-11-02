@@ -45,7 +45,7 @@ export async function readDraftAttachment(env:Env,user:AuthUser,schoolId:string,
 async function requireSubmission(env:Env,user:AuthUser,schoolId:string,submissionId:string) {
   await requireActiveSchoolStaff(env,user,schoolId);
   const allowed=await env.DB.prepare(`SELECT 1 FROM school_lesson_submissions sub JOIN schools s ON s.id=sub.school_id JOIN school_subject_groups g ON g.id=sub.group_id
-    WHERE sub.id=? AND sub.school_id=? AND (sub.author_id=? OR s.owner_user_id=? OR g.leader_id=? OR EXISTS(SELECT 1 FROM school_staff_permissions sp WHERE sp.school_id=sub.school_id AND sp.user_id=? AND sp.permission='REVIEW_ALL'))`).bind(submissionId,schoolId,user.id,user.id,user.id,user.id).first();
+    WHERE sub.id=? AND sub.school_id=? AND (sub.author_id=? OR s.owner_user_id=? OR g.leader_id=? OR EXISTS(SELECT 1 FROM (SELECT school_id,user_id,permission FROM school_staff_permissions UNION ALL SELECT school_id,user_id,permission FROM school_temporary_permissions WHERE expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')) sp WHERE sp.school_id=sub.school_id AND sp.user_id=? AND sp.permission='REVIEW_ALL'))`).bind(submissionId,schoolId,user.id,user.id,user.id,user.id).first();
   if(!allowed)throw ApiError.notFound();
 }
 export async function listSubmissionAttachments(env:Env,user:AuthUser,schoolId:string,submissionId:string) {

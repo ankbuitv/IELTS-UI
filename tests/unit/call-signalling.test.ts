@@ -1,7 +1,8 @@
+import {listCallSummaries,saveCallSummary,deleteCallSummary} from '@worker/services/call-summaries';
 import { describe, expect, it } from 'vitest';
 import schemaSql from '@worker/lib/runtime-schema.sql';
 import { joinRoom, leaveRoom, postSignal, roomState, setHandRaised, setScreenShare, setMentorClassBrand } from '@worker/services/mentor-service';
-import {createPoll,answerPoll,closePoll,listPolls,getWhiteboard,saveWhiteboard,createBreakouts,listBreakouts,closeBreakouts,broadcastBreakouts} from '@worker/services/live-class-service';
+import {createPoll,answerPoll,closePoll,listPolls,getWhiteboard,saveWhiteboard,createBreakouts,listBreakouts,closeBreakouts,broadcastBreakouts,liveQuestions,askLiveQuestion,changeLiveQuestion} from '@worker/services/live-class-service';
 import type { Env } from '@worker/env';
 import type { AuthUser } from '@worker/lib/auth-types';
 
@@ -43,6 +44,8 @@ describe('call signalling and presence', () => {
       expect((await roomState(env, student, 'room', null)).participants).toHaveLength(0);
       const joining = await joinRoom(env, student, 'room');
       await joinRoom(env, host, 'room'); await joinRoom(env, other, 'room'); await joinRoom(env,admin,'room'); await joinRoom(env,schoolOwner,'room');
+      const draft=await saveCallSummary(env,host,'room',null,'Buổi một','Private notes',false);expect(await listCallSummaries(env,student,'room')).toEqual([]);await expect(saveCallSummary(env,student,'room',draft,'X','no',true)).rejects.toMatchObject({status:403});await saveCallSummary(env,host,'room',draft,'Buổi một','Shared summary',true);expect(await listCallSummaries(env,student,'room')).toMatchObject([{title:'Buổi một',body:'Shared summary'}]);await saveCallSummary(env,host,'room',draft,'Buổi một','Private again',false);expect(await listCallSummaries(env,student,'room')).toEqual([]);await deleteCallSummary(env,host,'room',draft);expect(await listCallSummaries(env,host,'room')).toEqual([]);
+      await askLiveQuestion(env,student,'room','main','Câu hỏi trong buổi học');const questions=await liveQuestions(env,host,'room','main') as Array<{id:string;status:string;body:string}>;expect(questions).toMatchObject([{body:'Câu hỏi trong buổi học',status:'OPEN'}]);const q=questions[0]!;await expect(changeLiveQuestion(env,student,'room','main',q.id,'ANSWERED')).rejects.toMatchObject({status:403});await expect(changeLiveQuestion(env,other,'room','main',q.id,'DELETE')).rejects.toMatchObject({status:404});await changeLiveQuestion(env,host,'room','main',q.id,'ANSWERED');expect(await liveQuestions(env,student,'room','main')).toMatchObject([{status:'ANSWERED'}]);await changeLiveQuestion(env,student,'room','main',q.id,'DELETE');expect(await liveQuestions(env,host,'room','main')).toEqual([]);await leaveRoom(env,other,'room');await expect(liveQuestions(env,other,'room','main')).rejects.toMatchObject({status:403});await joinRoom(env,other,'room');
       await expect(setScreenShare(env,student,'room','main',true)).rejects.toMatchObject({status:403});
       await setScreenShare(env,host,'room','main',true);
       await expect(setScreenShare(env,admin,'room','main',true)).rejects.toMatchObject({status:409});

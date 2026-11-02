@@ -1,3 +1,10 @@
+import {AssignmentExtensions} from '../../components/AssignmentExtensions';
+import {PersonalLearningPath} from '../../components/PersonalLearningPath';
+import {AssignmentPrerequisite} from '../../components/AssignmentPrerequisite';
+import {AssignmentMilestones} from '../../components/AssignmentMilestones';
+import {AssignmentGuides} from '../../components/AssignmentGuides';
+import {AssignmentHistory} from './AssignmentHistory';
+import {ClassGoals} from './ClassGoals';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
@@ -208,7 +215,7 @@ export function ClassroomPage() {
   const { classroomId = '' } = useParams();
   const toast = useToast();
   const [searchParams] = useSearchParams();
-  const allowedTabs = ['conversation','files','overview','students','assignments','invites','ratings','attendance','gradebook','private-notes','seating','board','resources','skill-progress','term-reports','support','duties','worksheets','schedule'] as const;
+  const allowedTabs = ['conversation','files','overview','students','assignments','invites','ratings','attendance','gradebook','private-notes','seating','board','resources','skill-progress','goals','learning-path','term-reports','support','duties','worksheets','schedule'] as const;
   const initialTab = allowedTabs.find(value => value === searchParams.get('tab')) ?? 'conversation';
   const [tab, setTab] = useState<typeof allowedTabs[number]>(initialTab);
   const [attendanceDirty,setAttendanceDirty] = useState(false);
@@ -225,6 +232,7 @@ export function ClassroomPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteResult, setInviteResult] = useState<{ shareUrl: string; expiresAt: string } | null>(null);
   const [addEmail, setAddEmail] = useState('');
+  const [pathStudent,setPathStudent]=useState('');
   const [assignOpen, setAssignOpen] = useState(false);
   const [editOpen,setEditOpen] = useState(false);
   const [editName,setEditName] = useState('');
@@ -246,6 +254,8 @@ export function ClassroomPage() {
           { id: 'seating', label: 'Sơ đồ chỗ ngồi' },
           { id: 'gradebook', label: 'Bảng điểm' },
           { id: 'skill-progress', label: 'Tiến độ kỹ năng' },
+          { id: 'goals', label: 'Mục tiêu lớp' },
+          {id:'learning-path',label:'Lộ trình cá nhân'},
           { id: 'term-reports', label: 'Báo cáo học tập' },
           { id: 'support', label: 'Lịch hỗ trợ' },
           { id:'schedule',label:'Lịch dạy' },
@@ -297,6 +307,8 @@ export function ClassroomPage() {
       {tab === 'duties' && (data.classroom.isOwner || user?.role === 'ADMIN') && <ClassDuties key={classroomId} classroomId={classroomId}/> }
       {tab === 'support' && <ClassSupport key={classroomId} classroomId={classroomId}/> }
       {tab === 'term-reports' && <ClassTermReports key={classroomId} classroomId={classroomId}/> }
+      {tab === 'learning-path' && <section><h2>Lộ trình cá nhân</h2><label>Chọn học viên<select value={pathStudent} onChange={e=>setPathStudent(e.target.value)}><option value="">Chọn học viên…</option>{data.members.filter(m=>m.role==='STUDENT'&&m.status==='ACTIVE').map(m=><option key={m.userId} value={m.userId}>{m.displayName||m.email}</option>)}</select></label>{pathStudent&&<PersonalLearningPath key={pathStudent} classroomId={classroomId} studentId={pathStudent} teacher/>}</section>}
+      {tab === 'goals' && <ClassGoals key={classroomId} classroomId={classroomId} canEdit={data.classroom.isOwner || user?.role === 'ADMIN'}/> }
       {tab === 'skill-progress' && <ClassSkillProgress key={classroomId} classroomId={classroomId}/> }
       {tab === 'resources' && <ClassResources key={classroomId} classroomId={classroomId}/> }
       {tab === 'board' && <ClassroomBoard key={classroomId} classroomId={classroomId}/> }
@@ -998,6 +1010,12 @@ export function AssignmentPage() {
       </div>
 
       {data.status==='DRAFT'&&<Notice tone="info">Bản nháp chưa hiển thị cho học viên. Chính sách kết quả: <b>{data.resultVisibility}</b>; hạn nộp: {data.deadlineAt?formatDateTime(data.deadlineAt):'không có'}. Bản sao dành cho toàn bộ lớp khi phát hành.</Notice>}
+
+      <AssignmentPrerequisite assignmentId={assignmentId} teacher/>
+      <AssignmentExtensions assignmentId={assignmentId} onUpdated={reload}/>
+      <AssignmentMilestones assignmentId={assignmentId}/>
+      <AssignmentGuides assignmentId={assignmentId} teacher/>
+      <AssignmentHistory assignmentId={assignmentId}/>
 
       <Card title="Students" hint="Ordered by name. Integrity counts are observable events, not verdicts." flush>
         <div className="table-wrap">

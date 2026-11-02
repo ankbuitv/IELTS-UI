@@ -1,3 +1,4 @@
+import {studentRevisions} from '../services/student-revisions';
 import {listMistakes,createMistake,updateMistake,deleteMistake} from '../services/learning-mistakes';
 import {listStudyTime,createStudyTime,updateStudyTime,deleteStudyTime} from '../services/learning-study-time';
 import {listGoals,createGoal,updateGoal,deleteGoal} from '../services/learning-goals';
@@ -77,6 +78,7 @@ const filterSchema = z.object({
 });
 
 const mistakeSchema=z.object({title:z.string().max(200),skill:z.enum(['READING','LISTENING','WRITING','SPEAKING']),note:z.string().max(1000),occurrences:z.number().int().min(1).max(999)});
+router.get('/revisions',async c=>c.json(await studentRevisions(c.env,currentUser(c))));
 router.get('/mistakes',async c=>c.json({mistakes:await listMistakes(c.env,currentUser(c))}));
 router.post('/mistakes',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,mistakeSchema);return c.json({id:await createMistake(c.env,currentUser(c),body)},201);});
 router.put('/mistakes/:id',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,mistakeSchema);await updateMistake(c.env,currentUser(c),c.req.param('id'),body);return c.json({ok:true});});

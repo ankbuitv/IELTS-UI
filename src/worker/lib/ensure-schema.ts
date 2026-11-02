@@ -1,6 +1,7 @@
 import type { Env } from '../env';
 // Generated file — see scripts/generate-runtime-schema.mjs (`npm run schema:generate`).
 import RUNTIME_SCHEMA_SQL from './runtime-schema.sql';
+import ASSIGNED_PROTECTION_SQL from '../../../migrations/0125_assigned_content_immutability.sql';
 import { ensureDefaultScoringProfiles } from '../services/scoring-profile-service';
 
 /**
@@ -161,6 +162,7 @@ async function checkAndBootstrap(env: Env): Promise<SchemaState> {
   const drift = await schemaDrift(env);
   if (isCurrent(drift)) {
     await ensureDefaultScoringProfiles(env);
+    await ensureAssignedProtection(env);
     return { ok: true };
   }
 
@@ -175,7 +177,17 @@ async function checkAndBootstrap(env: Env): Promise<SchemaState> {
   }
   await healSchema(env, drift);
   await ensureDefaultScoringProfiles(env);
+  await ensureAssignedProtection(env);
   return { ok: true };
+}
+
+/** Install the same idempotent integrity triggers on self-bootstrapped DBs. */
+async function ensureAssignedProtection(env:Env):Promise<void>{
+  const statements=ASSIGNED_PROTECTION_SQL.split('-- @trigger').map(s=>s.trim()).filter(s=>/^CREATE TRIGGER/i.test(s));
+  const existing=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'assigned_%'").all<{name:string}>();
+  const names=new Set(existing.results.map(row=>row.name));
+  const missing=statements.filter(sql=>{const match=/^CREATE TRIGGER IF NOT EXISTS ([a-z0-9_]+)/i.exec(sql);return !match||!names.has(match[1]!);});
+  if(missing.length)await env.DB.batch(missing.map(sql=>env.DB.prepare(sql)));
 }
 
 /** Nothing to create, add or rebuild. */

@@ -1,3 +1,4 @@
+import {listCallSummaries,saveCallSummary,deleteCallSummary} from '../services/call-summaries';
 /**
  * Mentor API — booking, live call rooms, classes and the mentor console.
  *
@@ -50,6 +51,7 @@ import {
 } from '../services/mentor-service';
 import { notify } from '../services/notification-service';
 import {
+  liveQuestions,askLiveQuestion,changeLiveQuestion,
   answerPoll,
   broadcastBreakouts,
   closeBreakouts,
@@ -299,6 +301,14 @@ router.post('/mentor/sessions/:sessionId/signal', async (c) => {
 
 // ------------------------------------------------------------------------- live extras
 
+router.get('/mentor/sessions/:sessionId/questions',async c=>c.json({questions:await liveQuestions(c.env,currentUser(c),c.req.param('sessionId'),c.req.query('room')||'main')}));
+router.post('/mentor/sessions/:sessionId/questions',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({room:z.string().min(1).max(40),body:z.string().trim().min(1).max(1000)}));await askLiveQuestion(c.env,currentUser(c),c.req.param('sessionId'),b.room,b.body);return c.json({ok:true},201);});
+router.patch('/mentor/sessions/:sessionId/questions/:questionId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({room:z.string().min(1).max(40),status:z.enum(['OPEN','ANSWERED','DELETE'])}));await changeLiveQuestion(c.env,currentUser(c),c.req.param('sessionId'),b.room,c.req.param('questionId'),b.status);return c.json({ok:true});});
+const summarySchema=z.object({title:z.string().trim().min(1).max(150),body:z.string().trim().min(1).max(5000),published:z.boolean()});
+router.get('/mentor/sessions/:sessionId/summaries',async c=>c.json({summaries:await listCallSummaries(c.env,currentUser(c),c.req.param('sessionId'))}));
+router.post('/mentor/sessions/:sessionId/summaries',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,summarySchema);return c.json({id:await saveCallSummary(c.env,currentUser(c),c.req.param('sessionId'),null,b.title,b.body,b.published)},201);});
+router.put('/mentor/sessions/:sessionId/summaries/:summaryId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,summarySchema);await saveCallSummary(c.env,currentUser(c),c.req.param('sessionId'),c.req.param('summaryId'),b.title,b.body,b.published);return c.json({ok:true});});
+router.delete('/mentor/sessions/:sessionId/summaries/:summaryId',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);await deleteCallSummary(c.env,currentUser(c),c.req.param('sessionId'),c.req.param('summaryId'));return c.json({ok:true});});
 router.get('/mentor/sessions/:sessionId/polls', async (c) => {
   const user = currentUser(c);
   const room = c.req.query('room') || 'main';

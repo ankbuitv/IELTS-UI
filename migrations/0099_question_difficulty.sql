@@ -1,0 +1,1 @@
+ALTER TABLE teacher_question_bank ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'UNSPECIFIED' CHECK(difficulty IN ('UNSPECIFIED','EASY','MEDIUM','HARD'));

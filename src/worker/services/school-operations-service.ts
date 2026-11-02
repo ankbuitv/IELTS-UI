@@ -1,3 +1,4 @@
+import {recordAudit} from '../lib/audit';
 import type { Env } from '../env';
 import type { AuthUser } from '../lib/auth-types';
 import { ApiError } from '../lib/errors';
@@ -47,6 +48,7 @@ export async function saveSubjectGroup(env: Env, user: AuthUser, schoolId: strin
   if (duplicate) throw ApiError.conflict('Tên tổ bộ môn đã tồn tại.');
   const write=id ? env.DB.prepare('UPDATE school_subject_groups SET name=?,leader_id=?,updated_at=? WHERE id=? AND school_id=?').bind(input.name,input.leaderId,now,groupId,schoolId) : env.DB.prepare('INSERT INTO school_subject_groups(id,school_id,name,leader_id,created_at,updated_at) VALUES(?,?,?,?,?,?)').bind(groupId,schoolId,input.name,input.leaderId,now,now);
   await env.DB.batch([write,env.DB.prepare('DELETE FROM school_subject_group_members WHERE group_id=?').bind(groupId),...ids.map(uid=>env.DB.prepare('INSERT INTO school_subject_group_members(group_id,user_id) VALUES(?,?)').bind(groupId,uid))]);
+  await recordAudit(env,{actorUserId:user.id,action:id?'SCHOOL_GROUP_UPDATE':'SCHOOL_GROUP_CREATE',entityType:'school',entityId:schoolId,metadata:{groupId}});
   return {id:groupId};
 }
 export async function deleteSubjectGroup(env: Env, user: AuthUser, schoolId: string, id: string) {
@@ -55,6 +57,7 @@ export async function deleteSubjectGroup(env: Env, user: AuthUser, schoolId: str
   if (!exists) throw ApiError.notFound('Không tìm thấy tổ bộ môn.');
   if (await env.DB.prepare('SELECT 1 AS ok FROM school_lesson_submissions WHERE group_id=? LIMIT 1').bind(id).first()) throw ApiError.conflict('Tổ đã có giáo án gửi duyệt; không thể xóa để bảo toàn lịch sử.');
   await env.DB.batch([env.DB.prepare('DELETE FROM school_subject_group_members WHERE group_id=?').bind(id), env.DB.prepare('DELETE FROM school_subject_groups WHERE id=? AND school_id=?').bind(id,schoolId)]);
+  await recordAudit(env,{actorUserId:user.id,action:'SCHOOL_GROUP_DELETE',entityType:'school',entityId:schoolId,metadata:{groupId:id}});
 }
 export async function listSchoolEvents(env: Env,user:AuthUser,schoolId:string) {
   await requireActiveSchoolStaff(env,user,schoolId);
@@ -68,12 +71,14 @@ export async function saveSchoolEvent(env:Env,user:AuthUser,schoolId:string,id:s
     const result=await env.DB.prepare('UPDATE school_events SET title=?,description=?,starts_at=?,ends_at=?,kind=?,updated_at=? WHERE id=? AND school_id=?').bind(input.title,input.description,input.startsAt,input.endsAt,input.kind ?? 'EVENT',now,id,schoolId).run();
     if (!result.meta.changes) throw ApiError.notFound('Không tìm thấy sự kiện.');
   } else await env.DB.prepare('INSERT INTO school_events(id,school_id,title,description,starts_at,ends_at,kind,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(eventId,schoolId,input.title,input.description,input.startsAt,input.endsAt,input.kind ?? 'EVENT',user.id,now,now).run();
+  await recordAudit(env,{actorUserId:user.id,action:id?'SCHOOL_EVENT_UPDATE':'SCHOOL_EVENT_CREATE',entityType:'school',entityId:schoolId,metadata:{eventId}});
   return {id:eventId};
 }
 export async function deleteSchoolEvent(env:Env,user:AuthUser,schoolId:string,id:string) {
   await requireSchoolPermission(env,user,schoolId,'MANAGE_CALENDAR');
   const result=await env.DB.prepare('DELETE FROM school_events WHERE id=? AND school_id=?').bind(id,schoolId).run();
   if (!result.meta.changes) throw ApiError.notFound('Không tìm thấy sự kiện.');
+  await recordAudit(env,{actorUserId:user.id,action:'SCHOOL_EVENT_DELETE',entityType:'school',entityId:schoolId,metadata:{eventId:id}});
 }
 
 export async function groupStaffDirectory(env:Env,user:AuthUser,schoolId:string) {

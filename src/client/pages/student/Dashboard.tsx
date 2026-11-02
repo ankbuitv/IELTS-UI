@@ -1,3 +1,7 @@
+import {AssignmentPrerequisite} from '../../components/AssignmentPrerequisite';
+import {AssignmentMilestones} from '../../components/AssignmentMilestones';
+import {AssignmentGuides} from '../../components/AssignmentGuides';
+import {RevisionList} from './RevisionList';
 import {LearningMistakes} from './LearningMistakes';
 import {StudyTime} from './StudyTime';
 import {LearningGoals} from './LearningGoals';
@@ -83,7 +87,7 @@ export function StudentDashboardPage() {
 
   return (
     <div className="stack dash">
-      {user?.role === 'STUDENT' && <><SchoolBanners /><LearningGoals /><StudyTime /><LearningMistakes /><LearningJournal /></>}
+      {user?.role === 'STUDENT' && <><SchoolBanners /><RevisionList /><LearningGoals /><StudyTime /><LearningMistakes /><LearningJournal /></>}
       <section className="dash-hero">
         <span className="dash-hero__bars" aria-hidden="true">
           <i />
@@ -447,6 +451,8 @@ export function AssignmentRow({ assignment, compact }: { assignment: AssignmentS
             ? ` · best ${assignment.bestRawScore}/${assignment.bestTotalQuestions}${assignment.bestBand !== null ? ` (band ${formatBand(assignment.bestBand)})` : ''}`
             : ''}
         </div>
+        <AssignmentPrerequisite assignmentId={assignment.assignmentId}/>
+        {!compact&&<><AssignmentMilestones assignmentId={assignment.assignmentId}/><AssignmentGuides assignmentId={assignment.assignmentId}/></>}
       </div>
       <div className="assign-row__action">
         {assignment.inProgressAttemptId ? (

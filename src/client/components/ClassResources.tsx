@@ -1,7 +1,7 @@
 import {useState} from 'react';
 import {api,describeError} from '../lib/api';
 import {useAsync} from '../hooks/useAsync';
-export type ResourceFile={id:string;filename:string;subject:string;topic:string;bytes:number;author_name?:string;pinned?:number;shared_classroom_id?:string|null;classroom_name?:string|null};
+export type ResourceFile={sensitivity?:'NORMAL'|'SENSITIVE';id:string;filename:string;subject:string;topic:string;bytes:number;author_name?:string;pinned?:number;shared_classroom_id?:string|null;classroom_name?:string|null};
 export async function downloadResource(path:string) {const {file}=await api.get<{file:{filename:string;data_b64:string}}>(path);const bytes=Uint8Array.from(atob(file.data_b64),c=>c.charCodeAt(0));const url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));const a=document.createElement('a');a.href=url;a.download=file.filename;a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);}
 export function ClassResources({classroomId}:{classroomId:string}) {
  const base=`/api/classrooms/${encodeURIComponent(classroomId)}/resources`;const data=useAsync(()=>api.get<{files:ResourceFile[]}>(base),[base]);const [message,setMessage]=useState('');const [busy,setBusy]=useState(false);

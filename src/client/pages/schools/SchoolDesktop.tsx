@@ -1,3 +1,7 @@
+import {TeacherCompetency} from './TeacherCompetency';
+import {SchoolWorkload} from './SchoolWorkload';
+import {ReviewInbox} from './ReviewInbox';
+import {SchoolAudit} from './SchoolAudit';
 import {RestoreWindows} from './RestoreWindows';
 import {DesktopShortcuts,ShortcutHelp} from './DesktopShortcuts';
 import {PinnedClasses} from './PinnedClasses';
@@ -25,7 +29,7 @@ import { SchoolCalendarWindow, SubjectGroupsWindow, LessonReviewsWindow, SchoolP
 type School = { id: string; name: string; status: string; member_status: string; member_role?: string; address?: string };
 type ClassItem = { id: string; name: string; studentCount?: number; status?: string };
 type Member = { user_id: string; role: string; status: string; email: string; display_name: string | null };
-type AppId = 'today' | 'resource-library' | 'question-bank' | 'school-overview' | 'school-banner' | 'teacher-progress' | 'page' | 'notifications' | 'profile' | 'mentor-console' | 'mentor-earnings' | 'admin-tests' | 'admin-imports' | 'admin-users' | 'admin-schools' | 'school-app-reviews' | 'admin-settings' | 'admin-attempts' | 'admin-learn' | 'admin-scoring' | 'practice' | 'history' | 'vocabulary' | 'dictionary' | 'speaking' | 'drills' | 'mentors' | 'study-room' | 'shortcut-folder' | 'school-permissions' | 'lesson-reviews' | 'subject-groups' | 'school-calendar' | 'lesson-plans' | 'classes' | 'class-detail' | 'class-manage' | 'school-manage' | 'school-invitations' | 'wallpaper' | 'schools' | 'members' | 'assignments' | 'messages' | 'files' | 'marking' | 'calendar' | 'sessions' | 'learn' | 'admin';
+type AppId = 'today' | 'resource-library' | 'question-bank' | 'school-overview' | 'school-banner' | 'review-inbox' | 'school-audit' | 'school-workload' | 'teacher-competency' | 'teacher-progress' | 'page' | 'notifications' | 'profile' | 'mentor-console' | 'mentor-earnings' | 'admin-tests' | 'admin-imports' | 'admin-users' | 'admin-schools' | 'school-app-reviews' | 'admin-settings' | 'admin-attempts' | 'admin-learn' | 'admin-scoring' | 'practice' | 'history' | 'vocabulary' | 'dictionary' | 'speaking' | 'drills' | 'mentors' | 'study-room' | 'shortcut-folder' | 'school-permissions' | 'lesson-reviews' | 'subject-groups' | 'school-calendar' | 'lesson-plans' | 'classes' | 'class-detail' | 'class-manage' | 'school-manage' | 'school-invitations' | 'wallpaper' | 'schools' | 'members' | 'assignments' | 'messages' | 'files' | 'marking' | 'calendar' | 'sessions' | 'learn' | 'admin';
 type DesktopApp = { id: AppId; title: string; icon: IconName; tone: string; group: string; path?: string };
 type Wallpaper = 'sky' | 'forest' | 'sunset' | 'midnight' | 'ocean' | 'lavender' | 'custom';
 type BackgroundSettings = { choice: Wallpaper; image: string | null; fit: 'cover' | 'contain' | 'center'; dim: number };
@@ -120,7 +124,7 @@ export function SchoolDesktop({initialPath}:{initialPath?:string} = {}) {
   const needsSchoolChoice = !!schools.data && needsChoice;
   const changeSchool = (id: string) => {
     if (!approved.some(s => s.id === id)) return false;
-    const schoolWindows = ['school-banner','school-permissions','subject-groups','lesson-reviews','school-calendar','lesson-plans','members'];
+    const schoolWindows = ['school-banner','review-inbox','school-audit','school-permissions','subject-groups','lesson-reviews','school-calendar','lesson-plans','members'];
     if (school && school.id !== id && windows.some(w => schoolWindows.includes(w.id)) && !window.confirm('Chuyển trường sẽ tải lại các cửa sổ của trường và có thể mất nội dung chưa lưu. Tiếp tục?')) return false;
     setSchoolIdState(id);
     try { localStorage.setItem(`school-desktop-selected-school:${user?.id ?? 'guest'}`, id); } catch { /* The choice lasts for this visit. */ }
@@ -141,10 +145,14 @@ export function SchoolDesktop({initialPath}:{initialPath?:string} = {}) {
     ...(!isMentor ? [{id:'today' as const,title:'Hôm nay',icon:'clock' as const,tone:'cyan',group:'Giảng dạy'}] : []),
     ...(access.data?.canReviewSchools ? [{id:'school-overview' as const,title:'Tổng hợp trường',icon:'chart' as const,tone:'cyan',group:'Nhà trường'}] : []),
     ...(owner ? [{id:'school-banner' as const,title:'Banner học viên',icon:'presentation' as const,tone:'violet',group:'Nhà trường'}] : []),
+    ...(school ? [{id:'teacher-competency' as const,title:'Hồ sơ năng lực',icon:'user' as const,tone:'green',group:'Nhà trường'}] : []),
+    ...(owner ? [{id:'school-workload' as const,title:'Khối lượng giáo viên',icon:'clock' as const,tone:'orange',group:'Nhà trường'}] : []),
+    ...(owner ? [{id:'school-audit' as const,title:'Nhật ký quản lý',icon:'list' as const,tone:'cyan',group:'Nhà trường'}] : []),
     ...(!isMentor ? [{id:'resource-library' as const,title:'Thư viện tài liệu',icon:'file' as const,tone:'orange',group:'Giảng dạy',path:'/teacher/resources'}] : []),
     ...(!isMentor ? [{id:'question-bank' as const,title:'Ngân hàng câu hỏi',icon:'layers' as const,tone:'violet',group:'Giảng dạy',path:'/teacher/questions'}] : []),
     ...(!isMentor ? [{id:'teacher-progress' as const,title:'Tiến độ bài tập',icon:'chart' as const,tone:'blue',group:'Giảng dạy',path:'/teacher/progress'}] : []),
     ...((owner || (reviewPermission?.schoolId === school?.id && reviewPermission?.canReview)) ? [{ id: 'lesson-reviews' as const, title: 'Duyệt giáo án', icon: 'checkCircle' as const, tone: 'green', group: 'Nhà trường' }] : []),
+    ...((owner || (reviewPermission?.schoolId === school?.id && reviewPermission?.canReview)) ? [{id:'review-inbox' as const,title:'Hộp việc cần duyệt',icon:'list' as const,tone:'orange',group:'Nhà trường'}] : []),
     ...(owner ? [{ id: 'school-permissions' as const, title: 'Phân quyền trường', icon: 'shield' as const, tone: 'red', group: 'Nhà trường' }] : []),
     ...(canManageGroups ? [{ id: 'subject-groups' as const, title: 'Tổ bộ môn', icon: 'layers' as const, tone: 'orange', group: 'Nhà trường' }] : []),
     { id: 'notifications', title: 'Thông báo', icon: 'bell', tone: 'red', group: 'Tiện ích' },
@@ -413,9 +421,13 @@ export function SchoolDesktop({initialPath}:{initialPath?:string} = {}) {
       return <section key={w.id} className={`sd-window${w.maximized ? ' sd-window--max' : ''}${w.minimized ? ' sd-window--min' : ''}${w.snap ? ` sd-window--snap-${w.snap}` : ''}`} style={{ left: w.x, top: w.y, zIndex: w.z }} onPointerDown={() => focus(w.id)} aria-label={`Cửa sổ ${app.title}`}>
         <header className="sd-window__title" onPointerDown={e => beginDrag(e, w)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={() => { drag.current = null; }} onDoubleClick={() => update(w.id, { maximized: !w.maximized, snap: null })}><span><DesktopAppIcon id={app.id} fallback={app.icon} size={15} /> {app.title}</span><div><button type="button" className="sd-snap-control" title="Chia cửa sổ bên trái" aria-label={`Chia trái ${app.title}`} onClick={() => update(w.id, { maximized: false, snap: 'left' })}>◧</button><button type="button" className="sd-snap-control" title="Chia cửa sổ bên phải" aria-label={`Chia phải ${app.title}`} onClick={() => update(w.id, { maximized: false, snap: 'right' })}>◨</button><button type="button" title="Thu nhỏ" aria-label={`Thu nhỏ ${app.title}`} onClick={() => update(w.id, { minimized: true })}>−</button><button type="button" title={w.maximized ? 'Khôi phục' : 'Phóng to'} aria-label={`${w.maximized ? 'Khôi phục' : 'Phóng to'} ${app.title}`} onClick={() => update(w.id, { maximized: !w.maximized, snap: null })}>□</button><button type="button" title="Đóng" aria-label={`Đóng ${app.title}`} onClick={() => closeWindow(w.id)}>×</button></div></header>
         {!app.path && <div className="sd-native-toolbar"><button type="button" onClick={()=>setWindows(current=>current.filter(win=>win.id!==w.id))}>← Quay lại desktop</button></div>}
-        {app.id === 'today' && !isMentor ? <TeacherToday apiBase={user.role==='ADMIN'?'/api/admin':'/api/teacher'} onOpen={openPage}/> : null}
+        {app.id === 'today' && !isMentor ? <TeacherToday apiBase={user.role==='ADMIN'?'/api/admin':'/api/teacher'} onOpen={openPage} schoolId={school?.id??null} userId={user.id}/> : null}
         {app.id === 'school-overview' ? <SchoolOverviewWindow/> : null}
         {app.id === 'school-banner' && owner ? <SchoolBannerWindow key={school?.id} school={school}/> : null}
+        {app.id === 'teacher-competency' && school ? <TeacherCompetency key={school.id} schoolId={school.id} owner={!!owner}/> : null}
+        {app.id === 'school-workload' && school && owner ? <div className="sd-window__body"><SchoolWorkload key={school.id} schoolId={school.id} userId={user.id}/></div> : null}
+        {app.id === 'school-audit' && school && owner ? <SchoolAudit key={school.id} school={school}/> : null}
+        {app.id === 'review-inbox' && school && (owner || (reviewPermission?.schoolId===school.id && reviewPermission.canReview)) ? <ReviewInbox key={school.id} school={school} onReview={()=>open('lesson-reviews')}/> : null}
         {app.id === 'notifications' ? <DesktopNotifications feedState={notification} onOpen={openPage} classes={classes.data??[]}/> : null}
         {app.id === 'shortcut-folder' ? <div className="sd-window__body">
           {!isBuiltInFolder && <div className="sd-appbar"><button onClick={()=>startFolderEdit(folders.find(f=>f.id===currentFolder))}><Icon name="edit" size={15}/> Sửa thư mục</button><button onClick={()=>{const folder=folders.find(f=>f.id===currentFolder);if(folder&&window.confirm(`Xóa thư mục “${folder.name}”? Các ứng dụng không bị xóa.`)){storeFolders(folders.filter(f=>f.id!==folder.id));setWindows(current=>current.filter(win=>win.id!=='shortcut-folder'));setCurrentFolder(null);}}}><Icon name="trash" size={15}/> Xóa thư mục</button></div>}

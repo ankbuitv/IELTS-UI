@@ -1,6 +1,6 @@
 import type { Env } from '../env';
 import { ApiError } from '../lib/errors';
-import { nowIso } from '../lib/ids';
+import { newId, nowIso } from '../lib/ids';
 
 /**
  * Hard-delete a test or a version.
@@ -11,10 +11,16 @@ import { nowIso } from '../lib/ids';
  * in a safe order, then delete the row the administrator asked for.
  */
 
-async function runBatches(env: Env, statements: D1PreparedStatement[]): Promise<void> {
-  for (let index = 0; index < statements.length; index += 40) {
-    await env.DB.batch(statements.slice(index, index + 40));
-  }
+async function runProtectedDelete(env:Env,statements:D1PreparedStatement[],target:'test'|'version',id:string):Promise<D1Result[]>{
+  const guardId=newId('purge_guard');
+  const scope=target==='test'?'SELECT id FROM test_versions WHERE test_id=?':'SELECT id FROM test_versions WHERE id=?';
+  // D1 batch is one transaction: no assignment can be created between this
+  // recursive dependency check and any of the destructive statements.
+  const guard=env.DB.prepare(`INSERT INTO content_delete_guards(id,safe)
+    WITH RECURSIVE protected(id) AS (SELECT test_version_id FROM assignments UNION SELECT m.test_version_id FROM mock_components m JOIN protected p ON p.id=m.mock_version_id)
+    SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM protected WHERE id IN (${scope})) THEN 0 ELSE 1 END`).bind(guardId,id);
+  try{return await env.DB.batch([guard,...statements,env.DB.prepare('DELETE FROM content_delete_guards WHERE id=?').bind(guardId)]);}
+  catch(error){if((error as Error).message.includes('no_assigned_version'))throw ApiError.conflict('This version is used by an assignment or an assigned mock and cannot be permanently deleted. Archive it instead.');throw error;}
 }
 
 async function attemptIdsFor(env: Env, whereSql: string, bindings: string[]): Promise<string[]> {
@@ -96,7 +102,7 @@ export async function purgeTest(
   }
   statements.push(env.DB.prepare('DELETE FROM tests WHERE id = ?').bind(testId));
 
-  await runBatches(env, statements);
+  await runProtectedDelete(env, statements,'test',testId);
   return { deletedAttempts: attemptIds.length, deletedVersions: versionIds.length, title: test.title };
 }
 
@@ -110,9 +116,6 @@ export async function purgeVersion(
   if (!version) throw ApiError.notFound('Version not found.');
 
   const attemptIds = await attemptIdsFor(env, 'test_version_id = ?', [versionId]);
-  const remaining = await env.DB.prepare('SELECT COUNT(*) AS count FROM test_versions WHERE test_id = ? AND id != ?')
-    .bind(version.test_id, versionId)
-    .first<{ count: number }>();
 
   const statements: D1PreparedStatement[] = [
     ...attemptCleanupStatements(env, attemptIds),
@@ -122,12 +125,12 @@ export async function purgeVersion(
     ),
     ...versionContentCleanup(env, versionId),
     env.DB.prepare('DELETE FROM test_versions WHERE id = ?').bind(versionId),
+    env.DB.prepare('UPDATE imports SET target_test_id=NULL WHERE target_test_id=? AND NOT EXISTS(SELECT 1 FROM test_versions WHERE test_id=?)').bind(version.test_id,version.test_id),
+    env.DB.prepare('DELETE FROM tests WHERE id=? AND NOT EXISTS(SELECT 1 FROM test_versions WHERE test_id=?)').bind(version.test_id,version.test_id),
   ];
-  await runBatches(env, statements);
+  const deletion=await runProtectedDelete(env, statements,'version',versionId);
 
-  const leftover = remaining?.count ?? 0;
-  if (leftover === 0) {
-    await purgeTest(env, version.test_id);
+  if (deletion[statements.length]?.meta.changes) {
     return {
       deletedAttempts: attemptIds.length,
       testId: version.test_id,

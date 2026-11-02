@@ -1,3 +1,5 @@
+import {CallSummaries} from './CallSummaries';
+import {LiveQuestions} from './LiveQuestions';
 import {PrejoinAudioCheck} from './PrejoinAudioCheck';
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -1296,6 +1298,8 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
             </div>
           ) : null}
 
+          <details><summary>Tóm tắt buổi học</summary><CallSummaries sessionId={sessionId} host={isMentor}/></details>
+
           <button type="button" className="jr-join" disabled={joinBusy} onClick={() => void join()}>
             {joinBusy ? 'Joining…' : 'Join meeting'}
           </button>
@@ -1688,6 +1692,7 @@ export function CallRoomPage({ embedded = false, onActiveChange }: { embedded?: 
         </div>
       ) : null}
 
+      {(screenOn||state?.screenShare)&&<div className="jr-presentbar" role="status">{screenOn?<><span><strong>Bạn đang trình bày</strong> · Màn hình được ưu tiên trên bố cục tự động. Kiểm tra nội dung trước khi chia sẻ.</span><button type="button" disabled={sharingBusy} onClick={()=>void toggleScreen()}>Dừng trình bày</button></>:<><span><strong>{state?.screenShare?.name} đang trình bày</strong> · Chế độ xem chỉ thay đổi trên thiết bị của bạn.</span><button type="button" onClick={()=>{const next=layout==='auto'?'grid':'auto';setLayout(next);try{localStorage.setItem('aieo-call-layout',next);}catch{/* Local preference is optional. */}}}>{layout==='auto'?'Xem dạng lưới':'Ưu tiên trình chiếu'}</button></>}</div>}
       {latestBroadcast && latestBroadcast.id !== dismissedBroadcast ? <div className="jr-banner jr-banner--breakout" role="status"><span>{latestBroadcast.body}</span><button type="button" onClick={()=>setDismissedBroadcast(latestBroadcast.id)} aria-label="Đóng thông báo nhóm">×</button></div> : null}
       {breakouts?.open ? (
         <div className="jr-banner jr-banner--breakout">
@@ -2094,6 +2099,7 @@ function QuizPanel({
   host: boolean;
   onClose: () => void;
 }) {
+  const [tab,setTab]=useState<'poll'|'questions'|'summaries'>('poll');
   const [polls, setPolls] = useState<ClassPoll[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -2204,6 +2210,8 @@ function QuizPanel({
           </button>
         </header>
 
+        <div className="jr-quiz__foot"><button type="button" aria-pressed={tab==='poll'} onClick={()=>setTab('poll')}>Quiz &amp; bình chọn</button><button type="button" aria-pressed={tab==='questions'} onClick={()=>setTab('questions')}>Bảng câu hỏi</button><button type="button" aria-pressed={tab==='summaries'} onClick={()=>setTab('summaries')}>Tóm tắt</button></div>
+        {tab==='questions'?<LiveQuestions sessionId={sessionId} room={room} host={host}/>:tab==='summaries'?<CallSummaries sessionId={sessionId} host={host}/>:<>
         {error ? <p className="jr-tool__error">{error}</p> : null}
 
         {open ? (
@@ -2355,7 +2363,7 @@ function QuizPanel({
           </section>
         ) : null}
 
-        {host && open ? <p className="jr-quiz__muted">Close this question before starting another.</p> : null}
+        {host && open ? <p className="jr-quiz__muted">Close this question before starting another.</p> : null}</>}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import {studentWritingReview,submitWritingRevision} from '../services/writing-revision-service';
+import {studentWritingReview,submitWritingRevision,writingFeedbackDiscussion,setWritingFeedbackStatus,addWritingFeedbackMessage} from '../services/writing-revision-service';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { AppBindings } from '../env';
@@ -289,6 +289,9 @@ router.post('/:id/submit', async (c) => {
   return c.json(result);
 });
 
+router.get('/:id/writing/:submissionId/review/:versionId/discussion',async c=>c.json(await writingFeedbackDiscussion(c.env,currentUser(c),c.req.param('submissionId'),c.req.param('versionId'),'student',c.req.param('id'))));
+router.put('/:id/writing/:submissionId/review/:versionId/status',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({index:z.number().int().min(0).max(99),status:z.enum(['UNDERSTOOD','QUESTION']).nullable()}));await setWritingFeedbackStatus(c.env,currentUser(c),c.req.param('id'),c.req.param('submissionId'),c.req.param('versionId'),b.index,b.status);return c.json({ok:true});});
+router.post('/:id/writing/:submissionId/review/:versionId/messages',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const b=await parseBody(c,z.object({index:z.number().int().min(0).max(99),body:z.string().trim().min(1).max(2000)}));await addWritingFeedbackMessage(c.env,currentUser(c),c.req.param('submissionId'),c.req.param('versionId'),b.index,'student',b.body,c.req.param('id'));return c.json({ok:true});});
 router.get('/:id/writing/:submissionId/review',async c=>c.json(await studentWritingReview(c.env,currentUser(c),c.req.param('id'),c.req.param('submissionId'))));
 router.post('/:id/writing/:submissionId/revision',async c=>{assertCsrf(c,c.get('session')?.csrfToken??null);const body=await parseBody(c,z.object({response:z.string().trim().min(1).max(20000)}));await submitWritingRevision(c.env,currentUser(c),c.req.param('id'),c.req.param('submissionId'),body.response);return c.json({ok:true});});
 

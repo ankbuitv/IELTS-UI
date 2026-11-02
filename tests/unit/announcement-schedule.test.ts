@@ -1,0 +1,16 @@
+import {describe,it,expect} from 'vitest';
+import schema from '@worker/lib/runtime-schema.sql';
+import {listClassroomBoard,createAnnouncement,readAnnouncement} from '@worker/services/classroom-board-service';
+import type {Env} from '@worker/env';
+import type {AuthUser} from '@worker/lib/auth-types';
+interface Stmt {get(...args:unknown[]):unknown; all(...args:unknown[]):unknown[]; run(...args:unknown[]):{changes:number|bigint}}
+interface DB {exec(sql:string):void; prepare(sql:string):Stmt; close():void}
+function adapter(db:DB){return {prepare(sql:string){const stmt=db.prepare(sql);let args:unknown[]=[];return {bind(...values:unknown[]){args=values;return this;},async first(){return stmt.get(...args)??null;},async all(){return {results:stmt.all(...args)};},async run(){return {meta:{changes:Number(stmt.run(...args).changes)}};}};}};}
+const user=(id:string):AuthUser=>({id,role:'TEACHER',email:`${id}@test`,status:'ACTIVE',username:null,displayName:id,avatarUrl:null,createdAt:'',lastLoginAt:null});
+describe('scheduled class announcements',()=>{it('hides future content from students, allows reads after publication and counts timely acknowledgments',async()=>{
+ const module='node:sqlite';const {DatabaseSync}=await import(/* @vite-ignore */ module) as {DatabaseSync:new(path:string)=>DB};const db=new DatabaseSync(':memory:');
+ try{db.exec(schema);db.exec('PRAGMA foreign_keys=OFF');db.exec(`INSERT INTO users(id,email,role,status,created_at,updated_at) VALUES('owner','owner@test','TEACHER','ACTIVE','n','n'),('s','s@test','STUDENT','ACTIVE','n','n'),('s2','s2@test','STUDENT','ACTIVE','n','n');INSERT INTO classrooms(id,name,teacher_id,join_code,status,created_at,updated_at) VALUES('c','Class','owner','123','ACTIVE','n','n');
+ INSERT INTO classroom_members(id,classroom_id,user_id,role,status,joined_at,updated_at) VALUES('m1','c','s','STUDENT','ACTIVE','n','n'),('m2','c','s2','STUDENT','ACTIVE','n','n');`);
+ const env={DB:adapter(db)} as unknown as Env;const owner=user('owner'),student={...user('s'),role:'STUDENT' as const};const future=new Date(Date.now()+3600000).toISOString(),deadline=new Date(Date.now()+7200000).toISOString();const id=await createAnnouncement(env,owner,'c','Scheduled','Secret',future,deadline);expect((await listClassroomBoard(env,owner,'c')).announcements).toMatchObject([{id,isScheduled:true,studentCount:2}]);expect((await listClassroomBoard(env,student,'c')).announcements).toEqual([]);await expect(readAnnouncement(env,student,'c',id)).rejects.toMatchObject({status:409});await expect(createAnnouncement(env,owner,'c','Bad','Bad',deadline,future)).rejects.toMatchObject({status:400});await expect(createAnnouncement(env,student,'c','Bad','Bad')).rejects.toMatchObject({status:403});db.exec("UPDATE classroom_announcements SET publish_at='2000-01-01T00:00:00.000Z'");await readAnnouncement(env,student,'c',id);expect((await listClassroomBoard(env,owner,'c')).announcements).toMatchObject([{readCount:1,timelyCount:1,studentCount:2}]);db.exec("UPDATE classroom_announcements SET acknowledge_by='2000-01-01T00:00:00.000Z'");expect((await listClassroomBoard(env,owner,'c')).announcements).toMatchObject([{readCount:1,timelyCount:0,deadlinePassed:true}]);
+ }finally{db.close();}
+});});

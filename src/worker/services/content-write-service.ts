@@ -324,11 +324,15 @@ export async function replaceVersionContent(
   );
 
   try {
-    for (let i = 0; i < statements.length; i += 40) {
-      await env.DB.batch(statements.slice(i, i + 40));
-    }
+    const guardId = newId('content_guard');
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO content_delete_guards(id,safe) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM test_versions WHERE id=? AND status IN ('DRAFT','REVIEW')) THEN 1 ELSE 0 END`).bind(guardId,versionId),
+      ...statements,
+      env.DB.prepare('DELETE FROM content_delete_guards WHERE id=?').bind(guardId),
+    ]);
   } catch (error) {
     const message = (error as Error)?.message ?? '';
+    if (/no_assigned_version|ASSIGNED_VERSION_IMMUTABLE/i.test(message)) throw ApiError.conflict('The version has been published or assigned; create a new version to edit it.');
     if (/FOREIGN KEY/i.test(message)) {
       throw ApiError.validation(
         'Could not save this content because a related record is missing (audio URL, scoring profile, or leftover attempt data). Paste a real HTTPS audio link, clear an invalid scoring profile id, or delete the test and recreate it.',

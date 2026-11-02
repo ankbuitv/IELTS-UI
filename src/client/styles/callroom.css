@@ -865,3 +865,7 @@
 .jr-quiz__past{display:block}.jr-quiz__past summary{cursor:pointer}.jr-quiz__past ul{margin:8px 0;padding-left:20px}
 
 .jr-breakout__broadcast{display:grid;gap:8px;margin:16px 0}.jr-breakout__broadcast label{display:grid;gap:5px;color:#cdd6f4;font-size:12px}.jr-breakout__broadcast input{background:#181825;color:white;border:1px solid #585b70;border-radius:5px;padding:8px}.jr-breakout__broadcast button{width:max-content;background:#46517e;color:white;border:1px solid #7d8fc2;border-radius:5px;padding:7px 10px}.jr-breakout__broadcast small{color:#a6e3a1}
+
+.jr-presentbar { display:flex; align-items:center; justify-content:center; gap:12px; padding:8px 14px; background:#17364c; color:#eef8ff; font-size:.83rem; }
+.jr-presentbar button { flex:none; padding:6px 10px; border:1px solid #8fc5e4; border-radius:7px; background:#244e68; color:#fff; cursor:pointer; }
+@media(max-width:600px) { .jr-presentbar { justify-content:space-between; font-size:.75rem; gap:8px; } }

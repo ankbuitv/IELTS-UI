@@ -1,3 +1,4 @@
+import {historyBefore,historyAfter,historyCreate} from './assignment-history';
 import {assignmentEligible} from './assignment-audience';
 import type { Env } from '../env';
 import { ApiError } from '../lib/errors';
@@ -510,7 +511,7 @@ export async function createAssignment(
     `INSERT INTO assignments (id, classroom_id, teacher_id, test_id, test_version_id, title, instructions,
                               start_at, deadline_at, max_attempts, timing_policy, custom_duration_seconds, mode,
                               integrity_policy_json, result_visibility, allow_reattempt, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ? WHERE EXISTS(SELECT 1 FROM classrooms c WHERE c.id=? AND c.status='ACTIVE' AND (?='ADMIN' OR c.teacher_id=? OR EXISTS(SELECT 1 FROM classroom_members cm WHERE cm.classroom_id=c.id AND cm.user_id=? AND cm.role='CO_TEACHER' AND cm.status='ACTIVE')))`,
   )
     .bind(
       id,
@@ -531,21 +532,23 @@ export async function createAssignment(
       input.publish === false ? 'DRAFT' : 'ACTIVE',
       timestamp,
       timestamp,
+      input.classroomId,user.role,user.id,user.id,
     );
 
   if(selected) {
     const ids=JSON.stringify(selected);
     // The CHECK constraint makes membership validation part of the same atomic D1 batch.
-    try { await env.DB.batch([create,
+    try { const created=await env.DB.batch([create,
       env.DB.prepare(`INSERT INTO assignment_audiences(assignment_id,expected_count,verified_count)
        SELECT ?,?,COUNT(DISTINCT m.user_id) FROM classroom_members m JOIN users u ON u.id=m.user_id AND u.status='ACTIVE'
-       WHERE m.classroom_id=? AND m.role='STUDENT' AND m.status='ACTIVE' AND m.user_id IN (SELECT value FROM json_each(?))`).bind(id,selected.length,input.classroomId,ids),
-      env.DB.prepare(`INSERT INTO assignment_audience_students(assignment_id,student_id) SELECT ?,value FROM json_each(?)`).bind(id,ids),
-    ]); } catch(error) {
+       WHERE m.classroom_id=? AND m.role='STUDENT' AND m.status='ACTIVE' AND m.user_id IN (SELECT value FROM json_each(?)) HAVING EXISTS(SELECT 1 FROM assignments WHERE id=?)`).bind(id,selected.length,input.classroomId,ids,id),
+      env.DB.prepare(`INSERT INTO assignment_audience_students(assignment_id,student_id) SELECT ?,value FROM json_each(?) WHERE EXISTS(SELECT 1 FROM assignments WHERE id=?)`).bind(id,ids,id),
+      historyCreate(env,user.id,id,timestamp),
+    ]); if(!created[0]?.meta.changes)throw ApiError.conflict('Class access has changed.'); } catch(error) {
       if((error as Error).message.includes('CHECK constraint failed')) throw ApiError.validation('One or more selected students are no longer active members of the class.');
       throw error;
     }
-  } else await create.run();
+  } else {const created=await env.DB.batch([create,historyCreate(env,user.id,id,timestamp)]);if(!created[0]?.meta.changes)throw ApiError.conflict('Class access has changed.');}
 
   return { assignmentId: id };
 }
@@ -583,7 +586,8 @@ export async function updateAssignment(
   }
 
   const timestamp = nowIso();
-  const result = await env.DB.prepare(
+  const history=historyBefore(env,user.id,assignmentId,'UPDATE',timestamp,`a.status != 'ARCHIVED' AND (a.deadline_at IS ? OR NOT EXISTS(SELECT 1 FROM assignment_extensions e WHERE e.assignment_id=a.id)) AND (?=0 OR NOT EXISTS(SELECT 1 FROM assignment_prerequisites p JOIN assignments target ON target.id=p.assignment_id WHERE p.prerequisite_id=a.id AND target.status IN ('DRAFT','ACTIVE','CLOSED'))) AND (?=0 OR (a.status='DRAFT' AND EXISTS(SELECT 1 FROM test_versions v JOIN tests t ON t.id=v.test_id JOIN classrooms c ON c.id=a.classroom_id WHERE v.id=a.test_version_id AND v.status='PUBLISHED' AND t.status!='ARCHIVED' AND c.status='ACTIVE')))` ,[deadlineAt??null,input.publish===false?1:0,input.publish===true?1:0]);
+  const update = env.DB.prepare(
     `UPDATE assignments
         SET title = COALESCE(?, title),
             instructions = COALESCE(?, instructions),
@@ -598,6 +602,8 @@ export async function updateAssignment(
             status = COALESCE(?, status),
             updated_at = ?
       WHERE id = ? AND status != 'ARCHIVED'
+        AND (deadline_at IS ? OR NOT EXISTS(SELECT 1 FROM assignment_extensions e WHERE e.assignment_id=assignments.id))
+        AND (?=0 OR NOT EXISTS(SELECT 1 FROM assignment_prerequisites p JOIN assignments target ON target.id=p.assignment_id WHERE p.prerequisite_id=assignments.id AND target.status IN ('DRAFT','ACTIVE','CLOSED')))
         AND (?=0 OR (status='DRAFT' AND EXISTS (
           SELECT 1 FROM test_versions v JOIN tests t ON t.id=v.test_id JOIN classrooms c ON c.id=assignments.classroom_id
           WHERE v.id=assignments.test_version_id AND v.status='PUBLISHED' AND t.status!='ARCHIVED' AND c.status='ACTIVE'
@@ -617,10 +623,12 @@ export async function updateAssignment(
       input.publish === undefined ? null : input.publish ? 'ACTIVE' : 'DRAFT',
       timestamp,
       assignmentId,
+      deadlineAt ?? null,
+      input.publish === false ? 1 : 0,
       input.publish === true ? 1 : 0,
-    )
-    .run();
-  if (Number(result.meta.changes) !== 1) throw ApiError.conflict('Bài giao hoặc quyền phát hành đã thay đổi.');
+    );
+  const results=await env.DB.batch([history.statement,update,historyAfter(env,history.id)]);
+  if (Number(results[1]?.meta.changes) !== 1) throw ApiError.conflict('Bài giao hoặc quyền phát hành đã thay đổi; không thể đổi hạn chung khi đang có hạn riêng.');
 }
 
 export async function archiveAssignment(env: Env, user: AuthUser, assignmentId: string): Promise<void> {
@@ -629,9 +637,9 @@ export async function archiveAssignment(env: Env, user: AuthUser, assignmentId: 
     .first<{ classroom_id: string }>();
   if (!assignment) throw ApiError.notFound('Assignment not found.');
   await requireClassroomAccess(env, user, assignment.classroom_id);
-  await env.DB.prepare(`UPDATE assignments SET status = 'ARCHIVED', updated_at = ? WHERE id = ?`)
-    .bind(nowIso(), assignmentId)
-    .run();
+  const timestamp=nowIso();const history=historyBefore(env,user.id,assignmentId,'ARCHIVE',timestamp,"a.status!='ARCHIVED' AND NOT EXISTS(SELECT 1 FROM assignment_prerequisites p JOIN assignments target ON target.id=p.assignment_id WHERE p.prerequisite_id=a.id AND target.status IN ('DRAFT','ACTIVE','CLOSED'))");
+  const results=await env.DB.batch([history.statement,env.DB.prepare(`UPDATE assignments SET status = 'ARCHIVED', updated_at = ? WHERE id = ? AND status!='ARCHIVED' AND NOT EXISTS(SELECT 1 FROM assignment_prerequisites p JOIN assignments target ON target.id=p.assignment_id WHERE p.prerequisite_id=assignments.id AND target.status IN ('DRAFT','ACTIVE','CLOSED'))`).bind(timestamp,assignmentId),historyAfter(env,history.id)]);
+  if(!results[1]?.meta.changes)throw ApiError.conflict('Bài đã lưu trữ hoặc đang là tiên quyết của bài khác.');
 }
 
 export interface AssignmentDetail {
@@ -716,7 +724,7 @@ export async function getAssignmentDetail(
   const classroom=await requireClassroomAccess(env, user, assignment.classroom_id);
 
   const students = await env.DB.prepare(
-    `SELECT m.user_id, u.email, p.display_name,
+    `SELECT m.user_id, u.email, p.display_name, (SELECT e.deadline_at FROM assignment_extensions e WHERE e.assignment_id=? AND e.student_id=m.user_id) AS extension_deadline,
             (SELECT COUNT(*) FROM attempts x WHERE x.assignment_id = ? AND x.user_id = m.user_id AND x.status != 'ABANDONED') AS attempts_used,
             (SELECT MAX(x.raw_score) FROM attempts x WHERE x.assignment_id = ? AND x.user_id = m.user_id AND x.status IN ('SUBMITTED','EXPIRED')) AS best_raw,
             (SELECT x.total_questions FROM attempts x WHERE x.assignment_id = ? AND x.user_id = m.user_id AND x.status IN ('SUBMITTED','EXPIRED') ORDER BY x.raw_score DESC LIMIT 1) AS best_total,
@@ -745,6 +753,7 @@ export async function getAssignmentDetail(
       assignmentId,
       assignmentId,
       assignmentId,
+      assignmentId,
       assignment.classroom_id,
       assignmentId, assignmentId,
     )
@@ -761,10 +770,10 @@ export async function getAssignmentDetail(
       integrity_count: number;
       writing_count: number;
       in_progress: number;
+      extension_deadline:string|null;
     }>();
 
   const now = Date.now();
-  const overdue = Boolean(assignment.deadline_at && new Date(assignment.deadline_at).getTime() < now);
 
   return {
     id: assignment.id,
@@ -793,6 +802,8 @@ export async function getAssignmentDetail(
     status: assignment.status,
     createdAt: assignment.created_at,
     report: students.results.map((row) => {
+      const deadline=row.extension_deadline??assignment.deadline_at;
+      const overdue=Boolean(deadline&&new Date(deadline).getTime()<now);
       let status: 'NOT_STARTED' | 'IN_PROGRESS' | 'SUBMITTED' | 'OVERDUE' = 'NOT_STARTED';
       if (row.in_progress > 0) status = 'IN_PROGRESS';
       else if (row.latest_submitted_at && row.attempts_used >= Math.max(1, assignment.max_attempts)) status = 'SUBMITTED';
@@ -804,6 +815,7 @@ export async function getAssignmentDetail(
         email: row.email,
         displayName: row.display_name ?? row.email,
         attemptsUsed: row.attempts_used,
+        individualDeadlineAt:row.extension_deadline,
         status,
         bestRawScore: row.best_raw,
         bestTotalQuestions: row.best_total,

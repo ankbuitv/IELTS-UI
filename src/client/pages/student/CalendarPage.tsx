@@ -1,3 +1,4 @@
+import {CalendarSubscription} from '../teacher/CalendarSubscription';
 import {TeacherWeek} from './TeacherWeek';
 import {useAuth} from '../../context/AuthContext';
 import { useMemo, useState } from 'react';
@@ -164,6 +165,7 @@ export function CalendarPage() {
         </div>
       </div>
 
+      {(user?.role==='TEACHER'||user?.role==='ADMIN')&&<CalendarSubscription/>}
       {events.loading && !events.data ? (
         <Loading label="Loading your calendar…" />
       ) : events.error ? (

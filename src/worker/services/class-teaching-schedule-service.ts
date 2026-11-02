@@ -37,7 +37,8 @@ export async function createTeachingEvent(env: Env, user: AuthUser, classId: str
   const ids = occurrences.map(() => newId('teach'));
   const teacherId = user.role === 'ADMIN' ? classroom.teacher_id : user.id;
   const now = nowIso();
-  await env.DB.batch(occurrences.map((event, i) => env.DB.prepare('INSERT INTO classroom_teaching_events(id,classroom_id,teacher_id,title,starts_at,ends_at,created_at,series_id,kind,note) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(ids[i], classId, teacherId, input.title, event.startsAt, event.endsAt, now, seriesId, kind, note)));
+  const results=await env.DB.batch(occurrences.map((event, i) => env.DB.prepare(`INSERT INTO classroom_teaching_events(id,classroom_id,teacher_id,title,starts_at,ends_at,created_at,series_id,kind,note) SELECT ?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM classrooms c WHERE c.id=? AND c.status='ACTIVE' AND ((?='ADMIN' AND c.teacher_id=?) OR c.teacher_id=? OR EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=? AND m.role='CO_TEACHER' AND m.status='ACTIVE')))` ).bind(ids[i], classId, teacherId, input.title, event.startsAt, event.endsAt, now, seriesId, kind, note,classId,user.role,teacherId,user.id,user.id)));
+  if(results.some(r=>!r.meta.changes))throw ApiError.conflict('Quyền lớp đã thay đổi; lịch không được tạo.');
   if (kind === 'MAKEUP') await notifyClass(env, classId, 'Lớp có lịch dạy bù', `${input.title} · ${note}`);
   return { id: ids[0]!, count: occurrences.length, seriesId };
 }
@@ -47,7 +48,7 @@ export async function updateTeachingEvent(env: Env, user: AuthUser, classId: str
   if (classroom.status !== 'ACTIVE') throw ApiError.conflict('Lớp đã lưu trữ.');
   const time = validateTime(input), kind = input.kind ?? 'REGULAR', note = input.note?.trim() ?? '';
   if (kind === 'MAKEUP' && !note) throw ApiError.validation('Vui lòng nhập lý do dạy bù.');
-  const result = await env.DB.prepare(`UPDATE classroom_teaching_events SET title=?,starts_at=?,ends_at=?,kind=?,note=? WHERE id=? AND classroom_id=? AND (teacher_id=? OR ?=1)`).bind(input.title, time.startsAt, time.endsAt, kind, note, id, classId, user.id, +(user.role === 'ADMIN' || classroom.teacher_id === user.id)).run();
+  const result = await env.DB.prepare(`UPDATE classroom_teaching_events SET title=?,starts_at=?,ends_at=?,kind=?,note=? WHERE id=? AND classroom_id=? AND EXISTS(SELECT 1 FROM classrooms c WHERE c.id=classroom_teaching_events.classroom_id AND c.status='ACTIVE' AND (?='ADMIN' OR c.teacher_id=? OR (classroom_teaching_events.teacher_id=? AND EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=? AND m.role='CO_TEACHER' AND m.status='ACTIVE'))))`).bind(input.title, time.startsAt, time.endsAt, kind, note, id, classId, user.role,user.id,user.id,user.id).run();
   if (!result.meta.changes) throw ApiError.notFound();
   await notifyClass(env, classId, kind === 'MAKEUP' ? 'Lịch dạy bù đã thay đổi' : 'Lịch dạy đã thay đổi', `${input.title}${note ? ` · ${note}` : ''}`);
 }
@@ -55,15 +56,15 @@ export async function updateTeachingEvent(env: Env, user: AuthUser, classId: str
 export async function deleteTeachingEvent(env: Env, user: AuthUser, classId: string, id: string) {
   const c = await requireClassroomAccess(env, user, classId);
   if (c.status !== 'ACTIVE') throw ApiError.conflict('Lớp đã lưu trữ.');
-  const result = await env.DB.prepare('DELETE FROM classroom_teaching_events WHERE id=? AND classroom_id=? AND (teacher_id=? OR ?=1)').bind(id, classId, user.id, +(user.role === 'ADMIN' || c.teacher_id === user.id)).run();
+  const result = await env.DB.prepare(`DELETE FROM classroom_teaching_events WHERE id=? AND classroom_id=? AND EXISTS(SELECT 1 FROM classrooms c WHERE c.id=classroom_teaching_events.classroom_id AND c.status='ACTIVE' AND (?='ADMIN' OR c.teacher_id=? OR (classroom_teaching_events.teacher_id=? AND EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=? AND m.role='CO_TEACHER' AND m.status='ACTIVE'))))`).bind(id, classId, user.role,user.id,user.id,user.id).run();
   if (!result.meta.changes) throw ApiError.notFound();
 }
 
 export async function moveTeachingEvent(env:Env,user:AuthUser,classId:string,id:string,time:Occurrence){
   const classroom=await requireClassroomAccess(env,user,classId);
   if(classroom.status!=='ACTIVE')throw ApiError.conflict('Lớp đã lưu trữ.');
-  const next=validateTime(time),canManage=+(user.role==='ADMIN'||classroom.teacher_id===user.id);
-  const result=await env.DB.prepare(`UPDATE classroom_teaching_events SET starts_at=?,ends_at=? WHERE id=? AND classroom_id=? AND (teacher_id=? OR ?=1)`).bind(next.startsAt,next.endsAt,id,classId,user.id,canManage).run();
+  const next=validateTime(time);
+  const result=await env.DB.prepare(`UPDATE classroom_teaching_events SET starts_at=?,ends_at=? WHERE id=? AND classroom_id=? AND EXISTS(SELECT 1 FROM classrooms c WHERE c.id=classroom_teaching_events.classroom_id AND c.status='ACTIVE' AND (?='ADMIN' OR c.teacher_id=? OR (classroom_teaching_events.teacher_id=? AND EXISTS(SELECT 1 FROM classroom_members m WHERE m.classroom_id=c.id AND m.user_id=? AND m.role='CO_TEACHER' AND m.status='ACTIVE'))))`).bind(next.startsAt,next.endsAt,id,classId,user.role,user.id,user.id,user.id).run();
   if(!result.meta.changes)throw ApiError.notFound();
   const row=await env.DB.prepare('SELECT title,kind,note FROM classroom_teaching_events WHERE id=? AND classroom_id=?').bind(id,classId).first<{title:string;kind:'REGULAR'|'MAKEUP';note:string}>();
   if(row)await notifyClass(env,classId,row.kind==='MAKEUP'?'Lịch dạy bù đã thay đổi':'Lịch dạy đã thay đổi',`${row.title}${row.note?` · ${row.note}`:''}`);

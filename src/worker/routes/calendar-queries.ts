@@ -1,3 +1,4 @@
+import {individualDeadline} from '../services/assignment-extensions';
 import {assignmentEligible} from '../services/assignment-audience';
 /**
  * The four SQL queries behind `GET /api/student/calendar`, kept as plain
@@ -36,11 +37,11 @@ export const CALENDAR_CLASSES_SQL = `SELECT c.id, c.title, c.starts_at, c.ends_a
     AND c.ends_at >= ? AND c.starts_at <= ?
   ORDER BY c.starts_at`;
 
-export const CALENDAR_DEADLINES_SQL = `SELECT a.id, a.title, a.deadline_at
+export const CALENDAR_DEADLINES_SQL = `SELECT a.id, a.title, ${individualDeadline('a','m.user_id')} AS deadline_at
    FROM assignments a
    JOIN classroom_members m ON m.classroom_id = a.classroom_id AND m.user_id = ? AND m.status = 'ACTIVE'
-  WHERE a.status = 'ACTIVE' AND ${assignmentEligible('a','m.user_id')} AND a.deadline_at IS NOT NULL AND a.deadline_at >= ? AND a.deadline_at <= ?
-  ORDER BY a.deadline_at`;
+  WHERE a.status = 'ACTIVE' AND ${assignmentEligible('a','m.user_id')} AND ${individualDeadline('a','m.user_id')} IS NOT NULL AND ${individualDeadline('a','m.user_id')} >= ? AND ${individualDeadline('a','m.user_id')} <= ?
+  ORDER BY deadline_at`;
 
 /** Teaching deadlines for classes owned or actively co-taught by the current user. */
 export const CALENDAR_TEACHER_DEADLINES_SQL = `SELECT a.id,a.title,a.deadline_at,c.name AS classroom_name

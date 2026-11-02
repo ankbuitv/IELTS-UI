@@ -1,3 +1,4 @@
+import {BannerTemplates} from './BannerTemplates';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, describeError } from '../../lib/api';
@@ -81,6 +82,7 @@ export function SchoolBannerWindow({school}:{school:School}) {
          <label className="sd-banner-editor__check"><input type="checkbox" checked={value.active} onChange={e=>setDraft({...value,active:e.target.checked})}/> Hiện banner cho học viên</label>
          <div className="sd-banner-editor__actions"><button type="button" className="sd-banner-editor__save" disabled={!value.title.trim()} onClick={()=>void save()}>{saved?'Cập nhật banner':'Tạo banner'}</button>{saved&&<button type="button" className="sd-banner-editor__delete" onClick={()=>void remove()}>Xóa banner</button>}</div>
        </fieldset>
+       <BannerTemplates schoolId={id} onApply={item=>{setDraft({...item,image:null,active:false});setMessage('Đã áp dụng mẫu vào bản nháp; kiểm tra và lưu để cập nhật banner.');}}/>
        <div className={`school-banner school-banner--${value.theme}`}>{value.image&&<img src={`data:${value.image.mime};base64,${value.image.base64}`} alt=""/>}<div><small>{school.name}</small><strong>{value.title||'Tiêu đề banner'}</strong><p>{value.message||'Nội dung sẽ hiện ở đây.'}</p></div></div>
      </section>
      <section><h2>Lớp thuộc trường</h2><p>Chỉ lớp của giáo viên đang thuộc trường mới có thể liên kết. Mỗi lớp thuộc một trường.</p>

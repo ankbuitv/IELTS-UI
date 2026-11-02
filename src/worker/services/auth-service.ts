@@ -1,3 +1,4 @@
+import {alertUnusualLogin} from './login-alerts';
 import type { Env } from '../env';
 import { avatarUrlFor, type AuthSession, type AuthUser } from '../lib/auth-types';
 import { ApiError } from '../lib/errors';
@@ -301,6 +302,8 @@ export async function createSession(
   )
     .bind(id, userId, csrfToken, createdAt, expiresAt, createdAt, context.ip, context.userAgent)
     .run();
+
+  await alertUnusualLogin(env,userId,id,context.ip,context.userAgent);
 
   return { token, session: { id, userId, csrfToken, expiresAt } };
 }

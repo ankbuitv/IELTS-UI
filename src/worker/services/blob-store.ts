@@ -31,9 +31,9 @@ export async function putBlob(
   const totalBytes = options.bytes ?? Math.round((payload.length * 3) / 4);
   const timestamp = nowIso();
 
-  await env.DB.prepare(`DELETE FROM ${table} WHERE ${ownerColumn} = ?`).bind(ownerId).run();
-
-  const statements: D1PreparedStatement[] = [];
+  // Asset chunks are committed together: assignment creation must never see
+  // a partially uploaded or partially replaced exam asset.
+  const statements: D1PreparedStatement[] = [env.DB.prepare(`DELETE FROM ${table} WHERE ${ownerColumn} = ?`).bind(ownerId)];
   for (let offset = 0, index = 0; offset < payload.length; offset += BLOB_CHUNK_CHARS, index += 1) {
     const chunk = payload.slice(offset, offset + BLOB_CHUNK_CHARS);
     statements.push(
@@ -44,8 +44,10 @@ export async function putBlob(
     );
   }
 
-  for (let i = 0; i < statements.length; i += 40) {
-    await env.DB.batch(statements.slice(i, i + 40));
+  if(table === 'asset_blobs') {
+    await env.DB.batch(statements);
+  } else {
+    for (let i = 0; i < statements.length; i += 40) await env.DB.batch(statements.slice(i, i + 40));
   }
   return { chunks: statements.length, bytes: totalBytes };
 }

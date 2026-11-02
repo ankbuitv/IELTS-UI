@@ -1,3 +1,5 @@
+import {CandidateTestPreview} from './CandidateTestPreview';
+import type {CandidateTestPayload} from '@shared/candidate';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
@@ -892,75 +894,11 @@ function AccessCodeCard({
   );
 }
 
-interface CandidatePreview {
-  preview: boolean;
-  test: {
-    title: string;
-    type: string;
-    sections: Array<{
-      skill: string;
-      title: string;
-      instructions: string;
-      durationSeconds: number | null;
-      passage: { title: string; paragraphs: Array<{ label: string; text: string }> } | null;
-      groups: Array<{
-        type: string;
-        instructions: string;
-        sharedOptions: Array<{ id: string; text: string }>;
-        questions: Array<{ number: number; prompt: string; options: Array<{ id: string; text: string }> }>;
-      }>;
-    }>;
-  };
-}
-
-function VersionPreview({ versionId }: { versionId: string }) {
-  const { data, loading, error } = useAsync<CandidatePreview>(
-    () => api.get(`/api/admin/versions/${versionId}/preview`),
-    [versionId],
-  );
-  if (loading) return <Loading label="Building candidate payload…" />;
-  if (error) return <Notice tone="danger">{error}</Notice>;
-  if (!data) return null;
-
-  return (
-    <div className="stack">
-      <Notice tone="info" title="This is exactly what a candidate can see">
-        The payload contains no answer keys, evidence or explanations.
-      </Notice>
-      {data.test.sections.map((section, sectionIndex) => (
-        <Card key={`${section.title}-${sectionIndex}`} title={section.title || `Section ${sectionIndex + 1}`} hint={section.instructions}>
-          {section.passage ? (
-            <details>
-              <summary>{section.passage.title} ({section.passage.paragraphs.length} paragraphs)</summary>
-              {section.passage.paragraphs.map((paragraph) => (
-                <p key={paragraph.label}>
-                  <strong>{paragraph.label}</strong> {paragraph.text}
-                </p>
-              ))}
-            </details>
-          ) : null}
-          {section.groups.map((group, groupIndex) => (
-            <div key={`${group.type}-${groupIndex}`} style={{ marginTop: 12 }}>
-              <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-                <Badge tone="accent">{QUESTION_TYPE_META[group.type as QuestionType]?.label ?? group.type}</Badge>
-                <span className="tiny muted">{group.questions.length} questions</span>
-              </div>
-              <ol className="stack" style={{ marginTop: 8, paddingLeft: 18 }}>
-                {group.questions.map((question) => (
-                  <li key={question.number}>
-                    <span className="tiny muted">#{question.number}</span> {question.prompt}
-                    {question.options.length > 0 ? (
-                      <div className="tiny muted">{question.options.map((option) => `${option.id}. ${option.text}`).join('  ·  ')}</div>
-                    ) : null}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          ))}
-        </Card>
-      ))}
-    </div>
-  );
+function VersionPreview({versionId}:{versionId:string}) {
+ const {data,loading,error}=useAsync<{preview:boolean;test:CandidateTestPayload}>(()=>api.get(`/api/admin/versions/${versionId}/preview`),[versionId]);
+ if(loading)return <Loading label="Building candidate payload…"/>;
+ if(error)return <Notice tone="danger">{error}</Notice>;
+ return data?<CandidateTestPreview key={versionId} test={data.test}/>:null;
 }
 
 // ---------------------------------------------------------------------------

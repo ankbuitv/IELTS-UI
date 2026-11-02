@@ -1,3 +1,5 @@
+import {individualDeadline,resultDeadline} from './assignment-extensions';
+import {assertPrerequisite} from './assignment-prerequisites';
 import {assignmentEligible} from './assignment-audience';
 import {teacherAttemptScope} from './teacher-attempt-scope';
 import type { Env } from '../env';
@@ -227,6 +229,7 @@ export async function createAttempt(
         integrityPolicy: resolvePolicy(existing.mode, parseJson<Partial<IntegrityPolicy>>(existing.integrity_policy_json, {})),
       };
     }
+    await assertPrerequisite(env,user,assignment.id);
     const attemptCount = await env.DB.prepare(
       `SELECT COUNT(*) AS count FROM attempts WHERE user_id = ? AND assignment_id = ? AND status != 'ABANDONED'`,
     )
@@ -312,18 +315,19 @@ export async function createAttempt(
      WHERE ? IS NULL OR EXISTS (
        SELECT 1 FROM assignments a JOIN test_versions v ON v.id=a.test_version_id
        WHERE a.id=? AND a.status='ACTIVE' AND v.status!='DRAFT'
-         AND (a.start_at IS NULL OR a.start_at<=?) AND (a.deadline_at IS NULL OR a.deadline_at>=?)
-         AND (?='ADMIN' OR (?='TEACHER' AND a.teacher_id=?) OR EXISTS (
+         AND (a.start_at IS NULL OR a.start_at<=?) AND (${individualDeadline('a','?')} IS NULL OR ${individualDeadline('a','?')}>=?)
+         AND (?='ADMIN' OR (?='TEACHER' AND EXISTS(SELECT 1 FROM classrooms owner_class WHERE owner_class.id=a.classroom_id AND owner_class.teacher_id=?)) OR EXISTS (
            SELECT 1 FROM classroom_members m WHERE m.classroom_id=a.classroom_id AND m.user_id=? AND m.status='ACTIVE'
              AND (m.role='CO_TEACHER' OR (m.role='STUDENT' AND ${assignmentEligible('a','m.user_id')}))
          ))
+         AND (?='ADMIN' OR EXISTS(SELECT 1 FROM classrooms owner_class WHERE owner_class.id=a.classroom_id AND owner_class.teacher_id=?) OR NOT EXISTS(SELECT 1 FROM classroom_members learner WHERE learner.classroom_id=a.classroom_id AND learner.user_id=? AND learner.role='STUDENT' AND learner.status='ACTIVE') OR NOT EXISTS(SELECT 1 FROM assignment_prerequisites p WHERE p.assignment_id=a.id AND NOT EXISTS(SELECT 1 FROM attempts done WHERE done.assignment_id=p.prerequisite_id AND done.user_id=? AND done.status='SUBMITTED')))
          AND (SELECT COUNT(*) FROM attempts used WHERE used.user_id=? AND used.assignment_id=a.id AND used.status!='ABANDONED') < MAX(1,a.max_attempts)
          AND NOT EXISTS(SELECT 1 FROM attempts running WHERE running.user_id=? AND running.assignment_id=a.id AND running.status='IN_PROGRESS')
      )`,
   ).bind(
     attemptId, user.id, assignment?.id ?? null, testId, versionId, test.type, mode, startedAt, null,
     JSON.stringify(policy), resultVisibility, version.scoring_profile_id, JSON.stringify(input.clientMeta ?? {}), startedAt, startedAt,
-    assignment?.id ?? null, assignment?.id ?? null, startedAt, startedAt, user.role, user.role, user.id, user.id, user.id, user.id,
+    assignment?.id ?? null, assignment?.id ?? null, startedAt, user.id, user.id, startedAt, user.role, user.role, user.id, user.id, user.role, user.id, user.id, user.id, user.id, user.id,
   );
   const statements: D1PreparedStatement[] = [insertAttempt];
 
@@ -708,13 +712,14 @@ export async function refreshAttemptSectionProgress(env: Env, attemptId: string)
 // Authorization helpers
 // -----------------------------------------------------------------------------
 export async function requireAssignmentAccess(env: Env, user: AuthUser, assignmentId: string): Promise<AssignmentRow> {
-  const assignment = await env.DB.prepare('SELECT * FROM assignments WHERE id = ?')
-    .bind(assignmentId)
-    .first<AssignmentRow>();
+  const assignment = await env.DB.prepare(`SELECT a.*,${individualDeadline('a','?')} AS effective_deadline_at FROM assignments a WHERE a.id = ?`)
+    .bind(user.id,assignmentId)
+    .first<AssignmentRow & {effective_deadline_at:string|null}>();
   if (!assignment) throw ApiError.notFound('Assignment not found.');
+  assignment.deadline_at=assignment.effective_deadline_at;
 
   if (user.role === 'ADMIN') return assignment;
-  if (user.role === 'TEACHER' && assignment.teacher_id === user.id) return assignment;
+  if (user.role === 'TEACHER' && await env.DB.prepare('SELECT 1 FROM classrooms WHERE id=? AND teacher_id=?').bind(assignment.classroom_id,user.id).first()) return assignment;
 
   const membership = await env.DB.prepare(
     `SELECT m.id FROM classroom_members m JOIN assignments a ON a.classroom_id=m.classroom_id WHERE a.id=? AND m.user_id=? AND m.status='ACTIVE' AND (m.role='CO_TEACHER' OR (m.role='STUDENT' AND ${assignmentEligible('a','m.user_id')}))`,
@@ -1840,7 +1845,7 @@ export async function buildResultView(
   ]);
 
   const assignment = attempt.assignment_id
-    ? await env.DB.prepare('SELECT deadline_at, result_visibility FROM assignments WHERE id = ?')
+    ? await env.DB.prepare(`SELECT ${resultDeadline('a')} AS deadline_at, a.result_visibility FROM assignments a WHERE id = ?`)
         .bind(attempt.assignment_id)
         .first<{ deadline_at: string | null; result_visibility: ResultVisibility }>()
     : null;
@@ -1995,8 +2000,8 @@ export async function buildResultView(
   };
 }
 
-function evaluateRelease(
-  attempt: AttemptRow,
+export function evaluateRelease(
+  attempt: Pick<AttemptRow, 'status' | 'test_type' | 'result_visibility'>,
   assignment: { deadline_at: string | null; result_visibility: ResultVisibility } | null,
 ): { reviewAvailable: boolean; scoreAvailable: boolean; reason: string; releasesAt: string | null } {
   const visibility: ResultVisibility = assignment?.result_visibility ?? attempt.result_visibility;
